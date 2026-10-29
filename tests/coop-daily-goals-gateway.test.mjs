@@ -31,6 +31,8 @@ function fakeDailyGoals(overrides = {}) {
         definition: DEFINITION,
         progress: 4,
         target: DEFINITION.target,
+        // the module computes the reward from the real progress (hull sizes, units)
+        rewardSkillPoints: 42000,
         completed: false,
         claimedAt: 0,
         claimable: false,
@@ -81,7 +83,8 @@ test("GetAllCurrent answers a card the client can actually unpack", () => {
   assert.equal(goal.goal.payment.length, 1);
   assert.equal(goal.goal.payment[0].asset.uuid.length, UUID_BYTES);
   assert.equal(goal.goal.payment[0].period, 1);
-  assert.equal(goal.goal.payment[0].unit.sp.amount, DEFINITION.rewardSkillPoints);
+  assert.equal(goal.goal.payment[0].unit.sp.amount, 42000,
+    "the card must promise exactly what redeem will pay");
 
   // the configuration branch must be PRESENT, or format_goal_from_payload drops it
   assert.ok(result.responsePayloadBuffer.length > 0);
@@ -99,6 +102,7 @@ test("each goal kind encodes its own contribution branch", () => {
             definition,
             progress: 0,
             target: definition.target,
+            rewardSkillPoints: definition.rewardSkillPoints,
             completed: false,
             claimedAt: 0,
             claimable: false,
@@ -114,7 +118,8 @@ test("each goal kind encodes its own contribution branch", () => {
       result.responsePayloadBuffer);
     const config = body.goals[0].goal.contribution_configuration;
     const present = config.kill_npc !== null || config.mine_ore !== null ||
-      config.complete_daily_goal !== null || config.space_jump !== null;
+      config.complete_daily_goal !== null || config.space_jump !== null ||
+      config.install_manufacturing_job !== null;
     assert.ok(present, `${definition.kind} must set a configuration branch`);
   }
 });

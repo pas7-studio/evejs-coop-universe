@@ -9117,3 +9117,11 @@ barge 4, Raven battleship 6; half damage on a frigate = 0.5 point; full battlesh
 Still open from the client's own 13 contribution types (all need a new producer or a funded payer):
 `damage_ship`, `scan_signature`, `install_manufacturing_job`, `salvage_wreck`,
 `earn_loyalty_points`, `fw_capture`/`fw_defend`, remote repairs.
+
+### 2026-10-29T11:40Z - fifth goal: Manufacture
+
+`install_manufacturing_job` is measurable without a new producer: `industryRuntimeState.listJobsByOwner`
+already holds the real jobs the industry window shows, so today's jobs (by real `startDate`) count,
+12 000 SP each with a 20 000 floor. Name/description are real client ids (1040182 "Manufacture",
+61487 "Manufacturing"). Live: `GetAllCurrent` = 5 cards / 569 bytes; `listJobsByOwner(140000001)` = 0
+jobs, so the card honestly reads 0/2.
