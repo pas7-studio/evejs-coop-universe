@@ -118,12 +118,15 @@ test("NPC spends only earned ISK buying real seeded station stock into native ca
 test("must be actual named native NPC physically at real same-system station",async()=>{
  const x=fixture();try{
   const t=x.trader();
+  // One refusal code for a dozen reasons taught nothing (measured 2026-10-30: a sale was refused
+  // NOT_AT_NATIVE_STATION for an hour without telling a missing ship from a station 11 km away),
+  // so each predicate now names itself. The refusal is still refused, and still does not trade.
   x.ship.position.x=100000;
-  assert.equal((await t.execute(x.params("sell",34))).status,"NOT_AT_NATIVE_STATION");
+  assert.equal((await t.execute(x.params("sell",34))).status,"TOO_FAR_FROM_STATION");
   x.ship.position.x=500;x.ship.nativeNpc=false;
-  assert.equal((await t.execute(x.params("sell",34))).status,"NOT_AT_NATIVE_STATION");
+  assert.equal((await t.execute(x.params("sell",34))).status,"NOT_A_NATIVE_SHIP");
   x.ship.nativeNpc=true;x.ship.session={characterID:7};
-  assert.equal((await t.execute(x.params("sell",34))).status,"NOT_AT_NATIVE_STATION");
+  assert.equal((await t.execute(x.params("sell",34))).status,"PLAYER_SHIP_EXCLUDED");
   assert.equal(x.getCalls().length,0);
  }finally{x.cleanup()}
 });
