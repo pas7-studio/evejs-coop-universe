@@ -10388,3 +10388,34 @@ sales, or loot of the wrecks its hulls create), the war economy needs an operato
 
 Payout rung: PROVEN in process (tests/coop-war-payout-end-to-end.test.mjs, 4 tests). Live observation of
 `bounty-paid` still needs one kill inside a funded campaign, which is now purely an economy question.
+
+## PERF ROOT CAUSE, measured on the owner's LIVE play server (2026-10-30)
+
+Method: `%TEMP%\opencode\profile-server.cjs <container> [seconds] [pid]` - opens the Node
+inspector with `SIGUSR1` (no restart) and prints top self-time functions. This is the tool to
+reuse; do not guess at CPU cost again.
+
+**FW-097 (SHIPPED, commit 8a36539, deployed to the play stack after owner-authorised restart):**
+profile of `evejs-server-1` before the fix = `cloneValue 7374 ms / 82 %` + `listNativeCargo 11 %`.
+`getNativeEntity(id)`, `listNativeCargoForEntity(id)`, `listNativeModulesForEntity(id)` and
+`listNativeEntitiesForSystem(id)` deep-cloned the ENTIRE collection (`JSON.parse(JSON.stringify)`)
+and only then picked the row, and the A-Life haul pass calls the cargo one once per miner per
+tick. They now scan the cache and clone only the rows they return; isolation is unchanged
+(`database.read` hands out the live cache object, so returned rows stay private clones).
+After the restart `cloneValue` is **absent from the profile**. Test: `tests/coop-npc-store-read-cost.test.mjs`.
+
+**FW-098 (NEXT, identified, not written yet):** two post-restart profiles of the same server
+(9 s, 12k samples each) put ~82 % of the process inside our atomic-rows bridge:
+`transact coopGameStoreAtomic.js:93 = 36.5 %`, `reconcileObject :74 = 14.7 %`,
+`loadTableObject sqliteStore.js:697 = 14.3 %`, GC 16.7 %. Reading the code: every transaction
+(1) calls `flushTableSync(t)` for every table it names, and (2) after commit the cache is
+invalidated, so the next access reloads and deep-reconciles the WHOLE table from SQLite.
+The fix is row-level: `transact` already returns its exact `changed` write set, so apply those
+keys to the cache instead of reloading/reconciling whole tables. Do not touch the durability
+guards (`NATIVE_GAMESTORE_PERSISTENCE_NOT_QUIESCENT`) - the flush is what makes the commit safe.
+
+State of the owner's stack right now: running image `f41c50ca…` (has FW-092..FW-097), 65 durable
+NPC links incl. 10 seeded armed hulls (Aldranette 9, Nennamaila 6, Immuri 3), CPU still ~118 %.
+Militia enlistment still waits on the owner: dock at Enaluri 30045339 / station 60015068 (agent
+3019070) + log out ~30 s, then `militia_enlist` (the bridge refuses while his session is live and
+while the character is undocked).
