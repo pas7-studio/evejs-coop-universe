@@ -1,5 +1,44 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 19:40Z (UTC) - the client's own reader caught our buffer (uint64), and what is left
+
+The achievement catalogue was accepted by our own reader and rejected by the client's: feed the
+served file to `achievement_system/client/model/flatbuffer/generated.pyj` and the first target came
+back as **618475290625** instead of 1, the SP reward as **94489281512** instead of 1000. `Target` and
+`SpReward.Quantity` are **uint64** there; we wrote uint32, so the client merged the neighbouring
+bytes into the number. Our reader read the same low 32 bits and agreed with us - a reader that
+shares the writer's assumption cannot catch a width error.
+
+Fixed in fork `3a01b5b` (writer has uint64/BigInt, 8-byte alignment), and made repeatable:
+`scripts/coop-verify-flatbuffer-client.cjs achievement` fetches the client's generated module from
+the local archive at run time (never committed) and prints the numbers it really sees. The extractor
+`scripts/coop-flatbuffer-schema.py` now records a field's width from its `Prepend<Type>Slot` instead
+of defaulting to uoffset, so `docs/client-contracts/achievement-flatbuffer.json` says uint64/uint8/
+bool again, and the JS tests read uint64 where the client does. A test fails on a width regression
+and SKIPS (never passes) when python3+flatbuffers or the archive is missing.
+
+PROVEN LIVE on `evejs-agents` after redeploy: checkpoint 200 with crc **3362621445**, TLS GET 200 /
+**1912 bytes** / `ACHV` / same CRC, and those exact served bytes parsed by the client's reader give
+`coop_mine_ore` targets 1/100 with SP 1000/2500, `coop_haul_cargo` 1/1500, `coop_win_fight` 1/2000.
+
+What is left (14 register types) and the honest reason for each:
+  - `cosmetic.market.component.listing.{GetAll,InitiatePurchaseListing}` - **blocked**: a listing
+    carries `component_item.sequential`, which the client resolves through its own
+    `ComponentsDataLoader` FSD; the server's item-type table has no SKIN component items (checked:
+    only armour coatings and unrelated "component" commodities). An invented id would make the
+    market window fail to build that listing in game;
+  - `freelance.contributionmethod.itemdelivery.Deliver` - our freelance projects are stub-empty, so
+    there is no project or delivery location to deliver to; needs the project system first;
+  - `ship.unlock.{GetPendingNotifications,ClaimReward}` - nothing in this world unlocks a ship type
+    yet; a claim without a real source would be an invented reward;
+  - `eve.sovereignty.{hub,mercenaryden,skyhook}.admin.*`, `internal_gateway.*`, `debug.Request`,
+    `eve_public.Request`, `ai.assistant`, `auth.*` - cloud-internal, debug or authentication;
+    never faked.
+
+Still unverified by a human: the achievements and titles windows need the owner to open them in the
+real client, and the play stack still runs the pre-catalogue image (needs an owner restart window).
+
+
 ## 2026-10-30 19:10Z (UTC) - freight income is visible in the balance sheet
 
 PROVEN LIVE: the first freight row was written by a real sale and the balance sheet reads it:
