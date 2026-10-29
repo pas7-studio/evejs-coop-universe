@@ -2448,3 +2448,9 @@ Why: Initiate/Get/CompleteEarly had no handler and GetAllActive answered an empt
 Detail: A design costs its whole price or nothing, a due job completes on read so a restart cannot lose it, and only completion mints the copies. 5/5 new tests.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-skin-sequencing.test.mjs
 Evidence: fork 645f18a; live on 140000001: initiate without design 3, 200 pending qty 3 planned +30s, 2 jobs spent exactly 4 capacity, complete early 200 then 9, skin 6ae282c834c7dd78 3 copies, unknown 5, second job completed on read (67bfb0f11948d71d, 2 copies); 5/5 tests; register 42 unhandled
+### 2026-10-29T16:28Z · 3c2a1ed · L2 · docs/tests: a sequenced skin reads back with its design and provenance
+
+Why: a skin minted by a sequencing job could not show its own record: thirdparty.api.Get had no handler, so the designer could list a licence but not its design or creator
+Detail: 3/3 new tests; the design is spliced back byte-identically and an admin-granted licence stays honestly unsequenced.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-third-party-skin-record.test.mjs
+Evidence: fork 85041fc; live on 140000001: minted skin 220a07477df30255, layout stored byte-identical, creator 140000001; Get 200 name/creator/not_sequenced false/tier 1/layout spliced intact; unknown hex 5; 3/3 tests; register 41 unhandled
