@@ -9245,3 +9245,16 @@ What is still missing is exactly ONE event: a casualty in a live funded campaign
 healthy identities, so `NATIVE_DESTRUCTION_ATTACKER_PROVIDED` fires and the HELD escrow pays. The two
 casualties we did get were unattributable for the reason FW-075 now prevents; the next campaign will not
 have that defect, and the watcher plus `scripts/coop-war-acceptance.cjs` are both armed for it.
+
+## 2026-10-29T13:10Z - New Eden Store catalog drawn from the real store state
+
+Fork `d941ad3`, register 77 -> 70 unhandled. The seven `store.*` reads (categories, offers,
+offers by tag, targeted offers, products) now answer from `storeState.getLegacyCatalog(4)` -
+the very state the existing `purchasePlexVaultOffer` path fulfils from, so a listed offer is
+always buyable at the listed price (15 offers, 9 categories, Omega 500 PLX, 15 products).
+A product only claims `item.type` when the offer really carries a `typeId`.
+
+**Bug found by probing the live registry:** `stargateLockGatewayService.handleRequest` ended
+with an unconditional `return GetAllResponse`, so every request that reached it got a lock
+list - the store, PLEX, presence and everything registered after it were all hijacked. It
+now returns `null` for any type that is not its own, and a regression test pins that.

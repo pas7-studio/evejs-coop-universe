@@ -112,6 +112,22 @@ test("gateway: Apply answers 200, refusals carry the reason, GetAll lists the ro
   assert.equal(deleted.statusCode, 200);
 });
 
+test("the service only answers its own types (a fall-through once hijacked a store call)", () => {
+  const {createStargateLockGatewayService} = require(path.join(forkRoot,
+    "Code/server/src/_secondary/express/gatewayServices/stargateLockGatewayService.js"));
+  const service = createStargateLockGatewayService({stargateLocks: locks()});
+  // regression: the GetAll answer used to be the unconditional tail of handleRequest, so
+  // every later service (the New Eden Store catalog, for one) got a lock list instead of
+  // its own answer.
+  for (const other of [
+    "eve_public.store.offer.api.GetAllRequest",
+    "eve_public.payment.token.api.GetRequest",
+    "eve_public.dailygoal.api.GetAllCurrentRequest",
+  ]) {
+    assert.equal(service.handleRequest(other, {payload: {value: Buffer.alloc(0)}}), null, other);
+  }
+});
+
 test("the jump path consults the lock where the gate is actually known", () => {
   const runtime = require("node:fs").readFileSync(
     path.join(forkRoot, "Code/server/src/space/runtime.js"), "utf8");
