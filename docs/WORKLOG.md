@@ -2726,3 +2726,13 @@ Evidence: fork d7cb19d; live 22:33:15Z merit UPDATED + BOUNTY_PILOT_FACTION_UNKN
 Why: my earlier claim that no dungeon instance is ever created was wrong; the seeder works but allocated every site outside the systems this world plays in
 Where: .opencode/state.md
 Evidence: dungeonRuntimeState snapshot: 27 active instances in 16 systems; Jita/Perimeter/New Caldari have 0; 23 enabled spawn families
+### 2026-10-29T22:47Z · 2d896e8 · L2 · alife27a: refine the biggest stacks first (starvation fix), tested
+
+Why: 2.8M units of ore sat unrefined for hours because the refinery always examined the same eight tiny leftover rows
+Where: integration/coopNpcRefineryTick.cjs, tests/coop-refinery-second-station.test.mjs
+Evidence: live: ore 2798972 -> 771462 units and minerals -> 4243400 units at 60000682; 72 refinements in minutes; 4/4 refinery tests
+### 2026-10-29T22:48Z · f9cdf53 · DOCS · docs: the refinery starvation and its measured clearing
+
+Why: site density and rotation were unmeasured; the profiles show 1 slot per system on N systems per band with a 24h lifetime, but the tick only sees awake systems
+Where: docs/COOP_LOOP_RESULTS.md
+Evidence: getSpawnProfile combat_anomaly/combat/data/combat_hacking: slotsPerSystem and targetSystems per band, lifetime 1440/2880 min; advance tick driven by listAwakeSolarSystemIDs; 27 instances in 16 systems

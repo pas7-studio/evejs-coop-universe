@@ -1,5 +1,32 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 07:45Z (UTC) - site density and rotation: what the profiles say
+
+The owner asked whether sites rotate and respawn the way the real game does. Measured from
+`dungeonAuthority.getSpawnProfile(family)` on the running server:
+
+    combat_anomaly  lifetime 1440 min  highsec slotsPerSystem=1 targetSystems=360 |
+                    lowsec 2/196 | nullsec 3/1280 | wormhole 2/720
+    combat          lifetime 1440 min  highsec 1/120 | lowsec 1/132 | nullsec 1/220 | wormhole 1/196
+    data            lifetime 1440 min  highsec 1/36  | lowsec 1/32  | nullsec 1/104 | wormhole 1/96
+    combat_hacking  lifetime 2880 min  highsec 0/0   | lowsec 1/3   | nullsec 1/12  | wormhole 1/16
+
+So the design is "one site slot per system, on N systems per band" - 516 highsec slots for ~1200 highsec
+systems across the whole map, i.e. a given system has roughly a 40% chance of holding a site, and the
+site lives 24 h before `advanceUniversePersistentSites` expires and re-allocates it elsewhere. Rotation
+IS implemented (the advance tick reports expired/rotated/removed counts and the startup path calls it).
+
+What is missing is the *scope*: the tick is driven with `systemIDs: spaceRuntime.listAwakeSolarSystemIDs()`
+and startup prepare is called with `startupSystemIDs: []`, so only systems that already have a scene are
+considered, and a system that never wakes is never seeded or rotated. 27 instances exist in 16 systems
+today, none of them Jita/Perimeter/New Caldari.
+
+Change to make: seed and rotate over the systems this world actually uses (the route/visited set) instead
+of only the awake ones, and/or seed a system on wake when its desired count is zero. Both are small:
+`dungeonUniverseRuntime.advanceUniversePersistentSites({systemIDs})` already accepts an explicit list,
+and `dungeonUniverseSiteService.handleSceneCreated` already materialises whatever exists.
+
+
 ## 2026-10-30 07:20Z (UTC) - CORRECTION: the dungeon seeder works; our systems simply have no sites
 
 My earlier "nothing ever creates an instance" was **wrong** - it came from a probe in a separate
