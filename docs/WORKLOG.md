@@ -2361,3 +2361,14 @@ Why: stargate locks had no implementation at all (empty default) and the basic s
 Detail: Stargate restrictions are a real mechanic now (persisted lock + expiry, refused in startStargateJump), and solarsystem/station Get answer the server's own static rows with the units+nanos security the client reads. The public stargate.lock Get is documented as deliberately unanswered: it returns one gate and carries no fields, so only the jump path can decide. Live: Perimeter 0.949000000, the Jita
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-entity-lookup.test.mjs, tests/coop-stargate-locks.test.mjs
 Evidence: fork f0ff7c1; live: Perimeter 0.949000000, Jita IV station name, unknown system status 5; lock apply 200, isLocked true for that gate only, list 1 row, past expiry refused status 9, delete 200 leaving 0; register 82->77; 11/11 new tests
+### 2026-10-29T12:45Z · 6ea755d · L1 · state(fw): both sides mustered and captured twice; the payout needs one attributable kill
+
+Why: Close the last way this world creates an unattributable warship
+Where: .opencode/state.md
+Evidence: two casualties answered NOT_UNIQUE_NAMED_PIRATE because their pilots had been released; both-side muster and capture now proven
+### 2026-10-29T13:43Z · 8995b10 · L2 · docs/tests: the store catalog reads and the service fall-through regression
+
+Why: the New Eden Store window was blank because none of its seven catalog reads existed, even though the purchase path behind them worked; and a live probe found a lock service answering every other service's requests
+Detail: Seven store read types now draw the real catalog the purchase path fulfils from, and the lock service no longer answers other services' calls (it did, for everything registered after it). Register 77 -> 70 unhandled.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-stargate-locks.test.mjs, tests/coop-store-catalog.test.mjs
+Evidence: fork d941ad3; live: 15 offers (omega_30_days), Omega 500 PLX can_purchase, 9 categories (Featured 8 children), product without fake item type, tag filter, 0 targeted, unknown offer NOT_FOUND; registry dispatch now reaches new-eden-store (401 bytes) instead of the lock list; register 77->70; 17/17 tests
