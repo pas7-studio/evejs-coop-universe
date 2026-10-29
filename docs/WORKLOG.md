@@ -2576,3 +2576,9 @@ Evidence: front keeper running; NO_FUNDED_FRONT with SUPPLY_UNFUNDED_SIDE after 
 Why: A trip could only load at one station while the bundle planner kept choosing cargo from several
 Where: integration/coopDistributionRun.cjs, integration/coopFactionWarOpening.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-distribution-run.test.mjs, tests/coop-stargate-lock-read.test.mjs, tests/coop-war-funding-corporation.test.mjs, tests/coop-war-market-access.test.mjs
 Evidence: live: trips with 4 and 5 stops (46/65 lines); 26/26 distribution-run tests incl. a two-stop journey
+### 2026-10-29T19:38Z · afffa79 · L2 · tools: audit gateway coverage against the client's own request types, and decode our protobuf with its descriptors
+
+Why: public stargate-lock reads and ship SKIN state had no answer; the gap list itself was hand-written
+Detail: The 'remaining gaps' list was hand-written, so it could only contain gaps somebody had already thought of. scripts/coop-gateway-gap-audit.py derives the list instead: it reads the client archive, takes every request message from the generated descriptors, keeps the ones a non-generated module names together with its proto module (that is what an import plus a call looks like), and compares them wi
+Where: docs/client-contracts/gateway-coverage.json, scripts/coop-gateway-gap-audit.py, scripts/coop-verify-client-proto.cjs, tests/coop-ship-cosmetic-state.test.mjs
+Evidence: fork ff09ec8; audit 1282/213/282/15; 25 tests green incl. client-descriptor decode of GetResponse and GetAllInBubbleResponse
