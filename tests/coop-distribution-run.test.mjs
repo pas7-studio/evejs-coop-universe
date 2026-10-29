@@ -316,3 +316,36 @@ test("goods already aboard are sold, not parked when the planner refuses a full 
   assert.equal(run.read(sixteenth).phase, "SELL");
   assert.equal(run.read(sixteenth).toStationID, 60003760);
 });
+
+test("freight nobody nearby buys crosses one gate to the buyer", async () => {
+  // Measured 2026-10-30: ore carried in New Caldari had no local buyer at all, while Jita one
+  // gate away bid 4 035 826 units for it. The cargo crosses first, then TO_DEST/SELL take over.
+  const seventeenth = 980000004186;
+  let plannedTo = 0;
+  const result = await run.tick(seventeenth, {
+    recycle: true,
+    hullSystemOf: () => 30000145,
+    planTrip: () => ({ status: "HOLD_ALREADY_FULL" }),
+    stationForCargo: () => 0,
+    buyerForCargo: () => ({ systemID: 30000142, stationID: 60003760 }),
+    planCrossingTo: (args) => { plannedTo = args.targetSystemID; return { status: "PLANNED" }; },
+    now: 20000,
+  });
+  assert.equal(result.status, "LIQUIDATING_ACROSS");
+  assert.equal(plannedTo, 30000142, "a crossing to the buyer's system is planned");
+  const state = run.read(seventeenth);
+  assert.equal(state.phase, "CROSS");
+  assert.equal(state.toStationID, 60003760);
+  assert.equal(state.toSystemID, 30000142);
+});
+
+test("no local buyer and no neighbour means the run ends with the truth", async () => {
+  const eighteenth = 980000004187;
+  const result = await run.tick(eighteenth, {
+    recycle: true, hullSystemOf: () => 30000145,
+    planTrip: () => ({ status: "HOLD_ALREADY_FULL" }),
+    stationForCargo: () => 0, buyerForCargo: () => null, now: 21000,
+  });
+  assert.equal(result.status, "DONE");
+  assert.equal(run.read(eighteenth).lastReason, "HOLD_ALREADY_FULL");
+});

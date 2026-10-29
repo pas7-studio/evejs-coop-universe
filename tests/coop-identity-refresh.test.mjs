@@ -43,3 +43,30 @@ test("the market trader refreshes before it looks for the identity", () => {
   assert.ok(/registry\.refresh\?\.\(\)[\s\S]{0,200}registry\.snapshot\(\)\.links\?\.\[pilotID\]/.test(source),
     "a trader that never re-reads can only trade with the identities it saw at boot");
 });
+
+test("two owners link different hulls and neither loses the other's link", () => {
+  // Measured 2026-10-30: the loop linked a distribution hull, the next write from the market
+  // side replaced the whole file, and every crossing then failed SOURCE_IDENTITY_MISMATCH.
+  const file = fresh();
+  const exists = () => true;
+  const a = createRegistry({ file, exists });
+  const b = createRegistry({ file, exists });
+  a.link({ id: "coop-pilot-060", name: "Sixty", role: "hauler" }, 30000145, 980000004164);
+  b.link({ id: "coop-pilot-061", name: "Sixty-one", role: "hauler" }, 30000142, 980000004100);
+  const onDisk = JSON.parse(fs.readFileSync(file, "utf8")).links;
+  assert.ok(onDisk["coop-pilot-060"], "the first owner's link survives the second write");
+  assert.ok(onDisk["coop-pilot-061"], "and the second owner's link is there too");
+});
+
+test("a released link is not resurrected by another owner's write", () => {
+  const file = fresh();
+  const exists = () => true;
+  const a = createRegistry({ file, exists });
+  const b = createRegistry({ file, exists });
+  a.link({ id: "coop-pilot-062", name: "Sixty-two" }, 30000145, 980000004101);
+  b.link({ id: "coop-pilot-063", name: "Sixty-three" }, 30000145, 980000004102);
+  a.release("coop-pilot-062", { expectedEntityID: 980000004101 });
+  const onDisk = JSON.parse(fs.readFileSync(file, "utf8")).links;
+  assert.equal(onDisk["coop-pilot-062"], undefined, "a release sticks");
+  assert.ok(onDisk["coop-pilot-063"], "and the other owner's link is untouched");
+});

@@ -372,6 +372,10 @@ async function tick(haulerID, authorities = {}, env = process.env) {
     if (Number.isFinite(atStation) && atStation > STATION_RANGE_M) {
       return finish(PHASE.TO_DEST, "NOT_AT_STATION");
     }
+    // The market fills in bounded settlements (MAX_SELL_QTY is 100 000 here), so the budget
+    // grows with the load instead of stopping a real haul at a fixed number of calls.
+    const load = Math.max(num(state.quantity), num(state.cargoUnits));
+    const callBudget = Math.max(MAX_SELL_CALLS, Math.ceil(load / 100000) + 2);
     let calls = num(state.sellCalls);
     let isk = num(state.isk);
     let settled = null;
@@ -383,7 +387,7 @@ async function tick(haulerID, authorities = {}, env = process.env) {
       // recorded as unknown rather than as a misleading zero.
       return finish(PHASE.DONE, "SOLD_VERIFIED_BY_HOLD", { soldAt: now, sellCalls: calls, iskUnknown: true });
     }
-    for (let attempt = 0; attempt < MAX_POLLS_PER_BEAT && !settled && calls < MAX_SELL_CALLS;
+    for (let attempt = 0; attempt < MAX_POLLS_PER_BEAT && !settled && calls < callBudget;
       attempt += 1) {
       let answer = null;
       try {
@@ -450,8 +454,10 @@ async function tick(haulerID, authorities = {}, env = process.env) {
         sellCalls: calls, isk, lastReason: "WAITING_FOR_SALE:" + why, updatedAt: now }, env);
       return { status: "WAITING_FOR_SALE", reason: why, state: next };
     }
-    if (calls >= MAX_SELL_CALLS) {
-      return finish(PHASE.BLOCKED, "SALE_STOPPED:CALL_LIMIT", { sellCalls: calls, isk });
+    // A big load needs more than a fixed handful of settlements: the market fills at most
+    // MAX_SELL_QTY per call, so the budget grows with the load.
+    if (calls >= callBudget) {
+      return finish(PHASE.BLOCKED, "SALE_STOPPED:CALL_LIMIT", {sellCalls: calls, isk, callBudget});
     }
     const since = num(state.pendingSince) || now;
     if (now - since > SALE_SETTLE_TIMEOUT_MS) {
