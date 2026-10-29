@@ -2324,3 +2324,13 @@ Why: the daily goals page was blank and could not pay: no handler for Get/Redeem
 Detail: Four goals, each fed by a record the world already produces (mining ledger, killmail ledger, accepted gate jumps, redeemed goals) and rewarded in skill points through the campaign-crate path. Nothing is minted; pay-for-completion is refused on purpose. The names are not guesses: the client resolves them from its own localization pickle, so the ids were read out of that file (656416 Mine Ore, 10376
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md
 Evidence: fork 57d0f47; live GetAllCurrent 200 4 goals 451b; redeem refused goal is not complete (0/5000); QA progress -> 5000; redeem granted 2000 SP once, second refused; bonus 1/2; PayForCompletion 12; register 86->82; 15/15 new tests
+### 2026-10-29T10:44Z · f875b36 · L1 · state(fw): four mobiliser defects fixed and measured, and the pilot-pool blocker named
+
+Why: Make a live campaign actually deploy a hull, which is the last link before a payout
+Where: .opencode/state.md
+Evidence: SIDE_MUSTERED assigned 1 first observed at 10:17Z; remaining rejections are PILOT_IN_USE from live hulls in other systems
+### 2026-10-29T11:16Z · fc2b3d8 · L2 · alife21b: destination-served lift, scene stations, live hull recovery, hauler-named sale
+
+Why: A freight run existed on paper but carried air, and once it carried real cargo it stopped at the arrival sale
+Where: integration/coopDistributionPlan.cjs, integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, tests/coop-distribution-plan.test.mjs
+Evidence: live: plan->warp->lift 1x28338->cross ARRIVED->station 60003760->SALE_PENDING (unsettled, cargo still aboard); 13/13 run+plan tests; 79 loop tests

@@ -1,5 +1,32 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 11:10Z (UTC) - the freight run flies, and stops at the sale
+
+PROVEN LIVE (hull 980000004164, no client): planned a trip from the real hangar stacks and the
+real seeded book (1 x Republic Fleet Depleted Uranium XL, 60000682 -> 60003760 @ 560 000),
+warped in-system, LIFTED the stack into its native hold, CROSSED 30000145 -> 30000142
+(SAME_NATIVE_SHIP_ARRIVED), flew to the destination station.
+
+OPEN, MEASURED: the arrival sale answers SALE_PENDING and never settles (6+ calls over an
+hour, market container healthy, seeded Jita bid present, the unit still in the hold). The
+next fix belongs inside the arrival-sale settlement, not in the run: reproduce a single
+sellOnArrival for this hull and follow its journal. The run itself is honest - it waits by
+TIME, keeps the cargo, and says SALE_PENDING.
+
+Fixes this round, each pinned by tests (coop-distribution-run 8, coop-distribution-plan 5):
+  - a station lift serves the DESTINATION bid (demand map), because every station holding the
+    corporational minerals bids for none of them (NO_LOCAL_BID was the measured refusal);
+  - stations come from the SCENE (listStations() answered zero rows live);
+  - a durable hull is re-materialized from its record and the flight falls back to the scene
+    follow when its controller is gone;
+  - distance decides warp vs follow (a subwarp follow across a system never arrives);
+  - PENDING is bounded by time, not calls (a slow market must not stop a run);
+  - the sale needs a NAMED hauler: an empty role answered HAULER_NOT_NAMED.
+
+Still open from the previous list: no-belts fleet guard (Jita 30000142 has 0 belts and still
+holds a mining fleet of 4 miners with 0 ore), relocate-on-arrival for the identity file, and
+the runtime line ratchet (5153, other sessions).
+
 ## 2026-10-30 00:40Z (UTC) - the crossing works in both directions
 
 PROVEN LIVE: hauler 980000004164 crossed Jita 30000142 -> New Caldari 30000145 through gate
