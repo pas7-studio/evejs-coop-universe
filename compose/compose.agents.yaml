@@ -38,7 +38,7 @@ services:
       # world already tracked had a live campaign; these two systems are the real
       # stargate neighbours of the captured 30045344, so the world can derive a
       # fresh front from real travel instead of a hand-made record.
-      EVEJS_COOP_VIRTUAL_ROUTE: "30000142,30000144,30000145,30045344,30003837,30003836,30045343,30045342"
+      EVEJS_COOP_VIRTUAL_ROUTE: "30000142,30000144,30000145,30045344,30003837,30003836,30003839,30045343,30045342,30045339,30045340,30045341,30045338"
       EVEJS_COOP_VIRTUAL_TRAVEL_MS: "24000"
       EVEJS_COOP_CLONE_RECOVERY_MS: "360000"
       EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: "0.2"
@@ -71,6 +71,9 @@ services:
       # One real freight trip: lift at the origin station (what the DESTINATION pays for),
       # cross the gate with the proven native transfer, sell on arrival. Agent stack only.
       EVEJS_COOP_DISTRIBUTION_RUN: "1"
+      # After a sale the hull goes home and takes another load, instead of sitting in the
+      # buyer system with an empty hold (bounded to MAX_TRIPS per run).
+      EVEJS_COOP_DISTRIBUTION_CYCLE: "1"
       # The economic phases get their own beat: measured 2026-10-29, the stock hook ran at
       # 23:30:26 and then not for eight minutes while a journaled crossing waited 6 km from
       # its gate. A phase that only runs when another system happens to call it is not a

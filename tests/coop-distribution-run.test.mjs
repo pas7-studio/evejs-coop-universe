@@ -165,3 +165,70 @@ test("a carried type outside the sell allowlist is still asked for", () => {
   assert.ok(/for\(const typeID of carried\)[\s\S]{0,120}sellTypes\.push/.test(source),
     "what the hull really carries must join the sale list");
 });
+
+test("after a sale the hull goes home and takes another load", async () => {
+  // A hull that waits in the buyer system with an empty hold is dead freight: measured
+  // 2026-10-30 the first sale left it sitting in Jita with nothing to do.
+  const eighth = 980000004175;
+  run.write({ version: 1, haulerID: eighth, phase: "SELL", trip: TRIP, updatedAt: 10000,
+    sellCalls: 0, isk: 0, quantity: 1, trips: 0,
+    fromStationID: 60000682, fromSystemID: 30000145,
+    toStationID: 60003760, toSystemID: 30000142 });
+  const sold = await run.tick(eighth, { recycle: true, distanceTo: () => 100,
+    sell: async () => ({ status: "SOLD", isk: 560000 }), now: 10001 });
+  assert.equal(sold.status, "RETURN");
+  assert.equal(sold.state.trips, 1);
+  assert.equal(sold.state.returnToSystemID, 30000145);
+  // Not home yet: a crossing home is planned, never a silent replan.
+  const away = await run.tick(eighth, { recycle: true, hullSystemOf: () => 30000142,
+    planCrossingTo: (args) => { assert.equal(args.targetSystemID, 30000145);
+      return { status: "PLANNED" }; }, now: 10002 });
+  assert.equal(away.status, "RETURN_CROSSING");
+  // Home: the journal resets so the next beat plans a new trip.
+  const home = await run.tick(eighth, { recycle: true, hullSystemOf: () => 30000145, now: 10003 });
+  assert.equal(home.status, "REPLANNING");
+  assert.equal(run.read(eighth).phase, "PLAN");
+  assert.equal(run.read(eighth).trips, 1, "the trip count survives the reset");
+});
+
+test("a cycle is bounded: the last allowed load ends the run, and no trip ends it too", async () => {
+  const ninth = 980000004176;
+  const base = { version: 1, haulerID: ninth, phase: "SELL", trip: TRIP,
+    sellCalls: 0, isk: 0, quantity: 1,
+    fromStationID: 60000682, fromSystemID: 30000145,
+    toStationID: 60003760, toSystemID: 30000142 };
+  // One load left before the bound: the sale still sends the hull home.
+  run.write({ ...base, updatedAt: 11000, trips: run.MAX_TRIPS - 2 });
+  const sold = await run.tick(ninth, { recycle: true, distanceTo: () => 100,
+    sell: async () => ({ status: "SOLD", isk: 1000 }), now: 11001 });
+  assert.equal(sold.status, "RETURN");
+  assert.equal(sold.state.trips, run.MAX_TRIPS - 1);
+  // Home again: the planner is asked once more and finds nothing worth taking.
+  const home = await run.tick(ninth, { recycle: true, hullSystemOf: () => 30000145, now: 11002 });
+  assert.equal(home.status, "REPLANNING");
+  const end = await run.tick(ninth, { recycle: true, hullSystemOf: () => 30000145,
+    planTrip: () => ({ status: "NO_TRIP_WORTH_TAKING" }), now: 11003 });
+  assert.equal(end.status, "DONE");
+  assert.equal(run.read(ninth).phase, "DONE");
+  // And the bound itself: a run at MAX_TRIPS sells and stops instead of cycling.
+  const tenth = 980000004177;
+  run.write({ ...base, haulerID: tenth, updatedAt: 12000, trips: run.MAX_TRIPS - 1 });
+  const lastLoad = await run.tick(tenth, { recycle: true, distanceTo: () => 100,
+    sell: async () => ({ status: "SOLD", isk: 1000 }), now: 12001 });
+  assert.equal(lastLoad.status, "DONE");
+});
+
+test("the completed journal of the outward trip is not mistaken for the way home", async () => {
+  // Measured 2026-10-30: a stale ARRIVED journal made the run report RETURNED for ever while
+  // the hull still sat in the buyer system. Only the durable record proves the hull is home.
+  const eleventh = 980000004178;
+  run.write({ version: 1, haulerID: eleventh, phase: "RETURN", updatedAt: 13000, trips: 1,
+    returnToSystemID: 30000145, returnStationID: 60000682, crossAt: 0, isk: 560000 });
+  let planned = null;
+  const result = await run.tick(eleventh, { recycle: true, hullSystemOf: () => 30000142,
+    crossingPhase: () => "ARRIVED",
+    planCrossingTo: (args) => { planned = args.targetSystemID; return { status: "PLANNED" }; },
+    now: 13001 });
+  assert.equal(result.status, "RETURN_CROSSING");
+  assert.equal(planned, 30000145, "a fresh crossing home is planned");
+});
