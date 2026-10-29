@@ -2437,3 +2437,14 @@ Why: component licences were not readable at all (GetOwned answered an empty lis
 Detail: Finite capacity is spent down and never negative, infinite is free, and GetOwned no longer answers an empty list from the compatibility service. 5/5 new tests.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md
 Evidence: fork bc6ee18; live on 140000001 through the registry: GetOwned 0/0, grants 200, GetOwned 1/1, finite capacity 5, infinite free, spend 3 -> 2, spend 9 refused, unknown 5, revoke 200 then 5; 5/5 tests; register 45 unhandled
+### 2026-10-29T16:21Z · e2c967b · L2 · state(fw): frontier blind spot, refusal context, per-border isolation, and the pilot pool
+
+Why: Make the frontier visible, honest about refusals, isolated per border, and staffable again
+Where: .opencode/state.md
+Evidence: tickSystems 12 -> 24 with 30003829 included; BORDER_REFUSED per border; roster 64->88 with free pilots 23
+### 2026-10-29T16:24Z · 9433525 · L2 · docs/tests: SKIN sequencing jobs pay with real licences
+
+Why: Initiate/Get/CompleteEarly had no handler and GetAllActive answered an empty list, so a design could never become a skin and a running job was invisible
+Detail: A design costs its whole price or nothing, a due job completes on read so a restart cannot lose it, and only completion mints the copies. 5/5 new tests.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-skin-sequencing.test.mjs
+Evidence: fork 645f18a; live on 140000001: initiate without design 3, 200 pending qty 3 planned +30s, 2 jobs spent exactly 4 capacity, complete early 200 then 9, skin 6ae282c834c7dd78 3 copies, unknown 5, second job completed on read (67bfb0f11948d71d, 2 copies); 5/5 tests; register 42 unhandled
