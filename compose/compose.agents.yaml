@@ -38,7 +38,7 @@ services:
       # world already tracked had a live campaign; these two systems are the real
       # stargate neighbours of the captured 30045344, so the world can derive a
       # fresh front from real travel instead of a hand-made record.
-      EVEJS_COOP_VIRTUAL_ROUTE: "30000142,30000144,30000145,30045344,30003837,30003836,30003839,30045343,30045342,30045339,30045340,30045341,30045338,30003829,30003838"
+      EVEJS_COOP_VIRTUAL_ROUTE: "30000142,30000144,30000145,30045344,30003837,30003836,30003839,30045343,30045342,30045339,30045340,30045341,30045338,30003829,30003838,30045320"
       EVEJS_COOP_VIRTUAL_TRAVEL_MS: "24000"
       EVEJS_COOP_CLONE_RECOVERY_MS: "360000"
       EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: "0.2"
@@ -141,6 +141,13 @@ services:
       # stack is therefore priced at 5 000 ISK: real escrow, real debit, real payout, but
       # small enough that the existing militia income can carry a war.
       EVEJS_COOP_WAR_BOUNTY_ISK: "5000"
+      # FW-091/FW-095 (measured): the stall window was 45 minutes, which on this stack ate
+      # an evening per retry. Ten minutes then proved too short: measured at 19:32Z a border
+      # opened, its hulls arrived at 19:39-19:42, and the campaign expired before the first
+      # assault tick. The pipeline is wall-clock (one phase per tick), not simulated time, so
+      # the window is 25 minutes - enough for open -> stage -> jump -> assault -> kill,
+      # and still a fifth of the original.
+      EVEJS_COOP_WAR_OPENING_STALL_MS: "1500000"
       # FW-038B (2026-10-28): allow a funded faction to hire a navy with a real,
       # journaled two-leg wallet transfer (division 1000). The world measured this
       # asymmetry: ORE holds 136.5 M ISK and cannot field a hull, while every
