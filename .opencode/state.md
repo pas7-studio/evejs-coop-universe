@@ -1,5 +1,41 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 18:50Z (UTC) - achievements: our own catalogue, served, and the reward is paid
+
+PROVEN LIVE on `evejs-agents` (never on the owner's play stack), fork `395cb66`:
+  - `eve_public.achievement.definition.api.cdn.GetLatest` -> 200, checkpoint
+    `https://127.0.0.2/elysian-eve/achievements/1.0.0.achievements`, version 1.0.0, crc 2179836517;
+  - the content listener answer to that path over TLS: 200, 1880 bytes, identifier `ACHV`,
+    crc 2179836517 (matches the checkpoint), both roots the client's repository loads
+    (Challenges, TimeLimited) present, 3 achievements / 4 milestones parsed back;
+  - a real claim on character 140000004: Complete -> unclaimed 1 -> Claim 200 ->
+    `freeSkillPoints` 0 -> 3500, unclaimed 0. The reward is not a promise: the grant happens
+    before the entry is removed, and a failed grant returns REWARD_FAILED and keeps it claimable.
+
+What exists now:
+  - `space/coopAchievementContent.js` builds `AchievementData -> Category -> Achievement ->
+    Milestone -> Reward -> SpReward` on `space/coopFlatbuffer.js` (which learned uint8/uint16/bool
+    scalars; a bool is 0/1, a uint8 keeps its value - the first version collapsed both to 1 and the
+    round-trip test caught it as `RewardPayload.SpReward = 1`);
+  - names are **real localization message ids** read once from the client's own message table
+    (`W:\EVE Online - 3396210\ResFiles\...\localization_fsd_en-us.pickle`), quoted in comments.
+    An invented id renders as an unresolved marker in game, so never guess one;
+  - catalogue: Operations (0) -> Mining 1/100 (1 000 + 2 500 SP), Hauler 1 (1 500 SP),
+    Combat 1 (2 000 SP); Time Limited root is an honest empty category because the repository
+    reads `TimeLimited()` unconditionally and a missing root is `None` there and breaks the page;
+  - one contribution method `coop_cumulative` (ProgressConfig.CumulativeMode = 1, no parameters).
+  - 20 tests green across flatbuffer + content + achievements + titles.
+
+NEXT (remaining 14 register types, unchanged order):
+  1. `component.listing.InitiatePurchaseListing` (buy the component a licence needs);
+  2. freelance `itemdelivery.Deliver`;
+  3. sovereignty hub / mercenaryden / skyhook admin;
+  4. `ship.unlock.ClaimReward`;
+  5. `ai.assistant`, `internal_gateway`, `debug` (do not fake), `auth.*` (never fake).
+Still unverified by a human: the achievements window and the titles window need the owner to open
+them in the real client; no client-side visual confirmation exists for either.
+
+
 ## 2026-10-30 18:40Z (UTC) - demand first: build for the buyer the freight can reach
 
 PROVEN LIVE: within a minute of the deploy the manufacturer installed jobs for 444 and 60764,
