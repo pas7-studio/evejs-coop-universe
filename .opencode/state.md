@@ -11086,3 +11086,34 @@ Two honest ways forward, both owner decisions:
 2. **Pay from the faction corporation wallet** (real ISK exists: 1000120 = 530 000, 1000035 =
    90 000) instead of only from pilot earned balances - a doctrine change, since FW-005 was
    written to pay only from money its own pilots really earned.
+
+## FW-105 DEPLOYED (fork 36abb4f): the bounty can be backed by the faction's real corp wallet
+
+Owner decision 2026-10-30 ("1, 2"): seed a real counterparty for the loot, and pay from the
+faction corporation wallet. The second half is in and live (`EVEJS_COOP_WAR_BOUNTY_WALLET_FALLBACK=1`):
+`coopWarBounty.pay()` now asks `coopWarTreasury` RESERVE for escrow from the faction's native
+corporation wallet when no HELD reservation exists. RESERVE verifies the corporation, debits
+division 1000 with a real journal entry and refuses when the balance is not there, so no ISK is
+minted; a wallet that cannot cover the bounty still answers NO_HELD_ESCROW_FOR_FACTION.
+Each attempt emits `living-native-war-bounty-wallet-backed` with the reserve verdict.
+Bounty suite 10/10 (two new cases), coop-war-*+coop-fw-* 542 pass.
+
+## The hard fact that changes the plan: the wallets are EMPTY
+Measured 2026-10-30 23:0xZ on the play stack:
+```
+corporations 1000120 (Gallente)  balance 0        journal 0
+corporations 1000035             balance 0        journal 0
+corporations 1000129 (ORE)       balance 3432.75  journal 2
+coop-faction-war|treasury-v1     NO SUCH ROW      (nothing was ever reserved)
+```
+The 530 000 ISK I quoted earlier for 1000120 no longer exists - either it was spent before the
+rollback of the FW-050 store defect or it never survived that rollback. So:
+- "pay from the wallet" is wired and honest, but it cannot pay 25 000 ISK from 0;
+- "seed a counterparty" is therefore the prerequisite, not an alternative: income must exist
+  before any escrow can.
+
+## Next: real income (option 1)
+Loot sales die at `NO_SEEDED_COUNTERPARTY` because `coopNativeNpcMarket.js:318` only accepts a
+`source === "seed"` row at the exact station the hull docked at. Either seed real bids for the
+loot types at those stations, or let the seller pick a station that really has a seeded bid -
+never invent an order. Until one of those lands, the war is merit-only by arithmetic, not by policy.

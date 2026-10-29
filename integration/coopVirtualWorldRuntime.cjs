@@ -355,6 +355,27 @@ function warBountyStore(){
   readFleet:()=>{
    try{return nativeWarFleetRegistry()?.snapshot?.()||null}catch(_error){return null}
   },
+  // FW-105 (owner decision 2026-10-30): a real kill may be backed by the faction's real
+  // native corporation wallet instead of only by a levy its pilots never earned. The
+  // escrow is taken by coopWarTreasury RESERVE, which verifies the corporation, debits
+  // division 1000 with a real journal entry and refuses when the money is not there.
+  reserveFromWallet:({campaignID,factionID,needCents})=>{
+   try{
+    const state=warStateStore().read();
+    const campaign=state?.campaigns?.[campaignID];
+    if(!campaign)return {status:"BLOCKED",reason:"CAMPAIGN_NOT_FOUND"};
+    const pilots=warPresencePilots(),ledger=warEarnedLedger();
+    const corporationID=warFactionCorporation(factionID,pilots,ledger);
+    if(!(Number(corporationID)>0))return {status:"BLOCKED",reason:"NO_FACTION_CORPORATION"};
+    return warTreasuryStore().execute({type:"RESERVE",
+     eventID:"fw:wallet-reserve:"+campaignID+":"+factionID,
+     reservationID:"bounty:"+campaignID+":"+factionID,
+     corporationID,factionID,warID:campaign.warID,campaignID,
+     amountCents:needCents,minRemainingCents:0});
+   }catch(error){
+    return {status:"BLOCKED",reason:String(error&&error.message||error)};
+   }
+  },
   emit:(event,detail)=>{
    try{require("./coopRuntimeProbe").observe(event,null,null,detail);}
    catch(_error){/* probe is best effort */}
@@ -2479,6 +2500,14 @@ function start(){
   // Real courier dispatch (COOP-024). Opt-in and default OFF: it accepts the
   // owner's genuine native courier contract with a seeded courier character,
   // flies it natively and completes it. Observe above stays read-only.
+  // Universe sites for the systems this world plays in. The seeder only ever saw the AWAKE systems, so
+  // the systems the player flies through had no anomalies at all; this reconciles the visited set
+  // through the same persistent-site seeder (rate limited: new system or every 10 minutes).
+  if(process.env.EVEJS_COOP_UNIVERSE_SITES!=="0"&&visitedSystems.size)runPhase("universe-sites",()=>{
+   const result=require("./coopUniverseSites").reconcile({visitedSystems,nowMs:Date.now()});
+   if(result.status==="RECONCILED")console.log(`[CoopUniverseSites] systems=${result.systemIDs.length} desired=${result.desired} created=${result.created}`);
+   else if(result.status==="FAILED")console.warn(`[CoopUniverseSites] ${result.reason}`);
+  });
   if(process.env.EVEJS_COOP_ADMIN_BRIDGE==="1")runPhase("admin-bridge",()=>{
     require("./coopAdminBridge").drain({log:console.log});
   });

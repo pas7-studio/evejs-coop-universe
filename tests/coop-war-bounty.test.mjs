@@ -158,3 +158,93 @@ test("with no link and no registry row the bounty still names the real blocker",
   // war is not payable at all, and saying so is more honest than blaming the faction.
   assert.equal(result.reason, "NO_REAL_CAMPAIGN_FOR_EVENT");
 });
+
+// FW-105 (owner decision 2026-10-30): a real kill may be backed by the faction's REAL
+// native corporation wallet.
+//
+// MEASURED before this change: the play stack held no escrow row at all (no treasury row
+// existed) and every real kill answered NO_HELD_ESCROW_FOR_FACTION, although a faction
+// corporation wallet is a real balance the war could legitimately spend. The reservation is
+// taken on demand by the same escrow authority the opening phase uses, so ISK is only ever
+// moved from a wallet that really holds it.
+test("with the wallet fallback on, a kill reserves its escrow from the faction wallet", () => {
+  const events = [], reserves = [];
+  let held = false;
+  const treasury = {
+    snapshot: () => ({ status: "OK",
+      reservations: held ? { ["bounty:" + campaignID + ":500014"]: {
+        reservationID: "bounty:" + campaignID + ":500014", corporationID: 1000129,
+        factionID: 500014, warID: "war:500011-500014", campaignID, cents: 5000000,
+        status: "HELD" } } : {} }),
+    execute: (command) => {
+      if (command.type === "RESERVE") {
+        reserves.push(command);
+        held = true;
+        return { status: "APPLIED", receipt: { reservationID: command.reservationID } };
+      }
+      return { status: "APPLIED", receipt: { type: "PAYOUT",
+        reservationID: command.reservationID, corporationID: command.corporationID,
+        factionID: 500014, warID: "war:500011-500014", campaignID,
+        pilotID: command.pilotID, amountCents: 5000000,
+        payoutProofID: command.proofID, at: 100000 } };
+    },
+  };
+  const bounty = createWarBounty({
+    env: { ...flags(), EVEJS_COOP_WAR_BOUNTY_WALLET_FALLBACK: "1",
+      EVEJS_COOP_WAR_BOUNTY_ISK: "25000" },
+    treasury,
+    chest: { creditPilot: () => ({ status: "APPLIED", receipt: {} }) },
+    readWarState: () => ({ version: 1,
+      campaigns: { [campaignID]: { campaignID, warID: "war:500011-500014",
+        state: "ASSAULT", targetSystemID: 30000143 } },
+      wars: { "war:500011-500014": { warID: "war:500011-500014", state: "ACTIVE",
+        attackerFactionID: 500011, defenderFactionID: 500014 } } }),
+    readLinks: () => links,
+    getNativeEntity: (id) => ({ corporationID: corporations.get(Number(id)) }),
+    getFactionForCorporation: (id) => factions.get(Number(id)),
+    readCasualties: () => ({ byWreck: { "980300000006": { wreckID: 980300000006,
+      campaignID, warID: "war:500011-500014", pilotID: "coop-pilot-050" } } }),
+    reserveFromWallet: ({ factionID, needCents }) => {
+      assert.equal(factionID, 500014);
+      assert.equal(needCents, 2500000, "the reservation is the configured bounty, in cents");
+      return treasury.execute({ type: "RESERVE", reservationID: "bounty:" + campaignID + ":500014",
+        corporationID: 1000129, factionID, campaignID, amountCents: needCents });
+    },
+    emit: (event, detail) => events.push({ event, detail }),
+    clock: () => 100000,
+  });
+  const result = bounty.pay({ pilotID: "coop-pilot-001", kind: "warship-kill",
+    wreckID: 980300000006, proofID: "wreck:980300000006" });
+  assert.equal(result.status, "PAID", JSON.stringify(result));
+  assert.equal(reserves.length, 1, "exactly one real wallet reservation backs exactly one kill");
+  assert.equal(events[0].event, "living-native-war-bounty-wallet-backed");
+  assert.equal(events[0].detail.status, "RESERVED");
+});
+
+test("a wallet that cannot cover the bounty still refuses instead of inventing ISK", () => {
+  let reserved = 0;
+  const bounty = createWarBounty({
+    env: { ...flags(), EVEJS_COOP_WAR_BOUNTY_WALLET_FALLBACK: "1" },
+    treasury: { snapshot: () => ({ status: "OK", reservations: {} }),
+      execute: () => ({ status: "BLOCKED", reason: "INSUFFICIENT_WALLET_BALANCE" }) },
+    chest: { creditPilot: () => ({ status: "APPLIED", receipt: {} }) },
+    readWarState: () => ({ version: 1,
+      campaigns: { [campaignID]: { campaignID, warID: "war:500011-500014",
+        state: "ASSAULT", targetSystemID: 30000143 } },
+      wars: { "war:500011-500014": { warID: "war:500011-500014", state: "ACTIVE",
+        attackerFactionID: 500011, defenderFactionID: 500014 } } }),
+    readLinks: () => links,
+    getNativeEntity: (id) => ({ corporationID: corporations.get(Number(id)) }),
+    getFactionForCorporation: (id) => factions.get(Number(id)),
+    readCasualties: () => ({ byWreck: { "980300000006": { wreckID: 980300000006,
+      campaignID, warID: "war:500011-500014", pilotID: "coop-pilot-050" } } }),
+    reserveFromWallet: () => { reserved += 1; return { status: "BLOCKED",
+      reason: "INSUFFICIENT_WALLET_BALANCE" }; },
+    clock: () => 100000,
+  });
+  const result = bounty.pay({ pilotID: "coop-pilot-001", kind: "warship-kill",
+    wreckID: 980300000006 });
+  assert.equal(reserved, 1);
+  assert.equal(result.status, "BLOCKED");
+  assert.equal(result.reason, "NO_HELD_ESCROW_FOR_FACTION");
+});
