@@ -9185,3 +9185,41 @@ Fork `f0ff7c1`, register 82 -> 77 unhandled.
 - **solarsystem.api.Get / station.api.Get** answer the real static rows (Perimeter 0.949000000,
   the Jita IV station name), structures included, NOT_FOUND otherwise. Security is units+nanos
   with -0 normalised (a negative sec below one starts at units 0).
+
+## 2026-10-29T12:25Z - the war ran all night and then starved; root cause found (FW-038)
+
+What the night produced (play stack, measured):
+  war:500001-500004 ACTIVE; campaign 30045343 reached **OCCUPIED** and the
+  territory row now reads 30045343 -> 500004 (Gallente) OCCUPIED,
+  30003837 -> 500001 (Caldari) SECURE.
+  No `war-capture-by-force` event exists, so the flip came from the campaign
+  resolution path, NOT from the FW-035 wreck proof. Do not claim FW-035.
+  campaign 30003837 opened and expired 15 times (:r2..:r15).
+
+Then it starved: roster fleets [], registry ships 0, no war event for 60 min.
+The watchdog reported it correctly (`PROBLEM no war event for 60 min`).
+
+Root cause (fixed, fork `241f010`, tests `d14605ac`, 14 pass):
+  `coopWarGarrison` only fed campaigns in state ASSAULT. A campaign is created
+  in PREPARING and can only reach ASSAULT once both sides hold hulls, and the
+  mobilizer can only assign native patrols that already exist. With no patrols
+  left, PREPARING had nobody to muster, the garrison refused to help, and every
+  reopen expired again - which also drove the 8x TARGET_RECENTLY_EXPIRED
+  cooldown on 30003837 that now blocks the Caldari/Gallente front.
+  FW-038 musters PREPARING too; a decided campaign (OCCUPIED/EXPIRED) is never
+  refilled.
+
+Deployed on `evejs-agents` only (verified: `garrison skipped:
+GARRISON_CHEST_EMPTY` proves the PREPARING campaign is now mustered).
+
+NEEDS_OWNER_RESTART_WINDOW: the play stack still runs the old garrison, so the
+Caldari/Gallente front stays on cooldown. One `docker compose up -d --no-deps
+server` (~3 min) picks up FW-038 and the next open will muster instead of
+expiring. Do not do it without the owner's word.
+
+Separate blocker on `evejs-agents` (NOT mine to change): `EVEJS_COOP_WAR_
+GARRISON_FUNDED=1` + empty campaign chest => GARRISON_CHEST_EMPTY. That is the
+FW-005B war-economy work owned by the parallel agent. Do not flip it to 0.
+
+Next after the restart: watch 30003837 reopen, confirm both sides muster
+(>1 hull each), then native attack orders + weapon events, then the client view.
