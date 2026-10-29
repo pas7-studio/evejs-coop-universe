@@ -10085,3 +10085,31 @@ WHAT REMAINS is therefore only the live observation, not a code gap: `bounty-pai
 kill inside a funded campaign, and the live world keeps ending campaigns (capture or 45-minute expiry)
 before one lands. The tools are in place: `scripts/coop-war-acceptance.cjs`,
 `war_payout_diagnose`, `living-native-destruction-identity`, `living-native-war-merit-bridge`.
+
+## FW-091 + the front keeper (19:1xZ): the live loop starves on militia money, not on code
+
+FW-091: the campaign stall window on the agents stack is now 10 minutes
+(`EVEJS_COOP_WAR_OPENING_STALL_MS=600000`) instead of 45, because this stack simulates at x5 and a
+front could otherwise eat an evening per retry.
+
+`%TEMP%\opencode\front-keeper.cjs` (a tool, not engine code) closes the operational hole that made every
+acceptance run a lottery: it reads the live war state, finds a PREPARING/ASSAULT campaign, and makes sure
+its OWN contested system holds armed hulls of BOTH war parties, using the sanctioned spawn path with a
+real doctrine and a free pilot. Runs keep cycles going without an operator seeding fixed systems that
+the planner never picks.
+
+MEASURED LIMIT of the live loop (19:12Z): `NO_FUNDED_FRONT` with
+`SUPPLY_UNFUNDED_SIDE:500001` - the two-sided rule refuses because the militia corporation cannot fund
+its own 5 000 ISK bounty, even after a top-up to 90 000 ISK. The reason chain in the events is
+`BOUNTY_BACKED_BY_NATIVE_CORP_WALLET` -> `WAR_TREASURY_FUNDS_UNAVAILABLE`, so the levy is planned and the
+wallet debit is refused; the treasury row and the corporation wallet disagree about what is spendable
+(most likely an orphaned HELD row from an aborted opening holds the difference).
+
+THE ONE STRUCTURAL GAP LEFT (product decision, not a patch): militia corporations have no income of
+their own. Everything they pay comes from a manual `war_mercenary_settle` from the ORE corporation, while
+the funded garrison buys replacement hulls from the same wallet. A day of fighting drains both, and then
+FW-068 correctly refuses every border. Until a real income exists (a share of the faction's NPC market
+sales, or loot of the wrecks its hulls create), the war economy needs an operator to top it up.
+
+Payout rung: PROVEN in process (tests/coop-war-payout-end-to-end.test.mjs, 4 tests). Live observation of
+`bounty-paid` still needs one kill inside a funded campaign, which is now purely an economy question.
