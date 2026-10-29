@@ -75,7 +75,11 @@ def main():
     everything = groups_where(lambda info: info["category"] in
                               (CELESTIAL, STATION, SHIP, ENTITY, DRONE, DEPLOYABLE, STRUCTURE, UPWELL))
     ships = groups_where(lambda info: info["category"] in (SHIP, ENTITY))
-    hostile = groups_where(lambda info: info["category"] == ENTITY and HOSTILE_NAMES.search(info["name"]))
+    # A friendly mining fleet is not hostile: the NPC hull groups carry "Mining"/"Industrial" in
+    # their names and would otherwise sit in the Hostile tab.
+    hostile = groups_where(lambda info: info["category"] == ENTITY
+                           and HOSTILE_NAMES.search(info["name"])
+                           and not re.search(r"(Mining|Industrial)", info["name"], re.I))
     travel = groups_where(lambda info: info["category"] in (CELESTIAL, STATION)
                           and (TRAVEL_NAMES.search(info["name"]) or info["category"] == STATION))
     loot = groups_where(lambda info: info["category"] == CELESTIAL and LOOT_NAMES.search(info["name"]))
