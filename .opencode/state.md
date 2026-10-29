@@ -10867,3 +10867,39 @@ exists, just not where staging looks.
    if some attacker rows exist (it switched from NO_ATTACKER_SHIP_REGISTERED to
    NO_ATTACKER_SHIP_IN_SOURCE:30045344). Resolve which read is authoritative before touching
    the assign path further.
+
+## FIRST REAL ASSAULT AND REAL KILLS ON THE PLAY STACK (2026-10-29 22:33Z)
+
+FW-103 unblocked the front: `war:500001-500004:campaign:30003837:r18` moved PREPARING -> **ASSAULT**
+(the first campaign on that border ever to leave PREPARING; r7..r17 all expired). The attacker
+now musters in the TARGET once ASSAULT starts, which is exactly the mobiliser's own rule:
+`living-native-war-mobilization-idle 22:33:18Z  DEFENDER 30003837 SIDE_MUSTERED assigned 2`.
+
+Combat is real, not modelled:
+```
+22:33:15.178Z living-native-war-merit UPDATED pilot coop-pilot-018
+             evidence UPSTREAM_ATTACKER_ENTITY_PLUS_PHYSICAL_NATIVE_WRECK
+22:33:15.178Z living-native-war-merit UPDATED pilot coop-pilot-013 ...
+22:33:18.449Z living-native-war-battle-line-relief RELEASED entity 980000064832
+             reason NATIVE_WRECK_CONFIRMED
+merit-v1 row: 16 pilots, 8 with merit, 535 merit total, top coop-pilot-040 175,
+coop-pilot-018 115, coop-pilot-002 100; every entry kind "warship-kill" (25 each)
+```
+
+Bounty is NOT paid, and the event says why: `living-native-war-bounty-skipped
+BLOCKED NO_HELD_ESCROW_FOR_FACTION` (`REAL_KILL_WITHOUT_PAYABLE_ESCROW`). That is the
+consequence of the deliberate `EVEJS_COOP_WAR_REQUIRE_FUNDING=0` on this stack: its factions
+earn 0 (`REFUSED:NO_REAL_FACTION_INCOME`), so there is no escrow to pay from.
+
+## Corrected measurement (my previous note was wrong)
+The registry row is `coop-faction-war\u001ffleet-registry-v1`, NOT `...\u001ffleet-roster-v1`
+(roster = composition plans, `war_fleet_state` ones). Measured 22:34Z: 6 registry rows, all in
+30003837, 5 of them the DEFENDER faction 500001 plus one 500004 row - i.e. the defender side
+mobilises normally and the attacker row only appears once ASSAULT flips the muster system to
+the target. There was no "registry disagrees with itself" defect; I read the wrong row.
+
+## Next (in order)
+1. `BOUNTY_PILOT_FACTION_UNKNOWN` on a kill that DID earn merit (coop-pilot-013, camp "").
+   A kill the merit ledger accepts must know its faction; find why attribution lost it.
+2. Bounty payout is a product decision: either fund the factions for real (no real income) or
+   keep the war merit-only on the play stack. Escrow is never minted.
