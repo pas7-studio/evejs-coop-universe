@@ -4,12 +4,14 @@ import {createRequire} from "node:module";
 import path from "node:path";
 
 // Achievements: progress, completion and the reward completion unlocks. The catalogue is client
-// content, so the server owns only what really happened - and a Claim must move a reward from
-// unclaimed to claimed without inventing a payment.
+// content (ours - space/coopAchievementContent), and a Claim pays exactly the skill points that
+// catalogue declares for the achievement, before the reward leaves the unclaimed list.
 const forkRoot = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
 const require = createRequire(import.meta.url);
 const {createAchievements} = require(
   path.join(forkRoot, "Code/server/src/space/coopAchievements.js"));
+const {CATEGORIES} = require(
+  path.join(forkRoot, "Code/server/src/space/coopAchievementContent.js"));
 const {
   ACHIEVEMENT_PROTO_ROOT,
   createAchievementGatewayService,
@@ -82,14 +84,59 @@ test("a reset withdraws the reward completion created, and nothing else", () => 
   assert.equal(achievements.claim(7, {}).status, "SOURCE_REQUIRED");
 });
 
-test("claim keeps the reward honest: it is removed, not paid", () => {
+test("claiming an achievement the catalogue does not declare pays nothing", () => {
   const state = fakeCharacterState({"7": {characterID: 7}});
-  const achievements = make(state);
+  const paid = [];
+  const achievements = createAchievements({
+    characterState: state,
+    clock: () => NOW,
+    env: {EVEJS_COOP_ACHIEVEMENTS: "1"},
+    grantSkillPoints: (id, amount) => paid.push([id, amount]),
+  });
   achievements.complete(7, ACH);
   assert.equal(achievements.unclaimed(7).length, 1);
-  assert.equal(achievements.claim(7, {achievement: ACH}).status, "CLAIMED");
+  const result = achievements.claim(7, {achievement: ACH});
+  assert.equal(result.status, "CLAIMED");
+  assert.equal(result.skillPoints, 0);
+  assert.deepEqual(paid, [], "an unknown achievement must not invent a payment");
   assert.equal(achievements.unclaimed(7).length, 0);
   assert.equal(achievements.score(7), 0, "no category score was invented by a claim");
+});
+
+test("a claim pays the skill points our catalogue declares, once", () => {
+  const catalogueId = CATEGORIES[0].achievements[0].id;
+  const uuid = Buffer.from(catalogueId, "hex");
+  const state = fakeCharacterState({"7": {characterID: 7}});
+  const paid = [];
+  const achievements = createAchievements({
+    characterState: state,
+    clock: () => NOW,
+    env: {EVEJS_COOP_ACHIEVEMENTS: "1"},
+    grantSkillPoints: (id, amount) => paid.push([id, amount]),
+  });
+  achievements.complete(7, uuid);
+  const result = achievements.claim(7, {achievement: uuid});
+  assert.equal(result.status, "CLAIMED");
+  assert.equal(result.skillPoints, 3500, "the sum of the milestones the catalogue declares");
+  assert.deepEqual(paid, [[7, 3500]]);
+  assert.equal(achievements.claim(7, {achievement: uuid}).status, "NOT_FOUND",
+    "a paid reward cannot be claimed twice");
+});
+
+test("a reward that cannot be paid stays claimable instead of being eaten", () => {
+  const uuid = Buffer.from(CATEGORIES[0].achievements[0].id, "hex");
+  const state = fakeCharacterState({"7": {characterID: 7}});
+  const achievements = createAchievements({
+    characterState: state,
+    clock: () => NOW,
+    env: {EVEJS_COOP_ACHIEVEMENTS: "1"},
+    grantSkillPoints: () => {
+      throw Error("SKILL_POINT_GRANT_WRITE_FAILED");
+    },
+  });
+  achievements.complete(7, uuid);
+  assert.equal(achievements.claim(7, {achievement: uuid}).status, "REWARD_FAILED");
+  assert.equal(achievements.unclaimed(7).length, 1, "the reward is still there to claim later");
 });
 
 test("the gateway answers Get, admin calls, categories and the showcase score", () => {
