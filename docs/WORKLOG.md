@@ -2505,3 +2505,9 @@ Why: the skin market window could not quote broker fee, tax or buyer fee at all,
 Detail: 3/3 tests: broker rates per duration, tax in nanos, and the tiered buyer fee definition.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md
 Evidence: fork 1ec0b15; live through the registry: 4 broker rows (1 day = 10 000 000 nanos), 4 per-duration rows, tax 0 units + 25 000 000 nanos, buyer fee 100 LP, definition v1.0.0 with 3 tiers and 200 LP branded tier 1; 3/3 tests; register 23 unhandled
+### 2026-10-29T18:09Z · 0a097d4 · L2 · docs/tests: skin market listings escrow what they sell
+
+Why: market listings had no create/cancel/get at all and GetAll/GetAllOwned answered empty from the compatibility service, so a player could neither list a skin nor see one
+Detail: 4/4 tests: a listing without copies is refused, cancelling returns them, only the seller may cancel, and an expired listing drops with its copies back.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-skin-listings.test.mjs
+Evidence: fork 931cb17; live on 140000001 with licence 6ae282c834c7dd78: create 200 + 16-byte tx, GetAll price 5 000 000, owned 1/0, escrow 1; foreign cancel 7, own cancel 200 with 3 copies back; 99 copies 9; unknown 5; 4/4 tests; register 19 unhandled
