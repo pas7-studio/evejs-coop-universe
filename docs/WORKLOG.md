@@ -2281,3 +2281,19 @@ Why: coop-events.jsonl grew without bound (368 MB, 402k lines, 4.2 GB data volum
 Detail: The only durable trace of the world had grown to 368 MB / 402 291 lines and was never trimmed, with the data volume at 4.2 GB. Rotation is bounded (one previous generation kept) and rate-limited to one size check a minute, so it cannot cost a tick. Fork: 7988e05. Tests: 4.
 Where: integration/coopRuntimeProbe.cjs, tests/coop-events-rotation.test.mjs
 Evidence: fork 7988e05; measured 368137461 bytes / 402291 lines before; module deployed without restart; tests/coop-events-rotation 4/0
+### 2026-10-28T23:49Z · 7198080 · L2 · feat(fw): a campaign validator that checks the relations between records
+
+Why: Validate the war campaign as relations between records, not per field
+Detail: Every defect this campaign found was invisible inside a single record: a funded war whose escrow had reverted, a campaign that expired with its money locked, a capture with no provenance. The validator states ten relations (payable, sides funded, terminal escrow released, PAID proof, credit leg, territory provenance, one campaign per target, fleet hulls, war/state integrity, record readable) as pu
+Where: .opencode/state.md, scripts/coop-war-validate.cjs, scripts/war-campaign-checks.cjs, tests/coop-war-campaign-validation.test.mjs
+Evidence: first run FAILed live-campaign-funded and led to FW-062; after deploy WAR_CAMPAIGN_OK checks=10 warn=1 (defender militia wallet is 0)
+### 2026-10-28T23:50Z · b711b6e · L2 · alife20a: loop driver, named preflight refusals, scene-authorised jump range, fleet hauler shortfall
+
+Why: The economic phases depended on a stock hook that went quiet for minutes, and a mining hull was being ordered through a gate it can never make
+Where: compose/compose.agents.yaml, integration/coopLoopDriver.cjs, integration/coopLoopTick.cjs, integration/coopNativeMiningFleetDurable.cjs, integration/coopNpcGateCrossing.cjs, scripts/__pycache__/coop-client-code.cpython-312.pyc, tests/coop-fleet-hauler-shortfall.test.mjs, tests/coop-loop-driver.test.mjs, tests/coop-npc-gate-crossing.test.mjs
+Evidence: living-coop-loop-driver STARTED/OK live; slot 30000145-1 RELINKED miners=5 haulers=1 addedHaulers=980000009652; 72/72 loop tests incl. new driver, preflight-name and hauler-shortfall suites
+### 2026-10-29T00:23Z · dc30291 · L2 · test(gateway): pin the career GetAll progress rows
+
+Why: the career portal raised AttributeError because GetAll returned no progress row per definition; the message also had to move to a private proto root after an eager lookup crashed the gateway at require time
+Where: tests/coop-career-getall-progress.test.mjs
+Evidence: fork b0c0+, live payload 104 bytes (was 0), 200; tests/coop-career-getall-progress 2/0; rebuild + stack up healthy
