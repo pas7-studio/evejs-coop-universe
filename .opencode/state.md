@@ -1,5 +1,35 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 16:20Z (UTC) - three hulls share the freight; a stuck call cannot freeze them
+
+PROVEN LIVE: the two idle Jita haulers were re-marked as distribution hulls through
+scripts/coop-distribution-hull.cjs (identity bookkeeping only - nothing moved, nothing
+invented). Both then repositioned home on their own, loaded freight and crossed to Jita;
+one trip settled **5 224 110 ISK in a single sale**.
+
+Changes (tests: distribution-run 21, distribution-plan 6, 97 across the loop suites):
+  - a hull with no freight where it stands repositions to the nearest system that really
+    holds corporation stock and is one reciprocal gate away (stockSystems over real hangars);
+  - one hung market call no longer freezes every hull: per-hull budget HULL_TIMEOUT_MS, and
+    planning may be async (a market read is);
+  - an empty hold proves delivery, not price: such a sale records iskUnknown, never a
+    misleading 0;
+  - a run blocked by a slow market may retry once after BLOCKED_RETRY_MS (30 min) while it
+    still carries goods, bounded to 2 retries.
+
+Fleet: 980000000002, 980000000005, 980000004164 are coop-distribution-*; one durable journal
+per hull; the loop iterates all of them each beat.
+
+NEXT:
+  1. margin-based cargo choice (a hold of ammunition beats a hold of 4-ISK ore; the planner
+     still ranks by trip revenue, not value per m3);
+  2. the manufacturer reports NO_REAL_BUYER locally - produce what Jita bids for, then let
+     this freight carry it;
+  3. accounting: sum the real per-trip ISK into the economy ledger so the balance sheet shows
+     freight income separately from station sales;
+  4. relocate-on-arrival for the identity file;
+  5. the runtime line ratchet (5153, other sessions).
+
 ## 2026-10-30 15:20Z (UTC) - the cycle RUNS: repeated real sales, hold emptied, hull home
 
 PROVEN LIVE, one hull, no client, one continuous loop:
