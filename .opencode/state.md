@@ -1,5 +1,33 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 21:20Z (UTC) - the price of a trip is captured before the market forgets it
+
+MEASURED LIVE (balance sheet):
+  freight          10 trips, 471 984 ISK, 122 063 units (4 rows still carry an unknown price)
+  freight check    RECONCILED
+  newest row       {haulerID 980000000002, lines 1, units 9595, isk 77349, status SOLD}
+
+Fixed: the settled sale is dropped ~5 s after it lands and the run looked only after a whole
+poll interval (6 s), so four of nine paid trips were written without an amount. After a PENDING
+answer the run now READS the settlement every 1.2 s (four reads) and only asks the market again
+once those reads are exhausted. The poll spacing still exceeds the per-pilot cooldown.
+
+The four remaining unknown rows are historical (before this fix) and stay as they are - a
+record is not edited to look better.
+
+Tests: distribution-run 28, freight-check 3.
+
+Fleet: four coop-distribution-* hulls; three finished loads this round, one is crossing, one is
+loading a multi-stop trip.
+
+NEXT:
+  1. the runtime line ratchet (5153, other sessions) - split a module rather than grow it;
+  2. the mining side: its slots still carry ore that only the drain sells; a miner cannot fly
+     its own ore to a buyer;
+  3. a second destination system (the run currently ships to one buyer system per route);
+  4. watch the treasury against the freight ledger over a longer window - the numbers now exist
+     on both sides, so a slow drift can be named instead of guessed.
+
 ## 2026-10-30 03:15Z (UTC) - daily goal claim works; EverMarks now exist as a real ledger balance
 
 The claim path was never broken. Measured on the play stack for character 140000005:

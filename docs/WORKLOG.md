@@ -2654,3 +2654,13 @@ Evidence: live: 9 trips / 394635 ISK / 112468 units, freight check RECONCILED, t
 Why: The only armed border of the funded war was blocked by a cooldown created by the FW-050 escrow defect
 Where: .opencode/state.md
 Evidence: fork commit ad62455; owner real state: 30003837 old blocked (360 min window) -> new not blocked; coop-war-*/coop-fw-* 529 pass, cooldown suite 8/8
+### 2026-10-29T21:18Z · 65de821 · L3 · fw: FW-100/101 - the frontier stops looping open/expire; next blocker is gate staging
+
+Why: Every campaign on the play stack was expired ~1 minute after opening, so no front could ever exist
+Where: .opencode/state.md, integration/coopFactionWarOpening.cjs, tests/coop-war-target-cooldown.test.mjs
+Evidence: fork 4e6b8bc; r18 PREPARING since 21:11:13Z while 17 predecessors died WAR_ESCROW_MISSING; cooldown suite 11/11; coop-war-*+coop-fw-* 532 pass
+### 2026-10-29T21:18Z · 91aeb4d · L2 · alife25d: capture the settled sale inside its five-second window
+
+Why: Paid trips were being recorded without an amount because the settled sale was read too late
+Where: integration/coopDistributionRun.cjs, tests/coop-distribution-run.test.mjs
+Evidence: live next row isk=77349 (was iskUnknown); ledger 10 trips / 471984 ISK RECONCILED; 28/28 run tests
