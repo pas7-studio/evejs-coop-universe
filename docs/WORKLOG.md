@@ -2297,3 +2297,8 @@ Evidence: living-coop-loop-driver STARTED/OK live; slot 30000145-1 RELINKED mine
 Why: the career portal raised AttributeError because GetAll returned no progress row per definition; the message also had to move to a private proto root after an eager lookup crashed the gateway at require time
 Where: tests/coop-career-getall-progress.test.mjs
 Evidence: fork b0c0+, live payload 104 bytes (was 0), 200; tests/coop-career-getall-progress 2/0; rebuild + stack up healthy
+### 2026-10-29T00:37Z · 1351db2 · L2 · alife20b: a proven return crossing, identity reconciliation, distribution hull tooling
+
+Why: A hull could not cross back although everything about it was provable: the gate distance was measured by the wrong authority, a follow order re-locked its own target, and the identity link had been pruned
+Where: integration/coopLoopTick.cjs, integration/coopNativeMiningFleetDurable.cjs, integration/coopNpcGateCrossing.cjs, scripts/coop-distribution-hull.cjs, scripts/coop-hull-identity.cjs, tests/coop-fleet-hauler-shortfall.test.mjs, tests/coop-npc-gate-crossing.test.mjs
+Evidence: live ARRIVED SAME_NATIVE_SHIP_ARRIVED 980000004164 30000142->30000145 attempts=1 after 11 191 km warp; store systemID 30000145, 4 modules; 79/79 loop tests
