@@ -9598,3 +9598,23 @@ and the map reads 30003829 = 500001 next to 30003836 = 500011 with a real gate b
 only ever reports two OTHER borders (`30045338 -> 30045343` and `30045344 -> 30045343`). So
 `buildFronts`/`territoriesForFronts` is dropping a genuine, owned, adjacent pair. That is the next thread
 to pull; everything downstream of the plan (apply, mobilise, fight, attribute, capture, refund) is proven.
+
+### 2026-10-29T20:05Z - SKIN step 4b done (sequencing jobs, 3 types + GetAllActive)
+
+Fork `645f18a`: `space/coopSkinSequencing.js` + `skinSequencingGatewayService.js`. `licenses`
+in InitiateRequest is the number of copies (`nb_runs` in the client messenger), name/line_name
+arrive as utf-8 strings and the layout is the raw field 3 bytes. Price: every component is
+checked against the held licences first (infinite free, finite spent), then all are taken - a
+design costs its whole price or nothing. Jobs store `plannedMs`, so a due job completes on read
+(restart-safe, exactly once); the minted hex is sha256(job uuid) so no skin exists early.
+`GetAllActive` was an empty list from compatibility - a running job was invisible.
+
+Live on 140000001: initiate without design 3; 200 pending qty 3 planned +30s; 2 jobs and exactly
+4 capacity spent; complete early 200 then 9; skin 6ae282c834c7dd78 with 3 copies; unknown 5; a
+second job completed on read after its time (67bfb0f11948d71d, 2 copies). Register 42 unhandled
+(`handled=238`).
+
+Known limit to fix next: CompleteEarly does not charge PLEX yet (retail does), and
+`thirdparty.api.Get` (the created skin's own record: name/layout/tier) is still missing, so the
+designer can list a licence but cannot show its design. Then `component.license.item.Consume`,
+then the skin market (10).
