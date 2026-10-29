@@ -17,6 +17,11 @@ const {
   createSkinListingGatewayService,
 } = require(path.join(forkRoot,
   "Code/server/src/_secondary/express/gatewayServices/skinListingGatewayService.js"));
+const {
+  TRANSACTION_PROTO_ROOT,
+  createMarketTransactionGatewayService,
+} = require(path.join(forkRoot,
+  "Code/server/src/_secondary/express/gatewayServices/marketTransactionGatewayService.js"));
 
 const API = "eve_public.cosmetic.market.skin.listing.api";
 const HEX = "a1b2c3d4e5f60718";
@@ -246,4 +251,61 @@ test("a purchase that cannot be paid for moves nothing", () => {
   assert.equal(wallet.balances["7"], 0);
   assert.equal(skins.get(8, HEX), null, "no copies were delivered");
   assert.equal(listings.all()[0].quantity, 1, "the listing is untouched");
+});
+
+// The transaction record both sides ask for after a purchase.
+test("both sides can read the transaction the purchase created", () => {
+  const {listings} = market();
+  const {listing} = listings.create(7, {skin: HEX, quantity: 1, priceUnits: 2000000});
+  const bought = listings.purchase(8, listing.uuid, 1);
+  assert.equal(bought.status, "PURCHASED");
+
+  for (const actor of [7, 8]) {
+    const rows = listings.transactionRows(actor);
+    assert.equal(rows.length, 1, `character ${actor} keeps its own copy`);
+    assert.equal(rows[0].uuid, bought.transaction);
+    assert.equal(rows[0].status, 3, "the client's successful status");
+    assert.equal(rows[0].skin, HEX);
+    assert.equal(rows[0].quantity, 1);
+    assert.equal(rows[0].gross, 2000000);
+  }
+  assert.equal(listings.transactionRows(9).length, 0, "a bystander has no rows");
+  assert.equal(listings.transaction(8, bought.transaction).role, "buyer");
+  assert.equal(listings.transaction(7, bought.transaction).role, "seller");
+  assert.equal(listings.transaction(8, Buffer.alloc(16, 99)), null);
+});
+
+test("the transaction gateway answers the row both sides hold", () => {
+  const {listings} = market();
+  const {listing} = listings.create(7, {skin: HEX, quantity: 1, priceUnits: 1000000});
+  const bought = listings.purchase(8, listing.uuid, 1);
+  const service = createMarketTransactionGatewayService({skinListings: listings});
+  const API = "eve_public.cosmetic.market.transaction.api";
+  const encode = (typeName, value) =>
+    Buffer.from(TRANSACTION_PROTO_ROOT.lookupType(typeName).encode(value).finish());
+  const decode = (typeName, buffer) =>
+    TRANSACTION_PROTO_ROOT.lookupType(typeName).decode(buffer || Buffer.alloc(0));
+  const envelope = (value, characterID) => ({
+    payload: {value},
+    authoritative_context: {identity: {character: {sequential: characterID}}},
+  });
+
+  const uuid = Buffer.from(bought.transaction, "hex");
+  for (const actor of [7, 8]) {
+    const result = service.handleRequest(`${API}.GetRequest`,
+      envelope(encode(`${API}.GetRequest`, {transaction: {uuid}}), actor));
+    assert.equal(result.statusCode, 200, `character ${actor} can read it`);
+    const body = decode(`${API}.GetResponse`, result.responsePayloadBuffer);
+    assert.equal(body.status.status, 3, "successful");
+    assert.ok(body.status.last_updated.seconds > 0, "the client renders that timestamp");
+  }
+
+  const all = decode(`${API}.GetAllResponse`, service.handleRequest(`${API}.GetAllRequest`,
+    envelope(Buffer.alloc(0), 8)).responsePayloadBuffer);
+  assert.equal(all.transactions.length, 1);
+  assert.deepEqual(all.transactions[0].uuid, uuid);
+
+  assert.equal(service.handleRequest(`${API}.GetRequest`,
+    envelope(encode(`${API}.GetRequest`, {transaction: {uuid: Buffer.alloc(16, 42)}}), 8))
+    .statusCode, 5, "a transaction nobody has is NOT_FOUND");
 });

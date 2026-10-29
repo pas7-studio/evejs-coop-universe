@@ -9920,3 +9920,15 @@ Remaining 18, with the honest next step for each:
 - `ai.assistant.chat.api.QueryRequest`, `internal_gateway.ConsumeEvents/Request`, `debug.Request`,
   `eve_public.Request` - infrastructure/debug surfaces; `debug.Request` must stay unhandled unless
   the owner asks for it explicitly.
+
+### 2026-10-30T07:20Z - transaction record done (1 type, 17 left)
+
+Fork `0595472`. `marketTransactionGatewayService.js` + rows written by the purchase into BOTH the
+buyer's and the seller's record. Status enum numbers read from the client's own descriptor
+(0 unspecified, 1 initiated, 2 failed, 3 successful) - never guessed. Live: after a real 750 000
+ISK purchase both actors read 200 with state 3 and a timestamp, the buyer's GetAll has exactly that
+id, unknown id 5. Register 17 (`handled=266`).
+
+Next candidates (see the earlier checkpoint entry for the full list): achievement definitions CDN
+(flatbuffer, same content-host mechanism), component.listing purchase, freelance item delivery,
+sovereignty admin calls.
