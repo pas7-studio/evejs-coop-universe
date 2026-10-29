@@ -9805,3 +9805,20 @@ Remaining in the market: `skin.listing.InitiateCreateListing` / `InitiatePurchas
 `CancelListing` / `Get` / `admin.SetExpiration`, `component.listing.InitiatePurchaseListing`,
 `transaction.api.Get`. They need escrow of a real licence in the seller's store plus ISK transfer
 between characters; the fee policy above is what those calls should charge.
+
+### 2026-10-30T05:10Z - skin market listings done (6 types, 19 left)
+
+Fork `931cb17`: `space/coopSkinListings.js` + `skinListingGatewayService.js`, gated by
+`EVEJS_COOP_SKIN_MARKET`. Listings live in the seller's character record (a listing cannot exist
+without its owner) and the market view is the union over characters, because `gameStore.write` only
+accepts the `characters` table - a dedicated table does not exist (`TABLE_NOT_FOUND` measured).
+
+Escrow is real: create moves copies from `unactivated` to `escrowed` in the licence row before the
+listing exists; cancel returns exactly those copies; expiry drops the row and refunds. Live on
+140000001 (licence 6ae282c834c7dd78, 3 copies): create 200 + 16-byte transaction, GetAll price
+5 000 000, owner-specific GetAllOwned 1/0, escrow 1; foreign cancel 7, own cancel 200 -> 3 copies,
+no listing; 99 copies 9; unknown 5. Register 19 (`handled=263`).
+
+Remaining market work: `InitiatePurchaseListing` (ISK transfer + buyer fee), `component.listing.
+InitiatePurchaseListing`, `transaction.api.Get`. Character records carry a `balance` field, so a
+wallet path exists natively - find the native debit/credit function before writing the purchase.
