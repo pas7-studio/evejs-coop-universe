@@ -349,3 +349,26 @@ test("no local buyer and no neighbour means the run ends with the truth", async 
   assert.equal(result.status, "DONE");
   assert.equal(run.read(eighteenth).lastReason, "HOLD_ALREADY_FULL");
 });
+
+test("a settled sale is written to the freight ledger, where the money is accounted", async () => {
+  // The economy ledger counted production and station sales, so a trip's ISK lived only in the
+  // pilot's balance and a treasury sweep.
+  const nineteenth = 980000004188;
+  run.write({ version: 1, haulerID: nineteenth, phase: "SELL", trip: TRIP, updatedAt: 22000,
+    sellCalls: 0, isk: 0, quantity: 1000, trips: 0,
+    fromSystemID: 30000145, toSystemID: 30000142, toStationID: 60003760,
+    fromStationID: 60000682 });
+  // The hold has goods until the sale lands, then it is empty: the trip is finished.
+  let aboard = 1000;
+  const result = await run.tick(nineteenth, { recycle: false, distanceTo: () => 100,
+    cargoUnits: () => aboard,
+    sell: async () => { aboard = 0; return { status: "SOLD", isk: 123456, quantity: 1000 }; },
+    now: 22001 });
+  assert.equal(result.status, "DONE");
+  const rows = fs.readFileSync(run.freightLedgerFile(), "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  const mine = rows.filter((row) => Number(row.haulerID) === nineteenth);
+  assert.equal(mine.length, 1, "one row per settled sale");
+  assert.equal(mine[0].isk, 123456);
+  assert.equal(mine[0].toStationID, 60003760);
+  assert.equal(mine[0].status, "SOLD");
+});

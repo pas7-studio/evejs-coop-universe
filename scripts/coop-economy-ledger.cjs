@@ -157,6 +157,32 @@ console.log("treasury            " + (treasury === null ? "unreadable" : fmt(tre
 console.log("refinery            " + refineFees.count + " operations, " + fmt(refineFees.isk) + " ISK of station fees");
 console.log("manufacturing       " + jobs.count + " jobs, " + fmt(jobs.runs) + " runs");
 console.log("sales               " + revenue.fills + " fills, " + fmt(revenue.isk) + " ISK");
+// Freight is where most of the corporation's goods now leave the building, and its money
+// used to live only in a pilot balance and a treasury sweep. One append-only row per settled
+// sale keeps it visible where the capital is accounted.
+let freight = { rows: 0, isk: 0, units: 0, unknown: 0, routes: new Map() };
+try {
+  const file = path.join(process.env.EVEJS_COOP_NPC_MARKET_ROOT ||
+    process.env.EVEJS_COOP_NPC_MARKET_DIR || "/var/lib/evejs/coop-native-market",
+    "freight-ledger.jsonl");
+  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const row = JSON.parse(line);
+    freight.rows += 1;
+    freight.isk += Number(row.isk) || 0;
+    freight.units += Number(row.units) || 0;
+    if (row.iskUnknown === true) freight.unknown += 1;
+    const route = String(row.fromSystemID || 0) + "->" + String(row.toSystemID || 0);
+    const current = freight.routes.get(route) || { isk: 0, trips: 0 };
+    current.isk += Number(row.isk) || 0;
+    current.trips += 1;
+    freight.routes.set(route, current);
+  }
+} catch (_error) { /* no freight ledger yet is a valid state */ }
+console.log("freight             " + freight.rows + " trips, " + fmt(freight.isk) + " ISK, " +
+  freight.units + " units" + (freight.unknown ? " (" + freight.unknown + " without a captured price)" : ""));
+for (const [route, row] of [...freight.routes.entries()].sort((a, b) => b[1].isk - a[1].isk).slice(0, 4))
+  console.log("  " + route + "  " + row.trips + " trips, " + fmt(row.isk) + " ISK");
 console.log("");
 console.log("ORE REFINED");
 for (const [typeID, units] of top(oreConsumed)) console.log("  " + typeID + "  " + fmt(units) + " units refined away");
