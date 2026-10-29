@@ -9297,3 +9297,19 @@ FW-073 (no second hull for a linked pilot), FW-075 (no release while the hull fl
 one identity) and FW-076 (fleet registry as identity evidence) together close every way this world could
 hand a war hull to a kill without a name. What remains is not a code gap but a fresh front: every
 campaign fought so far used hulls created before those fixes.
+
+## 2026-10-29T13:55Z - career portal completed (4 more types)
+
+Fork `bcf632c`, register 70 -> 66. The portal list and the claim now read one record
+(`space/coopCareerGoals`): completion comes from the client's own career admin calls
+(Complete/Progress), the claim marks itself before paying (never twice) and pays 25 000 SP
+through the one shared grant (`space/coopSkillPointGrant`, also used by daily goals).
+Both claim packages answer: `career.goal.api.ClaimReward` and
+`app.eveonline.career.goal.ClaimReward` (the latter echoes the goal back).
+Bug found on the way: the compatibility service's `handleRequest` ignored its envelope, so
+it could not know the character. Live: 4 goals incomplete -> admin complete -> portal shows
+1 completed/progress 1 -> claim 200 with SP 2000 -> 27000 -> second claim refused.
+
+Remaining big surfaces (register 66): SKINs 19 + skin market 10, achievements 9, freelance
+projects 14, titles 6 (needs a CDN flatbuffer blob), assetholding 4, payment schedules 3,
+mercenary den/hub/skyhook admin 4, and a few single-type content features.
