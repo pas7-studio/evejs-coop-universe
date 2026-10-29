@@ -117,3 +117,15 @@ test("a hauler that is out on a real trip is not replaced, and not declared brok
   assert.equal(result.status, "HAULER_AWAY");
   assert.deepEqual(result.awayHaulers, [OLD_HAULER]);
 });
+
+test("a system with no asteroid belts never gets a mining fleet", () => {
+  // Measured 2026-10-30: Jita 30000142 has 18 stations and ZERO asteroid belts, and it carried
+  // a durable fleet of four miners whose hold stayed at 0 while the belt systems ran at half
+  // strength - two slots where one was needed.
+  const belts = (count) => ({ staticEntities: Array.from({ length: count },
+    () => ({ kind: "asteroidBelt" })) });
+  assert.equal(durable.systemHasBelts(belts(2)), true);
+  assert.equal(durable.systemHasBelts(belts(0)), false, "no belts, no fleet");
+  assert.equal(durable.systemHasBelts({}), null, "an unreadable scene is not a refusal");
+  assert.equal(durable.systemHasBelts(null), null, "and neither is a missing one");
+});
