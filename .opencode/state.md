@@ -9505,3 +9505,22 @@ store it), per character, with a uuid, name, line_name and timestamps; capacity 
 configured limit (not a fake zero). GetAllSaved/Get/GetShared return the stored shape;
 Delete removes the row. Sequencing (step 4) is what turns a draft into a skin hex, and it must
 consume a real item.
+
+### 2026-10-29T18:10Z - SKIN designer step 3 done (drafts, 7 types)
+
+Fork `157ed2c`, new files `space/coopSkinDrafts.js` +
+`_secondary/express/gatewayServices/thirdPartySkinDraftGatewayService.js` (registered after the
+licence service). Live through the gateway registry on 140000001: capacity 20; save 200 with a
+16-byte id and the float configs round-tripped; the stored layout is **byte-identical** to what
+was sent (taken straight off the wire, never re-encoded from a partly decoded tree); get all 200
+count 1; get 200; get shared 200; update 200 and the layout replaced (it reads field 4, not the
+save field 3); get of a missing id 5; delete 200 then 5 and zero drafts left. Register: 51
+unhandled (was 56), `handled=229`.
+
+Contract note worth remembering: draft `Attributes` has only skin hex + `editor_configuration` +
+`editor_configurations` - no name, line_name or layout. Those are stored because sequencing
+needs them, but they are not part of a read answer.
+
+Next: sequencing jobs (`Initiate`/`Get`/`CompleteEarly`) must consume a **real** inventory item
+and only then mint a skin hex in the licence store; then component licences (finite/infinite
+Get + admin Grant/Revoke) and `component.license.item.Consume`.
