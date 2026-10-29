@@ -8983,3 +8983,17 @@ Daily goals design (next session, decide with the owner):
    so a goal is measurable without new instrumentation;
 3. payout from a **funded** account (`space/coopCorpWallet.applyDelta` with a negative delta, or a
    treasury), plus a persisted claim row so a goal cannot be paid twice.
+
+### Why daily goals is not a one-file job (measured, 2026-10-29)
+
+`eve_public.dailygoal.Attributes.name_message` is `eve_public.localization.message.Identifier{
+sequential uint32}` - a **numeric client localization id**, and the client renders it directly:
+`dailygoals/client/utils.pyj:27` sets `'name_id': goal_attributes.name_message.sequential`. There is
+no inline text field, so a goal we invent has no name/description in the client: the id must already
+exist in the client's own localization data, or the localization surface has to push text first.
+`utils.pyj` also builds the goal from `contribution_config` (kill_npc, mine_ore, damage_ship,
+capture_fw_complex, ...), so progress must be expressed in one of those native shapes.
+
+So the three requirements are: (1) localization ids that really exist, (2) progress from a real
+native counter, (3) a payout from a funded account with a persisted claim row. None of the three is
+available today; writing "progress: 0, reward: X" would be invented state, which the doctrine bans.
