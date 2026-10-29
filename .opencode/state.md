@@ -10839,3 +10839,31 @@ NEXT: either stop that leftover keeper and let the mobiliser muster the attacker
 source system, or call `spawn_war_fleet {factionID:500004, systemID:30045344}` so the registry
 gets an attacker ship where staging looks for it. Then watch for ASSAULT -> casualty ->
 war-merit -> bounty PAID. Nothing before that can be reported as a fight.
+
+## FW-102/103 DEPLOYED (fork 3c327f2, 8502e8e) - the war is no longer staffed into a corner
+
+**FW-102 (3c327f2).** `war_diagnose` returned `MOBILIZER_NOT_INITIALIZED` while the phase kept
+ticking, so the one read-only action that explains an empty side explained nothing. The
+mobiliser now has a single construction site (`warMobilizerInstance(registry,guard)`) used by
+the phase and the diagnostic; an idle tick publishes `living-native-war-mobilization-idle` with
+the per-side report (system tracked? assigned? the first rejection reasons).
+PROVEN live: `living-native-war-mobilization-idle OBSERVED` with both sides and their rejects.
+
+**FW-103 (8502e8e).** `coopWarGarrison.js` mustered BOTH sides inside `campaign.targetSystemID`.
+`coopWarGateStaging` (and the mobiliser) need the attacker in `campaign.sourceSystemID` while
+PREPARING, so one tick published `GARRISON_APPLIED` and `NO_ATTACKER_SHIP_REGISTERED` together;
+that is why r7..r18 never deployed. Each side now musters in its own system.
+PROVEN live 21:46:51Z and 21:50:06Z: the garrison spawned 500004 in **30045344** (fleets
+`coop-fleet-500004-0025`, `-0026`), and at 21:54:37Z the staging reason advanced from
+`NO_ATTACKER_SHIP_REGISTERED` to `NO_ATTACKER_SHIP_IN_SOURCE:30045344` - the attacker now
+exists, just not where staging looks.
+
+## Next two blockers (measured 21:50-21:55Z)
+1. The mobiliser rejects the freshly garrison-spawned hulls with `SHIP_NOT_IDLE_NATIVE` (they
+   are still warping right after the sanctioned spawn), so the hulls that would satisfy staging
+   are never ASSIGNed in the window in which they exist.
+2. The registry read disagrees with itself: `war_fleet_state` and a direct SQLite read of
+   `coop-faction-war\u001ffleet-roster-v1` report **0 rows**, while `coopWarGateStaging` behaves as
+   if some attacker rows exist (it switched from NO_ATTACKER_SHIP_REGISTERED to
+   NO_ATTACKER_SHIP_IN_SOURCE:30045344). Resolve which read is authoritative before touching
+   the assign path further.
