@@ -9636,3 +9636,26 @@ consumeInventoryItemQuantity) and only then add capacity/infinite to the compone
 an explicit type -> licence mapping because our SDE rows are not automatically licences. Then
 the skin market (10) with escrow + ISK, then titles/achievements (both gated behind a client
 feature flag `character_titles_feature_enabled` and a CDN flatbuffer, so verify that first).
+
+### 2026-10-29T22:00Z - SKIN licence items done (1 type, 40 left)
+
+Fork `e18b98d`. `component.license.item.Consume` needs an explicit mapping
+`EVEJS_COOP_COMPONENT_LICENCE_ITEMS` (typeID -> {component, capacity|infinite}); an unmapped
+item is refused, never guessed. The item comes from the real itemStore, must belong to the
+character and be present in the quantity; only then is it consumed and the licence written.
+
+Real bug found live: a singleton (ship/capsule) reports quantity -1, which made the quantity
+check refuse every consume; a singleton now counts as 1.
+
+Live on 140000001 with its real item 9988400000001 (type 670): registry refusal 9 unmapped;
+mapped store refuses another character 7; quantity 2 -> 9 with nothing spent; quantity 1 -> 200,
+capacity 1 on component 53002, the item is gone; unknown id 5. The engine then re-ensured the
+character a capsule (9988400115357), so the character is still flyable - check that on any
+consume probe against a real item.
+
+Register 40 (`handled=240`).
+
+Next: the skin market (10) - listings need escrow of a real licence + ISK transfer between
+characters, plus broker fee/tax reads. Then titles/achievements, which are gated behind the
+client flag `character_titles_feature_enabled` and a CDN flatbuffer - verify the flag surface
+before writing either.

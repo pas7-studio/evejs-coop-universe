@@ -167,3 +167,83 @@ test("grant and revoke answer honestly, including the refusals", () => {
     encode(`${FINITE}.admin.RevokeRequest`, {license: id})));
   assert.equal(again.statusCode, 5);
 });
+
+// A licence item is an inventory item somebody mapped to a component; consuming it is the only
+// way an item turns into capacity. The item is read from the real inventory, must belong to the
+// character, and only then is the licence written.
+function fakeItems(initial = {}) {
+  const rows = structuredClone(initial);
+  return {
+    rows,
+    findItemById(id) {
+      const row = rows[String(id)];
+      return row ? {...row} : null;
+    },
+    consumeInventoryItemQuantity(id, quantity) {
+      const row = rows[String(id)];
+      if (!row) return {success: false, errorMsg: "ITEM_NOT_FOUND"};
+      if ((row.quantity || 0) < quantity) return {success: false, errorMsg: "INSUFFICIENT_ITEMS"};
+      row.quantity -= quantity;
+      if (row.quantity === 0) delete rows[String(id)];
+      return {success: true};
+    },
+  };
+}
+
+const LICENCE_ITEMS = {EVEJS_COOP_THIRD_PARTY_SKINS: "1",
+  EVEJS_COOP_COMPONENT_LICENCE_ITEMS: JSON.stringify({
+    45678: {component: 66, capacity: 2},
+    45679: {component: 67, infinite: true},
+  })};
+
+test("consuming a mapped item is the only way an item becomes capacity", () => {
+  const state = fakeCharacterState({"7": {characterID: 7}});
+  const items = fakeItems({
+    9001: {itemID: 9001, ownerID: 7, typeID: 45678, quantity: 5},
+    9002: {itemID: 9002, ownerID: 8, typeID: 45678, quantity: 5},
+    9003: {itemID: 9003, ownerID: 7, typeID: 11111, quantity: 5},
+    9004: {itemID: 9004, ownerID: 7, typeID: 45679, quantity: 1},
+  });
+  const store = createComponentLicences({characterState: state, itemStore: items, env: LICENCE_ITEMS});
+
+  assert.equal(store.consumeItem(7, {itemID: 0, quantity: 1}).status, "ITEM_REQUIRED");
+  assert.equal(store.consumeItem(7, {itemID: 9001, quantity: 0}).status, "QUANTITY_REQUIRED");
+  assert.equal(store.consumeItem(7, {itemID: 9999, quantity: 1}).status, "ITEM_NOT_FOUND");
+  assert.equal(store.consumeItem(7, {itemID: 9002, quantity: 1}).status, "ITEM_NOT_OWNED");
+  assert.equal(store.consumeItem(7, {itemID: 9003, quantity: 1}).status, "NOT_A_LICENCE_ITEM");
+  assert.equal(store.consumeItem(7, {itemID: 9001, quantity: 9}).status, "NOT_ENOUGH_ITEMS");
+  assert.equal(items.rows["9001"].quantity, 5, "a refused consume takes nothing");
+
+  const consumed = store.consumeItem(7, {itemID: 9001, quantity: 3});
+  assert.equal(consumed.status, "CONSUMED");
+  assert.equal(consumed.capacity, 6, "each item is worth the mapped capacity");
+  assert.equal(items.rows["9001"].quantity, 2, "the real stack went down by the quantity");
+
+  const infinite = store.consumeItem(7, {itemID: 9004, quantity: 1});
+  assert.equal(infinite.status, "CONSUMED");
+  assert.equal(infinite.infinite, true);
+  assert.ok(store.infinite(7, 67), "the infinite licence really exists now");
+});
+
+test("ConsumeRequest answers 200 only when a real item was spent", () => {
+  const state = fakeCharacterState({"7": {characterID: 7}});
+  const items = fakeItems({9001: {itemID: 9001, ownerID: 7, typeID: 45678, quantity: 2}});
+  const store = createComponentLicences({characterState: state, itemStore: items, env: LICENCE_ITEMS});
+  const service = createComponentLicenceGatewayService({componentLicences: store});
+  const CONSUME = "eve_public.cosmetic.ship.skin.thirdparty.component.license.item.api.ConsumeRequest";
+
+  const ok = service.handleRequest(CONSUME, envelope(
+    encode(CONSUME, {item: {item: {sequential: 9001}}, quantity: 2})));
+  assert.equal(ok.statusCode, 200, ok.statusMessage);
+  assert.equal(store.finite(7, 66).capacity, 4);
+  assert.equal(items.rows["9001"], undefined, "the whole stack was consumed");
+
+  const missing = service.handleRequest(CONSUME, envelope(
+    encode(CONSUME, {item: {item: {sequential: 9001}}, quantity: 1})));
+  assert.equal(missing.statusCode, 5, "consuming what is not there is NOT_FOUND");
+
+  const noQuantity = service.handleRequest(CONSUME, envelope(
+    encode(CONSUME, {item: {item: {sequential: 9001}}})));
+  assert.equal(noQuantity.statusCode, 3);
+  assert.equal(noQuantity.statusMessage, "quantity must be greater than zero");
+});
