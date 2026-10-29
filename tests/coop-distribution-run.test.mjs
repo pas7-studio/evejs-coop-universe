@@ -429,3 +429,27 @@ test("a stop whose goods moved away is skipped, not fatal", async () => {
   assert.equal(second.reason, "LOADED_PARTIAL");
   assert.equal(run.read(twentyFirst).skippedStops.length, 1);
 });
+
+test("the amount is read quickly enough to survive the five-second settlement window", async () => {
+  // Measured 2026-10-30: four of nine trips were recorded with no price because the run waited a
+  // full poll interval (6 s) and the settled answer was already gone.
+  const twentySecond = 980000004191;
+  run.write({ version: 1, haulerID: twentySecond, phase: "SELL", trip: TRIP, updatedAt: 25000,
+    sellCalls: 0, isk: 0, quantity: 1000, trips: 0,
+    fromSystemID: 30000145, toSystemID: 30000142, toStationID: 60003760 });
+  let aboard = 1000;
+  let reads = 0;
+  const result = await run.tick(twentySecond, { recycle: false, distanceTo: () => 100,
+    cargoUnits: () => aboard,
+    sell: async () => ({ status: "PENDING" }),
+    wait: async () => {},
+    // The settlement appears on the second read, before the window closes.
+    saleSettlement: () => { reads += 1;
+      if (reads < 2) return null;
+      aboard = 0;
+      return { status: "SOLD", isk: 777000, quantity: 1000 }; },
+    now: 25001 });
+  assert.equal(result.status, "DONE");
+  assert.equal(result.state.isk, 777000, "the real amount, not an unknown price");
+  assert.ok(reads >= 2);
+});
