@@ -1,5 +1,36 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 18:30Z (UTC) - leftovers crossed a gate and sold; identity writes now merge
+
+PROVEN LIVE this round:
+  - hull 980000004164 carried ore in New Caldari where no station bids for it. The run found
+    the buyer ONE GATE AWAY (Jita 60003760 bids 4 035 826 units of type 1228), crossed on the
+    first attempt (SAME_NATIVE_SHIP_ARRIVED) and sold **1 490 464 ISK** of leftovers;
+  - the run then ended honestly SOLD_VERIFIED_BY_HOLD once the hold was empty.
+
+Changed (tests: distribution-run 24, distribution-plan 7, identity-refresh 5, 91 in the loop
+suites):
+  - buyerForCargo(): the liquidation search now asks the neighbouring systems with a real gate
+    and a real seeded book, then reuses the crossing + TO_DEST + SELL legs;
+  - the identity registry MERGES with the file on every write and keeps a tombstone for what
+    this owner deleted. Two owners used to replace each other's links, which is why crossings
+    failed SOURCE_IDENTITY_MISMATCH while both sides were individually correct;
+  - the sell budget grows with the load (ceil(load/100 000) + 2, floor 6) instead of stopping
+    a real haul at six settlements;
+  - an empty hold ends the run even when the journal no longer remembers the quantity.
+
+Fleet at hand-off: three coop-distribution-* hulls cycling (980000000005 is on a new trip,
+980000000002 finished its load, 980000004164 finished its leftovers).
+
+NEXT:
+  1. produce what Jita bids for (the manufacturer still reports NO_REAL_BUYER locally) and let
+     this freight carry it - the loop now has nowhere to put money it cannot spend;
+  2. sum freight ISK into the economy ledger so the balance sheet separates freight income
+     from station sales;
+  3. several hulls is proven; next is a hull that loads at TWO stations in one trip;
+  4. relocate-on-arrival for the identity file (merge covers the live case);
+  5. the runtime line ratchet (5153, other sessions).
+
 ## 2026-10-30 17:40Z (UTC) - the trip fills the hold; leftovers need a gate
 
 Changed (tests: distribution-plan 7, distribution-run 22, npc-distribution 9, 101 across the
