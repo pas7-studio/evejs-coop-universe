@@ -167,3 +167,83 @@ test("the gateway serves real listings, with honest refusals", () => {
   assert.equal(decode(`${API}.GetAllResponse`,
     service.handleRequest(`${API}.GetAllRequest`, envelope()).responsePayloadBuffer).listings.length, 0);
 });
+
+// Buying pays for real through the native wallet transfer, charges the sales tax to the seller,
+// and only then moves the escrowed copies. Anything that fails after the transfer is rolled back.
+function fakeWallet(initial) {
+  const balances = {...initial};
+  return {
+    balances,
+    getCharacterWallet(id) {
+      return balances[String(id)] === undefined ? null : {balance: balances[String(id)]};
+    },
+    transferCharacterBalance(from, to, amount) {
+      if (this.getCharacterWallet(from) === null || this.getCharacterWallet(to) === null) {
+        return {success: false, errorMsg: "CHARACTER_NOT_FOUND"};
+      }
+      if (balances[String(from)] < amount) return {success: false, errorMsg: "INSUFFICIENT_FUNDS"};
+      balances[String(from)] -= amount;
+      balances[String(to)] += amount;
+      return {success: true};
+    },
+    adjustCharacterBalance(id, amount) {
+      if (this.getCharacterWallet(id) === null) return {success: false, errorMsg: "CHARACTER_NOT_FOUND"};
+      balances[String(id)] += amount;
+      return {success: true};
+    },
+  };
+}
+
+function market() {
+  const state = fakeCharacterState({"7": {characterID: 7}, "8": {characterID: 8}});
+  const clock = {now: START};
+  const env = {EVEJS_COOP_THIRD_PARTY_SKINS: "1", EVEJS_COOP_SKIN_MARKET: "1"};
+  const skins = createThirdPartySkins({characterState: state, clock: () => clock.now, env});
+  skins.grant(7, {skin: HEX, unactivated: 2, name: "Nova"});
+  const wallet = fakeWallet({"7": 0, "8": 10000000});
+  let seed = 0;
+  const listings = createSkinListings({
+    characterState: state,
+    gameStore: fakeGameStore(state),
+    skins,
+    wallet,
+    clock: () => clock.now,
+    randomUuid: () => Buffer.alloc(16, ++seed),
+    env,
+  });
+  return {listings, skins, wallet};
+}
+
+test("buying moves ISK, charges tax and hands over the escrowed copies", () => {
+  const {listings, skins, wallet} = market();
+  const {listing} = listings.create(7, {skin: HEX, quantity: 2, priceUnits: 1000000});
+  assert.equal(listings.purchase(7, listing.uuid, 1).status, "OWN_LISTING");
+
+  const bought = listings.purchase(8, listing.uuid, 1);
+  assert.equal(bought.status, "PURCHASED");
+  assert.equal(bought.gross, 1000000);
+  assert.equal(bought.tax, 25000, "2.5 % of the gross");
+  assert.equal(wallet.balances["8"], 9000000, "the buyer paid the gross price");
+  assert.equal(wallet.balances["7"], 975000, "the seller received the price minus tax");
+  assert.equal(skins.get(8, HEX).unactivated, 1, "the copy is the buyer's now");
+  assert.equal(skins.get(7, HEX).unactivated, 0, "both copies were listed, so none is loose");
+  assert.equal(skins.get(7, HEX).escrowed, 1, "one copy is still escrowed for the open listing");
+  assert.equal(listings.all().length, 1);
+  assert.equal(listings.all()[0].quantity, 1, "the listing keeps only what is left");
+
+  assert.equal(listings.purchase(8, listing.uuid, 5).status, "NOT_ENOUGH_STOCK");
+});
+
+test("a purchase that cannot be paid for moves nothing", () => {
+  const {listings, skins, wallet} = market();
+  const {listing} = listings.create(7, {skin: HEX, quantity: 1, priceUnits: 5000000});
+  const poor = listings.purchase(7, listing.uuid, 1);
+  assert.equal(poor.status, "OWN_LISTING");
+  wallet.balances["8"] = 1000;
+  const failed = listings.purchase(8, listing.uuid, 1);
+  assert.equal(failed.status, "NOT_ENOUGH_ISK");
+  assert.equal(wallet.balances["8"], 1000);
+  assert.equal(wallet.balances["7"], 0);
+  assert.equal(skins.get(8, HEX), null, "no copies were delivered");
+  assert.equal(listings.all()[0].quantity, 1, "the listing is untouched");
+});

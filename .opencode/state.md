@@ -9847,3 +9847,18 @@ any non-paid outcome, so silence means the function itself returned early or thr
 
 Also measured: the war economy is now priced at 5 000 ISK per side and both sides reserve it successfully
 (17:38:52Z and 17:48:55Z, two campaigns funded on both sides), so funding is no longer the blocker.
+
+### 2026-10-30T06:00Z - skin market purchase done (1 type, 18 left)
+
+Fork `27d9c09`. `InitiatePurchaseListing` uses the native wallet: `transferCharacterBalance` (which
+refuses an overdraft) moves the gross price, the seller pays 2.5 % tax out of the proceeds, then
+escrowed copies move to the buyer with the same name/line/layout/creator. Rollback on tax or
+delivery failure returns the ISK; own-listing and short stock are refused with the real number left.
+
+Live between two characters: 1 000 000 000 each before; create 200, own purchase 9, purchase 200
+(16-byte tx); after: seller 1 000 975 000, buyer 999 000 000, buyer holds the copy, escrow 0,
+listing gone. Register 18 (`handled=264`).
+
+Known gaps in this flow: the buyer's loyalty-point fee is quoted (100 LP tier 1) but not charged;
+`transaction.api.Get` cannot show the transaction yet (the id is returned but not stored as a row);
+`component.listing.InitiatePurchaseListing` is untouched.
