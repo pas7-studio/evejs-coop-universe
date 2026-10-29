@@ -2511,3 +2511,14 @@ Why: market listings had no create/cancel/get at all and GetAll/GetAllOwned answ
 Detail: 4/4 tests: a listing without copies is refused, cancelling returns them, only the seller may cancel, and an expired listing drops with its copies back.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-skin-listings.test.mjs
 Evidence: fork 931cb17; live on 140000001 with licence 6ae282c834c7dd78: create 200 + 16-byte tx, GetAll price 5 000 000, owned 1/0, escrow 1; foreign cancel 7, own cancel 200 with 3 copies back; 99 copies 9; unknown 5; 4/4 tests; register 19 unhandled
+### 2026-10-29T18:10Z · 20f1566 · L1 · state(fw): attribution proven on a real casualty; the silence after it is the next thread
+
+Why: Only a mobilised hull may become a war casualty, and the casualty ledger is identity
+Where: .opencode/state.md
+Evidence: attacker-attributed PASS 17:33:25Z; two-sided escrow at 5000 ISK reserved twice
+### 2026-10-29T18:15Z · a76a500 · L2 · docs/tests: buying a listing moves real ISK and real copies
+
+Why: a listing could not be bought: InitiatePurchaseListing had no handler, so the market could show stock but never sell it
+Detail: 6/6 listing tests, including the tax split and the rollback when the buyer cannot pay.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-skin-listings.test.mjs
+Evidence: fork 27d9c09; live between 140000001 and 140000002: seller 1 000 000 000 -> 1 000 975 000, buyer 1 000 000 000 -> 999 000 000, buyer got the copy, escrow 0, listing gone; own listing 9; 6/6 tests; register 18 unhandled
