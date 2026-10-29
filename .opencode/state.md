@@ -1,5 +1,46 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 00:30Z (UTC) - the suite is clean again, and one dead A-Life path was found by it
+
+`node --test tests/coop-*.test.mjs` -> **6590 pass / 0 fail / 84 skipped** (was 10 failing). What each
+failure actually was:
+
+  - `coop-flag-registry` (undeclared `EVEJS_*`): seven keys were read by tooling and by modules other
+    sessions had added. `node scripts/coop-flags.cjs --baseline` re-declared them (declarations only).
+  - `coop-hook-requires` / `coop-overlay-dependencies`: `coopLoopTick` requires `coopDistributionPlan`,
+    which requires `coopNpcDistribution`; neither distribution module was in `scripts/overlay-spec.cjs`,
+    so an installed module could not resolve what it needs. Added. The archived copy also required its
+    sibling as `.cjs`, which cannot resolve in the installed tree; it now uses the fork's adaptive
+    require (extensionless as `.js`, `.cjs` in this archive).
+  - `coop-career-getall-progress`: asserted the old stub literally (`not_completed: true`). The portal
+    now reads `space/coopCareerGoals`' snapshot, so the test asserts that contract instead
+    (`careerGoalSnapshotFor`, `progress: entry.progress`, `not_completed: !entry.completed`).
+  - `coop-native-npc-market`: the single `NOT_AT_NATIVE_STATION` refusal was deliberately split into
+    per-predicate codes on 2026-10-30; the test asserted the old single code.
+  - `coop-alife-native-buyer-wiring` exposed a REAL dead path, not a stale assertion: the station
+    authority never produced `economy.materialNeeds`, and `coopAlifeNativeBuyerDispatch` refuses any
+    economy object without it. So `BUY_SUPPLIES` could only ever answer
+    `ALIFE_BUY_INTENT_OR_OWNER_UNATTESTED` and no native supply purchase ever happened. Each authority
+    row now carries `materialNeeds {typeID, required, available, shortage}` (SDE quote vs this
+    station's stock in the same read) and the response exposes the selected product's list, short
+    materials only. Fork `dc0654b`, archive synced.
+  - `coop-installer-module-coverage` / `coop-post42-native-overlay-assembly`: passed once the
+    distribution modules were installed; no further change was needed.
+
+NOT live-proven: the `materialNeeds` change needs a deploy, and the agents stack was DOWN while
+another session rebuilt `evejs-local` (image rebuilt ~00:20Z), so nothing was restarted. Deploy with
+`docker build -t evejs-local` + `scripts/Start-Agents-Stack.ps1 -Action Up` when the stack is free,
+then check `living-*` events for a real `BUY_SUPPLIES` settlement.
+
+RUNTIME BLOCKERS still visible in `coop-events.jsonl` (not code we own):
+  - `living-mining-skipped` NO_BELTS_IN_SYSTEM on **Jita 30000142** - measured: Jita has 0 belts,
+    New Caldari 30000145 has 2, Perimeter 30000144 has 3. The agents compose seeds mining NPCs for
+    Jita+New Caldari, but the scene the loop picks is Jita, so mining skips every cycle. Moving the
+    fleet (or the startup list) to a belt-bearing system is the single next action.
+  - `living-native-war-opening-blocked` NO_OPENABLE_FRONT - war front territory table present, no
+    front openable; the war loop owns that.
+
+
 ## 2026-10-30 20:20Z (UTC) - a fourth hull, spawned as a real ship
 
 PROVEN LIVE: scripts/coop-spawn-distribution-hull.cjs spawned durable hull **980000018521**

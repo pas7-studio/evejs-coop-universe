@@ -2602,3 +2602,9 @@ Evidence: 599 war tests pass; live campaign 30045320:r3 funded both sides after 
 Why: Growing the freight fleet needed a real durable hull instead of re-marking an existing one
 Where: scripts/coop-spawn-distribution-hull.cjs, tests/coop-spawn-distribution-hull.test.mjs
 Evidence: live: hull 980000018521 spawned at belt 40009256 in 30000145, durable, marker coop-distribution-4-hauler; hulls() now returns 4; 3/3 tool tests
+### 2026-10-29T20:11Z · 7b7ef02 · TEST · integration: adaptive require for the distribution plan's sibling
+
+Why: ten failing tests: undeclared flags, two modules missing from the overlay, one archived .cjs require, two assertions against code that had moved on, and one real dead A-Life path
+Detail: An explicit .cjs cannot resolve in the installed tree and a bare name cannot resolve in this archive, so the archived copy now uses the same adaptive require the fork uses elsewhere: extensionless when the file is a .js module, .cjs when it is this archive copy.
+Where: integration/coopDistributionPlan.cjs
+Evidence: 6590 pass / 0 fail / 84 skipped; fork dc0654b adds materialNeeds to the station authority; integration archive synced
