@@ -232,3 +232,19 @@ test("the completed journal of the outward trip is not mistaken for the way home
   assert.equal(result.status, "RETURN_CROSSING");
   assert.equal(planned, 30000145, "a fresh crossing home is planned");
 });
+
+test("a partly sold load keeps selling before the hull goes home", async () => {
+  // Measured 2026-10-30: 37 428 units settled while 35 629 stayed in the hold, and the run
+  // returned home with them and loaded a full-size trip on top.
+  const twelfth = 980000004179;
+  run.write({ version: 1, haulerID: twelfth, phase: "SELL", trip: TRIP, updatedAt: 14000,
+    sellCalls: 0, isk: 0, quantity: 73000, trips: 0,
+    fromStationID: 60000682, fromSystemID: 30000145,
+    toStationID: 60003760, toSystemID: 30000142 });
+  const result = await run.tick(twelfth, { recycle: true, distanceTo: () => 100,
+    cargoUnits: () => 35629,
+    sell: async () => ({ status: "SOLD", isk: 668088 }), now: 14001 });
+  assert.equal(result.status, "PARTIALLY_SOLD");
+  assert.equal(result.state.phase, "SELL", "it keeps selling instead of flying home");
+  assert.equal(result.state.isk, 668088, "and the money that did arrive is recorded");
+});
