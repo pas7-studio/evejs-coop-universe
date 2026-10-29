@@ -9093,3 +9093,27 @@ the same co-op pilot is already bound to a live hull in ANOTHER system - the pil
 shared with miners, haulers and traders, and repeated seeding leaves live hulls holding the few war
 pilots. That is pool hygiene, not a mobilizer rule: the war needs its own reserved pilots (or the keeper
 must reuse the hulls already present instead of spawning new ones).
+
+## 2026-10-29T11:20Z - daily goals: hull-weighted credit, assists, real rewards
+
+Owner asked for three things and all are in (fork `c2fdfbf`):
+
+1. **Rewards are adequate**: SP per unit of real progress instead of a flat token amount —
+   combat 3 000 SP per point (30 000 at the 10-point target, 60 000 for a battleship day, cap
+   90 000), mining 4 SP per ore unit (20 000 at 5 000), jumps 1 500 per gate, bonus 40 000.
+   The card promises exactly what redeem pays because both come from `rewardSkillPoints()`.
+2. **Ship size scales the kill**: credit comes from the victim's SDE hull class —
+   frigate 1, destroyer 2, cruiser 3, battlecruiser 4, battleship 6, barge 4, capitals 8-14 —
+   with a cube-root-of-mass fallback for unknown hulls (never zero, never capital by accident).
+3. **Partial credit**: `killmail.attackers[].damageDone / victimDamageTaken` pays your share when
+   someone else lands the final blow, capped at 0.9 of the hull so an assist can never equal a kill.
+   `finalCharacterID === you` pays the whole hull.
+
+Live proof inside the container (real `itemTypeRegistry`): Bantam 1, Sansha destroyer 2, Retriever
+barge 4, Raven battleship 6; half damage on a frigate = 0.5 point; full battleship = 6; rewards
+`mine@5000 20000 / mine@9000 36000`, `kill@10 30000 / kill@20 60000 / kill@1000 90000` (cap);
+`GetAllCurrent` 200 with 4 cards.
+
+Still open from the client's own 13 contribution types (all need a new producer or a funded payer):
+`damage_ship`, `scan_signature`, `install_manufacturing_job`, `salvage_wreck`,
+`earn_loyalty_points`, `fw_capture`/`fw_defend`, remote repairs.
