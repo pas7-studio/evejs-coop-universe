@@ -45,6 +45,13 @@ function tableReader(buffer, pos) {
       const at = field(slot);
       return at ? buffer.readUInt32LE(at) : 0;
     },
+    // Target and SpReward.Quantity are uint64 in the client's generated reader. Reading them as
+    // uint32 happens to return the same number and hides a wrong width, which is how the catalogue
+    // shipped a uint32 target for one commit - see the client-reader check below.
+    uint64(slot) {
+      const at = field(slot);
+      return at ? Number(buffer.readBigUInt64LE(at)) : 0;
+    },
     table(slot) {
       const at = field(slot);
       return at ? tableReader(buffer, at + buffer.readUInt32LE(at)) : null;
@@ -96,9 +103,9 @@ test("the catalogue is one ACHV buffer whose roots the client's repository loads
 
   const milestones = mining.vectorOfTables(7);
   assert.equal(milestones.length, 2);
-  assert.equal(milestones[0].uint32(1), 1, "the first target is one unit of progress");
+  assert.equal(milestones[0].uint64(1), 1, "the first target is one unit of progress");
   assert.equal(milestones[0].uint32(2), 10, "category points");
-  assert.equal(milestones[1].uint32(1), 100);
+  assert.equal(milestones[1].uint64(1), 100);
   assert.equal(milestones[1].string(4), "coop_mine_ore_hundred");
 });
 
@@ -118,7 +125,7 @@ test("every milestone carries a skill point reward in the union the client reads
       // Payload() is the union member table itself, which is where SpReward() is initialised.
       const payload = reward.table(2);
       assert.ok(payload, "the union payload table exists");
-      assert.ok(payload.uint32(0) > 0, "SpReward.Quantity");
+      assert.ok(payload.uint64(0) > 0, "SpReward.Quantity");
     }
   }
 });
@@ -171,4 +178,20 @@ test("the gateway checkpoint points at the file we serve, with its real CRC", ()
   // the checkpoint describes exactly these bytes, which is what the client verifies after download
   assert.equal(require("node:zlib").crc32(served.buffer) >>> 0, body.checkpoint.crc.crc);
   assert.equal(body.checkpoint.url.endsWith(CDN_PATH), true);
+});
+
+test("the field widths are the ones the client's own schema declares", () => {
+  const schemaPath = path.join(process.cwd(), "docs/client-contracts/achievement-flatbuffer.json");
+  const schema = JSON.parse(require("node:fs").readFileSync(schemaPath, "utf8"));
+  const kindOf = (table, field) => schema[table] && schema[table].fields[field] && schema[table].fields[field].kind;
+  // A reader that guesses these agrees with a writer that guesses the same way; only the schema
+  // extracted from the client's generated Add functions is authoritative.
+  assert.equal(kindOf("AchievementMilestone", "Target"), "uint64");
+  assert.equal(kindOf("AchievementMilestone", "CategoryPoints"), "uint32");
+  assert.equal(kindOf("SpReward", "Quantity"), "uint64");
+  assert.equal(kindOf("Reward", "PayloadType"), "uint8");
+  assert.equal(kindOf("Achievement", "Name"), "uint32");
+  assert.equal(kindOf("Achievement", "ReleaseDateUnixMs"), "int64");
+  assert.equal(kindOf("Achievement", "Archived"), "bool");
+  assert.equal(kindOf("ContributionMethodDefinition", "ProgressType"), "uint8");
 });

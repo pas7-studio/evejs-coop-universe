@@ -2,59 +2,59 @@
  "Achievement": {
   "fields": {
    "Archived": {
-    "kind": "uoffset",
+    "kind": "bool",
     "slot": 12
    },
    "Contribution": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 6
    },
    "Description": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 2
    },
    "ExpirationDateUnixMs": {
-    "kind": "uoffset",
+    "kind": "int64",
     "slot": 9
    },
    "FlavorText": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 3
    },
    "IconId": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 4
    },
    "Id": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "InternalName": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 13
    },
    "IssuerNpcCorp": {
-    "kind": "uoffset",
+    "kind": "int32",
     "slot": 5
    },
    "Milestones": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 7
    },
    "Name": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 1
    },
    "ReleaseDateUnixMs": {
-    "kind": "uoffset",
+    "kind": "int64",
     "slot": 8
    },
    "Tags": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 11
    },
    "UiAnnotations": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 10
    }
   },
@@ -63,19 +63,19 @@
  "AchievementData": {
   "fields": {
    "Challenges": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 1
    },
    "ContributionMethods": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 3
    },
    "Goals": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "TimeLimited": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 2
    }
   },
@@ -84,23 +84,23 @@
  "AchievementMilestone": {
   "fields": {
    "CategoryPoints": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 2
    },
    "Id": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "InternalName": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 4
    },
    "Rewards": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 3
    },
    "Target": {
-    "kind": "uoffset",
+    "kind": "uint64",
     "slot": 1
    }
   },
@@ -109,39 +109,39 @@
  "Category": {
   "fields": {
    "Achievements": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 6
    },
    "Categories": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 5
    },
    "Description": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 2
    },
    "IconId": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 3
    },
    "Id": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "InternalName": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 7
    },
    "Milestones": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 4
    },
    "Name": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 1
    },
    "UiAnnotations": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 8
    }
   },
@@ -150,19 +150,19 @@
  "CategoryMilestone": {
   "fields": {
    "Id": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "InternalName": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 3
    },
    "Rewards": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 2
    },
    "Target": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 1
    }
   },
@@ -171,7 +171,7 @@
  "ChecklistMode": {
   "fields": {
    "TargetParameter": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    }
   },
@@ -180,11 +180,11 @@
  "ContributionConfig": {
   "fields": {
    "MethodId": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "Parameters": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 1
    }
   },
@@ -193,43 +193,43 @@
  "ContributionMethodDefinition": {
   "fields": {
    "ContentTags": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 4
    },
    "Description": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 2
    },
    "IconId": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 3
    },
    "Id": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "Name": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 1
    },
    "Parameters": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 6
    },
    "Progress": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 8
    },
    "ProgressDescription": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 5
    },
    "ProgressType": {
-    "kind": "uoffset",
+    "kind": "uint8",
     "slot": 7
    },
    "UiAnnotations": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 9
    }
   },
@@ -238,11 +238,11 @@
  "ContributionParam": {
   "fields": {
    "Key": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "Matchers": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 1
    }
   },
@@ -251,7 +251,7 @@
  "IskReward": {
   "fields": {
    "Quantity": {
-    "kind": "uoffset",
+    "kind": "uint64",
     "slot": 0
    }
   },
@@ -260,11 +260,11 @@
  "ItemReward": {
   "fields": {
    "Quantity": {
-    "kind": "uoffset",
+    "kind": "uint64",
     "slot": 1
    },
    "TypeId": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 0
    }
   },
@@ -273,11 +273,11 @@
  "MatcherValues": {
   "fields": {
    "ValueType": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "Values": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 1
    }
   },
@@ -286,31 +286,31 @@
  "MethodParamDefinition": {
   "fields": {
    "AcceptedValueTypes": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 2
    },
    "Description": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 5
    },
    "IconId": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 6
    },
    "Key": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "Name": {
-    "kind": "uoffset",
+    "kind": "uint32",
     "slot": 4
    },
    "Optional": {
-    "kind": "uoffset",
+    "kind": "bool",
     "slot": 3
    },
    "Type": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 1
    }
   },
@@ -319,19 +319,19 @@
  "Reward": {
   "fields": {
    "Id": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "InternalName": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 3
    },
    "Payload": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 2
    },
    "PayloadType": {
-    "kind": "uoffset",
+    "kind": "uint8",
     "slot": 1
    }
   },
@@ -340,7 +340,7 @@
  "SetMode": {
   "fields": {
    "TargetValueType": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    }
   },
@@ -349,7 +349,7 @@
  "SpReward": {
   "fields": {
    "Quantity": {
-    "kind": "uoffset",
+    "kind": "uint64",
     "slot": 0
    }
   },
@@ -358,7 +358,7 @@
  "TitleReward": {
   "fields": {
    "TitleId": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    }
   },
@@ -367,11 +367,11 @@
  "UiAnnotation": {
   "fields": {
    "Key": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 0
    },
    "Value": {
-    "kind": "UOffsetTFlags",
+    "kind": "uoffset",
     "slot": 1
    }
   },
