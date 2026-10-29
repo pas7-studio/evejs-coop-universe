@@ -9942,3 +9942,29 @@ The rest of the list is mostly infrastructure or content that does not exist in 
 achievement definitions CDN (needs a flatbuffer schema; titles already prove the mechanism),
 component.listing purchase, freelance item delivery, sovereignty hub/mercenaryden/skyhook admin,
 auth username/steam (must not be faked), ai assistant, internal_gateway, debug (leave alone).
+
+### 2026-10-30T08:30Z - why the achievement catalogue is the one big remaining piece
+
+Measured from the client's own flatbuffer module
+(`achievement_system/client/model/flatbuffer/generated.pyj`), the achievement catalogue is not one
+small table like titles (`TitleData { titles: [ { Id, LocalizedName } ] }`). It defines at least
+`RewardPayload`, `ProgressConfig`, `IskReward`, `SpReward`, `ItemReward`, `TitleReward`, `Reward`,
+`AchievementMilestone`, `CategoryMilestone`, `MethodParamDefinition`, `CumulativeMode`,
+`ChecklistMode`, plus the root and category tables, and the client's `from_flatbuffer` methods call
+`.decode('utf-8')` on strings, which means a missing string is not "empty" but a crash.
+
+So serving our own achievement catalogue is a real content-pipeline task (root table + identifier +
+categories + achievements + milestones + reward payloads + contribution methods), not a 40-line
+builder. Our content host, checkpoint and CRC mechanism are already proven with titles, so the
+plumbing exists; the work is the schema.
+
+Recommended order for that task:
+1. dump every class and field id from the generated module (one pass, like the title one);
+2. build the smallest catalogue the client can render: root -> categories -> achievements with a
+   name/description id, one milestone with a target and one SP reward;
+3. serve it at a new content path and point `achievement.definition.api.cdn.GetLatest` at it;
+4. verify by reading the buffer back with the client's field order, then in the client window.
+
+Everything else left in the register (15) is either infrastructure (ai assistant, internal_gateway,
+debug), authentication (must not be faked) or content that does not exist yet (component bundles,
+freelance item delivery, sovereignty admin).
