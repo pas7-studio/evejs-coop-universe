@@ -2613,3 +2613,8 @@ Evidence: 6590 pass / 0 fail / 84 skipped; fork dc0654b adds materialNeeds to th
 Why: Production and freight each discovered the same distant buyer separately, and a job could not say whose demand it answered
 Where: integration/coopFwEnlistmentGate.cjs, integration/coopNpcManufacture.cjs, integration/coopNpcManufactureTick.cjs, tests/coop-fw-enlist-standing.test.mjs, tests/coop-npc-manufacture-tick.test.mjs
 Evidence: live: job for 444 INSTALLED with buyer=30000142 in the durable record and in the event; 14/14 manufacture tests
+### 2026-10-29T20:17Z · 787e983 · L2 · state: a job names its buyer; note the stack recreations
+
+Why: the overview panel filters on slimItem.groupID, and ships either omitted it or reported the frigate default
+Where: .opencode/state.md, docs/WORKLOG.md
+Evidence: fork 2bd33c5; throwaway container on the real SDE: Catalyst 420/6, Capsule 29/6, Merlin 25/6, bare entity 0/0; tests/coop-overview-slim-item.test.mjs green

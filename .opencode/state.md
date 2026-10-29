@@ -1,5 +1,55 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 01:20Z (UTC) - the overview panel: what the client actually filters on
+
+The client's own contract, read from `eve/client/script/ui/inflight/overview/slimItemDisplayChecker.pyj`:
+
+    def ShouldDisplayItem(self, slimItem):
+        if not slimItem: return False
+        if slimItem.itemID == session.shipid: return False
+        ...
+        if slimItem.groupID not in self.filterGroups: return False
+
+and `michelle.AddBalls2` builds those objects one after another:
+
+    for data in extraBallData:
+        slimItem = SlimItem(); slimItem.__dict__ = slimItemDict
+        ...
+        self.ProcessBallAdd(slimItem, ballQueueData)
+
+Two server defects follow from that, both fixed in fork `2bd33c5`:
+
+  1. `space/destiny.js buildSlimItemDict` omitted `groupID`/`categoryID` whenever they were <= 0.
+     An object without the attribute raises inside that loop, and every ball AFTER it is added with
+     no slim item - the panel lists nothing while the ships are still drawn in space and still
+     shootable. Both fields are now always emitted (an unknown group is 0, never absent).
+  2. `space/runtime.js buildShipEntityCore` defaulted every hull to group 25 / category 6 (Frigate /
+     Ship) whenever the item row carried no group, so a Catalyst was reported as a frigate and any
+     preset listing destroyers did not match it. The group and category are now resolved from the
+     item type through `resolveItemByTypeID`.
+
+MEASURED (throwaway container `docker run --rm -v evejs-agents-data:/var/lib/evejs:ro` on the
+image built from `2bd33c5`, real SDE):
+`HULL 16240 Catalyst entityGroup=420 slimGroup=420 slimCategory=6`, `HULL 670 Capsule 29/6`,
+`HULL 603 Merlin 25/6`, and a bare entity with no classification still emits `groupID`/`categoryID`
+(= 0). Repo test: `tests/coop-overview-slim-item.test.mjs`.
+
+NOT YET CONFIRMED IN THE CLIENT: the fix is only visible after the play stack runs the new image,
+and the panel itself needs a human in space. The owner's client was disconnected while this was
+written (no established TCP, play stack reported 0 sessions), so the only thing measured is the
+payload the server builds.
+
+NEEDS_OWNER_RESTART_WINDOW: `evejs-server-1` still runs the image from 18:23 (before this and before
+the achievements/titles catalogues). Rebuild is done (`evejs-local` from `2bd33c5`); a play-stack
+restart is the owner's window.
+
+If the panel is still empty after that restart, the next measurement is the client's tab->preset
+mapping: `SlimItemDisplayChecker.GetValidGroups(presetName)` returns the groups of the preset the
+active tab points at, and a tab pointing at a preset that does not exist filters everything out.
+The tab/preset labels are readable through `overview_tabs` (`core_user_3.dat`); the presets
+themselves are binary, so that path needs a real client session to test.
+
+
 ## 2026-10-30 20:20Z (UTC) - a production job names the demand it answers
 
 PROVEN LIVE after the deploy: a job for product 444 was installed with **buyer=30000142**
