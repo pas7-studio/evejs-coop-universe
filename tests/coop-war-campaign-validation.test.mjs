@@ -106,6 +106,19 @@ test("two live campaigns on one target, a dead war and a ghost hull are all caug
   assert.equal(statusOf(ghost, "fleet-hulls-present"), "FAIL");
 });
 
+test("a funded side with no hull in the theatre is a WARN, not a broken record", () => {
+  const fundedOnlyAttacker = record({ reservations: [funded(500004)] });
+  const starved = validateCampaignRecord({ ...fundedOnlyAttacker,
+    presence: [{ systemID: 30003837, factions: { 500011: 2 } }] });
+  assert.equal(statusOf(starved, "payout-possible"), "WARN");
+  assert.match(starved.find((c) => c.name === "payout-possible").detail, /500004/);
+  const present = validateCampaignRecord({ ...fundedOnlyAttacker,
+    presence: [{ systemID: 30003837, factions: { 500004: 1 } }] });
+  assert.equal(statusOf(present, "payout-possible"), "PASS");
+  const unknown = validateCampaignRecord({ ...fundedOnlyAttacker, presence: [] });
+  assert.equal(statusOf(unknown, "payout-possible"), "SKIP", "no presence is not evidence");
+});
+
 test("unreadable input is a SKIP, never a silent pass", () => {
   const noChest = validateCampaignRecord(record({ reservations: [] }));
   assert.equal(statusOf(noChest, "paid-pilot-credited"), "SKIP");

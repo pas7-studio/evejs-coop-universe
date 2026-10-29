@@ -91,7 +91,8 @@ const stateResponse = bridge({ action: "war_state" });
 const state = stateResponse && (stateResponse.warState || stateResponse.result || null);
 const rows = readRows();
 const checks = validateCampaignRecord({ state, treasury: rows && rows.treasury,
-  fleet: rows && rows.fleet, creditedEventIDs: authorisedCredits() });
+  fleet: rows && rows.fleet, creditedEventIDs: authorisedCredits(),
+  presence: (state && state.presence && state.presence.systems) || null });
 const summary = summarise(checks);
 
 if (AS_JSON) {

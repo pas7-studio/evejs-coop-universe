@@ -14,7 +14,7 @@ const TERMINAL = new Set(["EXPIRED", "CANCELLED"]);
 const LIVE = new Set(["PREPARING", "ASSAULT"]);
 const KNOWN_STATES = new Set(["PREPARING", "ASSAULT", "OCCUPIED", "CANCELLED", "EXPIRED"]);
 
-function validateCampaignRecord({ state, treasury, fleet, creditedEventIDs = null } = {}) {
+function validateCampaignRecord({ state, treasury, fleet, creditedEventIDs = null, presence = null } = {}) {
   const checks = [];
   const add = (name, status, detail) => checks.push({ name, status, detail });
   const pass = (name, detail) => add(name, "PASS", detail);
@@ -133,6 +133,26 @@ function validateCampaignRecord({ state, treasury, fleet, creditedEventIDs = nul
   doubled.length
     ? fail("one-campaign-per-target", doubled.map(([id, ids]) => `${id}:${ids.join("|")}`).join(", "))
     : pass("one-campaign-per-target", `${byTarget.size} contested target(s), one live campaign each`);
+
+  // 10. A funded side that fields no hull in the theatre can never collect: the
+  //     escrow is real, the bounty is real, and no kill of that side can ever happen.
+  //     This is the actionable half of "why is there no payout yet".
+  const shown = Array.isArray(presence) ? presence : ((state.presence || {}).systems || []);
+  if (!shown.length) skip("payout-possible", "no presence in the war record");
+  else {
+    const starved = [];
+    for (const campaign of live) {
+      const theatre = [Number(campaign.sourceSystemID), Number(campaign.targetSystemID)];
+      for (const row of fundedFor(campaign.campaignID).filter((entry) => entry.status === "HELD")) {
+        const present = shown.some((system) => theatre.includes(Number(system.systemID)) &&
+          Number((system.factions || {})[row.factionID] || 0) > 0);
+        if (!present) starved.push(`${campaign.campaignID}:${row.factionID}`);
+      }
+    }
+    starved.length
+      ? warn("payout-possible", `funded but no hull in the theatre: ${starved.join(", ")}`)
+      : pass("payout-possible", `every funded side has a hull in its theatre`);
+  }
 
   // 9. A reserved hull must still have an entity and a system to be a hull.
   const ships = fleet ? Object.values(fleet.ships || {}) : null;
