@@ -49,12 +49,16 @@ CORPORATION CAN PRODUCE. Its stock of Tritanium (498 596 units at 60000682) is w
 2 M ISK and one fleet cycle will exhaust it; after that the loop sells only what mining feeds
 it, slowly.
 
+DONE since: space/coopDemandGap.js computes the gap in the server (artifact-filtered, only
+producible categories), and the manufacture phase reports DEMAND_WITHOUT_BLUEPRINT when no job
+is possible (at most once per 30 min). Today the manufacturer is busy, so the event has not
+fired yet - the wiring is tested, the event is not claimed.
+
 NEXT, in order of real leverage:
   1. blueprint acquisition. The seeded book carries only BUY demand (seed_buy_orders), so a
      blueprint cannot be bought from it; the honest options are a seeded sell side or an
      operator-granted copy. Decide before building anything on top of it.
-  2. make the manufacturer state the gap itself (DEMAND_WITHOUT_BLUEPRINT in its own event) so
-     the ceiling is visible in the live log, not only in an operator tool.
+  2. DONE (alife26a).
   3. the runtime line ratchet (5153, other sessions).
   4. the mining side feeds the loop; its yield is now the ceiling of the remaining trade.
 

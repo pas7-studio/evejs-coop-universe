@@ -2681,3 +2681,8 @@ Why: the owner asked what is still broken after walking the UI; placeholders had
 Detail: 'Unfinished' needed a list with reasons. The audit reads the pinned server source, bounds each handler body at the next one, and groups the placeholders by return value: 31 null, 8 audit-log data, 4 empty list, 1 scalar. A null getter the client guards for is correct (ping keepalive, 'no filament event', logon push); a null *action* is the real gap - structure rename/unanchor/cancel, industry moni
 Where: docs/CLIENT_GAPS.md, scripts/coop-placeholder-audit.cjs
 Evidence: 44 placeholders grouped 31 null/8 data/4 empty/1 scalar; userSvc playtime now real (fork 4274d2a); no client exception and no non-200 in the current server log
+### 2026-10-29T21:33Z · 9a1201e · L2 · alife26a: the demand gap is computed in the server and reported by the manufacturer
+
+Why: The loop's real ceiling (what it can build) was invisible in the live log and only visible in an operator tool
+Where: integration/coopDemandGap.cjs, integration/coopLoopTick.cjs, integration/coopNpcManufactureTick.cjs, tests/coop-demand-gap-module.test.mjs, tests/coop-ore-mission-mining-objective.test.mjs
+Evidence: module tests 3/3; wiring emits DEMAND_WITHOUT_BLUEPRINT when no job is possible (today the manufacturer is busy, so no event yet - stated, not faked)
