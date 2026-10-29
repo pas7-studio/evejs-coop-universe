@@ -81,3 +81,20 @@ test("an empty refinery reports both stations it tried", () => {
   assert.equal(refined.length, 0);
   assert.deepEqual(outcome.triedStations, [FLEET_STATION, ORE_STATION]);
 });
+
+test("the refinery takes the biggest stacks, so small leftovers cannot starve them", () => {
+  // Measured 2026-10-30: 2 798 972 units of ore sat untouched at 60000682 while 1 951 skip
+  // events said "leftover too small" - the candidate list was the first eight rows in insertion
+  // order, and those eight were always the tiny leftovers.
+  const refinery = require("../integration/coopNpcRefineryTick.cjs");
+  const tag = (id) => "coop-warehouse:v1:cargo:" + id;
+  const rows = [];
+  for (let i = 1; i <= 12; i += 1) {
+    rows.push({ itemID: 5000 + i, typeID: 1230, ownerID: 1000129, locationID: 60000682,
+      quantity: i <= 9 ? 40 : 12000, flagID: 4, customInfo: tag(i) });
+  }
+  const items = { ITEM_FLAGS: { HANGAR: 4 }, listOwnedItems: () => rows };
+  const picked = refinery.candidates({ items, ownerID: 1000129, stationID: 60000682, limit: 3 });
+  assert.deepEqual(picked.map((row) => row.quantity), [12000, 12000, 12000],
+    "the large stacks are chosen first");
+});
