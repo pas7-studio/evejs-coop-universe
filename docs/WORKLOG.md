@@ -2355,3 +2355,9 @@ Evidence: capture CAPTURE_APPLIED 11:26:12Z; NOT_UNIQUE_NAMED_PIRATE on the same
 Why: The freight run reached the buyer station but the sale could never settle or even report why
 Where: integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-distribution-run.test.mjs
 Evidence: live SOLD qty=1 isk=560000 at 60003760 for hauler 980000004164 (living-npc-sale-settlement), hold empty; 13/13 distribution-run tests
+### 2026-10-29T12:15Z · eefd1f1 · L2 · docs/tests: real stargate locks and the world name lookups
+
+Why: stargate locks had no implementation at all (empty default) and the basic solarsystem/station name calls were unhandled, so nothing could restrict a gate and any name lookup came back empty
+Detail: Stargate restrictions are a real mechanic now (persisted lock + expiry, refused in startStargateJump), and solarsystem/station Get answer the server's own static rows with the units+nanos security the client reads. The public stargate.lock Get is documented as deliberately unanswered: it returns one gate and carries no fields, so only the jump path can decide. Live: Perimeter 0.949000000, the Jita
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-entity-lookup.test.mjs, tests/coop-stargate-locks.test.mjs
+Evidence: fork f0ff7c1; live: Perimeter 0.949000000, Jita IV station name, unknown system status 5; lock apply 200, isLocked true for that gate only, list 1 row, past expiry refused status 9, delete 200 leaving 0; register 82->77; 11/11 new tests
