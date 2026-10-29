@@ -2592,3 +2592,13 @@ Evidence: 20/20 gate-crossing tests incl. relocate-on-arrival; live fleet walkin
 Why: ten gateway request types the client really sends had no answer; the gap list itself was hand-written
 Where: .opencode/state.md, docs/client-contracts/gateway-coverage.json
 Evidence: fork ff09ec8 + 6133d3e; audit 213 consumed / 287 answered / 10 open; live: restricted systems []->[30000144]->[], ship skin Get 200 decoded by CCP descriptor, ResetAll 200; 26 tests green
+### 2026-10-29T19:49Z · 3170f33 · TEST · test(fw): FW-092/093/094 proofs and the 25-minute stall window on the work stack
+
+Why: Prove the three live blockers found today in process: market-access planning, faction-corporation funding and aborted-opening refunds
+Where: compose/compose.agents.yaml, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-war-aborted-refund.test.mjs
+Evidence: 599 war tests pass; live campaign 30045320:r3 funded both sides after FW-093; release refused NOT_AUTHORIZED before FW-094
+### 2026-10-29T19:49Z · a53e382 · OPS · alife24a: an operator tool that spawns a durable distribution hull at a real anchor
+
+Why: Growing the freight fleet needed a real durable hull instead of re-marking an existing one
+Where: scripts/coop-spawn-distribution-hull.cjs, tests/coop-spawn-distribution-hull.test.mjs
+Evidence: live: hull 980000018521 spawned at belt 40009256 in 30000145, durable, marker coop-distribution-4-hauler; hulls() now returns 4; 3/3 tool tests

@@ -2,9 +2,9 @@
 
 Generated from the pinned client's own bytecode, not from guesswork: `docs/client-contracts/gateway-types.json`
 holds every `eve_public.*Request` string the client (V24.01, compiled 2026-06-16) can send —
-**217** of them. The local gateway knows **161** names (gateway services plus four inline handlers:
-`user.license.api.Get`, `plex.vault.api.Balance`, `cosmetic.ship.api.Get`,
-`cosmetic.ship.api.GetAllInBubble`). The remaining **56** have no handler at all.
+**216** of them. The local gateway names **254** types (gateway services plus the inline handlers,
+including `user.license.api.Get` and `plex.vault.api.Balance`), and **14** of the client's own types
+still get only the default empty answer.
 
 They are not fatal any more: since fork `f256261` an unknown `eve_public.*Request` is answered with
 a default-encoded empty message and a warning that names the type, so the client gets a valid
@@ -16,8 +16,10 @@ opens and shows nothing (or zeros) — it does not throw.
 `scripts/coop-gateway-gap-audit.py` compares the request messages in the client's own generated
 descriptors (kept only when a non-generated client module names both the proto module and the
 request class - that is what an import plus a call looks like) with the types the running server
-answers. Current numbers on `evejs-agents`: 1282 client request messages, 213 really sent, 287
-answered, 10 sent-but-unanswered; the derived list is `docs/client-contracts/gateway-coverage.json`.
+answers. This audit reads a wider set than `docs/client-contracts/gateway-types.json` (it takes every
+request message in every generated descriptor): on `evejs-agents` it finds 1282 client request
+messages, of which **213** are really sent, **287** are answered, and **10** are sent but
+unanswered. The derived list is `docs/client-contracts/gateway-coverage.json`.
 
 `scripts/coop-verify-client-proto.cjs` decodes bytes we produced with CCP's own FileDescriptorProto,
 so a wrong field number cannot pass by agreeing with our own reader. Both new answer sets were
