@@ -35,3 +35,16 @@ test("a throwing authority or an empty link answers 0, which no side can match",
   assert.equal(physicalCandidateSystem({}, () => null), 0);
   assert.equal(physicalCandidateSystem(null, null), 0);
 });
+
+// FW-070: "pirate" is a real war role here - the Angel Cartel raiders that hold 30045342
+// are linked as pirate, and the mobiliser only accepted patrol, so three armed, linked,
+// physically present hulls answered NO_PATROL_CANDIDATE while an ASSAULT waited.
+const { MOBILIZABLE_ROLES } = require("../integration/coopWarMobilizer.cjs");
+
+test("a pirate hull is a mobilizable war hull, like a patrol", () => {
+  assert.equal(MOBILIZABLE_ROLES.has("patrol"), true);
+  assert.equal(MOBILIZABLE_ROLES.has("pirate"), true);
+  for (const role of ["miner", "hauler", "trader", "", "PATROL", "unknown"]) {
+    assert.equal(MOBILIZABLE_ROLES.has(role), false, `"${role}" is not a war hull`);
+  }
+});
