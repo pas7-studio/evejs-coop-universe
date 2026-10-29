@@ -51,6 +51,8 @@ test("a real trip is chosen from real stock, a real bid and a real gate", () => 
   assert.equal(trip.toStationID, DEST_STATION);
   assert.equal(trip.toSystemID, 30000142);
   assert.equal(trip.expectedIsk, 310000 * 4);
+  assert.deepEqual(trip.demand, { 34: { price: 4, volume: 4000000 } },
+    "the lift serves the destination bid, not a local one");
   assert.deepEqual(trip.gate, { sourceGateID: 50001250, destinationGateID: 50002198,
     sourceSystemID: 30000145, destinationSystemID: 30000142 });
 });
