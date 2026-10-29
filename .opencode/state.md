@@ -1,5 +1,33 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 09:10Z (UTC) - site density brought closer to the real game (research + data change)
+
+The owner was right that our anomalies appear far less often than in EVE. What the real game does
+(EVE University combat-site page, 2017 and 2024 forum threads, Equinox notes, all cited in
+`docs/UNIVERSE_SITE_DENSITY.md`): a high-sec system normally holds **about three combat anomalies**,
+cleared sites **respawn in-region within seconds** (the server batches respawns every ~10 s), quiet
+systems accumulate dozens, and sites are not regenerated at downtime.
+
+We ran `combat_anomaly` = **1 slot on 360 of ~1200 high-sec systems with a 24 h lifetime** - most
+systems empty and sticky. Changed in the DUNGEON_AUTHORITY static table (data, not code; backup written
+beside it), via `scripts/coop-tune-site-density.js`:
+
+    combat_anomaly 3/3/4/3 slots (hs/ls/ns/wh)  lifetime 360 min
+    combat         2/2/2/2                       lifetime 360 min
+    data, relic    2/2/2/2                       lifetime 480 min
+    gas            1/1/1/2                       lifetime 480 min
+    every visited system eligible (targetSystems 0, targetSystemRatio 1)
+
+Measured after the change: `listDesiredUniverseDungeonSiteDefinitions` returns **6 for Jita, 5 for
+Perimeter, 5 for New Caldari** (where it returned ~1), i.e. the per-system desire now matches the real
+"about three anomalies, plus ore".
+
+Still open: the allocate step spreads those definitions across the band instead of filling each visited
+system, so the persisted instances are still 1 per system (Jita 1 ore, Perimeter 1 combat). That is the
+next fix - either fill every visited system up to `slotsPerSystem`, or raise the number until the
+observed count matches. Recorded in `docs/UNIVERSE_SITE_DENSITY.md`.
+
+
 ## 2026-10-30 22:50Z (UTC) - the refining backlog is cleared and the holds fill again
 
 MEASURED LIVE at 60000682:

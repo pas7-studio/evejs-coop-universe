@@ -2746,3 +2746,8 @@ Evidence: fork 36abb4f; play stack holds no treasury row; wallets 1000120=0, 100
 Why: The trip journal dropped every stop's cargo except the last, so the ledger under-reported loads
 Where: integration/coopDistributionRun.cjs, tests/coop-distribution-run.test.mjs
 Evidence: live: freshly planned trips are full (389999/550000/309999 units); ore 2798972->110192 and minerals 5282348 at 60000682; 31/31 run tests
+### 2026-10-29T23:06Z · 6806b11 · OPS · state: refining backlog cleared, holds full again
+
+Why: our anomalies were far rarer than the real game: one slot on a third of high-sec systems with a 24h lifetime, versus about three per system respawning in-region within seconds
+Where: .opencode/state.md, docs/WORKLOG.md
+Evidence: docs/UNIVERSE_SITE_DENSITY.md cites EVE University + 2017/2024 forum threads + Equinox notes; data edit via scripts/coop-tune-site-density.js; desired per system 1 -> 5-6 (Jita 6, Perimeter 5, New Caldari 5)
