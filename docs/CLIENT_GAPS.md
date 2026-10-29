@@ -2,9 +2,9 @@
 
 Generated from the pinned client's own bytecode, not from guesswork: `docs/client-contracts/gateway-types.json`
 holds every `eve_public.*Request` string the client (V24.01, compiled 2026-06-16) can send —
-**217** of them. The local gateway knows **158** names (gateway services plus four inline handlers:
+**217** of them. The local gateway knows **163** names (gateway services plus four inline handlers:
 `user.license.api.Get`, `plex.vault.api.Balance`, `cosmetic.ship.api.Get`,
-`cosmetic.ship.api.GetAllInBubble`). The remaining **59** have no handler at all.
+`cosmetic.ship.api.GetAllInBubble`). The remaining **54** have no handler at all.
 
 They are not fatal any more: since fork `f256261` an unknown `eve_public.*Request` is answered with
 a default-encoded empty message and a warning that names the type, so the client gets a valid
@@ -37,7 +37,7 @@ This file is the work queue for those surfaces. Refresh the numbers with
 
 | surface | request types | what the client does today | what building it needs |
 | --- | --- | --- | --- |
-| **SKINs and third-party skins** (`cosmetic.ship.skin.thirdparty.*`, 19) | licences (finite/infinite), drafts, sequencing jobs, shared drafts | Skin designer opens, every list is empty; sequencing a job does nothing | a SKIN licence/entitlement store keyed by character, draft storage (save/update/delete/share) and a sequencing job queue with real completion; item-bound licences (`component.license.item.Consume`) must consume a real inventory item |
+| **SKINs and third-party skins** (`cosmetic.ship.skin.thirdparty.*`, 19) | licences (finite/infinite), drafts, sequencing jobs, shared drafts | **licences done** (`469cbff`): a per-character store keyed by skin hex, GetOwned/Get/Activate + admin Grant/Revoke, an unactivated copy is the only thing that becomes usable. Still open: Apply/Unapply to a real ship, drafts, sequencing jobs, component licences and `component.license.item.Consume` (must consume a real inventory item) | the rest of the designer, per the staged plan in `.opencode/state.md` |
 | **SKIN market** (`cosmetic.market.*`, 10) | broker/buyer fees, tax rate, listings, transactions | the skin market window shows no listings and zero fees | listings table with escrowed SKIN items, an ISK settlement path (the native market already has one for items), fee/tax rules and a transaction log |
 | **Character titles** (`cosmetic.character.title.*`, 6) | owned/equipped titles, definitions, admin grant/revoke | the title picker is empty, equipping does nothing | a title definition list (flatbuffer) plus per-character owned/equipped rows; the character sheet reads them directly |
 | **Achievements** (`achievement.*`, 9) | definitions (flatbuffer CDN), progress, completion, rewards, showcase | the achievements page opens empty; the definition fetch fails inside the client (`FlatbufferContentProvider … L500`) because there is no checkpoint URL to download | an achievement definition flatbuffer (schema is in the client at `achievement_system/client/model/flatbuffer`), a progress store updated by real events, and a CDN path that serves the blob with a matching CRC |

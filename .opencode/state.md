@@ -9396,3 +9396,18 @@ so it needs its own state module; the catalog one cannot be reused for hex ids.
 
 Never fake a licence or an applied skin: if the store has no row, the answer is NOT_FOUND and
 the appearance must not change.
+
+## 2026-10-29T15:40Z - SKIN designer step 1 done (licences, 5 types)
+
+Fork `469cbff`, register 59 -> 54. `space/coopThirdPartySkins` owns per-character licence rows
+keyed by the skin **hex** (a different key from the catalogue skins shipCosmeticsState models),
+stored inside the character record through characterState. GetOwned / Get / Activate and the
+admin Grant / Revoke answer from real rows; another character's licence is never answered even
+by id; a row with no record is NOT_FOUND; a corrupt row is dropped.
+
+Live: 0 owned -> grant 200 -> 1 owned -> Get activated=false unactivated=2 -> Activate 200
+(activated=true, unactivated=1) -> second Activate 9 'already activated' -> Revoke 200 -> 0.
+
+Next steps (unchanged plan, `.opencode/state.md` above): step 2 Apply/Unapply onto a real ship
+item id (2 types), step 3 drafts (5 + capacity), step 4 sequencing jobs (3) with real item
+consumption, step 5 component licences (7).
