@@ -10720,3 +10720,28 @@ assault happens, no merit, no bounty and no capture can be claimed on the play s
 
 Watcher: `%TEMP%\opencode\front-watch.cjs <container> <minutes>` appends one line per minute
 (live campaigns + the last war/assault/merit events) to `%TEMP%\opencode\front-watch.log`.
+
+## WHERE THE ASSAULT IS STUCK (measured 2026-10-30 21:17-21:20Z on the play stack)
+
+The campaign is alive (`campaign:30003837:r18`, PREPARING since 21:11:13Z), so FW-099..101 did
+their job. The attack still cannot leave its system:
+
+```
+living-native-war-gate-staging  SKIPPED  NO_ATTACKER_SHIP_REGISTERED
+```
+`coopWarGateStaging.js:143` needs a fleet-registry ship with `campaignID === r18`,
+`factionID === attacker`, `systemID === campaign.sourceSystemID`, a real `entityID` and a
+`coop-pilot-NNN` pilot. The registry holds nothing matching.
+
+Two `living-war-fleet-spawned` events appeared (21:17:46Z 500004, 21:19:09Z 500001), both in
+**30003837 - the CAMPAIGN TARGET**, and both emitted from `coopAdminBridgeActions.js:998`, i.e.
+from the `spawn_war_fleet` ADMIN ACTION, not from a runtime phase. That is almost certainly the
+leftover `%TEMP%\opencode\front-keeper.cjs` from an earlier session still ticking: it staffs the
+target system with both sides. For r18 the target is 30003837 (Caldari), so the attacker is
+500004 and its staging source is **30045344** - a fleet spawned in 30003837 can never satisfy
+"attacker ship in source system".
+
+NEXT: either stop that leftover keeper and let the mobiliser muster the attacker in its own
+source system, or call `spawn_war_fleet {factionID:500004, systemID:30045344}` so the registry
+gets an attacker ship where staging looks for it. Then watch for ASSAULT -> casualty ->
+war-merit -> bounty PAID. Nothing before that can be reported as a fight.
