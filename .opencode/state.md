@@ -8834,3 +8834,33 @@ guessed.
 Validated live (23:5xZ): territory provenance holds for all four changed systems (capture and
 contested-bump are both named by a campaign), one live campaign per target, 16 fleet-registry hulls all
 carry an entity and a system, no PAID row exists yet so the payout rung is still unproven by data.
+
+## 2026-10-29T04:25Z - owner asked for all six client surfaces; first one is live
+
+Owner picked every surface I recommended (not the skip list). Order agreed, cheapest first:
+
+| # | surface | state |
+| --- | --- | --- |
+| 2 | career portal progress (`career.goal.*`) | **DONE** |
+| 4 | presence (`presence.api.*`) | next |
+| 5 | faction activity admin (`faction.activity.admin.*`) | next |
+| 3 | skill plans (`skill.plan.*`) | queued |
+| 6 | corp goal contributions (`goal.contribution.*`) | queued |
+| 1 | daily goals (`dailygoal.*`) | queued (biggest: definitions + progress + payout) |
+
+Career fix (fork `fb6c025`): `GetAll` now answers one row per definition stub with `progress: 0`,
+`not_completed: true`; the client used to raise `AttributeError: NoneType.progress` because the
+matching row did not exist. Verified live: the handler encodes 104 bytes instead of an empty
+payload.
+
+Trap worth remembering: the shared local proto root does NOT define every message the client uses,
+and an eager `protoRoot.lookupType()` throws at require time - the first attempt took the whole
+gateway down. New messages must be declared in a private root (pattern: `localChatGatewayService`,
+and now `CAREER_PROTO_ROOT`), and lookups stay lazy.
+
+Schemas already extracted from the client's own descriptors (python + protobuf, see
+`docs/CLIENT_CONTRACT_STATUS.md`): `career.goal.{Identifier,Attributes,Reward,RewardType}`,
+`career.goal.api.{GetDefinitions,GetAll,ClaimReward}`, `faction.activity.admin.{Increment,Set}
+ContributionScore{Request,Response}` (system Identifier + faction Identifier + int32/uint32, empty
+response). Still to extract when each surface starts: presence, skill plan, goal contribution,
+dailygoal attributes/entitlements.
