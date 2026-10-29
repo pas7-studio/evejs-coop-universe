@@ -8917,3 +8917,25 @@ Live record right now: `WAR_CAMPAIGN_OK checks=11 pass=11 warn=0 skip=0 fail=0` 
 contested target, every changed territory named by its campaign, all 16 registry hulls real. The
 payout itself is still unproven: the record honestly reports `0 PAID rows`, and the watcher is armed
 again for the next funded campaign that really produces an attributed kill.
+
+## FW-067/FW-068 + acceptance run (04:0xZ)
+
+FW-067 `war_payout_diagnose`: one read-only answer to "why is there no payout" - per campaign the state,
+escrow per side, hulls in the theatre, `payoutReady`, the blockers as sentences, and the last
+destruction-attribution status. Live at 04:0xZ it reported `PAYOUT_POSSIBLE` for
+`war:500011-500020:campaign:30045343:r5` (escrow HELD for 500011, 1 hull in the theatre) and NOTHING
+payable for every other campaign, which is the honest state.
+
+FW-068 `SUPPLY_UNFUNDED_SIDE`: with `EVEJS_COOP_WAR_BOUNTY_BOTH_SIDES=1` a border is refused unless both
+sides really reserved. Measured cause: 500020's militia corporation 1000135 holds 0 ISK with no income,
+so four campaigns opened and expired on 30045343 while the defender could never collect.
+
+`scripts/coop-war-acceptance.cjs` reports the nine rungs separately (never assuming a later step from an
+earlier one) and exits non-zero until the credit is real. First run at 04:0xZ: `war-opened` PASS,
+`escrow-reserved` PASS, `assault-begun` PENDING - the campaign opens and is funded but never musters.
+
+NEXT REAL BLOCKER (measured, not guessed): mobilization answers NO_PATROL_CANDIDATE / SYSTEM_NOT_TRACKED
+for the campaign's systems even while real armed hulls stand there, because the war fleet registry only
+accepts hulls it reserved itself. That is the next fix: either the mobilizer adopts patrol-role native
+hulls that are physically present, or the seeding path must reserve them through `spawn_war_fleet`.
+Until then no campaign reaches ASSAULT, so the payout rung stays unproven however healthy the money is.
