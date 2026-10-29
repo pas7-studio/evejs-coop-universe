@@ -9862,3 +9862,30 @@ listing gone. Register 18 (`handled=264`).
 Known gaps in this flow: the buyer's loyalty-point fee is quoted (100 LP tier 1) but not charged;
 `transaction.api.Get` cannot show the transaction yet (the id is returned but not stored as a row);
 `component.listing.InitiatePurchaseListing` is untouched.
+
+### 2026-10-30T06:40Z - checkpoint: 18 types left, 56/56 of this session's tests green
+
+Everything added this session is proven live and green: skins (licences, apply, drafts, sequencing,
+component licences, item consume, skin record), titles (state + our own catalogue + content host),
+achievements (8 of 9), market (fees, listings, purchase). Register `handled=264 missing=18`.
+Stack healthy, 0 error lines in 20 minutes of logs.
+
+Remaining 18, with the honest next step for each:
+- `achievement.definition.api.cdn.GetLatest` - needs an achievement definition flatbuffer (bigger
+  than titles). Our content host and checkpoint pattern already exist (coopTitleContent +
+  characterTitleDefinitionGatewayService + EVEJS_COOP_CONTENT_BIND/ORIGIN).
+- `cosmetic.market.transaction.api.Get` (+GetAll) - needs stored transaction rows; the purchase
+  already returns a 16-byte id, so the row just has to be written. Attributes.status is an enum
+  whose numbers must be read from the client's pb2 before answering.
+- `cosmetic.market.component.listing.api.InitiatePurchaseListing` - component bundle purchase,
+  same wallet + escrow shape as the skin listing purchase.
+- `freelance.contributionmethod.itemdelivery.DeliverRequest` - deliver an item to a project.
+- `operation.recommendation.GetRequest`, `ship.unlock.ClaimRewardRequest`, `communitytrack.api.Get`
+  - read/claim surfaces with no store yet.
+- sovereignty: `hub.upgrade.api.Get`, `mercenaryden admin.Modify{Anarchy,Development}Level`,
+  `skyhook admin.ScheduleTheftVulnerabilityWindow`.
+- auth: `AuthenticateUsernameRequest`, `auth.steam.AuthenticateSteamRequest` - native login paths;
+  do NOT fake an authentication result.
+- `ai.assistant.chat.api.QueryRequest`, `internal_gateway.ConsumeEvents/Request`, `debug.Request`,
+  `eve_public.Request` - infrastructure/debug surfaces; `debug.Request` must stay unhandled unless
+  the owner asks for it explicitly.
