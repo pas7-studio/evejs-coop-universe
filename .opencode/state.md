@@ -1,5 +1,29 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 04:05Z (UTC) - every transmission path to the overview panel is now measured
+
+Three separate paths put a row in front of the client, and all three are now checked on real payloads:
+
+  1. bootstrap on entering a system - `AddBalls2` + `SetState.slims`
+     (agents stack, Perimeter 414 entities and New Caldari 333 entities):
+     `slims=414 missingGroupID=0 zeroGroupID=0` and `slims=333 missingGroupID=0 zeroGroupID=0`;
+  2. incremental spawn while the client is already there - `OnSlimItemChange`
+     (`ONSLIMCHANGE ship=980000000030 hasGroup=true hasCategory=true`);
+  3. what one live session was actually told - `session._space.visibilityJournal`, now returned by the
+     read-only `scene_slim_diagnose` action (last 25 add/remove/visibility broadcasts with entity ids).
+
+Tooling: `scripts/coop-overview-payload-probe.js` (runs inside the container, builds both bootstrap
+payloads and counts unclassified slim items), `scripts/coop-overview-check.cjs` (asks a running server
+through the admin bridge and prints the scene plus the journal for a character or a system),
+`scripts/coop-overview-profile.py` (profile whose preset groups match this build's SDE).
+
+Client-side ignore list checked too: `appConst.OVERVIEW_IGNORE_TYPES` holds only effect beacons,
+chunks, Triglavian harvester phases and EDENCOM stockpiles - none of the hulls this world spawns.
+
+What is left is only the client's own settings: a tab whose preset lists group ids from another build
+cannot match, which is why the generated `coop-overview.yaml` exists and is installed for import.
+
+
 ## 2026-10-30 21:20Z (UTC) - the price of a trip is captured before the market forgets it
 
 MEASURED LIVE (balance sheet):

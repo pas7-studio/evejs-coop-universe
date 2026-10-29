@@ -2664,3 +2664,9 @@ Evidence: fork 4e6b8bc; r18 PREPARING since 21:11:13Z while 17 predecessors died
 Why: Paid trips were being recorded without an amount because the settled sale was read too late
 Where: integration/coopDistributionRun.cjs, tests/coop-distribution-run.test.mjs
 Evidence: live next row isk=77349 (was iskUnknown); ledger 10 trips / 471984 ISK RECONCILED; 28/28 run tests
+### 2026-10-29T21:19Z · a21970e · TEST · tool: check the bootstrap and incremental slim payloads for a scene
+
+Why: the overview panel needed proof that every transmission path carries the group the client filters on
+Detail: The live session check answers 'what did one client get'; this answers 'what does the runtime build' without a client at all: it constructs AddBalls2, SetState.slims and one OnSlimItemChange for a real scene and counts slim items without a group. Measured on the agents stack: Perimeter 414 entities and New Caldari 333 entities, 0 missing and 0 zero groupID in both payloads, OnSlimItemChange carrie
+Where: scripts/coop-overview-payload-probe.js
+Evidence: AddBalls2/SetState 414 and 333 slims, 0 missing/0 zero groupID; OnSlimItemChange has group+category; journal exposed via scene_slim_diagnose
