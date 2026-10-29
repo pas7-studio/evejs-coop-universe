@@ -9029,3 +9029,37 @@ bonus goal then 1/2; `PayForCompletion` status 12 with its reason; jump hook rec
 
 **Not verified:** how the cards look in the real client (the owner is not in game). The wire contract
 is proven, the visual is not.
+
+## FW-069..FW-072 (10:1x-10:4xZ): four real mobiliser defects, each measured on the way to a payout
+
+The chain from "a campaign is open and funded" to "a hull is on the field" was broken in four
+independent places. Every one of them answered NO_PATROL_CANDIDATE, so all four looked identical from
+the outside:
+
+FW-069 a candidate's system was the LINK's system. The link follows the virtual pilot, which walks its
+route while the native hull stays put (the drift FW-048/049/051 already fixed for attribution, presence
+and the opener), so every drifted patrol was dropped as WRONG_SYSTEM. `physicalCandidateSystem` now
+prefers the native record and answers 0 when neither is readable.
+
+FW-070 the mobiliser accepted only role "patrol", but an Angel Cartel raider - the hull that actually
+holds 30045342 - is linked as "pirate". Measured: three armed, linked, physically present hulls while
+both sides answered NO_PATROL_CANDIDATE. MOBILIZABLE_ROLES = {patrol, pirate} is now the same
+definition FW-044 already uses for military ownership.
+
+FW-071 the candidate SET itself was still built with `role === "patrol"` and `reachable.has(link.systemID)`,
+so 069/070 were only half effective: the corrected checks were never reached. The set is now built from
+armed roles and the hull's real system.
+
+FW-072 a registry row whose hull no longer exists kept its pilot blacklisted forever (PILOT_IN_USE), so
+once a hull died its pilot was unusable for the life of the process and no fresh campaign could staff a
+side. A row with a live native record still reserves its pilot; a row without one reserves nothing.
+
+PROVEN LIVE along the way: campaign `war:500001-500011:campaign:30045342` opened on a newly bootstrapped
+500001 territory (FW-045 registered 30045342 = 500001) and reached ASSAULT with the defender side
+SIDE_MUSTERED assigned 1 - the first time this world deployed a real hull for an assault.
+
+REMAINING BLOCKER (measured, not guessed): the two sides now reject candidates with PILOT_IN_USE because
+the same co-op pilot is already bound to a live hull in ANOTHER system - the pilot pool is 64 pilots
+shared with miners, haulers and traders, and repeated seeding leaves live hulls holding the few war
+pilots. That is pool hygiene, not a mobilizer rule: the war needs its own reserved pilots (or the keeper
+must reuse the hulls already present instead of spawning new ones).
