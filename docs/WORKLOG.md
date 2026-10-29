@@ -2736,3 +2736,8 @@ Evidence: live: ore 2798972 -> 771462 units and minerals -> 4243400 units at 600
 Why: site density and rotation were unmeasured; the profiles show 1 slot per system on N systems per band with a 24h lifetime, but the tick only sees awake systems
 Where: docs/COOP_LOOP_RESULTS.md
 Evidence: getSpawnProfile combat_anomaly/combat/data/combat_hacking: slotsPerSystem and targetSystems per band, lifetime 1440/2880 min; advance tick driven by listAwakeSolarSystemIDs; 27 instances in 16 systems
+### 2026-10-29T22:53Z · 8dc1d7e · L3 · state(fw): FW-105 wallet-backed escrow live; measured that every faction wallet is empty
+
+Why: A real kill could never pay because the war only escrowed money its pilots earned, while a real corporation wallet was never consulted
+Where: .opencode/state.md, integration/coopVirtualWorldRuntime.cjs, integration/coopWarBounty.cjs, tests/coop-war-bounty.test.mjs
+Evidence: fork 36abb4f; play stack holds no treasury row; wallets 1000120=0, 1000035=0, 1000129=3432.75 ISK; bounty 10/10, coop-war-*+coop-fw-* 542 pass
