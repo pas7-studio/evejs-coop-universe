@@ -10638,3 +10638,33 @@ metrics rather than a profiler.
 
 Note: the agents stack is being recreated by another session (container id changes between two
 calls minutes apart), so it cannot be used as a stable A/B rig right now.
+
+## FW-100/101 DEPLOYED ON THE PLAY STACK - the frontier is no longer an open/expire loop
+
+Deployed (fork 4e6b8bc) together with the earlier FW-099 image and EVEJS_COOP_PERF_METRICS=1
+(fork 7746512, compose.coop-probe.yaml). Measured after the restart:
+
+- `war:500001-500004:campaign:30003837:r18` opened 21:11:13Z and is STILL `PREPARING`; every
+  earlier campaign on that target (r7..r17) died about a minute after opening with
+  `WAR_ESCROW_MISSING`. The frontier now has a live front.
+- `war_state` counts moved 19 campaigns/18 EXPIRED to 21 campaigns with 1 PREPARING AND
+  1 OCCUPIED.
+- `war_funding_diagnose` explains why the play stack must keep REQUIRE_FUNDING=0:
+  needCents 2500000, every side `REFUSED:NO_REAL_FACTION_INCOME` because the 50 virtual
+  pilots' earned balances are all 0 - so requiring escrow there would mean no war at all.
+
+## NEXT blocker, measured 21:17:46Z (the phase tells it itself)
+```
+living-native-war-garrison        GARRISON_APPLIED
+living-native-war-skip            SKIPPED   WAITING
+living-native-war-gate-staging    SKIPPED   NO_ATTACKER_SHIP_REGISTERED
+living-native-war-sovereignty-projection  PROJECTED_VIEW
+```
+The attack cannot leave its system because the war fleet registry has no attacker hull
+(`coop-faction-war\u001ffleet-roster-v1` held only `coop-fleet-500004-0001`). That is the next
+thing to fix: either the mobiliser must register the attacker's hulls, or the bridge action
+`spawn_war_fleet` / `fleet_reconstitute` must be used to staff both sides of r18. Until a real
+assault happens, no merit, no bounty and no capture can be claimed on the play stack.
+
+Watcher: `%TEMP%\opencode\front-watch.cjs <container> <minutes>` appends one line per minute
+(live campaigns + the last war/assault/merit events) to `%TEMP%\opencode\front-watch.log`.

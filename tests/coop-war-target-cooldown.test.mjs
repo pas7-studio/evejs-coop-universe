@@ -85,3 +85,69 @@ test("an unknown reason is still a failure, never an excuse", () => {
     b: { ...campaign("b", 30045344, "EXPIRED", 2), expiredReason: "SOMETHING_NEW" } } };
   assert.equal(targetCooldownMs({ state, targetSystemID: 30045344, baseMs: BASE }), BASE * 2);
 });
+
+// FW-100: the in-memory pacing map must obey the same rule as the durable record.
+//
+// Measured on the play stack 2026-10-30 21:08Z: campaign r17 of 30003837 opened and was
+// released one minute later with WAR_ESCROW_MISSING, and the map - which kept only a
+// timestamp - paced the border for the full grown window although FW-099 had just made
+// that reason count as zero. The map now carries the reason with the time.
+const { expireUnfundedCampaigns, expireStalledCampaigns, coolingDown } =
+  require("../integration/coopFactionWarOpening.cjs");
+
+const NOW = 1793308000000;
+const territories = (target) => ({ [String(target)]: { state: "CONTESTED", revision: 1 } });
+const live = (id, target, startedAt) => ({ ...campaign(id, target, "PREPARING", 0),
+  startedAt, revision: 1 });
+
+test("a lost-escrow release paces the border for the base window, never the grown one", () => {
+  const prior = [noProof("p1", 30003837, NOW - 10 * BASE), noProof("p2", 30003837, NOW - 9 * BASE),
+    noProof("p3", 30003837, NOW - 8 * BASE)];
+  const state = { territories: territories(30003837), campaigns: {
+    ...Object.fromEntries(prior.map((row) => [row.campaignID, row])),
+    c: live("c", 30003837, NOW - BASE),
+  } };
+  const { campaignIDs } = expireUnfundedCampaigns(state, { nowMs: NOW, isFunded: () => false });
+  assert.deepEqual(campaignIDs, ["c"]);
+  assert.equal(state.campaigns.c.expiredReason, "WAR_ESCROW_MISSING");
+  // Three real failures would pace 4 x BASE; this release must not inherit that.
+  assert.equal(targetCooldownMs({ state, targetSystemID: 30003837, baseMs: BASE }), BASE * 4);
+  assert.equal(coolingDown(30003837, NOW + BASE - 1000, BASE, state), true,
+    "it still may not reopen on the very next tick");
+  assert.equal(coolingDown(30003837, NOW + BASE + 1000, BASE, state), false,
+    "after the base window the stale release stops pacing the border");
+});
+
+test("a real assault-proof failure still paces for the grown window", () => {
+  const state = { territories: territories(30045344), campaigns: {
+    p1: noProof("p1", 30045344, NOW - 10 * BASE),
+    p2: noProof("p2", 30045344, NOW - 9 * BASE),
+    c: live("c", 30045344, NOW - 3 * BASE),
+  } };
+  const { campaignIDs } = expireStalledCampaigns(state, { nowMs: NOW, ttlMs: BASE });
+  assert.deepEqual(campaignIDs, ["c"]);
+  assert.equal(state.campaigns.c.expiredReason, "NO_ASSAULT_DEPLOYMENT_PROOF");
+  assert.equal(coolingDown(30045344, NOW + BASE + 1000, BASE, state), true,
+    "three real failures still hold the border for 4 x BASE");
+  assert.equal(coolingDown(30045344, NOW + 4 * BASE + 1000, BASE, state), false);
+});
+
+// FW-101: the escrow-missing expirer may only run where escrow is required.
+//
+// Measured on the play stack 2026-10-30: it runs EVEJS_COOP_WAR_REQUIRE_FUNDING=0 (its
+// factions' funding plan is REFUSED:NO_REAL_FACTION_INCOME, so requiring escrow would
+// mean no war at all), and yet every campaign was expired about a minute after it opened
+// - r17 and the sixteen before it - each with WAR_ESCROW_MISSING. An open/expire loop
+// that looks exactly like "the war never starts".
+test("where funding is not required an unfunded campaign is the configured shape", () => {
+  const make = () => ({ territories: territories(30045344), campaigns: { c: live("c", 30045344, NOW - 60000) } });
+  const optional = make();
+  const relaxed = expireUnfundedCampaigns(optional, { nowMs: NOW, isFunded: () => false, requireFunding: false });
+  assert.deepEqual(relaxed.campaignIDs, []);
+  assert.equal(relaxed.skipped, "FUNDING_NOT_REQUIRED");
+  assert.equal(optional.campaigns.c.state, "PREPARING", "the front must survive to get its assault");
+  const required = make();
+  const strict = expireUnfundedCampaigns(required, { nowMs: NOW, isFunded: () => false, requireFunding: true });
+  assert.deepEqual(strict.campaignIDs, ["c"], "with funding required a vanished escrow is still a loss");
+  assert.equal(required.campaigns.c.state, "EXPIRED");
+});
