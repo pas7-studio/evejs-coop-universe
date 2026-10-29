@@ -496,3 +496,18 @@ test("the ledger reports the whole load, not only the last stop", async () => {
   assert.equal(state.lifted.length, 2, "both stops are in the journal");
   assert.equal(state.quantity, 1500, "and so is the whole load");
 });
+
+test("a finished run rests and then takes another load while recycling", async () => {
+  // Measured 2026-10-30: four hulls reached their trip cap and sat DONE for ever while 5.28 M
+  // minerals waited; the fleet only moved again because an operator cleared the journals.
+  const twentySixth = 980000004195;
+  run.write({ version: 1, haulerID: twentySixth, phase: "DONE", updatedAt: 30000,
+    isk: 1234, trips: run.MAX_TRIPS });
+  const tooSoon = await run.tick(twentySixth, { recycle: true, now: 31000 });
+  assert.equal(tooSoon.status, "IDLE", "it rests first");
+  const rested = await run.tick(twentySixth,
+    { recycle: true, now: 30000 + run.REST_BETWEEN_CYCLES_MS + 1 });
+  assert.equal(rested.status, "RESTED");
+  assert.equal(run.read(twentySixth).phase, "PLAN");
+  assert.equal(run.read(twentySixth).cycles, 1);
+});

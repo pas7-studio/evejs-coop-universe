@@ -79,7 +79,7 @@ services:
       # its gate. A phase that only runs when another system happens to call it is not a
       # phase. Default OFF everywhere except this probe stack.
       EVEJS_COOP_LOOP_DRIVER: "1"
-      EVEJS_COOP_LOOP_INTERVAL_MS: "45000"
+      EVEJS_COOP_LOOP_INTERVAL_MS: "20000"
       # 1800 s of native job time is 3.6 s here, so a proof does not wait half an hour.
       EVEJS_COOP_INDUSTRY_TIME_SCALE: "0.002"
       # The lift carries any corp-owned stack the station really bids for, not only the
@@ -148,6 +148,11 @@ services:
       # the window is 25 minutes - enough for open -> stage -> jump -> assault -> kill,
       # and still a fifth of the original.
       EVEJS_COOP_WAR_OPENING_STALL_MS: "1500000"
+      # FW-096 (owner decision 2026-10-30): enlistment is not free - the native rule
+      # accepts a raw 0.0 standing. "0" stays the default everywhere; this stack asks
+      # for 1.5 because the owner's own Caldari standing is 1.553 today, so 2.0 would
+      # lock him out while 1.5 keeps the rule real.
+      EVEJS_COOP_FW_ENLIST_MIN_STANDING: "1.5"
       # FW-038B (2026-10-28): allow a funded faction to hire a navy with a real,
       # journaled two-leg wallet transfer (division 1000). The world measured this
       # asymmetry: ORE holds 136.5 M ISK and cannot field a hull, while every

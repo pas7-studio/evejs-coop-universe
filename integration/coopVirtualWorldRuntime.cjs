@@ -359,7 +359,7 @@ function warBountyStore(){
   // native corporation wallet instead of only by a levy its pilots never earned. The
   // escrow is taken by coopWarTreasury RESERVE, which verifies the corporation, debits
   // division 1000 with a real journal entry and refuses when the money is not there.
-  reserveFromWallet:({campaignID,factionID,needCents})=>{
+  reserveFromWallet:({campaignID,factionID,needCents,proofID})=>{
    try{
     const state=warStateStore().read();
     const campaign=state?.campaigns?.[campaignID];
@@ -367,9 +367,19 @@ function warBountyStore(){
     const pilots=warPresencePilots(),ledger=warEarnedLedger();
     const corporationID=warFactionCorporation(factionID,pilots,ledger);
     if(!(Number(corporationID)>0))return {status:"BLOCKED",reason:"NO_FACTION_CORPORATION"};
-    return warTreasuryStore().execute({type:"RESERVE",
-     eventID:"fw:wallet-reserve:"+campaignID+":"+factionID,
-     reservationID:"bounty:"+campaignID+":"+factionID,
+    // FW-109: ONE escrow per KILL, not one per faction per campaign. The old fixed ids
+    // meant the second kill of a campaign reused the first reservation, and the treasury
+    // correctly answered a conflict - so a faction could never pay two bounties in one war.
+    // The proof is hashed because a treasury id may not exceed 96 characters.
+    let tag="";
+    try{
+     tag=require("node:crypto").createHash("sha1")
+      .update(String(proofID||"event")).digest("hex").slice(0,10);
+    }catch(_error){tag="";}
+    if(!tag)return {status:"BLOCKED",reason:"BOUNTY_PROOF_UNHASHABLE"};
+    return warTreasuryStore().execute({type:"RESERVE",purpose:"BOUNTY",
+     eventID:"fw:wallet-reserve:"+campaignID+":"+factionID+":"+tag,
+     reservationID:"bounty:"+campaignID+":"+factionID+":"+tag,
      corporationID,factionID,warID:campaign.warID,campaignID,
      amountCents:needCents,minRemainingCents:0});
    }catch(error){
@@ -5030,6 +5040,19 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
       "living-native-war-casualty",null,{spaceState:{systemID}},
       {status:casualty.status,receipt:casualty.receipt,
        captureAuthorized:false,killCreditAssigned:false});
+    else
+     // FW-109: a REFUSED casualty was silent. MEASURED on the play stack 2026-10-30:
+     // five verified enemy wrecks in the front system produced no casualty row and no
+     // event, so the assault could never name the exact predicate that refused them -
+     // the capture phase only ever said NO_DEFENDER_WRECK. The ledger's own reason is
+     // the evidence; without it the next step is guesswork.
+     require("./coopRuntimeProbe").observe(
+      "living-native-war-casualty-skipped",null,{spaceState:{systemID}},
+      {status:String(casualty.status||"UNKNOWN"),
+       reason:String(casualty.reason||(casualty&&casualty.status)||"").slice(0,80),
+       entityID:Number(npcID),pilotID:String(link&&link.pilotID||""),
+       wreckID:Number(wreckID),campaignID:String(fleetRow.campaignID||""),
+       evidence:"WAR_CASUALTY_LEDGER_REFUSED"});
     // FW-032: a confirmed wreck must actually leave the war. Otherwise the dead
     // hull keeps its exclusive custody slot and roster entry, the side looks
     // mustered with a corpse, and the killed pilot can never man a replacement.
