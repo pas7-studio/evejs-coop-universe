@@ -135,6 +135,12 @@ services:
       # parties really reserve a HELD escrow (wallet-backed above), which is the
       # only way PAYOUT can be observed. Work stack only.
       EVEJS_COOP_WAR_REQUIRE_FUNDING: "1"
+      # FW-086 (measured): a militia corporation earns nothing on its own, and every
+      # campaign reserves the default 25 000 ISK per side, so after a day of fighting the
+      # wallets sit at 5 000 and FW-068 correctly refuses every border. The bounty on this
+      # stack is therefore priced at 5 000 ISK: real escrow, real debit, real payout, but
+      # small enough that the existing militia income can carry a war.
+      EVEJS_COOP_WAR_BOUNTY_ISK: "5000"
       # FW-038B (2026-10-28): allow a funded faction to hire a navy with a real,
       # journaled two-leg wallet transfer (division 1000). The world measured this
       # asymmetry: ORE holds 136.5 M ISK and cannot field a hull, while every

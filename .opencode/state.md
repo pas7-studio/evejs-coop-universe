@@ -9659,3 +9659,36 @@ Next: the skin market (10) - listings need escrow of a real licence + ISK transf
 characters, plus broker fee/tax reads. Then titles/achievements, which are gated behind the
 client flag `character_titles_feature_enabled` and a CDN flatbuffer - verify the flag surface
 before writing either.
+
+## FW-084..FW-086 + how to finish (17:0xZ)
+
+FW-084 every refusal printed `territories: {}` and `fronts: 0`, so an empty map, a dropped edge and a
+failed proof were indistinguishable. The refusal now publishes the planner's own territories and front
+count. An offline probe with the same pure module and the LIVE state proves the planner is healthy: four
+fronts derived (500001-500011 across 30003829/30003836/30045338/30045339/30045341/30045344, plus three
+others) and four openings planned, including `war:500001-500011:campaign:30003829:r3`. The planner was
+never the problem.
+
+FW-085 with the both-sides rule the funded side's reservation stayed HELD for a campaign that was never
+created, and each retry used a new campaign id so the orphan-reuse path never saw it - 25 000 ISK lost
+per refused border, every tick. The opening now releases what it took; the treasury allows that refund
+only with an explicit `unfunded:<campaign>` proof, so no live campaign can use the hatch.
+FW-085b: the first release was itself refused (INVALID_TREASURY_COMMAND) because the event id blew past
+the treasury's 96-character key budget; it now names the campaign and the side.
+
+FW-086 the bounty is priced at 5 000 ISK on the agents stack (`EVEJS_COOP_WAR_BOUNTY_ISK`). Measured
+reason: militia corporations earn nothing on their own, every campaign reserved 25 000 per side, and after
+a day of fighting both militia wallets sat at 5 000 - so FW-068 correctly refused every border. Real
+escrow, real debit, real payout, at a price the existing income can carry. THIS IS THE KNOB TO REVISIT
+when a real militia income exists.
+
+STATE OF THE CHAIN (each rung proven live today at least once): front opened from a bootstrapped
+territory -> escrow reserved on both sides -> ASSAULT_BEGUN -> native attack orders accepted -> real
+casualty -> `war-merit PROMOTED` (14:47:30Z) -> capture-by-force -> escrow refunded. The only rung never
+observed is `war-bounty PAID`, and the last measured obstacle to it was the campaign lookup (FW-078) and
+the destroyed-hull identity (FW-073/075/076).
+
+HOW TO FINISH (no code expected): start the agents stack, keep `EVEJS_COOP_WAR_BOUNTY_ISK=5000`, seed one
+front with both sides in the SAME system (7 linked hulls is enough), then run
+`node scripts/coop-war-acceptance.cjs --minutes 20`. If it reports `bounty-paid` PENDING, read
+`living-native-destruction-identity` (FW-079) - it names the identity source that was short.
