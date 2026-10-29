@@ -9715,3 +9715,23 @@ HOW TO FINISH (no code expected): start the agents stack, keep `EVEJS_COOP_WAR_B
 front with both sides in the SAME system (7 linked hulls is enough), then run
 `node scripts/coop-war-acceptance.cjs --minutes 20`. If it reports `bounty-paid` PENDING, read
 `living-native-destruction-identity` (FW-079) - it names the identity source that was short.
+
+### 2026-10-29T23:10Z - character titles done server-side (6 types, 35 left)
+
+Fork `738b145`: `space/coopCharacterTitles.js` + `characterTitleGatewayService.js`, gated by
+`EVEJS_COOP_CHARACTER_TITLES` (added to compose). Per-character owned set + worn slot inside the
+character record; a title exists because a grant created it, an ungranted title cannot be worn
+(9), and revoking the worn title clears it. Live on 140000001: GetOwned 0 -> 2 grants 200 ->
+GetOwned 2 (16-byte ids) -> equip 200 and the equipped call answers it -> ungranted 9 -> revoke
+the worn one 200 and no_title true -> second revoke 5. Register 35 (`handled=246`).
+
+**Blocking fact for anything cosmetic-character side (owner's "we can simulate"):** the client
+gates titles behind the LaunchDarkly flag `character_titles_feature_enabled`
+(`featuremanagement.client.flag.flag_bool`, flag source is the LaunchDarkly SDK inside the
+client, NOT our gateway), so the UI stays dark until that flag is on. The definitions are a
+flatbuffer downloaded from the checkpoint our gateway returns; a title flatbuffer is small
+(`Title.LocalizedName` per entry), so OUR OWN content is feasible - that is the next step, then
+the flag question (client-side config, not server code).
+
+Achievements have no such LD gate; their definitions are also a checkpoint our server owns, plus
+admin progress/complete/reset, reward claim, category score and showcase score (9 types).
