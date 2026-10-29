@@ -1,5 +1,35 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 21:45Z (UTC) - the loop is logistics-complete; the ceiling is production
+
+MEASURED LIVE this round:
+  - the freight hulls are FULL: 980000004164 and 980000018521 carry 309 999 units in exactly
+    3 100 m3 (an Impel, brim full), 980000000002 carries 390 000 in 3 900 m3, 980000000005
+    543 746 in 5 500 m3 - all of it Tritanium, all bound for 60003760;
+  - freight ledger: 10 trips, 471 984 ISK, 122 063 units, RECONCILED; the newest row carries
+    its real price (77 349 ISK) because the settlement is now read inside its five-second
+    window.
+
+NEW OPERATOR TOOL: scripts/coop-demand-gap.cjs prints, read-only, the top seeded demand in the
+buyer system by value, marks which products the corporation can actually build, and totals the
+gap. With seeded artifacts filtered (a 92 billion ISK hardener, PLEX, blueprint crates) the
+measured picture is: **4 blueprints owned, 3 buildable, 4 144 products of real demand worth
+170 060 631 095 ISK that nobody here can make.**
+
+So the binding constraint is no longer ships, lifts, gates or sales - it is WHAT THE
+CORPORATION CAN PRODUCE. Its stock of Tritanium (498 596 units at 60000682) is worth about
+2 M ISK and one fleet cycle will exhaust it; after that the loop sells only what mining feeds
+it, slowly.
+
+NEXT, in order of real leverage:
+  1. blueprint acquisition. The seeded book carries only BUY demand (seed_buy_orders), so a
+     blueprint cannot be bought from it; the honest options are a seeded sell side or an
+     operator-granted copy. Decide before building anything on top of it.
+  2. make the manufacturer state the gap itself (DEMAND_WITHOUT_BLUEPRINT in its own event) so
+     the ceiling is visible in the live log, not only in an operator tool.
+  3. the runtime line ratchet (5153, other sessions).
+  4. the mining side feeds the loop; its yield is now the ceiling of the remaining trade.
+
 ## 2026-10-30 04:05Z (UTC) - every transmission path to the overview panel is now measured
 
 Three separate paths put a row in front of the client, and all three are now checked on real payloads:
