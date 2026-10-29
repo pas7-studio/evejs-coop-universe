@@ -2582,3 +2582,8 @@ Why: public stargate-lock reads and ship SKIN state had no answer; the gap list 
 Detail: The 'remaining gaps' list was hand-written, so it could only contain gaps somebody had already thought of. scripts/coop-gateway-gap-audit.py derives the list instead: it reads the client archive, takes every request message from the generated descriptors, keeps the ones a non-generated module names together with its proto module (that is what an import plus a call looks like), and compares them wi
 Where: docs/client-contracts/gateway-coverage.json, scripts/coop-gateway-gap-audit.py, scripts/coop-verify-client-proto.cjs, tests/coop-ship-cosmetic-state.test.mjs
 Evidence: fork ff09ec8; audit 1282/213/282/15; 25 tests green incl. client-descriptor decode of GetResponse and GetAllInBubbleResponse
+### 2026-10-29T19:43Z · c303363 · L2 · alife23d: relocate the identity on ARRIVED, with its own journal field
+
+Why: A proven arrival left the identity link in the old system, so the next reader pruned it and the following crossing was refused
+Where: integration/coopNpcGateCrossing.cjs, tests/coop-npc-gate-crossing.test.mjs
+Evidence: 20/20 gate-crossing tests incl. relocate-on-arrival; live fleet walking multi-stop trips (LOADED_STOP:60000688)

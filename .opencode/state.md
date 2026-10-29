@@ -1,5 +1,27 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 20:00Z (UTC) - the identity moves with a proven arrival; fleet walks its stops
+
+PROVEN LIVE: the whole fleet is on multi-stop trips - all three hulls loaded their first stop
+(LOADED_STOP:60000688 for two of them) and are flying to the second of 4-5 stops.
+
+Changed: on ARRIVED the crossing now calls identity.relocate(pilotID, from, entityID, to) and
+records the outcome in the journal (identityRelocated). Before this the link kept pointing at
+the old system, the next reader pruned it, and the following crossing failed
+SOURCE_IDENTITY_MISMATCH until it was rebuilt from the durable record. A relocate the registry
+refuses (STALE_SOURCE, SOURCE_STILL_PHYSICAL) is recorded, never hidden.
+
+Tests: gate-crossing 20, distribution-run 26, identity-refresh 5, 51 in the touched suites.
+
+NEXT:
+  1. the runtime line ratchet (5153, other sessions) - split a module rather than grow it;
+  2. a fourth hull (only an operator re-mark is needed: the run iterates every
+     coop-distribution-* marker, and the two idle Jita fleet haulers are already used);
+  3. a production order that names its buyer's system, so the manufacturer and the freight run
+     plan against the same demand instead of discovering it twice;
+  4. watch the freight ledger over a full cycle: several trips, several rows, and the balance
+     sheet's FREIGHT line growing with them.
+
 ## 2026-10-30 19:45Z (UTC) - one trip loads at several stations
 
 PROVEN LIVE right after the deploy: hull 980000000002 planned a 46-line trip with **4 stops**, 
