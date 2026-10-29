@@ -8895,3 +8895,25 @@ Schemas already extracted from the client's own descriptors (python + protobuf, 
 ContributionScore{Request,Response}` (system Identifier + faction Identifier + int32/uint32, empty
 response). Still to extract when each surface starts: presence, skill plan, goal contribution,
 dailygoal attributes/entitlements.
+
+## FW-064..FW-066 (03:2xZ): the campaign stopped looping, and won campaigns stop locking money
+
+FW-064 (validation): overnight the work stack reopened and expired `30045343` four times (`:r2`,
+`:r3`, `:r4`) - each cycle reserving real escrow and refunding it 45 minutes later, because the
+defender never fielded a hull there. The target cooldown now doubles per lost campaign (1x, 2x, 4x,
+capped 8x); a successful assault resets it because only EXPIRED records are counted. 5 tests.
+
+FW-065 (validation): the validator answers the question the payout rung really asks - for every HELD
+escrow, does that faction field a real hull in the campaign's own systems? PASS/WARN/SKIP with the
+campaign and faction named, so "why is there no payout" has a data answer. 1 test.
+
+FW-066 (validation): after the capture of 30003837 the campaign was OCCUPIED while two HELD rows
+(25 000 ISK each) sat behind it. Once CAPTURE_TERRITORY moves a campaign to OCCUPIED no further kill of
+that campaign can happen, so its bounty can never be spent. OCCUPIED is now terminal for escrow in the
+treasury precondition, the refund authority, the runtime reconcile and the validator. PROVEN LIVE
+03:23:09Z: two `living-native-war-bounty-refunded APPLIED` rows for `war:500001-500011:campaign:30003837`.
+
+Live record right now: `WAR_CAMPAIGN_OK checks=11 pass=11 warn=0 skip=0 fail=0` - no live campaign, no
+contested target, every changed territory named by its campaign, all 16 registry hulls real. The
+payout itself is still unproven: the record honestly reports `0 PAID rows`, and the watcher is armed
+again for the next funded campaign that really produces an attributed kill.
