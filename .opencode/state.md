@@ -1,5 +1,33 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 04:50Z (UTC) - "unfinished" is now a classified list, and one real stub is gone
+
+The owner walked the UI and asked what is still broken. Two sources audited:
+
+1. RemoteSvc placeholders - `node scripts/coop-placeholder-audit.cjs` reads the pinned server source,
+   bounds each handler body at the next handler, and groups the 44 entries of
+   `docs/client-contracts/baseline.json` by what they return: **31 null, 8 audit-log data, 4 empty
+   list, 1 scalar** (`docs/CLIENT_GAPS.md` now carries the verdicts).
+   Correct by contract, do not "fix": `pingService.Ping` (idle keepalive), `pvpFilamentMgr.
+   GetMostRecentEvent/GetNextEventDate` (the window tests `_event_info is not None` and shows "no
+   event"), `milestoneMgr.ProcessCharacterLogon` (logon push), the cohort/lockdown/bounty-cache
+   empties, and every node_graph/QA/localization/stat-logger surface.
+   Genuinely unfinished, because the call does nothing when a player uses it:
+   `structureDeployment.RenameStructure/Unanchor/CancelUnanchor`, `industryMonitor.DisconnectJob`,
+   the nine `petitioner.*` calls (no ticket store), `survey.*`, `milestoneMgr.ClaimRewards`,
+   `charUnboundMgr.CancelCharacterDeletePrepare`, `operationsManager.process_client_event`,
+   `pvpFilamentMgr.GetLeaderboard/LeavePVPQueue` - each needs backing data this world never produced.
+
+2. Live errors. Since the last restart the server log holds no client-reported exception and the
+   gateway logged no non-200. The only client exceptions measured earlier were the payment-schedule
+   lookups at gRPC status 5, which is fixed by answering 404 (fork `98dc75d`); the client has not been
+   in game since that build, so the next session is the first one that can confirm it.
+
+Fixed for real: `sessionRegistry.register` stamps `evejsRegisteredAtMs`, so
+`userSvc.GetSessionPlaytimeMinutes` reports the actual minutes of the session instead of 0
+(fork `4274d2a`). The play stack now runs the image that contains it.
+
+
 ## 2026-10-30 21:45Z (UTC) - the loop is logistics-complete; the ceiling is production
 
 MEASURED LIVE this round:

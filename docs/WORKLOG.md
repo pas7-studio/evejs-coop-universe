@@ -2670,3 +2670,14 @@ Why: the overview panel needed proof that every transmission path carries the gr
 Detail: The live session check answers 'what did one client get'; this answers 'what does the runtime build' without a client at all: it constructs AddBalls2, SetState.slims and one OnSlimItemChange for a real scene and counts slim items without a group. Measured on the agents stack: Perimeter 414 entities and New Caldari 333 entities, 0 missing and 0 zero groupID in both payloads, OnSlimItemChange carrie
 Where: scripts/coop-overview-payload-probe.js
 Evidence: AddBalls2/SetState 414 and 333 slims, 0 missing/0 zero groupID; OnSlimItemChange has group+category; journal exposed via scene_slim_diagnose
+### 2026-10-29T21:21Z · bc04413 · L3 · state: logistics-complete, production-limited (measured)
+
+Why: ORE mission sites (client-dungeon:13338, mission 'The Missing Pilot') materialized empty: combat-family template + no miningRocks/objectiveQuantity meant no rock, no objective and no Complete button. Mission context is now read from the instance and the declared ore becomes the same miningRocks/objectiveQuantity shape the working mining missions use.
+Where: .opencode/state.md
+Evidence: fork commit 615743c; node --test tests/coop-ore-mission-mining-objective.test.mjs 4/4 pass; image evejs-local rebuilt; play stack healthy on new image 21:23Z; live in-client completion still unverified (needs owner on site)
+### 2026-10-29T21:27Z · d2b9cda · DOCS · docs+tools: classify the 44 RemoteSvc placeholders by what they return
+
+Why: the owner asked what is still broken after walking the UI; placeholders had no classification and one real stub (session playtime) returned a constant
+Detail: 'Unfinished' needed a list with reasons. The audit reads the pinned server source, bounds each handler body at the next one, and groups the placeholders by return value: 31 null, 8 audit-log data, 4 empty list, 1 scalar. A null getter the client guards for is correct (ping keepalive, 'no filament event', logon push); a null *action* is the real gap - structure rename/unanchor/cancel, industry moni
+Where: docs/CLIENT_GAPS.md, scripts/coop-placeholder-audit.cjs
+Evidence: 44 placeholders grouped 31 null/8 data/4 empty/1 scalar; userSvc playtime now real (fork 4274d2a); no client exception and no non-200 in the current server log
