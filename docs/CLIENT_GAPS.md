@@ -11,6 +11,39 @@ a default-encoded empty message and a warning that names the type, so the client
 "no data" answer instead of a 404 it cannot decode. What that means in game is that the surface
 opens and shows nothing (or zeros) — it does not throw.
 
+## The 44 RemoteSvc placeholders, classified
+
+`node scripts/coop-placeholder-audit.cjs` reads the pinned server source and groups the placeholders
+from `docs/client-contracts/baseline.json` by what they actually return, because that decides what a
+client sees: a getter that returns `null` where the view guards for it ("no event", "no pending
+something") is correct, while an *action* that returns `null` silently does nothing.
+
+Current split: 31 return `null`, 8 return data from an audit log, 4 return an empty list, 1 returns a
+scalar.
+
+Correct by contract, deliberately left alone:
+- `pingService.Ping` - the client's idle keepalive (`connectionService.PingLoop`); nothing to return;
+- `pvpFilamentMgr.GetMostRecentEvent` / `GetNextEventDate` - the event window checks
+  `self._event_info is not None` and shows "no event" for `null`; this world runs no filament events;
+- `milestoneMgr.ProcessCharacterLogon` - a logon push the client tolerates as empty;
+- `charMgr.GetCohortsForCharacter`, `browserLockdownSvc.GetFlaggedSitesList`,
+  `bountyProxy.GMClearBountyCache` - honest empty results (no cohorts, no blocked sites, no cache);
+- `node_graph.*`, `keeper.GetLevelEditor`, `publicQaToolsServer.*`,
+  `localizationServer.UpdateLocalizationQAWrap`, `clientStatLogger.LogString`,
+  `eventLog.LogPlayerRequestedDisconnect` - QA/dev surfaces, not gameplay.
+
+Genuinely unfinished (the call does nothing when a player uses it):
+- `structureDeployment.RenameStructure` / `Unanchor` / `CancelUnanchor` - the structure context menu;
+- `industryMonitor.DisconnectJob` - detaching a job from the industry monitor;
+- `petitioner.*` (9 calls) - the support/petition window: no ticket store exists here;
+- `survey.PerformSurveyChecks` / `ClaimSurveyRewards`, `milestoneMgr.ClaimRewards`,
+  `charUnboundMgr.CancelCharacterDeletePrepare`, `operationsManager.process_client_event`,
+  `pvpFilamentMgr.GetLeaderboard` / `LeavePVPQueue` - features whose backing data this world has
+  never produced (surveys, milestones, PVP queues, character-deletion flows).
+
+`sessionRegistry.register` now stamps `evejsRegisteredAtMs`, so `userSvc.GetSessionPlaytimeMinutes`
+answers the real minutes of the current session instead of the constant 0 it used to return.
+
 ## Gateway coverage is measured, not remembered
 
 `scripts/coop-gateway-gap-audit.py` compares the request messages in the client's own generated
