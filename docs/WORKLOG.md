@@ -2494,3 +2494,14 @@ Why: the client's flatbuffer provider is plain HTTP/1.1 while 127.0.0.1:443 is t
 Detail: 5/5 tests: the flatbuffer parses like the client parses it, the checkpoint matches the served bytes, and the content host serves only its own routes.
 Where: .opencode/state.md, docs/CLIENT_GAPS.md, tests/coop-title-content.test.mjs
 Evidence: fork 0a7b8d1; host GET https://127.0.0.2/elysian-eve/titles/1.0.0.titles -> 200, 368 bytes, crc 2300466464 = checkpoint crc, id CHTI; unknown route 404; GetLatest advertises https://127.0.0.2/... v1.0.0; 5/5 tests
+### 2026-10-29T18:01Z · d4ac7e2 · L2 · alife22b: cross-gate liquidation, merged identity writes, load-aware sell budget
+
+Why: Freight with no local buyer could not leave the system it was stuck in, and two owners of the identity file kept deleting each other's links
+Where: integration/coopDistributionRun.cjs, tests/coop-distribution-run.test.mjs, tests/coop-identity-refresh.test.mjs, tests/coop-skin-market-fees.test.mjs
+Evidence: live: leftover crossing ARRIVED attempt 1 and sold 1490464 ISK; 91/91 loop tests incl. merge and cross-gate liquidation
+### 2026-10-29T18:03Z · 7efff53 · L2 · docs/tests: skin market fee quotes come from one policy
+
+Why: the skin market window could not quote broker fee, tax or buyer fee at all, so it could not offer a listing
+Detail: 3/3 tests: broker rates per duration, tax in nanos, and the tiered buyer fee definition.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md
+Evidence: fork 1ec0b15; live through the registry: 4 broker rows (1 day = 10 000 000 nanos), 4 per-duration rows, tax 0 units + 25 000 000 nanos, buyer fee 100 LP, definition v1.0.0 with 3 tiers and 200 LP branded tier 1; 3/3 tests; register 23 unhandled
