@@ -240,3 +240,56 @@ test("the funding gate is opt-in: flag OFF keeps the old behaviour", () => {
   assert.equal(fundedGate(ON), false);
   assert.equal(fundedGate(FUNDED_ON), true);
 });
+
+// FW-038: a PREPARING campaign is the muster stage. Without hulls it can never
+// reach ASSAULT, and a garrison that only fed ASSAULT campaigns deadlocked the
+// whole war (measured 2026-10-29: one PREPARING campaign, zero ships, no refill
+// for hours on both the play and the agents stack).
+test("a PREPARING campaign is mustered, not left empty until ASSAULT", () => {
+  const preparing = {
+    version: 1,
+    wars: STATE.wars,
+    campaigns: {
+      c1: { campaignID: "c1", warID: "war:a-b", state: "PREPARING", targetSystemID: 30045344 },
+    },
+  };
+  const calls = [];
+  const garrison = createWarGarrison({
+    readWarState: () => preparing,
+    registry: { snapshot: () => ({ ships: {} }) },
+    listFreePilots: () => ["coop-pilot-001"],
+    spawnFleet: (input) => {
+      calls.push(input);
+      return { ok: true, fleetID: "coop-fleet-x", ships: [{ entityID: 901 }] };
+    },
+    env: ON,
+    clock: () => 1000,
+  });
+  const out = garrison.tick();
+  assert.equal(out.status, "GARRISON_APPLIED");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].systemID, 30045344);
+});
+
+test("a campaign that is already decided is never refilled", () => {
+  const decided = {
+    version: 1,
+    wars: STATE.wars,
+    campaigns: {
+      c1: { campaignID: "c1", warID: "war:a-b", state: "OCCUPIED", targetSystemID: 30045344 },
+      c2: { campaignID: "c2", warID: "war:a-b", state: "EXPIRED", targetSystemID: 30045344 },
+    },
+  };
+  const calls = [];
+  const garrison = createWarGarrison({
+    readWarState: () => decided,
+    registry: { snapshot: () => ({ ships: {} }) },
+    listFreePilots: () => ["coop-pilot-001"],
+    spawnFleet: (input) => { calls.push(input); return { ok: true, ships: [{ entityID: 901 }] }; },
+    env: ON,
+    clock: () => 1000,
+  });
+  const out = garrison.tick();
+  assert.equal(out.status, "NO_MUSTER");
+  assert.equal(calls.length, 0);
+});
