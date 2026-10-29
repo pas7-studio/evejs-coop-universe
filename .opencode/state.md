@@ -9792,3 +9792,16 @@ route -> 404. Registry GetLatest advertises https://127.0.0.2/... v1.0.0.
 Remaining for the titles window: the client LaunchDarkly flag `character_titles_feature_enabled`
 (client config, not our gateway). Everything server-side is now in place: state (6 calls), our
 catalogue, the checkpoint, and a downloadable file.
+
+### 2026-10-30T04:00Z - skin market fees done (4 of 10 types, 23 left)
+
+Fork `1ec0b15`: `space/coopSkinMarketFees.js` (one policy) + `skinMarketFeesGatewayService.js`.
+Broker 1/2/3/5 % for 1/3/7/14-day listings (nanos 10/20/30/50 M), tax 2.5 % (25 M nanos), buyer fee
+tier 1 = 100 LP (branded 200), tiers 2-3 = 250/500 and 500/1000, version 1.0.0. Live: 4 broker rows
+with 1-day/10 M first, 4 per-duration rows, tax 0/25 M, buyer 100 LP, definition 3 tiers.
+Register 23 (`handled=259`).
+
+Remaining in the market: `skin.listing.InitiateCreateListing` / `InitiatePurchaseListing` /
+`CancelListing` / `Get` / `admin.SetExpiration`, `component.listing.InitiatePurchaseListing`,
+`transaction.api.Get`. They need escrow of a real licence in the seller's store plus ISK transfer
+between characters; the fee policy above is what those calls should charge.
