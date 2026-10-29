@@ -37,6 +37,26 @@ one needs `EVEJS_COMPOSE_DIR`, `EVEJS_SERVER_CONTAINER` and
 | `container_exec` | diagnostic command inside the server container | needs `confirm: true` |
 | `restart_server` | restart the `server` or `market` service | needs `confirm: true` |
 
+## Admin tools (act on a real character)
+
+Every admin call is **one `docker exec` and one bridge round-trip**; the bridge
+drains its request file on a 1 s timer, so an answer takes about a second. The
+world tick can be a minute apart and must not be waited for.
+
+| tool | one call does | mutation |
+| --- | --- | --- |
+| `admin_command` | one slash/GM command as a live character | needs `confirm: true` |
+| `admin_give_item` | grant an item or hull to the station hangar | needs `confirm: true` |
+| `admin_remove_item` | delete one owned item (never the active hull) | needs `confirm: true` |
+| `admin_board_ship` | make an owned, docked hull active (offline only) | needs `confirm: true` |
+| `admin_fit_ship` | fit modules through the native planner (needs a live session) | needs `confirm: true` |
+| `admin_give_fit` | **whole fitting**: reuse/grant the hull, every module into its real slot, drones to the drone bay, rest to the hold, optional board | needs `confirm: true` |
+| `admin_restore_last_loss` | **"I died"**: read the newest killmail, re-grant the hull and re-fit exactly what was lost | needs `confirm: true` |
+| `admin_batch` | several whitelisted actions in one round-trip, one result line each | needs `confirm: true` |
+
+A timeout does not mean "not applied": the request is already on the volume and
+the bridge may still execute it. Read the result before repeating a mutating call.
+
 ## Client tools
 
 | tool | what it proves | mutation |

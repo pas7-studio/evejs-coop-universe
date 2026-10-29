@@ -36,6 +36,60 @@ function createServerTools({
   const inContainer = (script, { timeoutMs = 30000 } = {}) =>
     docker(["exec", container, "sh", "-c", script], { timeoutMs });
 
+  // One admin round-trip: one docker exec, one request blob, one answer. The
+  // bridge drains every ~1 s (coopAdminBridge.startFastDrain), so the budget is
+  // seconds, not the minute the world-tick-only bridge used to need.
+  const ADMIN_WAIT_MS = 5000;
+  function adminCall(request, { waitMs = ADMIN_WAIT_MS, timeoutMs = 30000 } = {}) {
+    const script = require("node:fs").readFileSync(require("node:path").join(__dirname, "probe-admin-command.cjs"), "utf8");
+    const payload = Buffer.from(JSON.stringify(request), "utf8").toString("base64");
+    const budget = Math.max(1000, Number(waitMs) || ADMIN_WAIT_MS);
+    const result = docker(
+      ["exec", "-i", "-e", "Q_REQUEST_B64=" + payload, "-e", "Q_WAIT_MS=" + budget, container, "node", "-"],
+      { input: script, timeoutMs: Math.max(timeoutMs, budget + 10000) },
+    );
+    const line = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean).pop() || "{}";
+    try {
+      return JSON.parse(line);
+    } catch (_error) {
+      return { ok: false, error: "non-JSON answer: " + cap(result.stderr || line, 2000) };
+    }
+  }
+
+  function renderFit(answer) {
+    const lines = [
+      `hull: ${answer.hullName || "(unnamed)"} (type ${answer.hullTypeID}, item ${answer.itemID})${answer.hullGranted ? " [granted]" : " [reused]"} at station ${answer.stationID}`,
+      `fitted: ${answer.fitted}/${answer.attempted} slots`,
+    ];
+    for (const row of answer.rows || []) {
+      lines.push(
+        `  ${row.ok ? "OK  " : "FAIL"} ${row.name} x${row.count} -> ${row.family}${row.flag ? " (flag " + row.flag + ")" : ""}${row.error ? " - " + row.error : ""}`,
+      );
+    }
+    for (const row of answer.skipped || []) {
+      lines.push(`  SKIP ${row.name || row.typeID} x${row.count} - ${row.error}`);
+    }
+    for (const row of answer.already || []) {
+      lines.push(`  KEEP ${row.name} x${row.count} already on the hull (${row.family})`);
+    }
+    if (answer.boarded) {
+      lines.push(answer.boarded.ok ? "boarded: yes" : `boarded: no - ${answer.boarded.error}`);
+    }
+    return lines.join("\n");
+  }
+
+  function renderBatch(answer) {
+    const lines = [`batch: ${answer.applied}/${answer.attempted} actions applied`];
+    for (const row of answer.results || []) {
+      const detail = row.ok
+        ? [row.message, row.name, row.itemID ? "item " + row.itemID : "", row.fitted !== undefined ? "fitted " + row.fitted : ""]
+          .filter(Boolean).join(" ")
+        : row.error || "failed";
+      lines.push(`  ${row.ok ? "OK  " : "FAIL"} ${row.action || "(no action)"}: ${detail}`);
+    }
+    return lines.join("\n");
+  }
+
   function must(result, what) {
     if (!result.ok) {
       throw new Error(`${what} failed (exit ${result.code}): ${cap(result.stderr || result.stdout, 600)}`);
@@ -555,6 +609,142 @@ function createServerTools({
         if (!answer.ok) return `refused: ${answer.error || "nothing fitted"}`;
         const rows = (answer.results || []).map((row) => `  ${row.ok ? "OK  " : "FAIL"} ${row.name}${row.fitted ? " x" + row.fitted : ""}${row.error ? " - " + row.error : ""}`);
         return [`fitted ${answer.fitted}/${answer.attempted} modules on hull ${answer.itemID}`, ...rows].join("\n");
+      },
+    },
+    {
+      name: "admin_give_fit",
+      description: "One call issues a whole fitting: reuse or grant the hull, place every module into its real slot (high/med/low/rig), put drones in the drone bay and anything else in the hold, optionally board it. Works while the character is offline. Answers in about a second (requires confirm: true).",
+      mutating: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          characterID: { type: "integer", description: "Owning character." },
+          itemID: { type: "integer", description: "Existing hull to fit. Omit to reuse a docked hull of the hull type, or grant one." },
+          hullTypeID: { type: "integer", description: "Hull type to grant when no docked hull of that type exists (32880 = Venture)." },
+          hullName: { type: "string", description: "Hull name instead of hullTypeID, e.g. 'Venture'." },
+          modules: {
+            type: "array",
+            description: "Everything that goes on the ship: [{typeID|name, count, kind?}]. kind is 'module' | 'drone' | 'cargo'; leave it out to let the server classify by the item's slot family and category.",
+            items: {
+              type: "object",
+              properties: {
+                typeID: { type: "integer", description: "Module/item type ID." },
+                name: { type: "string", description: "Module/item name (or use typeID)." },
+                count: { type: "integer", description: "How many (default 1)." },
+                kind: { type: "string", enum: ["module", "drone", "cargo"], description: "Optional explicit placement class." },
+                flag: { type: "integer", description: "Optional explicit slot flag (wins over automatic placement)." },
+              },
+            },
+          },
+          board: { type: "boolean", description: "Make it the active hull afterwards (only when the character is offline)." },
+          stationID: { type: "integer", description: "Optional station override; defaults to where the character is docked." },
+          waitMs: { type: "integer", description: "Answer budget in ms (default 5000)." },
+          confirm: { type: "boolean", description: "Must be true." },
+        },
+        required: ["characterID", "modules", "confirm"],
+      },
+      async handler(args) {
+        if (args.confirm !== true) return "refused: pass confirm: true to issue a fitting";
+        const characterID = Number(args.characterID) || 0;
+        const modules = Array.isArray(args.modules) ? args.modules : [];
+        if (!(characterID > 0)) return "characterID is required";
+        if (!modules.length) return "modules[] is required";
+        if (!(Number(args.itemID) > 0) && !(Number(args.hullTypeID) > 0) && !String(args.hullName || "").trim()) {
+          return "itemID (existing hull), hullTypeID or hullName is required";
+        }
+        const answer = adminCall({
+          action: "give_fit",
+          characterID,
+          itemID: Number(args.itemID) || 0,
+          hullTypeID: Number(args.hullTypeID) || 0,
+          hullName: String(args.hullName || ""),
+          stationID: Number(args.stationID) || 0,
+          modules,
+          board: args.board === true,
+        }, { waitMs: args.waitMs });
+        if (!answer.ok && !Array.isArray(answer.rows)) return `refused: ${answer.error || "nothing fitted"}`;
+        return renderFit(answer);
+      },
+    },
+    {
+      name: "admin_restore_last_loss",
+      description: "He died: recreate exactly the same ship in one call. Reads the character's newest native killmail, re-grants the lost hull, re-fits every lost module into its own slot, restores drones to the drone bay and cargo to the hold. Answers in about a second (requires confirm: true).",
+      mutating: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          characterID: { type: "integer", description: "Character to restore." },
+          killID: { type: "integer", description: "Specific killmail to restore (default: the newest one for this character)." },
+          includeCargo: { type: "boolean", description: "Restore cargo and ore too (default true)." },
+          board: { type: "boolean", description: "Board the restored hull afterwards (only when the character is offline)." },
+          stationID: { type: "integer", description: "Optional station override; defaults to where the character is docked." },
+          waitMs: { type: "integer", description: "Answer budget in ms (default 5000)." },
+          confirm: { type: "boolean", description: "Must be true." },
+        },
+        required: ["characterID", "confirm"],
+      },
+      async handler(args) {
+        if (args.confirm !== true) return "refused: pass confirm: true to restore a lost ship";
+        const characterID = Number(args.characterID) || 0;
+        if (!(characterID > 0)) return "characterID is required";
+        const answer = adminCall({
+          action: "restore_last_loss",
+          characterID,
+          killID: Number(args.killID) || 0,
+          stationID: Number(args.stationID) || 0,
+          includeCargo: args.includeCargo !== false,
+          board: args.board === true,
+        }, { waitMs: args.waitMs });
+        if (!answer.fit) return `refused: ${answer.error || "nothing restored"}`;
+        const head = [
+          `killmail ${answer.killID} at ${answer.killTime} in system ${answer.solarSystemID}`,
+          `lost hull: ${answer.hullName || "(unnamed)"} (type ${answer.hullTypeID})`,
+          `restoring ${(answer.restored || []).length} item type(s)`,
+        ];
+        return [...head, renderFit(answer.fit)].join("\n");
+      },
+    },
+    {
+      name: "admin_batch",
+      description: "Run several admin actions in one call: one container exec, one bridge round-trip, a per-action result line. Actions are the same whitelisted ones the single tools use. Answers in about a second (requires confirm: true).",
+      mutating: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          characterID: { type: "integer", description: "Default character for actions that omit one." },
+          actions: {
+            type: "array",
+            description: "Actions to apply in order, e.g. [{action:'give_item', typeID:32880}, {action:'give_fit', itemID:..., modules:[...]}].",
+            items: {
+              type: "object",
+              properties: {
+                action: { type: "string", description: "chat_command | give_item | remove_item | move_item | fit_ship | fit_slots | give_fit | restore_last_loss | board_ship | grant_evermarks | ..." },
+                characterID: { type: "integer", description: "Optional per-action character override." },
+              },
+            },
+          },
+          stopOnError: { type: "boolean", description: "Stop at the first failure (default false: apply everything, report each line)." },
+          waitMs: { type: "integer", description: "Answer budget in ms (default 5000)." },
+          confirm: { type: "boolean", description: "Must be true." },
+        },
+        required: ["actions", "confirm"],
+      },
+      async handler(args) {
+        if (args.confirm !== true) return "refused: pass confirm: true to run a batch";
+        const actions = Array.isArray(args.actions) ? args.actions : [];
+        if (!actions.length) return "actions[] is required";
+        const characterID = Number(args.characterID) || 0;
+        if (!(characterID > 0) && !actions.some((row) => Number(row && row.characterID) > 0)) {
+          return "characterID is required (on the batch or on every action)";
+        }
+        const answer = adminCall({
+          action: "batch",
+          characterID,
+          actions,
+          stopOnError: args.stopOnError === true,
+        }, { waitMs: args.waitMs });
+        if (!Array.isArray(answer.results)) return `refused: ${answer.error || "batch was not applied"}`;
+        return renderBatch(answer);
       },
     },
     {
