@@ -9571,3 +9571,30 @@ unknown component 5 -> revoke 200, again 5, both kinds gone. Register 45 unhandl
 Next: sequencing jobs (Initiate/Get/CompleteEarly) - they must consume these licences and a
 real inventory item, and only a completed job may mint a third-party skin licence; then
 `component.license.item.Consume`; then the skin market (10), which needs escrow + ISK.
+
+## FW-080..FW-083 (16:0x-16:5xZ): the frontier was blind, then deaf, then out of pilots
+
+FW-080: the opener only sees the systems in its tick list, and that list was cut at twelve while the
+world owned more. Measured 15:50Z: 30003829 was registered as a 500001 territory with every hull standing
+there, yet the list ended at 30045341 - the new front was invisible and the only refusal the world could
+publish was an empty map. Owned systems are now ordered before the walked ones and the cap is 24.
+
+FW-081/081b: a refusal published only `NATIVE_WAR_AUTHORITY_MISSING` with an empty skip list, so four
+candidate borders and two possible failing proofs were indistinguishable. The refusal now carries
+refusedCommand/refusedWarID/refusedCampaignID/edge, the event publishes them, and the de-duplication key
+includes them. It immediately named the culprit: DECLARE_WAR for `war:500001-500020` across
+30045338/30045343, whose declaration proof failed because 500020 had no hull on its side.
+
+FW-082: that single failed border aborted the WHOLE tick (the thrown refusal discarded every other
+border, including a fully mustered one). Each opening now runs in its own try/catch, is rewound to the
+last committed snapshot and recorded as BORDER_REFUSED:<reason>, and the rest of the batch proceeds.
+A single-border batch still answers with the underlying proof reason so a real cause is never hidden.
+
+FW-083: the war had no pilots left to hire. Measured: roster 64, links 65, every link holding a live hull,
+free = -1. The agents stack roster is now 88 (free = 23), which restores the ability to staff a front.
+
+OPEN QUESTION for the next session (measured, not guessed): after FW-080 the tick list contains 30003829
+and the map reads 30003829 = 500001 next to 30003836 = 500011 with a real gate between them, yet the plan
+only ever reports two OTHER borders (`30045338 -> 30045343` and `30045344 -> 30045343`). So
+`buildFronts`/`territoriesForFronts` is dropping a genuine, owned, adjacent pair. That is the next thread
+to pull; everything downstream of the plan (apply, mobilise, fight, attribute, capture, refund) is proven.
