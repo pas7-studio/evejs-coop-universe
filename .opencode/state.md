@@ -9735,3 +9735,21 @@ the flag question (client-side config, not server code).
 
 Achievements have no such LD gate; their definitions are also a checkpoint our server owns, plus
 admin progress/complete/reset, reward claim, category score and showcase score (9 types).
+
+### 2026-10-30T00:20Z - achievements done except the definition catalogue (8 of 9 types, 27 left)
+
+Fork `aaebf64`: `space/coopAchievements.js` + `achievementGatewayService.js`, gated by
+`EVEJS_COOP_ACHIEVEMENTS` (in compose). Progress rows, category scores, unclaimed rewards and
+the showcase score are real per-character rows. Honest rules proven live on 140000001: add 7 ->
+progress 7; add 0 -> 3; checklist -> 9 (refused, not dropped); complete -> 200 then 9; Get
+not_completed false with a real timestamp; one unclaimed reward; claim 200 then 5, list empty;
+category/showcase 0 because nothing scored was invented; reset 200 then 5. Register 27
+(`handled=254`).
+
+Still missing in this block: `achievement.definition.api.cdn.GetLatest` - the catalogue is a
+flatbuffer the client downloads from the checkpoint we return, so we must generate our own
+content file and serve it. That is also the same shape needed for title definitions
+(`Title.LocalizedName`), so one content-serving mechanism covers both.
+
+Title UI additionally needs the client LaunchDarkly flag `character_titles_feature_enabled`
+(client-side, not our gateway).
