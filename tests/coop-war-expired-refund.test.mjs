@@ -62,7 +62,7 @@ function setup(campaignState) {
   const instance = treasury.createWarTreasury({
     gameStore: store,
     verifyCorporation: () => true,
-    authorizeRefund: ({ campaign }) => ["CANCELLED", "EXPIRED"].includes(String(campaign && campaign.state)),
+    authorizeRefund: ({ campaign }) => ["CANCELLED", "EXPIRED", "OCCUPIED"].includes(String(campaign && campaign.state)),
     authorizePayout: () => false,
     clock: () => 1793220000000,
     env: { EVEJS_COOP_FACTION_WAR: "1", EVEJS_COOP_WAR_TREASURY: "1", EVEJS_COOP_NATIVE_ATOMIC_ROWS: "1" },
@@ -105,4 +105,13 @@ test("a refund is idempotent: replaying the same event never pays twice", () => 
   assert.equal(again.status, "DUPLICATE");
   const division = store.data.get("corporationRuntime\u001fcorporations\u001f1000138").wallet.divisions["1000"];
   assert.equal(division.balance, 25000, "the wallet is credited exactly once");
+});
+
+test("a WON campaign refunds too: no further kill of that campaign can pay", () => {
+  const { instance, store, reservationID } = setup("OCCUPIED");
+  const result = instance.execute({ type: "REFUND", eventID: "fw:refund:won:500011",
+    reservationID, corporationID: 1000138, proofID: "capture:" + CAMPAIGN });
+  assert.equal(result.status, "APPLIED", JSON.stringify(result));
+  const division = store.data.get("corporationRuntime\u001fcorporations\u001f1000138").wallet.divisions["1000"];
+  assert.equal(division.balance, 25000, "the escrow behind a finished campaign goes home");
 });

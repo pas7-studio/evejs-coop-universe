@@ -10,7 +10,8 @@
 // A check never guesses: unreadable input is reported as SKIP with the reason, because
 // "we could not look" is not "it is wrong".
 
-const TERMINAL = new Set(["EXPIRED", "CANCELLED"]);
+// FW-066: a WON campaign is terminal for its escrow - no further kill can pay.
+const TERMINAL = new Set(["EXPIRED", "CANCELLED", "OCCUPIED"]);
 const LIVE = new Set(["PREPARING", "ASSAULT"]);
 const KNOWN_STATES = new Set(["PREPARING", "ASSAULT", "OCCUPIED", "CANCELLED", "EXPIRED"]);
 
