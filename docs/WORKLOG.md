@@ -2751,3 +2751,14 @@ Evidence: live: freshly planned trips are full (389999/550000/309999 units); ore
 Why: our anomalies were far rarer than the real game: one slot on a third of high-sec systems with a 24h lifetime, versus about three per system respawning in-region within seconds
 Where: .opencode/state.md, docs/WORKLOG.md
 Evidence: docs/UNIVERSE_SITE_DENSITY.md cites EVE University + 2017/2024 forum threads + Equinox notes; data edit via scripts/coop-tune-site-density.js; desired per system 1 -> 5-6 (Jita 6, Perimeter 5, New Caldari 5)
+### 2026-10-29T23:12Z · 1b48c0e · OPS · state(fw): first real ISK in the war chest via a journaled mercenary settlement; bounty scaled to the economy
+
+Why: A 25000 ISK bounty was unpayable because the only real money in the world was 3432.75 ISK in ORE
+Where: .opencode/state.md
+Evidence: merc settle PAID 1000129 3432.75->432.75 / 1000120 0->3000; bounty 1000; campaign 30003837:r18 still ASSAULT with 2426 combat-damage samples
+### 2026-10-29T23:31Z · 12da23e · L3 · mcp(admin): one call gives a fitting, one call restores a lost ship
+
+Why: Admin MCP calls waited on the 30-90s world tick and each item cost its own exec; the bridge now drains on a 1s timer and gives one batch/give_fit/restore_last_loss round-trip
+Detail: The owner's ask: stop driving a dozen commands per incident, and never wait 45-60 s. - admin_give_fit: reuse or grant the hull, place every module into its real slot family, drones into the drone bay, the rest into the hold, optionally board. Repeating it is idempotent: items already on the hull count towards the request. - admin_restore_last_loss: read the character's newest native killmail and r
+Where: mcp/README.md, mcp/lib/probe-admin-command.cjs, mcp/lib/serverTools.cjs, tests/coop-admin-fit-plan.test.mjs
+Evidence: evejs-agents: give_fit 415-1092ms, restore_last_loss 1093ms 8/8 slots from killmail 54, batch 1116ms 3/3, state survives restart; tests/coop-admin-fit-plan.test.mjs 5/5; fork commits 37e4197 33c6164 4990672
