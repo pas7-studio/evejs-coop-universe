@@ -125,3 +125,13 @@ test("a recipe that is a static-data artifact is refused, not printed", () => {
   assert.equal(industry.isTrivialRecipe({ materialValue: 400, productValue: 1000, minRatio: 0.5 }), true);
   assert.equal(industry.isTrivialRecipe({ materialValue: 900, productValue: 1000, minRatio: 0.1 }), false);
 });
+
+test("a station with no local buyer still builds for a buyer one gate away", async () => {
+  // Measured 2026-10-30: every local station reported NO_REAL_BUYER while Jita bid 560 000 for
+  // the ammunition the corporation had already produced - and the freight run can carry it.
+  const source = require("node:fs").readFileSync(
+    require("node:path").join(process.cwd(), "integration/coopNpcManufactureTick.cjs"), "utf8");
+  assert.ok(/bidElsewhere/.test(source), "the manufacturer can ask for a reachable buyer");
+  assert.ok(/living-npc-manufacture-buyer-elsewhere/.test(source),
+    "and it says so, instead of looking like a station with no demand");
+});
