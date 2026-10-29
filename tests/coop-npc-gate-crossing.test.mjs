@@ -426,3 +426,34 @@ test("a hull that is not where the journal says it is stops with the truth", () 
   assert.equal(mine.phase, "BLOCKED");
   assert.equal(mine.lastReason, "HULL_NOT_IN_JOURNAL_SYSTEM:30000142");
 });
+
+test("the identity follows a hull that has provably arrived", () => {
+  // Measured 2026-10-30: the link kept pointing at the old system after an arrival, the next
+  // reader pruned it, and the following crossing failed SOURCE_IDENTITY_MISMATCH until it was
+  // rebuilt from the durable record. The arrival is the proof, so the link moves with it.
+  const entityID = 980000000881;
+  crossing.plan({ entityID, pilotID: "coop-pilot-070", gate: GATE, now: 1900000 });
+  const moved = [];
+  const result = crossing.tick({
+    sceneForSystem: () => ({ systemID: GATE.sourceSystemID,
+      getEntityByID: () => ({ itemID: entityID, kind: "ship", nativeNpc: true, mode: "STOP",
+        systemID: GATE.sourceSystemID, position: { x: 0, y: 0, z: 0 }, radius: 100 }) }),
+    getController: () => fakeController(entityID),
+    getGate: () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 }),
+    identity: {
+      get: () => ({ pilotID: "coop-pilot-070", entityID, systemID: GATE.sourceSystemID,
+        role: "hauler" }),
+      link: () => ({}),
+      relocate: (pilotID, from, id, to) => { moved.push({ pilotID, from, id, to });
+        return { status: "RELOCATED" }; },
+    },
+    hullSystemOf: () => GATE.sourceSystemID,
+    transfer: () => ({ ...verified, entityID }),
+    now: 1900001,
+  });
+  assert.deepEqual(moved, [{ pilotID: "coop-pilot-070", from: GATE.sourceSystemID,
+    id: entityID, to: GATE.destinationSystemID }]);
+  const mine = result.advanced.find((row) => Number(row.entityID) === entityID);
+  assert.equal(mine.phase, "ARRIVED");
+  assert.equal(mine.identityRelocated, "RELOCATED");
+});
