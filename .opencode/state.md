@@ -9456,3 +9456,29 @@ unapply 200 -> empty. Register 56 unhandled.
 Remaining SKIN work: drafts (Get/Save/Update/Delete/GetShared/GetSaveCapacity), sequencing
 jobs (Initiate/Get/CompleteEarly) with real item consumption, component licences
 (finite/infinite Get + admin Grant/Revoke), `component.license.item.Consume`.
+
+## FW-077..FW-079 (14:3x-15:5xZ): the chain is proven end to end except the last hop
+
+Proven today, in one continuous run of real events: a funded front opens (`war:500001-500011:campaign:30005338`,
+escrow on both sides), reaches `ASSAULT_BEGUN`, accept real native attack orders, produces real
+casualties, and - at 14:47:30Z - a real kill got `living-native-war-merit PROMOTED` for
+`coop-pilot-007` with `force-lost` for `coop-pilot-003`. Attribution, which failed all evening, worked.
+
+FW-077: `spawn_native_npc` answered `ok` for a war patrol whose hull had ZERO native modules (inspected:
+`modules [] cargo []`), so the mobiliser refused it with WAR_NO_NATIVE_LOADED_WEAPON an hour later. A
+warPatrol spawn now verifies the hull it created and answers WAR_PATROL_UNARMED with the entity IDs.
+
+FW-078: at 14:47:30Z the payout of that same attributed kill was refused with
+NO_REAL_CAMPAIGN_FOR_EVENT, because the bounty is decided inside the native destruction callback while
+the casualty ledger row for that wreck is written seconds later by the war phase. The payer now resolves
+the campaign from the war fleet registry (the record that bound that hull to that campaign), with the
+casualty row still winning when it exists.
+
+FW-079: attribution has now failed four distinct ways, each diagnosed from one opaque status. The failing
+proof emits `living-native-destruction-identity` with how many rows EACH source holds for the victim and
+the attacker - disk link file, live registry, war fleet registry - so the next kill names the cache that
+lost the hull instead of costing another evening of guessing.
+
+Remaining: one more funded front with a kill, and the answer tells us whether `war-bounty PAID` fires and,
+if not, exactly which identity source was short. Keeper is off (it competes for the 64 co-op pilots);
+`scripts/coop-war-acceptance.cjs` and the watcher are the tools to run it.
