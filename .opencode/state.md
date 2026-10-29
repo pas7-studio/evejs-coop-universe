@@ -9278,3 +9278,22 @@ NEXT CONCRETE STEP (not guessed): find which native death path these war kills t
 passes `options.attackerEntity` - the same field that DID arrive at 19:15Z, 20:16Z and 20:26Z when merit
 was promoted. If the war hulls die from a path that omits it (e.g. a non-turret source), the fix belongs
 in that caller, not in the attribution module.
+
+## 13:4xZ: the killer context IS passed; the failure is the victim's missing identity
+
+Traced the destruction path end to end instead of guessing:
+`runtime.js:15804` -> `destroyCombatEntity(scene, target, {...buildCombatDestructionOwnerContext(attackerEntity)})`
+-> `destroyShipEntityWithWreck(..., {attackerEntity: options.attackerEntity || null, ...})`
+-> `npc/nativeNpcWreckService.destroyNativeNpcEntityWithWreck` -> `coopNpcDestructionAttacker.note`.
+`buildCombatDestructionOwnerContext` (runtime.js:15530) DOES include `attackerEntity`, so the killer is
+handed down on this path. There is exactly one caller of `destroyCombatEntity` and it passes the context.
+
+So `NATIVE_VICTIM_WRECK_ONLY_NO_KILLER` on the casualty receipt is a symptom, not the cause: that text
+is produced when the stock fallback runs, and the fallback runs when `verify()` cannot name the VICTIM.
+Every casualty we inspected (11:24, 12:36, 12:40, 13:08, 13:11, 13:25) had a victim whose identity link
+was missing - `coop-pilot-012` twice, a pilot released minutes earlier to free the spawn pool.
+
+FW-073 (no second hull for a linked pilot), FW-075 (no release while the hull flies), FW-074 (one hull is
+one identity) and FW-076 (fleet registry as identity evidence) together close every way this world could
+hand a war hull to a kill without a name. What remains is not a code gap but a fresh front: every
+campaign fought so far used hulls created before those fixes.
