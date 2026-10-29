@@ -2372,3 +2372,19 @@ Why: the New Eden Store window was blank because none of its seven catalog reads
 Detail: Seven store read types now draw the real catalog the purchase path fulfils from, and the lock service no longer answers other services' calls (it did, for everything registered after it). Register 77 -> 70 unhandled.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-stargate-locks.test.mjs, tests/coop-store-catalog.test.mjs
 Evidence: fork d941ad3; live: 15 offers (omega_30_days), Omega 500 PLX can_purchase, 9 categories (Featured 8 children), product without fake item type, tag filter, 0 targeted, unknown offer NOT_FOUND; registry dispatch now reaches new-eden-store (401 bytes) instead of the lock list; register 77->70; 17/17 tests
+### 2026-10-29T13:51Z · 7274fb2 · DOCS · state(fw): assault and attack orders proven; the missing killer is not a link problem
+
+Why: Record that the remaining attribution failure is a missing attacker entity, not a link defect
+Where: .opencode/state.md
+Evidence: three casualties NATIVE_VICTIM_WRECK_ONLY_NO_KILLER; ASSAULT_BEGUN 13:21:36Z with attack orders 13:24:23Z
+### 2026-10-29T14:00Z · 87ba421 · DOCS · state(fw): the killer context is passed; the gap is a victim without identity
+
+Why: Record the traced destruction path so the next session does not re-guess it
+Where: .opencode/state.md
+Evidence: runtime.js:15804 buildCombatDestructionOwnerContext includes attackerEntity; every failed casualty had a victim without a link
+### 2026-10-29T14:17Z · 805d676 · L2 · docs/tests: the career portal claim and its single SP grant path
+
+Why: the career portal could never offer Claim: completion was hardcoded to not_completed and the claim/reward call had no handler, so the four career goals were permanently dead
+Detail: Completion is an explicit record set by the career admin calls, both claim packages answer, the reward is 25 000 SP paid once, and an incomplete claim is refused with the real numbers. Register 70 -> 66 unhandled.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-career-goals.test.mjs
+Evidence: fork bcf632c; live: portal 4 goals all incomplete, incomplete claim status 9 'goal is not complete (0/1)', admin complete 200 -> portal 1 completed progress 1, claim 200 SP 2000->27000, second claim 'goal reward already claimed'; register 70->66; 26/26 tests
