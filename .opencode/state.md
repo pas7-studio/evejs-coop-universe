@@ -10571,3 +10571,39 @@ Bumping `EVEJS_COOP_WAR_OPENING_STALL_MS` does NOT help: the cooldown is derived
 Also still open: militia corporations have no income of their own (everything came from a
 manual `war_mercenary_settle` from ORE 1000129), so the funded garrison competes with hull
 purchases for the same wallet.
+
+## FW-099 SHIPPED (fork commit ad62455), NOT YET ON THE PLAY STACK
+
+`STALE_EXPIRY_REASONS = {WAR_ESCROW_MISSING}`; `targetCooldownMs` and the durable loop in
+`coolingDown` both skip those records. An `NO_ASSAULT_DEPLOYMENT_PROOF` expiry still grows
+the backoff (2x per failure, cap 8x) and an unknown reason is still a failure.
+
+Proven on the owner's REAL war state (copied from the container, pure functions, no deploy):
+```
+30003837  expired 16  escrowLost 14  old window 360 min  oldBlocked TRUE  new window 90 min  newBlocked FALSE
+30045344  expired  1  escrowLost  0  old window  45 min  oldBlocked false
+30045343  expired  0                old window  45 min  oldBlocked false
+```
+`war_diagnose` also shows the war `war:500001-500004` is `open:true BOTH_SIDES_CAN_FIELD_NAVY`
+(500001 1 armed hull, 500004 1 armed hull) while 500014/500019 are `NO_NAVY_CAPABILITY:ATTACKER`.
+So FW-099 + this image is what lets the only armed border open.
+
+Tests: `tests/coop-war-target-cooldown.test.mjs` now 8/8 (3 new: 10 lost-escrow releases do not
+sum to the 8x cap, a real assault-proof failure still doubles, an unknown reason is still a
+failure). Regression `coop-war-*` + `coop-fw-*` 529/529.
+
+## NEXT WINDOW BUNDLE for the play stack (needs an owner-authorised restart)
+1. this image (FW-098 + FW-099),
+2. `EVEJS_COOP_PERF_METRICS=1` - the agents stack already runs it and it is the cheap way to
+   see lag without an inspector: it emits `coop-perf-sample` every cycle with per-phase
+   count/avg/p95/max. The play stack emits ZERO of them today.
+
+## Next measured hot spot (agents stack, x5, own metrics - not a profile)
+`npc-reconcile:<system>` = 126-253 ms PER SYSTEM (p95 up to 492 ms), `native-faction-war-opening`
+118 ms. `npc-reconcile:<id>` is `observeSession(null,{itemID:0,spaceState:{systemID}})` at
+`coopVirtualWorldRuntime.js:2580`, run for every visited system every 4th background tick. That
+is the next real CPU target after FW-097/FW-098, and the first one to measure with the built-in
+metrics rather than a profiler.
+
+Note: the agents stack is being recreated by another session (container id changes between two
+calls minutes apart), so it cannot be used as a stable A/B rig right now.
