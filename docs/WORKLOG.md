@@ -2482,3 +2482,9 @@ Why: eight achievement calls had no handler, so progress, completion, rewards an
 Detail: 5/5 new tests: a zero delta is refused, completion unlocks exactly one reward, reset withdraws it, claim mints nothing, and a checklist delta is refused rather than dropped.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-achievements.test.mjs
 Evidence: fork aaebf64; live on 140000001: add 7 -> 200/progress 7, add 0 -> 3, checklist -> 9, complete 200 then 9, Get not_completed false with timestamp, 1 unclaimed then claim 200/5 and 0 left, category+showcase 0, reset 200 then 5; 5/5 tests; register 27 unhandled
+### 2026-10-29T17:51Z · c430ca6 · L2 · docs/tests: our own title catalogue, and why the client cannot download it yet
+
+Why: title definitions came only from CCP's content pipeline; with our own server we can serve our own catalogue, but the client's httplib download needs an HTTP/1.1 listener on 443
+Detail: 3/3 tests read the flatbuffer the way the client does. The download is blocked by the HTTP/2-only port 443, which is now written down with the exact mechanism.
+Where: .opencode/state.md, docs/CLIENT_GAPS.md, tests/coop-title-content.test.mjs
+Evidence: fork 7d93168; GetLatest 200 url https://127.0.0.1/elysian-eve/titles/1.0.0.titles v1.0.0 crc 2300466464 = crc of the 368 served bytes; 3/3 tests; host probe of that URL hangs because 443 is HTTP/2-only and the CDN responder skips 443
