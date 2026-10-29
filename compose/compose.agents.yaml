@@ -38,7 +38,7 @@ services:
       # world already tracked had a live campaign; these two systems are the real
       # stargate neighbours of the captured 30045344, so the world can derive a
       # fresh front from real travel instead of a hand-made record.
-      EVEJS_COOP_VIRTUAL_ROUTE: "30000142,30000144,30000145,30045344,30003837,30003836,30003839,30045343,30045342,30045339,30045340,30045341,30045338"
+      EVEJS_COOP_VIRTUAL_ROUTE: "30000142,30000144,30000145,30045344,30003837,30003836,30003839,30045343,30045342,30045339,30045340,30045341,30045338,30003829,30003838"
       EVEJS_COOP_VIRTUAL_TRAVEL_MS: "24000"
       EVEJS_COOP_CLONE_RECOVERY_MS: "360000"
       EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: "0.2"
@@ -105,7 +105,11 @@ services:
       # navy patrols on both sides of a border. The default 12-pilot world has ten
       # already linked to the mining fleet, so a war could never be staffed. The
       # virtual world tops the roster up on boot without wiping pilot history.
-      EVEJS_COOP_VIRTUAL_POPULATION: "64"
+            # FW-083 (measured): the 64-pilot roster was fully subscribed - 65 links, every one
+      # holding a live hull - so the war could not staff a fresh front at all ("free = -1").
+      # The war shares the roster with mining, hauling and trading, and each campaign needs
+      # up to four hulls per side. 88 leaves room for a front and its replacements.
+      EVEJS_COOP_VIRTUAL_POPULATION: "88"
       # FW N5 (2026-10-28): a garrison replacement hull must be paid for by the
       # campaign chest (FW-005B, real earned ISK only). Without it a garrison
       # refilled on cooldown forever, so the defending side never held zero live
