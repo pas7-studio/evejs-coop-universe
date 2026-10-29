@@ -1,5 +1,28 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 12:10Z (UTC) - CLOSED: a manufactured good was sold in Jita for 560 000 ISK
+
+PROVEN LIVE (hauler 980000004164, no client): plan from real hangars and the seeded book ->
+warp in-system -> LIFT 1 x 28338 -> cross 30000145 -> 30000142 (SAME_NATIVE_SHIP_ARRIVED) ->
+fly to 60003760 -> SOLD qty=1 isk=560 000 (living-npc-sale-settlement), hold empty after.
+That is the whole economic loop this project was chasing: mine/refine/manufacture held here,
+distribution flew, a real buyer paid.
+
+Four faults between "arrived" and "paid" (each with a test):
+  - the settled sale lives ~5 s, so a run polling once a minute only ever saw PENDING; it now
+    polls inside one beat and reads the settlement map directly;
+  - settlements were invisible after landing: every one now emits living-npc-sale-settlement
+    with status, reason, quantity and ISK;
+  - NOT_AT_NATIVE_STATION is a "not yet": the sell step measures distance, flies back, and
+    treats NOT_AT_NATIVE_STATION / SALE_TIMEOUT / MARKET_UNAVAILABLE as retryable (time bound);
+  - a carried type OUTSIDE the env sell allowlist was never asked for (the carried set only
+    filtered), so 28338 could never be sold while Jita bid 560 000 for it.
+
+NEXT: the run does ONE trip per hull, and the hull is now in Jita with an empty hold. The
+next increment is the RETURN leg - cross back to the origin system, replan, load, sell again -
+so a hull cycles without an operator. Then: several hulls, and goods chosen by margin rather
+than by per-trip revenue alone.
+
 ## 2026-10-30 11:10Z (UTC) - the freight run flies, and stops at the sale
 
 PROVEN LIVE (hull 980000004164, no client): planned a trip from the real hangar stacks and the

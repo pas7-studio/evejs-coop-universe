@@ -2345,3 +2345,13 @@ Why: combat was flat (1 per hull, final blow only) and the SP rewards were pocke
 Detail: Daily goals now score what the player actually did: a battleship is 6 points against a frigate's 1 (from the real SDE hull group, with a mass fallback), a target you damaged but did not finish pays your share of the damage (capped at 0.9 of the hull), and the SP reward follows the earned progress instead of a flat token amount. A fifth goal, Manufacture, counts real industry jobs installed today. 
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, tests/coop-daily-goals-gateway.test.mjs, tests/coop-daily-goals.test.mjs
 Evidence: fork c2fdfbf + b0f5b5a; live container probe with the real SDE: Bantam 1, Sansha destroyer 2, Retriever barge 4, Raven battleship 6; half-damage frigate 0.5, full battleship 6; rewards kill@10 30000, kill@20 60000, cap 90000, mine@5000 20000; 5 goal cards, 569 bytes; 19/19 tests
+### 2026-10-29T11:57Z · e859493 · L1 · state(fw): a real capture and the attribution duplicate that blocked the bounty
+
+Why: Stop orphan hulls and duplicated links from blocking a real bounty
+Where: .opencode/state.md
+Evidence: capture CAPTURE_APPLIED 11:26:12Z; NOT_UNIQUE_NAMED_PIRATE on the same kill at 11:24:26Z
+### 2026-10-29T12:10Z · 1d949f7 · L2 · alife21d: sell polling, visible settlements, station guard, carried types sellable
+
+Why: The freight run reached the buyer station but the sale could never settle or even report why
+Where: integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-distribution-run.test.mjs
+Evidence: live SOLD qty=1 isk=560000 at 60003760 for hauler 980000004164 (living-npc-sale-settlement), hold empty; 13/13 distribution-run tests
