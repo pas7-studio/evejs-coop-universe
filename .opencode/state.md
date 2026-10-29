@@ -9313,3 +9313,13 @@ it could not know the character. Live: 4 goals incomplete -> admin complete -> p
 Remaining big surfaces (register 66): SKINs 19 + skin market 10, achievements 9, freelance
 projects 14, titles 6 (needs a CDN flatbuffer blob), assetholding 4, payment schedules 3,
 mercenary den/hub/skyhook admin 4, and a few single-type content features.
+
+## 2026-10-29T14:30Z - honest absence for assetholding and payment calls (7 types)
+
+Fork `95bced3`, register 66 -> 59. Asset holdings, entitlements, payment schedules and
+redemption codes hold no state here, so instead of a default empty message:
+NOT_FOUND for a specific asset/entitlement/schedule, FAILED_PRECONDITION for a redemption
+("nothing was ever granted", "code redemption is not configured"), and for
+`GetActiveByType` the honest empty shape (its response carries one optional schedule, left
+unset). `absentStateGatewayService` is now the single place that must read a real store if
+one is ever built.

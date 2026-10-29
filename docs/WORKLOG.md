@@ -2388,3 +2388,9 @@ Why: the career portal could never offer Claim: completion was hardcoded to not_
 Detail: Completion is an explicit record set by the career admin calls, both claim packages answer, the reward is 25 000 SP paid once, and an incomplete claim is refused with the real numbers. Register 70 -> 66 unhandled.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-career-goals.test.mjs
 Evidence: fork bcf632c; live: portal 4 goals all incomplete, incomplete claim status 9 'goal is not complete (0/1)', admin complete 200 -> portal 1 completed progress 1, claim 200 SP 2000->27000, second claim 'goal reward already claimed'; register 70->66; 26/26 tests
+### 2026-10-29T14:21Z · 129ecb8 · L2 · docs/tests: assetholding and payment calls answer an honest absence
+
+Why: seven calls in domains with no state (asset holdings, entitlements, payment schedules, redemption codes) answered a default empty message, which the client cannot tell apart from real empty data
+Detail: The seven calls in domains with no state in this world now say so (NOT_FOUND / FAILED_PRECONDITION with a reason, or the honest empty shape for one optional schedule) instead of a default empty message. Register 66 -> 59 unhandled.
+Where: docs/CLIENT_GAPS.md, tests/coop-absent-state.test.mjs
+Evidence: fork 95bced3; live registry probe: 4x NOT_FOUND with reasons, 2x FAILED_PRECONDITION with reasons, 1x 200 with the optional schedule unset; register 66->59; 5/5 tests
