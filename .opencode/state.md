@@ -1,5 +1,31 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 07:20Z (UTC) - CORRECTION: the dungeon seeder works; our systems simply have no sites
+
+My earlier "nothing ever creates an instance" was **wrong** - it came from a probe in a separate
+process, where the signature providers have no scenes and therefore return nothing. Measured properly
+against the persisted dungeon runtime state (`dungeonRuntimeState.getStateSnapshot()`,
+`dungeonUniverseRuntime.summarizeActiveUniverseSeededCounts()`):
+
+    SEEDED {generatedMining: 2, persistent: 22, total: 24}   INSTANCES 27 across 16 systems
+    30000127 ice 5497 | 30000131 combat 5610,5687 | 30000141 combat 13338 | 30001376 combat 875
+    30001379 combat 5610,5685 | 30002762 combat 5610,5684 | 30002802 combat 5610,5687 | ...
+    OUR SYSTEMS: 30000142 (Jita) 0, 30000144 (Perimeter) 0, 30000145 (New Caldari) 0
+
+So the pipeline is alive: `network/tcp/index.js` runs `prepareStartupUniversePersistentSites` (with
+`startupSystemIDs: []`, reconcile off) and `advanceUniversePersistentSites` for awake systems, and
+`dungeonAuthority.listUniverseSpawnFamilies()` reports 23 enabled persistent families
+(combat, combat_anomaly, combat_hacking, data, drifter_*, …) with highsec/lowsec/nullsec/wormhole bands.
+The seeder allocated its 24 sites to 16 other systems, and the systems this world actually plays in got
+none - which is exactly why the scanner, the anomalies tabs and the Agency are empty for the owner.
+
+Next step (small, targeted): make the seeding cover the systems the world uses. Either a
+config/override list of "always seed" systems, or a startup pass that calls
+`dungeonUniverseRuntime` for the awake systems when their desired-definition count is zero. Then a scene
+is created there, `dungeonUniverseSiteService.handleSceneCreated` materialises the instances, and the
+existing providers put them in front of the client - no new plumbing.
+
+
 ## 2026-10-30 06:45Z (UTC) - co-op missions: implemented, never once fired; spawner API located
 
 **Missions.** `docs/COOP_MISSION_VERIFICATION_PLAN.md` is the verification plan. The measurement behind

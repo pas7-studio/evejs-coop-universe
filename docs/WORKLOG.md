@@ -2721,3 +2721,8 @@ Evidence: signatureRuntime 0/0/0 for 30000142, 30000144, 30000145, 30045344; pro
 Why: A kill the merit ledger accepted was reported unpayable because its released identity could no longer name a faction
 Where: .opencode/state.md, integration/coopVirtualWorldRuntime.cjs, integration/coopWarBounty.cjs, tests/coop-war-bounty.test.mjs
 Evidence: fork d7cb19d; live 22:33:15Z merit UPDATED + BOUNTY_PILOT_FACTION_UNKNOWN; fallback reads the pilot's own ASSIGN row; bounty 8/8 and coop-war-*+coop-fw-* 540 pass
+### 2026-10-29T22:45Z · e01a84e · DOCS · state(fw): live combat damage every 5s on the assault; muster pace is throttling, not a defect
+
+Why: my earlier claim that no dungeon instance is ever created was wrong; the seeder works but allocated every site outside the systems this world plays in
+Where: .opencode/state.md
+Evidence: dungeonRuntimeState snapshot: 27 active instances in 16 systems; Jita/Perimeter/New Caldari have 0; 23 enabled spawn families

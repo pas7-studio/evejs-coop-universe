@@ -11,18 +11,23 @@ a default-encoded empty message and a warning that names the type, so the client
 "no data" answer instead of a 404 it cannot decode. What that means in game is that the surface
 opens and shows nothing (or zeros) — it does not throw.
 
-## Scanning surfaces are empty because no site is ever spawned
+## Scanning surfaces are empty in OUR systems, not everywhere
 
-Measured on the running server (`signatureRuntime` for Jita/Perimeter/New Caldari/30045344):
-`anomalies=0 signatures=0 statics=0` in every system. The probe scanner, the Agency's combat and
-exploration anomalies, deadspace and wormholes all read those feeds, so all of them are empty for one
-reason: nothing ever puts a site into a scene.
+First measurement said "nothing spawns a site"; that was an artefact of probing from a separate process,
+where the signature providers have no scene. Measured against the persisted dungeon runtime instead:
+**27 dungeon instances are active across 16 systems** (combat anomalies 5610/5684/5687/13338, ice
+5497/5500, landmark statics), seeded by `dungeonUniverseRuntime`, whose
+`dungeonAuthority.listUniverseSpawnFamilies()` reports 23 enabled persistent families with
+highsec/lowsec/nullsec/wormhole bands.
 
-The pipeline is present and wired - `sceneAnomalySiteProvider` selects scene entities flagged
-`signalTrackerAnomalySite`, wormholes come from `wormholeRuntimeState`, `signaturePlacement` and
-`dungeonSiteAdapter` hold the glue - and the definitions are real: the SDE export on the data volume
-carries 1404 dungeons with localized names, `factionID` and `archetypeID`. What is missing is the
-spawner that chooses them per system and registers them as scene sites.
+Jita (30000142), Perimeter (30000144) and New Caldari (30000145) have **zero** instances. That is why the
+probe scanner, the combat/exploration anomaly lists and the Agency tabs are empty for the owner: the
+allocation landed on other systems.
+
+The fix is a seeding scope, not new plumbing: include the systems this world uses (or seed a system when
+its desired-definition count is zero and its scene wakes), then
+`dungeonUniverseSiteService.handleSceneCreated` materialises the instances and the existing providers
+deliver them.
 
 ## The 44 RemoteSvc placeholders, classified
 
