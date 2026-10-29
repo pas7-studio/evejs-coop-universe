@@ -23,9 +23,12 @@ Fixes this round, each pinned by tests (coop-distribution-run 8, coop-distributi
   - PENDING is bounded by time, not calls (a slow market must not stop a run);
   - the sale needs a NAMED hauler: an empty role answered HAULER_NOT_NAMED.
 
-Still open from the previous list: no-belts fleet guard (Jita 30000142 has 0 belts and still
-holds a mining fleet of 4 miners with 0 ore), relocate-on-arrival for the identity file, and
-the runtime line ratchet (5153, other sessions).
+DONE this round: the no-belts fleet guard. Live after deploy: 4x living-mining-skipped
+NO_BELTS_IN_SYSTEM and zero ALIFE08 reconcile lines for 30000142, so a belt-less system no
+longer spends a durable fleet (Jita had 18 stations, 0 belts and 4 idle miners).
+
+Still open: relocate-on-arrival for the identity file (the crossing reconciles lazily today),
+the runtime line ratchet (5153, other sessions), and the arrival-sale settlement above.
 
 ## 2026-10-30 00:40Z (UTC) - the crossing works in both directions
 

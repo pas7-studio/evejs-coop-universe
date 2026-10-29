@@ -2334,3 +2334,8 @@ Evidence: SIDE_MUSTERED assigned 1 first observed at 10:17Z; remaining rejection
 Why: A freight run existed on paper but carried air, and once it carried real cargo it stopped at the arrival sale
 Where: integration/coopDistributionPlan.cjs, integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, tests/coop-distribution-plan.test.mjs
 Evidence: live: plan->warp->lift 1x28338->cross ARRIVED->station 60003760->SALE_PENDING (unsettled, cargo still aboard); 13/13 run+plan tests; 79 loop tests
+### 2026-10-29T11:20Z · 8e7eb66 · L2 · alife21c: no-belts guard test
+
+Why: Half the mining fleet sat in a system with zero asteroid belts and an empty hold, so every belt system ran at half strength
+Where: integration/coopNativeMiningFleetDurable.cjs, tests/coop-fleet-hauler-shortfall.test.mjs
+Evidence: live: 4x living-mining-skipped NO_BELTS_IN_SYSTEM after deploy, zero ALIFE08 slot 30000142 lines; 4/4 fleet tests
