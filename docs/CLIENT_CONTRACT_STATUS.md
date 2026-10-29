@@ -172,7 +172,7 @@ Total client calls: 542 · MISSING 0 · STUB 44 · NULLABLE 103 · OK 395
 | `wormholeMgr.WormholeJump` | 1 | movementFunctions.pyj | services\exploration\wormholes\wormholeMgrService.js | **unreviewed** |
 | `XmppChatMgr.EnsureResourceWarsChannelExists` | 1 | rwservice.pyj | services\chat\xmppChatMgrService.js | **unreviewed** |
 
-## gRPC gateway types (216 client request types, 162 names known to the gateway, 99 of those client types defaulted)
+## gRPC gateway types (216 client request types, 169 names known to the gateway, 92 of those client types defaulted)
 
 A type no gateway service names is answered with a default-encoded 200
 (`fork f256261`): the client gets a valid empty message instead of a 404 it
@@ -239,20 +239,13 @@ cannot decode, and the gateway logs the type. These carry no data yet:
 - `eve_public.dailygoal.api.RedeemRequest`
 - `eve_public.dailygoal.api.admin.ProgressRequest`
 - `eve_public.debug.Request`
-- `eve_public.faction.activity.admin.IncrementContributionScoreRequest`
-- `eve_public.faction.activity.admin.SetContributionScoreRequest`
 - `eve_public.freelance.contributionmethod.itemdelivery.api.DeliverRequest`
-- `eve_public.goal.contribution.api.GetContributorSummariesForGoalRequest`
-- `eve_public.goal.contribution.api.GetMyContributorSummaryForGoalRequest`
 - `eve_public.internal_gateway.ConsumeEventsRequest`
 - `eve_public.internal_gateway.Request`
 - `eve_public.operation.recommendation.GetRequest`
 - `eve_public.payment.code.api.RedeemRequest`
 - `eve_public.payment.schedule.api.GetActiveByTypeRequest`
 - `eve_public.payment.schedule.api.GetRequest`
-- `eve_public.presence.api.GetAllianceRequest`
-- `eve_public.presence.api.GetCorporationRequest`
-- `eve_public.presence.api.GetFactionRequest`
 - `eve_public.ship.unlock.ClaimRewardRequest`
 - `eve_public.skill.plan.CreateRequest`
 - `eve_public.skill.plan.DeleteRequest`
