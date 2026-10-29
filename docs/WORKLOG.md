@@ -2488,3 +2488,9 @@ Why: title definitions came only from CCP's content pipeline; with our own serve
 Detail: 3/3 tests read the flatbuffer the way the client does. The download is blocked by the HTTP/2-only port 443, which is now written down with the exact mechanism.
 Where: .opencode/state.md, docs/CLIENT_GAPS.md, tests/coop-title-content.test.mjs
 Evidence: fork 7d93168; GetLatest 200 url https://127.0.0.1/elysian-eve/titles/1.0.0.titles v1.0.0 crc 2300466464 = crc of the 368 served bytes; 3/3 tests; host probe of that URL hangs because 443 is HTTP/2-only and the CDN responder skips 443
+### 2026-10-29T17:59Z · c44a60c · L2 · docs/tests: the title catalogue is downloadable over the client's own HTTP/1.1 path
+
+Why: the client's flatbuffer provider is plain HTTP/1.1 while 127.0.0.1:443 is the HTTP/2 gateway, so no content could ever be downloaded; the content host now answers on its own loopback address
+Detail: 5/5 tests: the flatbuffer parses like the client parses it, the checkpoint matches the served bytes, and the content host serves only its own routes.
+Where: .opencode/state.md, docs/CLIENT_GAPS.md, tests/coop-title-content.test.mjs
+Evidence: fork 0a7b8d1; host GET https://127.0.0.2/elysian-eve/titles/1.0.0.titles -> 200, 368 bytes, crc 2300466464 = checkpoint crc, id CHTI; unknown route 404; GetLatest advertises https://127.0.0.2/... v1.0.0; 5/5 tests
