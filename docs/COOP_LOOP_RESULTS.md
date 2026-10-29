@@ -18,9 +18,9 @@ mine (native fleet, belt systems)
 
 | What | Value | Where it comes from |
 |---|---|---|
-| Freight trips settled | **20 trips, 1 396 262 ISK, 220 119 units** | `coop-native-market/freight-ledger.jsonl` |
-| Freight rows proven against settlements | `RECONCILED` | `scripts/freight-check.cjs`, printed by the ledger |
-| Corporation treasury | **760 925 738.43 ISK** (722 134 486.21 at the start of this work) | `coop-native-market/corp-treasury/1000129.json` |
+| Freight trips settled | **28 trips, 1 965 747 ISK, 319 108 units** (7 deliveries without a captured price) | `coop-native-market/freight-ledger.jsonl` |
+| Freight rows proven against settlements | `RECONCILED` (payments); deliveries counted separately | `scripts/freight-check.cjs`, printed by the ledger |
+| Corporation treasury | **764 991 505.71 ISK** (722 134 486.21 at the start of this work) | `coop-native-market/corp-treasury/1000129.json` |
 | Hold utilisation | 309 999 units in exactly 3 100 m3 (Impel), 543 746 in 5 500 m3 | live trip journals |
 | Trip shape | 3-5 loading stops, 50-78 cargo lines | live trip journals |
 | Station sales (historical, pre-freight) | 160 fills, 165 357 081 ISK | economy ledger |

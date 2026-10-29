@@ -104,14 +104,29 @@ def main():
             continue
         client_modules.append(strings_of(data))
 
+    # A module that imports two proto files which both declare a message of the same simple name
+    # (planet and star both have GetAllConfigurationsRequest) cannot be attributed by the class name
+    # alone, so those pairs are reported as ambiguous instead of claimed as consumed. Without this
+    # the "still open" list grows phantom gaps that no client code actually sends.
     consumed = set()
+    ambiguous = set()
     for strings in client_modules:
-        for module, names in by_module.items():
-            if "eveProto.generated." + module not in strings:
+        imported = [module for module in by_module
+                    if "eveProto.generated." + module in strings]
+        if not imported:
+            continue
+        by_simple = {}
+        for module in imported:
+            for full_name in by_module[module]:
+                by_simple.setdefault(full_name.rsplit(".", 1)[-1], []).append(full_name)
+        for simple, full_names in by_simple.items():
+            if simple not in strings:
                 continue
-            for full_name in names:
-                if full_name.rsplit(".", 1)[-1] in strings:
-                    consumed.add(full_name)
+            if len(full_names) > 1:
+                ambiguous.update(full_names)
+                continue
+            consumed.add(full_names[0])
+    consumed -= ambiguous
 
     unhandled = sorted(consumed - handled)
     extra = sorted(handled - set(requests))
@@ -121,6 +136,10 @@ def main():
     print(f"CONSUMED_NOT_ANSWERED      {len(unhandled)}")
     for name in unhandled:
         print(f"  {name}")
+    if ambiguous:
+        print(f"AMBIGUOUS_ATTRIBUTION      {len(ambiguous)} (class name declared by several imported protos)")
+        for name in sorted(ambiguous):
+            print(f"  {name}")
     print(f"ANSWERED_NOT_IN_CLIENT     {len(extra)}")
     for name in extra:
         print(f"  {name}")
@@ -138,6 +157,7 @@ def main():
                 "consumedByClient": len(consumed),
                 "answeredByServer": len(handled),
                 "consumedNotAnswered": unhandled,
+                "ambiguousAttribution": sorted(ambiguous),
                 "answeredNotInClient": extra,
             },
             open(out, "w", encoding="utf-8"), indent=1,

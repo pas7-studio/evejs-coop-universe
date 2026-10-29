@@ -209,6 +209,7 @@ try {
 } catch (_error) { /* no ledger is a valid state */ }
 const freightCheck = reconcileFreight(freightRows, settlements);
 console.log("freight check        " + (freightCheck.ok ? "RECONCILED"
+  + (freightCheck.deliveries ? " (" + freightCheck.deliveries + " deliveries without a captured price)" : "")
   : "UNRECONCILED " + JSON.stringify(freightCheck.problems.slice(0, 4))));
 
 for (const [route, row] of [...freight.routes.entries()].sort((a, b) => b[1].isk - a[1].isk).slice(0, 4))

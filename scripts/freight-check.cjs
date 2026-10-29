@@ -12,7 +12,11 @@ function reconcileFreight(rows, settlements) {
     paidByHull.set(id, (paidByHull.get(id) || 0) + 1);
   }
   const rowsByHull = new Map();
+  let deliveries = 0;
   for (const row of rows || []) {
+    // A delivery proven only by an empty hold is not a payment: it has no amount to match.
+    const status = row.status === undefined || row.status === null ? "SOLD" : String(row.status);
+    if (status !== "SOLD") { deliveries += 1; continue; }
     const id = Number(row.haulerID) || 0;
     rowsByHull.set(id, (rowsByHull.get(id) || 0) + 1);
   }
@@ -22,7 +26,7 @@ function reconcileFreight(rows, settlements) {
     if (count > paid) problems.push({haulerID: id, rows: count, settlements: paid,
       reason: "FREIGHT_ROW_WITHOUT_SETTLEMENT"});
   }
-  return {ok: problems.length === 0, problems};
+  return {ok: problems.length === 0, problems, deliveries};
 }
 
 module.exports = {reconcileFreight};

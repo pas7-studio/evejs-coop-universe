@@ -23,3 +23,12 @@ test("a failed settlement does not back a paid trip", () => {
   const answer = reconcileFreight([{ haulerID: 9 }], [{ haulerID: 9, status: "NOT_SOLD" }]);
   assert.equal(answer.ok, false, "NOT_SOLD never justifies a paid row");
 });
+
+test("a delivery without a payment is counted separately, not as a lie", () => {
+  // Rows proven only by an empty hold have no amount to match; they are deliveries, not payments.
+  const answer = reconcileFreight(
+    [{ haulerID: 3, status: "SOLD" }, { haulerID: 3, status: "SOLD_VERIFIED_BY_HOLD" }],
+    [{ haulerID: 3, status: "SOLD" }]);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.deliveries, 1);
+});

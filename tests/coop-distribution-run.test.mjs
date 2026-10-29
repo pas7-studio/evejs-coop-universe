@@ -465,3 +465,13 @@ test("a busy hull waits for the market instead of stopping with its cargo", asyn
   assert.equal(result.status, "WAITING_FOR_SALE");
   assert.equal(run.read(twentyThird).phase, "SELL", "the run keeps the trip it is on");
 });
+
+test("any BUSY answer from the world is a not-yet, whatever its spelling", async () => {
+  const twentyFourth = 980000004193;
+  run.write({ version: 1, haulerID: twentyFourth, phase: "SELL", trip: TRIP, updatedAt: 27000,
+    sellCalls: 0, isk: 0, quantity: 1000, toStationID: 60003760, toSystemID: 30000142 });
+  const result = await run.tick(twentyFourth, { distanceTo: () => 100, cargoUnits: () => 1000,
+    sell: async () => ({ status: "NOT_SOLD", reason: "TRADE_BUSY" }), now: 27001 });
+  assert.equal(result.status, "WAITING_FOR_SALE");
+  assert.equal(run.read(twentyFourth).phase, "SELL");
+});
