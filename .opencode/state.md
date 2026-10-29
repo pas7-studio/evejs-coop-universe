@@ -9753,3 +9753,26 @@ content file and serve it. That is also the same shape needed for title definiti
 
 Title UI additionally needs the client LaunchDarkly flag `character_titles_feature_enabled`
 (client-side, not our gateway).
+
+### 2026-10-30T02:00Z - title catalogue content built; download path blocked (0 new types)
+
+Fork `7d93168`: `space/coopTitleContent.js` builds our own TitleData flatbuffer (identifier CHTI,
+4 titles, uuid-hex ids, localized names) and `characterTitleDefinitionGatewayService.js` answers
+`definition.api.GetLatest` with the checkpoint {url https://127.0.0.1/elysian-eve/titles/
+1.0.0.titles, version 1.0.0, crc 2300466464}; 368 bytes and the CRC of the file matches. The route
+is wired into the existing loopback CDN responder. Tests read the buffer with an independent
+reader that mimics the client (3/3 pass).
+
+WHY IT IS NOT VISIBLE YET - two separate blockers, both measured:
+1. On the play stack port 443 is the HTTP/2 gateway, so `createLoopbackCdnResponder()` returns
+   null (`activeHttpsPort === 443`) and the HTTP/2 listener deliberately has no HTTP/1 request
+   handler. The client's flatbuffer provider uses `httplib.HTTPSConnection(host, 443)` + a plain
+   GET, so that request never gets answered (a host-side probe hangs; from inside the container
+   it is ECONNREFUSED because the responder binds the host). Next step: an HTTP/1.1 listener that
+   also serves these content routes on 443 (or a second trusted host:port the client can reach).
+2. The titles UI is behind the client LaunchDarkly flag `character_titles_feature_enabled`
+   (`featuremanagement.client.flag.flag_bool`); the flag source is the LaunchDarkly SDK inside the
+   client, not our gateway.
+
+Achievements' `definition.api.cdn.GetLatest` needs the same content mechanism (bigger flatbuffer),
+so fixing the HTTP/1.1 content path unblocks both.
