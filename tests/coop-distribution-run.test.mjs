@@ -90,8 +90,9 @@ test("a sale the market refuses is bounded and then reported, never retried for 
   let last = null;
   for (let i = 0; i < run.MAX_SELL_CALLS + 2; i += 1) {
     last = await run.tick(another, { distanceTo: () => 100,
-      // A market that keeps saying PENDING is bounded by real calls, then reported.
-      sell: async () => { calls += 1; return { status: "PENDING" }; },
+      // A market that keeps REFUSING is bounded by real settlements, then reported.
+      // A retryable refusal (a market that is away) is bounded by settled answers.
+      sell: async () => { calls += 1; return { status: "NOT_SOLD", reason: "MARKET_UNAVAILABLE" }; },
       wait: async () => {}, saleSettlement: () => null,
       now: 6000 + i * 1000 });
     if (last.status === "BLOCKED") break;

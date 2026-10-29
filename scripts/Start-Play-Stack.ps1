@@ -8,14 +8,15 @@
   The friend does not connect to the game port directly. He opens ONE SSH
   connection to the host on the ProtonVPN-forwarded port:
 
-      ssh -N -T -p 61730 evefriend@159.26.120.49 `
+      ssh -N -T -p 37471 evefriend@130.195.241.6 `
         -L 443:127.0.0.1:443 -L 5222:127.0.0.1:5222 `
         -L 26000:127.0.0.1:26000 -L 26001:127.0.0.1:26001 `
         -L 26002:127.0.0.1:26002
 
-  Proton forwards only one port (61730), and that port must carry SSH.
+  Proton forwards only one port (currently 37471; it changes on every VPN
+  reconnect), and that port must carry SSH.
   `evejs-ssh-relay` (alpine/socat, restart unless-stopped) bridges
-  0.0.0.0:61730 to the host's hardened sshd on 127.0.0.1:55346
+  0.0.0.0:<PublicPort> to the host's hardened sshd on 127.0.0.1:55346
   (ProgramData/ssh/sshd_config.d/coop-friend.conf).
 
   This script:
@@ -37,7 +38,7 @@ param(
   [string]$Action = 'Status',
   [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
   [string]$Project = 'evejs',
-  [int]$PublicPort = 61730,
+  [int]$PublicPort = 37471,
   [int]$SshPort = 55346,
   [string]$RelayName = 'evejs-ssh-relay'
 )
@@ -88,14 +89,32 @@ function Get-RelayState {
   }
 }
 
+function Get-RelayPort {
+  # Published host port of the existing relay container, or $null when it cannot be read.
+  $published = docker port $RelayName 2>$null | Select-Object -First 1
+  if (-not $published) { return $null }
+  return [int](($published -split ':')[-1])
+}
+
 function Start-Relay {
   $exists = docker ps -a --filter "name=^/$RelayName$" --format '{{.Names}}' 2>$null
   if ($exists) {
-    docker start $RelayName | Out-Null
-  } else {
+    # ProtonVPN hands out a different forwarded port after every reconnect; a relay
+    # still bound to the old port means the friend reaches nothing. Recreate it.
+    $current = Get-RelayPort
+    if ($current -ne $PublicPort) {
+      docker rm -f $RelayName | Out-Null
+      $exists = $null
+    } else {
+      docker start $RelayName | Out-Null
+    }
+  }
+  if (-not $exists) {
+    # Two separate argv entries: socat rejects a single space-joined address pair.
     docker run -d --name $RelayName --restart unless-stopped `
       -p "0.0.0.0:${PublicPort}:${PublicPort}" alpine/socat `
-      "tcp-listen:${PublicPort},fork,reuseaddr tcp-connect:host.docker.internal:${SshPort}" | Out-Null
+      "tcp-listen:${PublicPort},fork,reuseaddr" `
+      "tcp-connect:host.docker.internal:${SshPort}" | Out-Null
   }
 }
 
