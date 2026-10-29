@@ -83,3 +83,36 @@ test("the stock fallback no longer misreads a named victim with a moved link", (
   assert.equal(proof.status, "NAMED_VICTIM_USE_STANDARD_PROOF",
     "a named war ship must never be handled by the stock pirate path");
 });
+
+// FW-074: a duplicated link must not make a real attacker ambiguous.
+//
+// Measured 11:24:26Z: the casualty was recorded and capture-by-force followed, yet
+// attribution answered NOT_UNIQUE_NAMED_PIRATE because the disk copy and the live registry
+// both held the SAME entity under different recorded systems.
+const { mergeLinks } = require("../integration/coopNpcDestructionAttacker.cjs");
+
+test("the same hull is one identity however many copies the registry holds", () => {
+  const merged = mergeLinks([
+    { pilotID: "coop-pilot-014", entityID: 980000005122, systemID: 30045343, linkedAt: 100 },
+    { pilotID: "coop-pilot-014", entityID: 980000005122, systemID: 30045344, linkedAt: 200 },
+  ]);
+  assert.equal(merged.length, 1, "two copies of one hull are one hull");
+  assert.equal(merged[0].systemID, 30045344, "the newest record wins");
+});
+
+test("one pilot is one hull, and two pilots stay two", () => {
+  const merged = mergeLinks([
+    { pilotID: "coop-pilot-014", entityID: 11, systemID: 30045344, linkedAt: 10 },
+    { pilotID: "coop-pilot-014", entityID: 12, systemID: 30045344, linkedAt: 20 },
+    { pilotID: "coop-pilot-015", entityID: 13, systemID: 30045344, linkedAt: 5 },
+  ]);
+  const pilots = merged.map((row) => row.pilotID).sort();
+  assert.deepEqual(pilots, ["coop-pilot-014", "coop-pilot-015"]);
+  assert.equal(merged.find((row) => row.pilotID === "coop-pilot-014").entityID, 12);
+});
+
+test("a link without an entity is merged by pilot, never dropped", () => {
+  const merged = mergeLinks([{ pilotID: "coop-pilot-016", entityID: 0, systemID: 30045342 }]);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].pilotID, "coop-pilot-016");
+});
