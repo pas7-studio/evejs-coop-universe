@@ -248,3 +248,59 @@ test("a partly sold load keeps selling before the hull goes home", async () => {
   assert.equal(result.state.phase, "SELL", "it keeps selling instead of flying home");
   assert.equal(result.state.isk, 668088, "and the money that did arrive is recorded");
 });
+
+test("a hull with no freight where it stands repositions to where the freight is", async () => {
+  // Measured 2026-10-30: a distribution hull parked in the buyer system has nothing to load;
+  // the corporation keeps its stock one gate away, so the run goes and gets it.
+  const thirteenth = 980000004180;
+  const result = await run.tick(thirteenth, { recycle: true, hullSystemOf: () => 30000142,
+    planTrip: () => ({ status: "NO_STOCK_IN_SYSTEM", systemID: 30000142 }),
+    homeSystemFor: () => 30000145, now: 15000 });
+  assert.equal(result.status, "REPOSITIONING");
+  assert.equal(run.read(thirteenth).phase, "RETURN");
+  assert.equal(run.read(thirteenth).returnToSystemID, 30000145);
+});
+
+test("one hung hull does not freeze the others", async () => {
+  const slow = 980000004181;
+  const fast = 980000004182;
+  const results = await run.tickAll({
+    hulls: () => [slow, fast],
+    hullTimeoutMs: 1000,
+    hullSystemOf: () => 30000145,
+    // The first hull never answers; the second must still be served.
+    planTrip: ({haulerID}) => (Number(haulerID) === slow
+      ? new Promise((resolve) => setTimeout(() => resolve({ status: "NO_TRIP" }), 1800))
+      : { status: "OK", trip: TRIP }),
+    distanceTo: () => 100,
+  });
+  const byHull = new Map(results.map((row) => [Number(row.haulerID), row]));
+  assert.equal(byHull.get(slow).status, "HULL_TIMEOUT");
+  assert.equal(byHull.get(fast).status, "PLANNED");
+});
+
+test("a run blocked by a slow market retries once after a long cooldown, and only with cargo", async () => {
+  const fourteenth = 980000004183;
+  run.write({ version: 1, haulerID: fourteenth, phase: "BLOCKED", updatedAt: 16000,
+    blockedAt: 16000, retries: 0, lastReason: "SALE_STOPPED:CALL_LIMIT",
+    trip: TRIP, toStationID: 60003760, toSystemID: 30000142, isk: 0 });
+  // Too early: nothing happens.
+  const early = await run.tick(fourteenth, { cargoUnits: () => 5000, now: 17000 });
+  assert.equal(early.status, "IDLE");
+  // After the cooldown, with goods aboard, it may try again.
+  const late = await run.tick(fourteenth,
+    { cargoUnits: () => 5000, now: 16000 + run.BLOCKED_RETRY_MS + 1 });
+  assert.equal(late.status, "RETRYING");
+  assert.equal(run.read(fourteenth).phase, "SELL");
+  assert.equal(run.read(fourteenth).retries, 1);
+});
+
+test("an empty hold that proves the sale does not invent an amount", async () => {
+  const fifteenth = 980000004184;
+  run.write({ version: 1, haulerID: fifteenth, phase: "SELL", trip: TRIP, updatedAt: 18000,
+    sellCalls: 0, isk: 0, quantity: 1, toStationID: 60003760, toSystemID: 30000142 });
+  const result = await run.tick(fifteenth, { cargoUnits: () => 0, now: 18001 });
+  assert.equal(result.status, "DONE");
+  assert.equal(result.state.iskUnknown, true, "the amount is unknown, not zero");
+  assert.equal(result.state.isk, 0);
+});

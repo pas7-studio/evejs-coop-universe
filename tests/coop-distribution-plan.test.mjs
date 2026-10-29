@@ -82,3 +82,11 @@ test("stock that is not in the hull's system is not this hull's freight", () => 
     worldData: world(), scene, connectedGates });
   assert.equal(answer.status, "NO_STOCK_IN_SYSTEM");
 });
+
+test("the planner can say which system holds the corporation's freight", () => {
+  // A distribution hull parked in the buyer system has nothing to load; it needs to know where
+  // the corporation really keeps stock before it can choose a trip home.
+  const systems = plan.stockSystems({ items, worldData: world(), corpID: 1000129 });
+  assert.equal(systems[0].systemID, 30000145);
+  assert.equal(systems[0].units, 499596, "every hangar row in that system counts");
+});
