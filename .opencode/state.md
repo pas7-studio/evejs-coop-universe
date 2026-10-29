@@ -9258,3 +9258,23 @@ A product only claims `item.type` when the offer really carries a `typeId`.
 with an unconditional `return GetAllResponse`, so every request that reached it got a lock
 list - the store, PLEX, presence and everything registered after it were all hijacked. It
 now returns `null` for any type that is not its own, and a regression test pins that.
+
+## 13:2xZ: the assault chain is proven; attribution is the last rung and it is NOT a link problem
+
+Proven in one window: a fresh border opened (`war:500001-500011:campaign:30045341`, 30045341 = 500001
+registered by FW-045, adjacent to 500011-owned 30045339), both sides mustered on the field, and
+`living-native-war-assault ASSAULT_BEGUN` (13:21:36Z) was followed by real
+`living-native-war-attack-orders NATIVE_ATTACK_ORDER_ACCEPTED` (13:24:23Z) and a real casualty
+(13:25:10Z) in the fought system.
+
+But all three recent casualties carry `attribution: NATIVE_VICTIM_WRECK_ONLY_NO_KILLER` and the
+separate attribution event answers NOT_UNIQUE_NAMED_PIRATE. The victim is always named (the casualty
+knows pilot, corporation, wreck and stored items) - what is missing is the KILLER: the upstream
+destruction caller did not hand over an `attackerEntity` for these deaths, and the fallback stock path
+then refuses. FW-048/074/076 (drift, duplicates, fleet-registry identity) were all necessary, but they
+fix the *naming* of a killer the event already provides.
+
+NEXT CONCRETE STEP (not guessed): find which native death path these war kills take and whether it
+passes `options.attackerEntity` - the same field that DID arrive at 19:15Z, 20:16Z and 20:26Z when merit
+was promoted. If the war hulls die from a path that omits it (e.g. a non-turret source), the fix belongs
+in that caller, not in the attribution module.
