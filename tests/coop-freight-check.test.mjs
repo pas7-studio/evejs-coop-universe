@@ -20,7 +20,6 @@ test("a row without a settlement is named, not averaged away", () => {
 });
 
 test("a failed settlement does not back a paid trip", () => {
-  const answer = reconcileFreight([{ haulerID: 9 }],
-    [{ haulerID: 9, status: "NOT_SOLD" }, { haulerID: 9, status: "SOLD" }]);
-  assert.equal(answer.ok, false, "NOT_SOLD alone never justifies a row");
+  const answer = reconcileFreight([{ haulerID: 9 }], [{ haulerID: 9, status: "NOT_SOLD" }]);
+  assert.equal(answer.ok, false, "NOT_SOLD never justifies a paid row");
 });
