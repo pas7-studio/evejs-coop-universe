@@ -111,3 +111,50 @@ function fixture({reservation={},env=flags()}={}){
   emit:(event,detail)=>events.push({event,detail}),clock:()=>100000});
  return {bounty,paid,credited,events,refusePayout:()=>{refuse=true}};
 }
+
+// FW-104: a real kill stays attributable after its identity link is released.
+//
+// MEASURED on the play stack 2026-10-30 22:33:15.180Z: coop-pilot-013 earned merit for a
+// real warship kill and the bounty answered BOUNTY_PILOT_FACTION_UNKNOWN, because the link
+// no longer resolved a live native corporation - the same hull was released as a confirmed
+// wreck three seconds later. The war fleet registry already holds that pilot's proven
+// faction and campaign (both verified at ASSIGN), so it is the honest fallback.
+const registryFixture = (ships) => ({
+  env: flags(),
+  treasury: { snapshot: () => ({ status: "OK", reservations: {} }),
+    execute: () => ({ status: "BLOCKED", reason: "UNREACHABLE" }) },
+  chest: { creditPilot: () => ({ status: "APPLIED", receipt: {} }) },
+  readWarState: () => ({ version: 1,
+    campaigns: { [campaignID]: { campaignID, warID: "war:500011-500014",
+      state: "ASSAULT", targetSystemID: 30000143 } },
+    wars: { "war:500011-500014": { warID: "war:500011-500014", state: "ACTIVE",
+      attackerFactionID: 500011, defenderFactionID: 500014 } } }),
+  readLinks: () => [{ pilotID: "coop-pilot-013", entityID: 9009, systemID: 30003837 }],
+  getNativeEntity: () => null,
+  getFactionForCorporation: () => 0,
+  readCampaignForEntity: () => null,
+  readFleet: () => ({ ships }),
+  clock: () => 100000,
+});
+
+test("a released identity is attributed from the war fleet registry, never as unknown", () => {
+  const bounty = createWarBounty({
+    ...registryFixture({ 9100: { entityID: 9100, pilotID: "coop-pilot-013",
+      factionID: 500014, campaignID } }),
+    readLinks: () => [], getNativeEntity: () => null, getFactionForCorporation: () => 0,
+  });
+  const result = bounty.pay({ pilotID: "coop-pilot-013", kind: "warship-kill", wreckID: 0 });
+  assert.equal(result.reason, "NO_HELD_ESCROW_FOR_FACTION",
+    "the faction and campaign must be resolved, never reported unknown");
+  assert.equal(result.factionID, 500014);
+  assert.equal(result.campaignID, campaignID);
+});
+
+test("with no link and no registry row the bounty still names the real blocker", () => {
+  const bounty = createWarBounty(registryFixture({}));
+  const result = bounty.pay({ pilotID: "coop-pilot-013", kind: "warship-kill", wreckID: 0 });
+  assert.equal(result.status, "BLOCKED");
+  // The campaign is checked before the faction: a kill attached to no campaign of this
+  // war is not payable at all, and saying so is more honest than blaming the faction.
+  assert.equal(result.reason, "NO_REAL_CAMPAIGN_FOR_EVENT");
+});

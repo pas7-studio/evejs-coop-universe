@@ -349,6 +349,12 @@ function warBountyStore(){
     return row&&row.campaignID?{campaignID:String(row.campaignID)}:null;
    }catch(_error){return null}
   },
+  // FW-104: the pilot's own registry row is the same proven assignment the mobiliser
+  // wrote (native ship + campaign verified at ASSIGN), so a kill stays attributable
+  // after its identity link is released with the confirmed wreck.
+  readFleet:()=>{
+   try{return nativeWarFleetRegistry()?.snapshot?.()||null}catch(_error){return null}
+  },
   emit:(event,detail)=>{
    try{require("./coopRuntimeProbe").observe(event,null,null,detail);}
    catch(_error){/* probe is best effort */}

@@ -10939,3 +10939,27 @@ the target. There was no "registry disagrees with itself" defect; I read the wro
    A kill the merit ledger accepts must know its faction; find why attribution lost it.
 2. Bounty payout is a product decision: either fund the factions for real (no real income) or
    keep the war merit-only on the play stack. Escrow is never minted.
+
+## FW-104 DEPLOYED (fork d7cb19d) - a real kill keeps its attribution
+
+`living-native-war-bounty-skipped BOUNTY_PILOT_FACTION_UNKNOWN` (coop-pilot-013, 22:33:15.180Z)
+was a real attribution bug: the merit ledger had already accepted the kill
+(UPSTREAM_ATTACKER_ENTITY_PLUS_PHYSICAL_NATIVE_WRECK), but the pilot's identity link no longer
+resolved a live native corporation, so the bounty could never be paid even where escrow exists.
+`pay()` now falls back to the pilot's own war fleet registry row - the same assignment verified
+natively at ASSIGN - for both faction and campaign. Bounty suite 8/8, coop-war-*+coop-fw-* 540.
+
+## Standing after the 22:4xZ restart
+`war:500001-500004:campaign:30003837:r18` is still **ASSAULT** (persisted across the restart),
+`campaign:30045343` **OCCUPIED**, 19 EXPIRED historical. Merit ledger: 16 pilots, 8 with merit,
+535 total, three real warship kills worth 25 each in the last hour (018 +115, 040 175, 002 100).
+
+Remaining, in order:
+1. The assault is quiet again: the attacker side in the target rejects with
+   `WRONG_FACTION` / `PILOT_IN_USE`, so no new attacker hull joins the fight. The defender side
+   is `SIDE_MUSTERED` (assigned 2). Next: why the garrison-spawned 500004 hulls in 30003837 do
+   not resolve to faction 500004 in `getFactionForCorporation` (the same lookup the mobiliser
+   uses), or give the garrison a way to spawn them already assigned.
+2. Bounty payout still needs a product decision: the play stack runs REQUIRE_FUNDING=0 and its
+   factions earn nothing, so every real kill answers NO_HELD_ESCROW_FOR_FACTION. Escrow is
+   never minted; either fund the factions for real or state that merit-only is the intended shape.
