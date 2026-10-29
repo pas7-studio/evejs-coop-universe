@@ -2649,3 +2649,8 @@ Evidence: Start-Play-Stack.ps1 -Action Status: ssh banner on 37471 OK (SSH-2.0-O
 Why: A slow market could strand a loaded hull because the sell budget counted polls instead of settlements, and the ledger could not prove its own freight rows
 Where: integration/coopDistributionRun.cjs, integration/coopFactionWarOpening.cjs, scripts/Start-Play-Stack.ps1, tests/coop-distribution-run.test.mjs, tests/coop-war-target-cooldown.test.mjs
 Evidence: live: 9 trips / 394635 ISK / 112468 units, freight check RECONCILED, two previously blocked hulls completed; 27+3 tests
+### 2026-10-29T21:02Z · 161bc89 · L3 · fw: FW-099 - a lost-escrow release must not back a border off for hours (test + state)
+
+Why: The only armed border of the funded war was blocked by a cooldown created by the FW-050 escrow defect
+Where: .opencode/state.md
+Evidence: fork commit ad62455; owner real state: 30003837 old blocked (360 min window) -> new not blocked; coop-war-*/coop-fw-* 529 pass, cooldown suite 8/8

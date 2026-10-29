@@ -1,5 +1,36 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 03:15Z (UTC) - daily goal claim works; EverMarks now exist as a real ledger balance
+
+The claim path was never broken. Measured on the play stack for character 140000005:
+
+    completed unclaimed: kind=space_jump progress=31/10 rewardSP=40000
+    dailygoal.api.RedeemRequest -> status 200
+    freeSkillPoints 0 -> 40000, completedUnclaimed 0 afterwards
+
+So a completed daily goal pays its skill points. The "needs an EverMark" text therefore did not come
+from this path - the two other candidates are the `PayForCompletion` button (honestly refused: paying
+to finish a goal is not available) and the Agency's campaign/daily-reward window
+(`campaign.api.GetAllUnredeemedRewards`), which this world answers empty because it runs no CCP
+campaign.
+
+EverMarks were simply at zero for everybody: they are loyalty points of the Heraldry issuer
+corporation (EVERMARK_ISSUER_CORP_ID 1000419 in services/corporation/lpWalletState), and nothing had
+ever credited that ledger. New admin action `grant_evermarks` (fork `3579dff`, `3c26266`) credits it
+with `adjustCharacterWalletLPBalance` - the same function `/addlp` writes - for one character or for
+every character the store knows, and returns before/after per character.
+
+Measured on the play stack: `characters: 22`, `amount: 25000`, every row `0 -> 25000`, including the
+player characters:
+
+    140000001 evermarks 25000  140000002 25000  140000003 25000  140000004 25000  140000005 25000
+
+The first run credited only 14 of them: the characters table is keyed BY character id and the row body
+does not repeat it, so reading row fields skipped the real players. Fixed in `3c26266` and re-run.
+
+Check in game with `/evermarks` (chat command, reads the same ledger).
+
+
 ## 2026-10-30 20:55Z (UTC) - nine proven trips, and a book that checks itself
 
 MEASURED LIVE (balance sheet, inside the container):
