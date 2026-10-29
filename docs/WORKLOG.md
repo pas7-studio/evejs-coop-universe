@@ -2762,3 +2762,8 @@ Why: Admin MCP calls waited on the 30-90s world tick and each item cost its own 
 Detail: The owner's ask: stop driving a dozen commands per incident, and never wait 45-60 s. - admin_give_fit: reuse or grant the hull, place every module into its real slot family, drones into the drone bay, the rest into the hold, optionally board. Repeating it is idempotent: items already on the hull count towards the request. - admin_restore_last_loss: read the character's newest native killmail and r
 Where: mcp/README.md, mcp/lib/probe-admin-command.cjs, mcp/lib/serverTools.cjs, tests/coop-admin-fit-plan.test.mjs
 Evidence: evejs-agents: give_fit 415-1092ms, restore_last_loss 1093ms 8/8 slots from killmail 54, batch 1116ms 3/3, state survives restart; tests/coop-admin-fit-plan.test.mjs 5/5; fork commits 37e4197 33c6164 4990672
+### 2026-10-29T23:37Z · a2e6ec2 · L3 · state(economy): FW-108 live - real gate distances to the only station that buys combat loot
+
+Why: Nothing in the server could build a multi-hop gate route, so loot could never reach the one market that buys it
+Where: .opencode/state.md, integration/coopGateRoutes.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-gate-routes.test.mjs
+Evidence: fork a424285; live SDE 30003837->30000142 = 10 hops, 30045344->30000142 = 9, 30000144->30000142 = 1; route suite 6/6

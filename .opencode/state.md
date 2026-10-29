@@ -1,5 +1,28 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 10:00Z (UTC) - sites now ~3-4 per visited system; null/J-space: two concrete blockers
+
+After the density change and the null/J sampling (fork `2d4318c`), the live reconcile reports:
+
+    [CoopUniverseSites] systems=17 desired=152 created=121 spawned=11
+      anomalies={"30000142":4, "30000144":3, "30000145":3, "30003837":3, "30045344":4}
+
+i.e. the visited systems now hold 3-4 anomalies each, which is the real-game norm (see
+`docs/UNIVERSE_SITE_DENSITY.md`). Persisted: 57 instances in 20 systems - highsec 37, lowsec 20.
+
+Null-sec and wormhole space are still zero, and the two reasons are now measured, not guessed:
+
+1. **The world map has no J-space at all**: `worldData.getSolarSystems()` returns 8490 systems,
+   `highsec 1247 / nullsec 6556 / wormhole 0` - no system carries `wormholeClassID`. So there is nothing
+   to seed a wormhole site into; importing the SDE's wormhole systems is a separate data task.
+2. **Null-sec desired definitions work but are filtered out of the reconcile**:
+   `listDesiredUniverseDungeonSiteDefinitions([30002149])` returns **11** definitions (combat 6, data 2,
+   gas, relic 2), `[30003239]` 13, `[30003194]` 12 - yet no null-sec instance is created. The seeder
+   normalises the passed `systemIDs` down to the systems the world manages, so systems outside that set
+   never get an instance even though the definitions exist. Next fix: seed with an explicit
+   allowed-system override, or register the sampled systems as managed before reconciling.
+
+
 ## 2026-10-30 09:30Z (UTC) - how the sites are actually spread right now, per band
 
 Measured from the persisted dungeon state, security taken from `worldData`:
