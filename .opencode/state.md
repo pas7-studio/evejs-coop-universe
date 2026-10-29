@@ -9932,3 +9932,13 @@ id, unknown id 5. Register 17 (`handled=266`).
 Next candidates (see the earlier checkpoint entry for the full list): achievement definitions CDN
 (flatbuffer, same content-host mechanism), component.listing purchase, freelance item delivery,
 sovereignty admin calls.
+
+### 2026-10-30T08:00Z - two empty-catalogue reads answered (2 types, 15 left)
+
+Fork `3166539`: recommendation.Get -> 200 with an empty list; communitytrack.Get -> 5 with the
+reason. Live measured. Register 15 (`handled=268`).
+
+The rest of the list is mostly infrastructure or content that does not exist in this world:
+achievement definitions CDN (needs a flatbuffer schema; titles already prove the mechanism),
+component.listing purchase, freelance item delivery, sovereignty hub/mercenaryden/skyhook admin,
+auth username/steam (must not be faked), ai assistant, internal_gateway, debug (leave alone).

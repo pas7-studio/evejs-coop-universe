@@ -76,3 +76,5 @@ Two gateway families answer real shapes with zero content, and both are honest z
 world produces no such state: `pirate.corruption` / `pirate.suppression` progress (no insurgency
 corruption exists here) and the ESS/dynamic-resource reserve banks (no player-run reserve banks).
 If insurgency is ever wanted, those responses are the place the state has to come from.
+
+| **Empty-catalogue reads** (`operation.recommendation.Get`, `communitytrack.api.Get`) | asks for recommended operations and for one community-track instance | **honest answers** (`3166539`): an empty recommendation list (there is no operations catalogue here) and `NOT_FOUND` with the reason for an instance nobody created | nothing to add until operations/tracks exist |
