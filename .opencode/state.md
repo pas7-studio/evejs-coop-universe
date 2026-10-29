@@ -1,5 +1,25 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 20:20Z (UTC) - a fourth hull, spawned as a real ship
+
+PROVEN LIVE: scripts/coop-spawn-distribution-hull.cjs spawned durable hull **980000018521**
+at belt 40009256 in 30000145 (transient: false, marker coop-distribution-4-hauler) through the
+same native path the mining fleet uses - a real scene, a real anchor, no invented event. The
+run picked it up immediately (hulls() returns 4) and it is already flying the first of its
+4 stops.
+
+Fleet: four coop-distribution-* hulls, all on multi-stop trips (4-5 stops each), both the
+freight ledger and the balance sheet's FREIGHT line live.
+
+NEXT:
+  1. the runtime line ratchet (5153, other sessions) - split a module rather than grow it;
+  2. a production order that names its buyer's system, so the manufacturer and the freight run
+     plan against the same demand instead of discovering it twice;
+  3. watch a full cycle of the four-hull fleet: several settled sales, several ledger rows, and
+     the FREIGHT line growing with them;
+  4. when the fleet is stable, give the mining side the same treatment (its slots still carry
+     ore that only the drain sells).
+
 ## 2026-10-29 20:05Z (UTC) - the gap list is now measured, and 5 more types answer
 
 The "remaining N types" list was written by hand, so it could only contain what somebody had already
