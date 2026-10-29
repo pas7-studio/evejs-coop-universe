@@ -90,7 +90,9 @@ test("a sale the market refuses is bounded and then reported, never retried for 
   let last = null;
   for (let i = 0; i < run.MAX_SELL_CALLS + 2; i += 1) {
     last = await run.tick(another, { distanceTo: () => 100,
-      sell: async () => { calls += 1; return { status: "NOT_SOLD", reason: "NO_BID" }; },
+      // A market that keeps saying PENDING is bounded by real calls, then reported.
+      sell: async () => { calls += 1; return { status: "PENDING" }; },
+      wait: async () => {}, saleSettlement: () => null,
       now: 6000 + i * 1000 });
     if (last.status === "BLOCKED") break;
   }
@@ -99,10 +101,67 @@ test("a sale the market refuses is bounded and then reported, never retried for 
   assert.equal(calls, run.MAX_SELL_CALLS, "exactly the bounded number of real calls");
 });
 
+test("a settlement the market refused stops the run with its own words", async () => {
+  const fourth = 980000004167;
+  run.write({ version: 1, haulerID: fourth, phase: "SELL", trip: TRIP, updatedAt: 8000,
+    sellCalls: 0, isk: 0, quantity: 1, toStationID: 60003760, toSystemID: 30000142 });
+  const result = await run.tick(fourth, { distanceTo: () => 100,
+    sell: async () => ({ status: "PENDING" }),
+    wait: async () => {},
+    saleSettlement: () => ({ status: "NOT_SOLD", reason: "NO_SEEDED_COUNTERPARTY" }),
+    now: 8001 });
+  assert.equal(result.status, "BLOCKED");
+  assert.equal(result.reason, "SALE_NOT_SOLD:NO_SEEDED_COUNTERPARTY");
+});
+
+test("a sale proved by an empty hold is accepted without an answer from the market", async () => {
+  const fifth = 980000004168;
+  run.write({ version: 1, haulerID: fifth, phase: "SELL", trip: TRIP, updatedAt: 9000,
+    sellCalls: 0, isk: 0, quantity: 1, toStationID: 60003760, toSystemID: 30000142 });
+  const result = await run.tick(fifth, { cargoUnits: () => 0, now: 9001,
+    sell: async () => { throw new Error("must not be called"); } });
+  assert.equal(result.status, "DONE");
+  assert.equal(result.reason, "SOLD_VERIFIED_BY_HOLD");
+});
+
 test("a missing authority is reported, never guessed", async () => {
   const third = 980000004166;
   run.write({ version: 1, haulerID: third, phase: "LOAD", trip: TRIP, updatedAt: 7000,
     fromStationID: 60000682, fromSystemID: 30000145 });
   const result = await run.tick(third, { now: 7001 });
   assert.equal(result.status, "NO_LIFT");
+});
+
+test("a hull that drifted off the station is flown back, not asked to sell", async () => {
+  // Measured 2026-10-30: the phase said SELL while the durable hull had been rebuilt out of
+  // its scene, and the market answered NOT_AT_NATIVE_STATION. Distance is the truth.
+  const sixth = 980000004171;
+  run.write({ version: 1, haulerID: sixth, phase: "SELL", trip: TRIP, updatedAt: 9500,
+    sellCalls: 0, isk: 0, quantity: 1, toStationID: 60003760, toSystemID: 30000142 });
+  const result = await run.tick(sixth, { distanceTo: () => 90000,
+    sell: async () => { throw new Error("must not sell from 90 km"); }, now: 9501 });
+  assert.equal(result.status, "TO_DEST");
+  assert.equal(result.reason, "NOT_AT_STATION");
+});
+
+test("\"not at the station\" waits instead of stopping the run", async () => {
+  const seventh = 980000004172;
+  run.write({ version: 1, haulerID: seventh, phase: "SELL", trip: TRIP, updatedAt: 9600,
+    sellCalls: 0, isk: 0, quantity: 1, toStationID: 60003760, toSystemID: 30000142 });
+  const result = await run.tick(seventh, { distanceTo: () => 100, wait: async () => {},
+    sell: async () => ({ status: "PENDING" }),
+    saleSettlement: () => ({ status: "NOT_SOLD", reason: "NOT_AT_NATIVE_STATION" }),
+    now: 9601 });
+  assert.equal(result.status, "WAITING_FOR_SALE");
+  assert.equal(run.read(seventh).phase, "SELL");
+  assert.ok(!result.reason.startsWith("SALE_NOT_SOLD"), "a retryable refusal is not a verdict");
+});
+
+test("a carried type outside the sell allowlist is still asked for", () => {
+  // Measured 2026-10-30: the hull carried 28338 while Jita bid 560 000 for it, and every sale
+  // answered NO_REAL_NATIVE_CARGO because that type is not in EVEJS_COOP_NPC_MARKET_SELL_TYPES.
+  // The carried set only FILTERED the allowlist, so it could never add what the ship holds.
+  const source = fs.readFileSync(path.join(process.cwd(), "integration/coopVirtualWorldRuntime.cjs"), "utf8");
+  assert.ok(/for\(const typeID of carried\)[\s\S]{0,120}sellTypes\.push/.test(source),
+    "what the hull really carries must join the sale list");
 });
