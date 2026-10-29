@@ -11034,3 +11034,28 @@ mobiliser (`rowIsLive`), so they reserve no pilot and block nothing.
 back, and during that window the mobiliser honestly reports `NO_ELIGIBLE_PATROL` on the empty
 side. Do not "fix" that with a bigger spawn budget before measuring whether it actually starves
 the front; the 22:33Z round had both sides staffed and killed two hulls.
+
+## Why the bounty never pays: the money chain dies at the seeded market (measured 22:26Z)
+
+The war chest is funded ONLY from the earned-ISK ledger of the faction's own pilots
+(`coopWarChestFunding.planLevy` reads `ledger.pilots[*].balance`), and every one of the 50
+virtual pilots is at **0**. The reason is not the war code:
+
+```
+22:13:23.938Z living-npc-sale-type  NO_SEEDED_COUNTERPARTY  typeID 17470 station 60000358
+22:26:30.818Z living-npc-sale-type  NO_SEEDED_COUNTERPARTY  typeID 1230  station 60000682
+22:26:32.928Z living-npc-sale-type  NO_SEEDED_COUNTERPARTY  typeID 17470 station 60000358
+```
+`coopNativeNpcMarket.js:318` only accepts a counterparty row with `source === "seed"` at that exact
+station and type, and those two stations hold no seeded bid for the loot the war hulls recover.
+So the loot is hauled to a station and never sold, no pilot ever earns ISK, the levy refuses with
+`NO_REAL_FACTION_INCOME`, no escrow is ever HELD, and every real kill answers
+`NO_HELD_ESCROW_FOR_FACTION`. The sell allowlist already includes 17470 and 1230
+(`EVEJS_COOP_NPC_MARKET_SELL_TYPES`), so this is a SEED-COVERAGE gap, not an allowlist gap.
+
+Two honest ways forward, both owner decisions:
+1. **Seed a real counterparty** for those loot types at those stations (real seeded stock, never
+   an invented player-style order) so loot sales credit the earned ledger.
+2. **Pay from the faction corporation wallet** (real ISK exists: 1000120 = 530 000, 1000035 =
+   90 000) instead of only from pilot earned balances - a doctrine change, since FW-005 was
+   written to pay only from money its own pilots really earned.
