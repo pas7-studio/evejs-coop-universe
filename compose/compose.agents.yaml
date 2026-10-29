@@ -68,6 +68,9 @@ services:
       # operator-journaled gate crossing with the native transfer's own verdict. It never
       # plans or starts a crossing by itself, and ARRIVED needs full native proof.
       EVEJS_COOP_DISTRIBUTION: "1"
+      # One real freight trip: lift at the origin station (what the DESTINATION pays for),
+      # cross the gate with the proven native transfer, sell on arrival. Agent stack only.
+      EVEJS_COOP_DISTRIBUTION_RUN: "1"
       # The economic phases get their own beat: measured 2026-10-29, the stock hook ran at
       # 23:30:26 and then not for eight minutes while a journaled crossing waited 6 km from
       # its gate. A phase that only runs when another system happens to call it is not a

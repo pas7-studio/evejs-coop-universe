@@ -146,6 +146,7 @@ function planTrip({ haulerID, store, items, inventory, db, worldData, connectedG
       if (!best || total > best.expectedIsk) {
         // The pure planner names the destination in its own fields; the run wants one shape.
         best = { ...answer.trip, expectedIsk: total, fromSystemID: systemID,
+          fromStationID: pos(answer.trip.stationID),
           toStationID: pos(answer.trip.destinationStationID),
           toSystemID: destinationSystemID, gate: {
             sourceGateID: pos(gate.sourceGateID), destinationGateID: pos(gate.destinationGateID),

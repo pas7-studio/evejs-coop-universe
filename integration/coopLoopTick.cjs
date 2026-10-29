@@ -69,16 +69,41 @@ function distributionRunAuthorities(options = {}) {
           (Number(station.radius) || 0));
       } catch (_error) { return null; }
     };
+    // The same durable ship, brought back into its scene from its own record.
+    const ensureLive = (haulerID) => {
+      try {
+        const native = store.getNativeEntity(haulerID);
+        if (!native) return false;
+        const scene = sceneFor(Number(native.systemID) || 0);
+        if (!scene) return false;
+        const ship = typeof scene.getEntityByID === "function" ? scene.getEntityByID(haulerID) : null;
+        if (ship) return true;
+        const answer = require("./npc/nativeNpcService")
+          .materializeStoredNativeController(scene, haulerID);
+        return Boolean(answer && answer.success === true);
+      } catch (_error) { return false; }
+    };
     const goTo = (stationID, haulerID) => {
+      // The manual order needs a live controller; a restored hull may have its ship back
+      // without one, so the scene follow - the same call the station arrival uses - is the
+      // fallback. Measured 2026-10-30: the order answered NOT_FOUND while the ship was
+      // already sitting at its station.
       try {
         const answer = require("./npc/npcService").issueManualOrder(haulerID, {
           type: "follow", targetID: stationID, followRangeMeters: 2000, allowWeapons: false,
         });
-        return answer && answer.success === true;
+        if (answer && answer.success === true) return true;
+      } catch (_error) { /* fall through to the scene order */ }
+      try {
+        const native = store.getNativeEntity(haulerID);
+        const scene = sceneFor(Number(native && native.systemID) || 0);
+        const ship = scene && scene.getEntityByID ? scene.getEntityByID(haulerID) : null;
+        if (!ship || typeof scene.followShipEntity !== "function") return false;
+        return scene.followShipEntity(ship, stationID, 2000, {allowWeapons: false}) !== false;
       } catch (_error) { return false; }
     };
     return {
-      env, hulls, distanceTo, goTo,
+      env, hulls, distanceTo, goTo, ensureLive,
       planTrip: ({haulerID}) => {
         const native = store.getNativeEntity(haulerID);
         const systemID = Number(native && native.systemID) || 0;

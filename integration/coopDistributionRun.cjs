@@ -28,6 +28,7 @@ const STATION_RANGE_M = 15000;
 const MAX_SELL_CALLS = 6;
 
 function num(x) { return Number.isFinite(Number(x)) ? Number(x) : 0; }
+const phase2 = (value) => String(value || PHASE.TO_ORIGIN);
 function pos(x) { const v = num(x); return Number.isSafeInteger(v) && v > 0 ? v : 0; }
 
 function root(env = process.env) {
@@ -139,7 +140,9 @@ async function tick(haulerID, authorities = {}, env = process.env) {
       return { status: "BLOCKED", reason: refused.lastReason };
     }
     state = write({ version: 1, haulerID: id, phase: PHASE.TO_ORIGIN, trip: row,
-      fromStationID: pos(row.fromStationID), fromSystemID: pos(row.fromSystemID),
+      // The pure planner calls the origin simply stationID; one name, one meaning.
+      fromStationID: pos(row.fromStationID) || pos(row.stationID),
+      fromSystemID: pos(row.fromSystemID),
       toStationID: pos(row.toStationID), toSystemID: pos(row.toSystemID),
       typeID: pos(row.typeID), quantity: num(row.quantity), expectedIsk: num(row.expectedIsk),
       gate: row.gate || null, sellCalls: 0, isk: 0, lastReason: "PLANNED", updatedAt: now }, env);
@@ -147,6 +150,22 @@ async function tick(haulerID, authorities = {}, env = process.env) {
     return { status: "PLANNED", state };
   }
 
+  // A durable hull can outlive its scene (a restart rebuilds it). Bringing the same ship
+  // back from its own record is the narrow road; anything else stays undispatched.
+  if (typeof authorities.ensureLive === "function") {
+    let live = false;
+    try { live = authorities.ensureLive(id) === true; } catch (_error) { live = false; }
+    if (!live) {
+      const misses = num(state.liveMisses) + 1;
+      const phase = misses >= 5 ? PHASE.BLOCKED : phase2(state.phase);
+      const next = write({ ...state, liveMisses: misses, phase,
+        lastReason: misses >= 5 ? "HULL_NOT_LIVE" : "WAITING_FOR_HULL",
+        updatedAt: now }, env);
+      note(observe, "living-distribution-run", next, { reason: next.lastReason });
+      return { status: next.lastReason, state: next };
+    }
+    if (num(state.liveMisses) > 0) state = write({ ...state, liveMisses: 0 }, env);
+  }
   const facts = {
     distanceToOriginM: typeof authorities.distanceTo === "function"
       ? authorities.distanceTo(state.fromStationID, state.fromSystemID, id) : null,
