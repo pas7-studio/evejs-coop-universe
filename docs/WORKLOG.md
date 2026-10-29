@@ -2587,3 +2587,8 @@ Evidence: fork ff09ec8; audit 1282/213/282/15; 25 tests green incl. client-descr
 Why: A proven arrival left the identity link in the old system, so the next reader pruned it and the following crossing was refused
 Where: integration/coopNpcGateCrossing.cjs, tests/coop-npc-gate-crossing.test.mjs
 Evidence: 20/20 gate-crossing tests incl. relocate-on-arrival; live fleet walking multi-stop trips (LOADED_STOP:60000688)
+### 2026-10-29T19:47Z · 1957500 · L2 · state: the gateway gap list is measured now - 213 client requests, 287 answered, 10 open
+
+Why: ten gateway request types the client really sends had no answer; the gap list itself was hand-written
+Where: .opencode/state.md, docs/client-contracts/gateway-coverage.json
+Evidence: fork ff09ec8 + 6133d3e; audit 213 consumed / 287 answered / 10 open; live: restricted systems []->[30000144]->[], ship skin Get 200 decoded by CCP descriptor, ResetAll 200; 26 tests green

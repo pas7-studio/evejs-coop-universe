@@ -11,6 +11,37 @@ a default-encoded empty message and a warning that names the type, so the client
 "no data" answer instead of a 404 it cannot decode. What that means in game is that the surface
 opens and shows nothing (or zeros) — it does not throw.
 
+## Gateway coverage is measured, not remembered
+
+`scripts/coop-gateway-gap-audit.py` compares the request messages in the client's own generated
+descriptors (kept only when a non-generated client module names both the proto module and the
+request class - that is what an import plus a call looks like) with the types the running server
+answers. Current numbers on `evejs-agents`: 1282 client request messages, 213 really sent, 287
+answered, 10 sent-but-unanswered; the derived list is `docs/client-contracts/gateway-coverage.json`.
+
+`scripts/coop-verify-client-proto.cjs` decodes bytes we produced with CCP's own FileDescriptorProto,
+so a wrong field number cannot pass by agreeing with our own reader. Both new answer sets were
+checked that way, and both were proven live on `evejs-agents`:
+
+- `stargate.lock.api.GetRestrictedSystems` / `Get` (fork `ff09ec8`) - a real admin Apply made the
+  system appear in the public list and a Delete removed it; `Get` answers the character's own
+  system from the live session and answers 404 with a reason when the system is unknown, has no
+  lock, or has several locked gates (the response carries one gate);
+- `cosmetic.ship.api.Get` / `GetAllInBubble` (fork `ff09ec8`) - a real ship of character 140000004
+  got a licence, was activated and was given skin `c0c0ffee12345678`; the gateway's 43 bytes decode
+  through CCP's descriptor to that character, that ship and that hex; after unapply+revoke -> 404.
+  The bubble comes from `space/runtime.getSceneForSession`, so it lists only ships really in the
+  character's scene;
+- `achievement.api.admin.ResetAll` (fork `6133d3e`) - clears one character's rows and unclaimed list
+  in one write.
+
+Still open (10): the three sequencing price/duration quotes (our jobs cost component licences, not
+PLEX - a PLEX price we never charge would be a lie), the two component-listing calls (blocked on the
+real SKIN component item ids inside the client's `ship_skin_design_components.fsdbinary`),
+`freelance...Deliver` (no project system), `sovereignty.resource.planet.GetAllConfigurations` (no
+configurations exist here), `user.license.Get` (no acceptance record), and `eve_public.Request` /
+`ai.assistant` (not ours).
+
 ## If you have no client: read this instead of decompiling
 
 A web or cloud session cannot run the decompiler - there is no `tq/code.ccp`, usually no Python
