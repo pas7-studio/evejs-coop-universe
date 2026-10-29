@@ -1,5 +1,31 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 14:35Z (UTC) - the cycle turns: home again, second load aboard
+
+PROVEN LIVE: after the 560 000 ISK sale the hull crossed BACK to 30000145
+(SAME_NATIVE_SHIP_ARRIVED), the run reset to PLAN at home, planned a new trip and really
+loaded 164 504 units at 60000682, crossed to Jita and reached the station.
+
+NOT PROVEN: the second sale. It is refused with a named reason (COOLDOWN now), and the hull
+is not live in its scene at the sale moment (the run's distance read is null), so something
+removes a named distribution hull and it is re-materialized. The cargo stays aboard; the run
+waits by time instead of inventing a sale.
+
+Changed this round (tests: coop-distribution-run 16, coop-identity-refresh 3):
+  - the run cycles: sale -> RETURN -> cross home -> REPLAN -> next trip, bounded by MAX_TRIPS,
+    and a cycle that finds nothing worth shipping ends the run;
+  - a stale ARRIVED journal from the outward trip is NOT the way home - only the durable
+    record saying the hull is home counts (measured: it reported RETURNED for ever);
+  - "at the station" now means what the market means: 8 km from the PHYSICAL scene station;
+  - the market's offer() names each failed predicate instead of one NOT_AT_NATIVE_STATION
+    (that is how NO_IDENTITY_LINK was found in one line);
+  - the identity registry re-reads the file when it changed, and the market trader refreshes
+    before it looks for an identity: several owners held stale copies and refused each other.
+
+NEXT: find what prunes a NAMED distribution hull out of its scene (a candidate is the
+materializer's stale-link pass; the hull keeps being re-materialized and then lost), then
+re-run the second sale. After that: several hulls and margin-based cargo choice.
+
 ## 2026-10-30 12:10Z (UTC) - CLOSED: a manufactured good was sold in Jita for 560 000 ISK
 
 PROVEN LIVE (hauler 980000004164, no client): plan from real hangars and the seeded book ->

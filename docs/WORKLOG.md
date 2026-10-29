@@ -2394,3 +2394,8 @@ Why: seven calls in domains with no state (asset holdings, entitlements, payment
 Detail: The seven calls in domains with no state in this world now say so (NOT_FOUND / FAILED_PRECONDITION with a reason, or the honest empty shape for one optional schedule) instead of a default empty message. Register 66 -> 59 unhandled.
 Where: docs/CLIENT_GAPS.md, tests/coop-absent-state.test.mjs
 Evidence: fork 95bced3; live registry probe: 4x NOT_FOUND with reasons, 2x FAILED_PRECONDITION with reasons, 1x 200 with the optional schedule unset; register 66->59; 5/5 tests
+### 2026-10-29T14:45Z · a974743 · L2 · alife21e: return leg, named market refusals, registry refresh, 19 tests
+
+Why: A hull sold once and then sat in the buyer system, and the market's single refusal code hid which of twelve predicates actually failed
+Where: compose/compose.agents.yaml, integration/coopDistributionRun.cjs, integration/coopIdentityRegistry.cjs, integration/coopLoopTick.cjs, integration/coopNativeNpcMarket.cjs, tests/coop-distribution-run.test.mjs, tests/coop-identity-refresh.test.mjs
+Evidence: live: return crossing ARRIVED home, second load 164504 units lifted and crossed; refusals now named (NO_IDENTITY_LINK fixed by registry refresh, then COOLDOWN); 19/19 run+registry tests
