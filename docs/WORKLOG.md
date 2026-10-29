@@ -2454,3 +2454,9 @@ Why: a skin minted by a sequencing job could not show its own record: thirdparty
 Detail: 3/3 new tests; the design is spliced back byte-identically and an admin-granted licence stays honestly unsequenced.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-third-party-skin-record.test.mjs
 Evidence: fork 85041fc; live on 140000001: minted skin 220a07477df30255, layout stored byte-identical, creator 140000001; Get 200 name/creator/not_sequenced false/tier 1/layout spliced intact; unknown hex 5; 3/3 tests; register 41 unhandled
+### 2026-10-29T16:36Z · 5d37338 · L2 · docs/tests: licence items are consumed from the real inventory
+
+Why: component.license.item.Consume had no handler, so an item could never become component capacity and the designer's component shop was dead
+Detail: 7/7 component licence tests, including the singleton quantity that used to refuse every consume.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-component-licences.test.mjs
+Evidence: fork e18b98d; live on 140000001 with real item 9988400000001: unmapped 9, foreign 7, quantity 2 refused 9 with nothing spent, quantity 1 200 with capacity 1 on component 53002 and the item consumed, unknown id 5; singleton quantity -1 bug fixed; 7/7 tests; register 40 unhandled
