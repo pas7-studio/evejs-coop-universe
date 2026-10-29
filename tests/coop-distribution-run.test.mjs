@@ -405,3 +405,26 @@ test("a trip that loads at two stations walks the stops before it crosses", asyn
   assert.equal(crossed, true, "the hull only leaves the system once every stop is loaded");
   assert.equal(second.status, "CROSS");
 });
+
+test("a stop whose goods moved away is skipped, not fatal", async () => {
+  // Measured 2026-10-30: two hulls were refused NO_LOCAL_BID at their second stop and the whole
+  // journey stopped with the first stop's cargo still aboard.
+  const twentyFirst = 980000004190;
+  const trip = { ...TRIP, fromStationID: 60000682, items: [
+    { stationID: 60000682, typeID: 34, quantity: 1000, price: 4, m3PerUnit: 0.01 },
+    { stationID: 60014935, typeID: 35, quantity: 500, price: 15, m3PerUnit: 0.01 },
+  ] };
+  await run.tick(twentyFirst, { planTrip: () => ({ status: "OK", trip }), now: 24000 });
+  const first = await run.tick(twentyFirst, { distanceTo: () => 100,
+    lift: async () => ({ status: "LIFTED", lifted: [{ typeID: 34, quantity: 1000, price: 4 }] }),
+    now: 24001 });
+  assert.equal(first.status, "NEXT_STOP");
+  const second = await run.tick(twentyFirst, { distanceTo: () => 100,
+    cargoUnits: () => 1000,
+    lift: async () => ({ status: "NO_LOCAL_BID" }),
+    planCrossing: () => ({ status: "PLANNED" }), now: 24002 });
+  // The last stop was empty, but the hull already carries the first stop's cargo: fly it.
+  assert.equal(second.status, "CROSS");
+  assert.equal(second.reason, "LOADED_PARTIAL");
+  assert.equal(run.read(twentyFirst).skippedStops.length, 1);
+});
