@@ -9776,3 +9776,19 @@ WHY IT IS NOT VISIBLE YET - two separate blockers, both measured:
 
 Achievements' `definition.api.cdn.GetLatest` needs the same content mechanism (bigger flatbuffer),
 so fixing the HTTP/1.1 content path unblocks both.
+
+### 2026-10-30T03:10Z - content host live: the client's download path now works
+
+Fork `0a7b8d1`. `contentCdnServer.js` is a separate TLS HTTP/1.1 server (the h2 gateway must not
+gain a request handler - it kills the process with ERR_HTTP2_TRAILERS_ALREADY_SENT). It serves only
+the routes `getGatewayBinaryAsset` knows and 404s everything else. Compose publishes a SECOND
+loopback address, `127.0.0.2:443 -> 28443`, because the gateway binds 127.0.0.1 only; env
+`EVEJS_COOP_CONTENT_BIND=0.0.0.0:28443`, `EVEJS_COOP_CONTENT_ORIGIN=https://127.0.0.2`.
+
+Proven from the HOST over the client's own protocol path: GET https://127.0.0.2/elysian-eve/
+titles/1.0.0.titles -> 200, 368 bytes, CRC 2300466464 = checkpoint CRC, identifier CHTI; unknown
+route -> 404. Registry GetLatest advertises https://127.0.0.2/... v1.0.0.
+
+Remaining for the titles window: the client LaunchDarkly flag `character_titles_feature_enabled`
+(client config, not our gateway). Everything server-side is now in place: state (6 calls), our
+catalogue, the checkpoint, and a downloadable file.

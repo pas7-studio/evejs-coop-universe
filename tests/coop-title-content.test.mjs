@@ -93,3 +93,51 @@ test("the CDN route serves our file and nothing else", () => {
   assert.equal(getTitleContentAsset("/elysian-eve/other"), null);
   assert.equal(getTitleContentAsset("/"), null);
 });
+
+// A plain HTTP/1.1 content host: the client's flatbuffer provider is Python 2 httplib, so it
+// needs a GET answered on port 443, while that port is the HTTP/2 gateway.
+const {createContentRequestHandler, parseBind} = require(
+  path.join(forkRoot, "Code/server/src/_secondary/express/contentCdnServer.js"));
+
+function fakeResponse() {
+  const out = {status: 0, headers: null, body: null};
+  return {
+    out,
+    writeHead(status, headers) {
+      out.status = status;
+      out.headers = headers;
+    },
+    end(body) {
+      out.body = body;
+    },
+  };
+}
+
+test("the content host serves only the routes it publishes", () => {
+  const resolveAsset = (routePath) => (routePath === "/elysian-eve/titles/1.0.0.titles"
+    ? {buffer: Buffer.from("abc"), contentType: "application/octet-stream"}
+    : null);
+  const handler = createContentRequestHandler(resolveAsset);
+
+  const hit = fakeResponse();
+  handler({method: "GET", url: "/elysian-eve/titles/1.0.0.titles"}, hit);
+  assert.equal(hit.out.status, 200);
+  assert.equal(hit.out.headers["content-length"], 3);
+  assert.deepEqual(hit.out.body, Buffer.from("abc"));
+
+  const miss = fakeResponse();
+  handler({method: "GET", url: "/eve_public.cosmetic.ship.skin.thirdparty.api.GetRequest"}, miss);
+  assert.equal(miss.out.status, 404, "it is a content host, not a second gateway");
+
+  const post = fakeResponse();
+  handler({method: "POST", url: "/elysian-eve/titles/1.0.0.titles"}, post);
+  assert.equal(post.out.status, 404, "only GET serves content");
+});
+
+test("a bind address is parsed strictly, never guessed", () => {
+  assert.deepEqual(parseBind("127.0.0.2:443"), {host: "127.0.0.2", port: 443});
+  assert.deepEqual(parseBind("8443"), {host: "127.0.0.1", port: 8443});
+  assert.deepEqual(parseBind(""), null);
+  assert.deepEqual(parseBind("nope"), null);
+  assert.deepEqual(parseBind("127.0.0.2:0"), null);
+});
