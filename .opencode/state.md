@@ -1,5 +1,30 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 19:10Z (UTC) - freight income is visible in the balance sheet
+
+PROVEN LIVE: the first freight row was written by a real sale and the balance sheet reads it:
+  freight   1 trips, 44 104 ISK, 2915 units
+    30000145->30000142  1 trips, 44 104 ISK
+with the row itself in coop-native-market/freight-ledger.jsonl
+  {haulerID 980000000005, lines 4, units 2915, isk 44104, status SOLD}.
+
+What changed:
+  - every settled sale in a distribution run appends ONE row (append-only): time, hull, from/to
+    system and station, cargo lines, units, ISK; a sale proven only by an empty hold records
+    iskUnknown instead of a fake amount;
+  - scripts/coop-economy-ledger.cjs prints a FREIGHT section (trips, ISK, units, top routes)
+    beside production and station sales, so the loop's most active income stream is auditable.
+
+Tests: distribution-run 25 (one row per settled sale with its ISK and destination).
+
+NEXT:
+  1. a hull that loads at TWO stations in one trip (the planner already assembles multi-station
+     stacks; the lift still lifts at one station);
+  2. relocate-on-arrival for the identity file (the merge already covers the live case);
+  3. the runtime line ratchet (5153, other sessions);
+  4. let the fleet grow: the run iterates every coop-distribution-* marker, so a fourth hull
+     only needs the operator re-mark (scripts/coop-distribution-hull.cjs).
+
 ## 2026-10-30 18:50Z (UTC) - achievements: our own catalogue, served, and the reward is paid
 
 PROVEN LIVE on `evejs-agents` (never on the owner's play stack), fork `395cb66`:
