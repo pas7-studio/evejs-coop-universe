@@ -293,3 +293,78 @@ test("a campaign that is already decided is never refilled", () => {
   assert.equal(out.status, "NO_MUSTER");
   assert.equal(calls.length, 0);
 });
+
+// FW-103: a PREPARING front musters the attacker in ITS OWN source system.
+//
+// MEASURED on the play stack 2026-10-30 21:17:46Z and 21:19:09Z: this garrison spawned
+// the attacker (500004) and the defender (500001) both inside the campaign TARGET
+// (30003837), while `coopWarGateStaging` - and the mobiliser, with the same rule - need
+// the attacker's hull in `campaign.sourceSystemID` (30045344) until the campaign reaches
+// ASSAULT. One tick therefore reported GARRISON_APPLIED and NO_ATTACKER_SHIP_REGISTERED
+// together, the front could never deploy, and it expired with NO_ASSAULT_DEPLOYMENT_PROOF
+// - a war that looks deployed and never fights.
+const PREPARING = {
+  version: 1,
+  wars: {
+    "war:a-b": { warID: "war:a-b", state: "ACTIVE", attackerFactionID: 500004, defenderFactionID: 500001 },
+  },
+  campaigns: {
+    c1: { campaignID: "c1", warID: "war:a-b", state: "PREPARING",
+      sourceSystemID: 30045344, targetSystemID: 30003837 },
+  },
+};
+const ASSAULTING = {
+  version: 1,
+  wars: PREPARING.wars,
+  campaigns: {
+    c1: { campaignID: "c1", warID: "war:a-b", state: "ASSAULT",
+      sourceSystemID: 30045344, targetSystemID: 30003837 },
+  },
+};
+
+function muster(state, ships = []) {
+  const calls = [];
+  const garrison = createWarGarrison({
+    readWarState: () => state,
+    registry: { snapshot: () => ({ ships: Object.fromEntries(ships.map(s => [String(s.entityID), s])) }) },
+    listFreePilots: () => ["coop-pilot-001", "coop-pilot-002", "coop-pilot-003"],
+    spawnFleet: (input) => {
+      calls.push(input);
+      return { ok: true, fleetID: "coop-fleet-x", ships: [{ entityID: 900 + calls.length }] };
+    },
+    env: ON,
+    clock: () => 1000,
+  });
+  return { garrison, calls };
+}
+
+test("the attacker musters in the campaign source system, the defender in the target", () => {
+  const f = muster(PREPARING);
+  const out = f.garrison.tick();
+  assert.equal(out.status, "GARRISON_APPLIED");
+  assert.equal(f.calls[0].factionID, 500004, "the attacker side is served first");
+  assert.equal(f.calls[0].systemID, 30045344,
+    "an attacker hull spawned in the target can never satisfy gate staging");
+  assert.equal(out.applied[0].systemID, 30045344);
+});
+
+test("an already attacking campaign musters the attacker in the target", () => {
+  const f = muster(ASSAULTING, [
+    { entityID: 1, systemID: 30003837, factionID: 500001 },
+  ]);
+  f.garrison.tick();
+  assert.equal(f.calls[0].factionID, 500004);
+  assert.equal(f.calls[0].systemID, 30003837, "the assault leaves the source behind");
+});
+
+test("hulls of the attacker standing in the target do not man the source side", () => {
+  const f = muster(PREPARING, [
+    { entityID: 1, systemID: 30003837, factionID: 500004 },
+    { entityID: 2, systemID: 30003837, factionID: 500001 },
+  ]);
+  const out = f.garrison.tick();
+  assert.equal(f.calls.length >= 1, true);
+  assert.equal(f.calls[0].systemID, 30045344,
+    "the ghost of a target hull must never be read as a mustered source");
+  assert.equal(out.status, "GARRISON_APPLIED");
+});

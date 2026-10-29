@@ -453,3 +453,15 @@ test("the amount is read quickly enough to survive the five-second settlement wi
   assert.equal(result.state.isk, 777000, "the real amount, not an unknown price");
   assert.ok(reads >= 2);
 });
+
+test("a busy hull waits for the market instead of stopping with its cargo", async () => {
+  // Measured 2026-10-30: a loaded hull was blocked SALE_NOT_SOLD:NATIVE_NPC_BUSY and kept
+  // 20 255 units aboard for good.
+  const twentyThird = 980000004192;
+  run.write({ version: 1, haulerID: twentyThird, phase: "SELL", trip: TRIP, updatedAt: 26000,
+    sellCalls: 0, isk: 0, quantity: 1000, toStationID: 60003760, toSystemID: 30000142 });
+  const result = await run.tick(twentyThird, { distanceTo: () => 100, cargoUnits: () => 1000,
+    sell: async () => ({ status: "NOT_SOLD", reason: "NATIVE_NPC_BUSY" }), now: 26001 });
+  assert.equal(result.status, "WAITING_FOR_SALE");
+  assert.equal(run.read(twentyThird).phase, "SELL", "the run keeps the trip it is on");
+});
