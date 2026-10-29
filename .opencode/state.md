@@ -9482,3 +9482,26 @@ lost the hull instead of costing another evening of guessing.
 Remaining: one more funded front with a kill, and the answer tells us whether `war-bounty PAID` fires and,
 if not, exactly which identity source was short. Keeper is off (it competes for the 64 co-op pilots);
 `scripts/coop-war-acceptance.cjs` and the watcher are the tools to run it.
+
+### 2026-10-29T16:45Z - clean stop point, drafts are next
+
+The session ends at a boundary that is safe to resume: licences + apply are live and proven,
+the next surface (drafts) has its shapes already extracted below.
+
+`thirdparty.draft` shapes (client `.../draft/{api/requests,draft}.proto`):
+- `SaveRequest{name, line_name, layout{slots[{id, configuration}], ship_type, pattern_blend_mode},
+  editor_configurations[{id{slot}, config{offset_u_ratio, offset_v_ratio, yaw, pitch, roll, scaling}}]}`
+  -> `SaveResponse{id{uuid}, attributes}`; `UpdateRequest` is the same plus `id{uuid}`.
+- `Attributes{skin{hex}, editor_configuration, editor_configurations[]}` - **no name/line_name**,
+  so the name is only carried into Save/Update (it matters when a skin is sequenced, not when
+  a draft is read).
+- `GetRequest{draft{uuid}}`, `GetSharedRequest{character, draft{uuid}}`,
+  `GetSaveCapacityRequest->{capacity uint64}`, `DeleteRequest{id}`,
+  `GetAllSavedRequest->{drafts[{id, attributes}]}`.
+
+Store plan: keep the draft payload as the **encoded bytes** of `layout` +
+`editor_configurations` exactly as received (the server does not need to interpret a design to
+store it), per character, with a uuid, name, line_name and timestamps; capacity is a real
+configured limit (not a fake zero). GetAllSaved/Get/GetShared return the stored shape;
+Delete removes the row. Sequencing (step 4) is what turns a draft into a skin hex, and it must
+consume a real item.
