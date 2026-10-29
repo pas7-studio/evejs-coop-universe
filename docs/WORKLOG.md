@@ -2767,3 +2767,8 @@ Evidence: evejs-agents: give_fit 415-1092ms, restore_last_loss 1093ms 8/8 slots 
 Why: Nothing in the server could build a multi-hop gate route, so loot could never reach the one market that buys it
 Where: .opencode/state.md, integration/coopGateRoutes.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-gate-routes.test.mjs
 Evidence: fork a424285; live SDE 30003837->30000142 = 10 hops, 30045344->30000142 = 9, 30000144->30000142 = 1; route suite 6/6
+### 2026-10-29T23:55Z · b9123f7 · L2 · alife28a: runs rest and restart, stall bound halved, beat 20 s
+
+Why: The fleet stopped for good once each hull reached its trip cap, and the 45 s beat dominated the cycle time
+Where: compose/compose.agents.yaml, integration/coopDistributionRun.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarTreasury.cjs, tests/coop-distribution-run.test.mjs, tests/coop-war-treasury-bounty.test.mjs
+Evidence: ledger: median gap 10.9 min, worst 95.6; live after deploy all four hulls carrying again with no operator reset; 32/32 run tests

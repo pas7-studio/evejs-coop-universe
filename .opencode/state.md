@@ -133,3 +133,40 @@ types, hand the hull a `shortestGateRoute` to a station that does (Jita 60003760
 `coopNpcGateTravel` hop by hop until it docks and sells. Everything it needs now exists - the
 seeded-buyer list from FW-106, the route finder from FW-108, and the multi-hop travel director.
 Until that lands, the war pays only from money a faction already holds (FW-105/FW-107).
+
+## FW-109 (fork a7cb78a, deployed on the play stack): a war bounty can finally reserve money
+The wallet-backed bounty (FW-105) had **never paid once**. Every real front kill emitted
+`living-native-war-bounty-wallet-backed` with `reserve: "BLOCKED"`, and the treasury said why:
+`WAR_TREASURY_PURPOSE_UNAVAILABLE`. A `RESERVE` naming a campaign that already exists is
+refused **by design** - correct for an *opening* (money is put aside before the campaign is
+created) and structurally impossible for a *bounty*, which is earned by a kill inside a live
+campaign. So the money in the faction's own corporation wallet could never be used for it.
+
+Two fixes, both in the money gate:
+- `RESERVE` honours an explicit `purpose:"BOUNTY"`: the named campaign must really exist, must
+  belong to that war, and must still be `PREPARING` or `ASSAULT`. Openings, refunds and payouts
+  are untouched, and no ISK can be created - the debit is the same journal entry as before.
+- each kill reserves under its own hashed reservation id (treasury ids are capped at 96 chars),
+  because the old fixed `bounty:<campaign>:<faction>` id collided on the second kill and the
+  orphan-escrow reuse would have collapsed two kills into one escrow.
+
+Also: a **refused casualty was silent**. The casualty ledger's status/reason is now published as
+`living-native-war-casualty-skipped` instead of being swallowed, so `NO_DEFENDER_WRECK` in the
+capture phase can finally name the predicate that refused the wreck.
+
+Live after deploy: `healthy`, fleet registry restored to 10 hulls (500001 x7, 500004 x3),
+1 casualty row, campaign `war:500001-500004:campaign:30003837:r18` still `ASSAULT`.
+
+## What still blocks a full war (measured, not guessed)
+1. The live front is a stalemate by numbers: the DEFENDER fields 7 registered hulls and the
+   ATTACKER 3, and `coopWarCaptureByForce` needs a wreck of a *registered defender* hull
+   (`victimFactionID === war.defenderFactionID`). In the last hour the verified wrecks at the
+   front were all **unregistered A-Life ships** (`coop-pilot-023` respawning every ~3 min), so
+   `objectiveEvidence` stayed empty and r13..r17 expired without ever capturing.
+2. Money: corp 1000129 holds 432.75 ISK, refinery jobs need 22 525.47 ISK, faction wallets
+   500001 = 0 / 500004 = 3 000 ISK. The only ISK source in the world is selling to real seeded
+   buyers, and no hull can reach one (mining hulls are refused at gates by design:
+   `HULL_ROLE_CONFLICT:MINING_FLEET`).
+3. Next lever, in this order: (a) watch `living-native-war-casualty-skipped` on the next front
+   wreck to learn the exact refusal, (b) give the assault a winnable, honest path (attacker
+   hull count or a siege rule), (c) the loot journey to Jita (FW-108 route finder is ready).
