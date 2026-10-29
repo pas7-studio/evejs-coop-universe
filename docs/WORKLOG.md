@@ -2549,3 +2549,9 @@ Evidence: fork flatbuffer writer + 2/2 round-trip tests; schema of 18 achievemen
 Why: The manufacturer refused to build because no local station bids, while the corporation's own goods sell one gate away and the freight run can carry them
 Where: integration/coopLoopTick.cjs, integration/coopNpcManufactureTick.cjs, tests/coop-npc-manufacture-tick.test.mjs
 Evidence: live BUYER_ELSEWHERE + JOB_INSTALLED for 444 and 60764; distribution trips now carry 46-54 item lines; 13/13 manufacture tests
+### 2026-10-29T18:49Z · 51e151b · L2 · tests+docs: the achievement catalogue, its checkpoint and the reward a claim pays
+
+Why: the client's achievements page had no definition checkpoint, so it opened empty; the catalogue is our content and every milestone now declares SP that a claim really pays
+Detail: 6 tests read the ACHV buffer the way the client's repository does (both roots present, uuid hex ids, message ids not text, the SpReward union member behind Reward.Payload, the cumulative contribution method the achievements name) and one checks the gateway checkpoint describes exactly the bytes we serve. 3 more cover the payout: an undeclared achievement pays nothing, a declared one pays 3 500 SP 
+Where: docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-achievement-content.test.mjs, tests/coop-achievements.test.mjs
+Evidence: fork 395cb66: ACHV catalogue + definition.api.cdn.GetLatest + paid rewards; live on evejs-agents: checkpoint 200 crc=2179836517, TLS GET 200 1880 bytes ACHV crc match, claim moved freeSkillPoints 0->3500 and emptied unclaimed
