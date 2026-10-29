@@ -9618,3 +9618,21 @@ Known limit to fix next: CompleteEarly does not charge PLEX yet (retail does), a
 `thirdparty.api.Get` (the created skin's own record: name/layout/tier) is still missing, so the
 designer can list a licence but cannot show its design. Then `component.license.item.Consume`,
 then the skin market (10).
+
+### 2026-10-29T21:05Z - SKIN record Get done (1 type, 41 left)
+
+Fork `85041fc`. `thirdparty.api.Get` reads the licence row a job minted: name, line_name,
+creator, tier 1, not_sequenced, first_sequenced, plus the design spliced back as raw field-4
+bytes (the server never decoded the tree, so it must not re-encode it). The job now writes
+layout/lineName/creatorID into the row; an admin grant has neither, so it stays honestly
+not_sequenced (that distinction is a test).
+
+Live on 140000001: minted 220a07477df30255 with layout stored byte-identical, creator
+140000001; Get 200 with all fields and the layout spliced intact; unknown hex 5. Register 41
+(`handled=239`).
+
+Next: `component.license.item.Consume` - must consume a REAL inventory item (itemStore
+consumeInventoryItemQuantity) and only then add capacity/infinite to the component licence; needs
+an explicit type -> licence mapping because our SDE rows are not automatically licences. Then
+the skin market (10) with escrow + ISK, then titles/achievements (both gated behind a client
+feature flag `character_titles_feature_enabled` and a CDN flatbuffer, so verify that first).
