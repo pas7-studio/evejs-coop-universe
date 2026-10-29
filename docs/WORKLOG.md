@@ -2566,3 +2566,13 @@ Why: the client's own flatbuffer reader decoded our achievement target and rewar
 Detail: Our reader and our writer agreed on a uint32 target while the client reads uint64, and the client decoded 1 as 618475290625. scripts/coop-verify-flatbuffer-client.cjs now runs the client's generated module (fetched from the local archive at run time, never committed) against the buffer and prints the numbers it really sees; tests/coop-achievement-client-reader.test.mjs fails when that reader canno
 Where: docs/client-contracts/achievement-flatbuffer.json, scripts/coop-flatbuffer-schema.py, scripts/coop-verify-flatbuffer-client.cjs, tests/coop-achievement-client-reader.test.mjs, tests/coop-achievement-content.test.mjs
 Evidence: fork 3a01b5b; scripts/coop-verify-flatbuffer-client.cjs prints targets=1/100 sp=1000/2500 via the client's generated module; 17 tests green incl. the client-reader test
+### 2026-10-29T19:12Z · 5a7b739 · OPS · state(fw): stall window for the test stack, the front keeper, and the one structural gap left
+
+Why: Make the live observation loop self-staffing and name the last structural gap
+Where: .opencode/state.md
+Evidence: front keeper running; NO_FUNDED_FRONT with SUPPLY_UNFUNDED_SIDE after a 90000 ISK top-up
+### 2026-10-29T19:31Z · 9ac80e3 · L2 · alife23c: multi-station loading stops and their test
+
+Why: A trip could only load at one station while the bundle planner kept choosing cargo from several
+Where: integration/coopDistributionRun.cjs, integration/coopFactionWarOpening.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-distribution-run.test.mjs, tests/coop-stargate-lock-read.test.mjs, tests/coop-war-funding-corporation.test.mjs, tests/coop-war-market-access.test.mjs
+Evidence: live: trips with 4 and 5 stops (46/65 lines); 26/26 distribution-run tests incl. a two-stop journey

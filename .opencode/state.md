@@ -1,5 +1,31 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 19:45Z (UTC) - one trip loads at several stations
+
+PROVEN LIVE right after the deploy: hull 980000000002 planned a 46-line trip with **4 stops**, 
+hull 980000000005 a 65-line trip with **5 stops** and was already at stop 1 after loading the
+first one. Before this, the run lifted at a single fromStationID while the bundle planner kept
+choosing cargo from several stations, so most of a trip's lines could never be taken.
+
+What changed:
+  - planning turns the bundle's items into an ordered list of STOPS (stationID + its items);
+  - the run flies to the current stop, lifts THAT stop's demand only, records it in
+    loadedStops and moves on; the crossing is planned only once every stop is loaded;
+  - a stop with nothing to lift is still refused by name, so a wrong stop cannot look like an
+    empty station.
+
+Freight ledger now has two real rows (44 104 ISK settled; 52 404 units with an unknown price
+because the sale was proven only by the empty hold) and the balance sheet prints them.
+
+NEXT:
+  1. relocate-on-arrival for the identity file (the merge covers the live case; a clean
+     relocate on ARRIVED would stop the reconciling churn entirely);
+  2. the runtime line ratchet (5153, other sessions) - split a module rather than grow it;
+  3. give the fleet a fourth hull (only an operator re-mark is needed: the run iterates every
+     coop-distribution-* marker);
+  4. a production order that names its buyer's system, so the manufacturer and the freight run
+     can be planned against the same demand instead of discovering it twice.
+
 ## 2026-10-30 19:40Z (UTC) - the client's own reader caught our buffer (uint64), and what is left
 
 The achievement catalogue was accepted by our own reader and rejected by the client's: feed the
