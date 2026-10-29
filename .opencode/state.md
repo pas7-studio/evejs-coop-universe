@@ -10419,3 +10419,40 @@ NPC links incl. 10 seeded armed hulls (Aldranette 9, Nennamaila 6, Immuri 3), CP
 Militia enlistment still waits on the owner: dock at Enaluri 30045339 / station 60015068 (agent
 3019070) + log out ~30 s, then `militia_enlist` (the bridge refuses while his session is live and
 while the character is undocked).
+
+## FW-098 SHIPPED (commit 0cc7158 in the fork, image evejs-local rebuilt)
+
+What was measured (live play server, post-FW-097 profile): `transact` 36.5 %,
+`reconcileObject` 14.7 %, `loadTableObject` 14.3 %, GC 16.7 %. Every commit re-read the
+WHOLE table from SQLite (parsing every row), deep-reconciled it, then re-read it a second
+time inside `rebuildFlushBaselineFromDisk`.
+
+What changed:
+- `createSqliteAdapter.transact` now returns `writes` - the exact serialized rows it wrote
+  (`[key, json]`, `null` = delete) next to the existing `changed`.
+- `sqliteStore.applyRowToObject(table, object, rowKey, value, merge)` - per-row counterpart
+  of `assembleFromRows`; preserves object identity via `merge`, replaces for `characters`,
+  and treats a bare wrapper-group row (skeleton `{}` / legacy blob) as ADDITIVE ONLY.
+- The adapter applies only the written rows to the cache and advances the flush baseline
+  with `advanceFlushBaseline` (the same function the async flush acknowledgement uses).
+  Tables declared but not written are not reloaded at all. `npcCargo` in cargo-witness
+  mixed mode keeps the full reload.
+- Fallback (not silent, structural): if the injected store cannot answer `rowGroupsFor` or
+  exposes no `applyRowToObject`/`advanceFlushBaseline`, that table takes the historical
+  full reload. Production passes the real module, and the test pins the index.js wiring.
+
+Tests: `tests/coop-atomic-rows-write-set.test.mjs` (4/4) - shape equivalence against the
+real `assembleFromRows`, a commit that asserts `loadTableObject` is NOT called (0 loads),
+cache/disk/baseline equality, and the production wiring source pin. Regressions:
+coop-gamestore-atomic/mining-cycle/cargo-isolation/ammo-bank 67/67,
+coop-native-* + coop-alife-* + coop-fw-* + coop-war-* + coop-mining-* 1744/1744.
+
+Agents stack redeployed and healthy, no POSTCOMMIT/CACHE_UNSAFE/NATIVE_GAMESTORE errors in
+the log, world events still flowing. Its CPU is ~77 % idle so it does NOT exercise the
+bridge hot path - the before/after numbers must come from the play stack, which needs an
+owner-authorised restart window.
+
+Engine audit still reports its PRE-EXISTING state: AUDIT_REGRESSION with integration drift
+4 (coopAdminBridgeActions, coopDistributionPlan, coopWarAdvantage differ by design/past
+edits; nativeNpcStore.cjs has no .js-free counterpart) and coopVirtualWorldRuntime.js at
+5397 lines vs the 4800 ceiling. FW-098 is not in that drift list (its mirror is identical).
