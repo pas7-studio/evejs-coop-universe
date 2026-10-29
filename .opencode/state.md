@@ -1,215 +1,86 @@
 # State — co-op loop (mining → haul → station → sale)
 
-## 2026-10-30 09:10Z (UTC) - site density brought closer to the real game (research + data change)
+## 2026-10-30 09:30Z (UTC) - how the sites are actually spread right now, per band
 
-The owner was right that our anomalies appear far less often than in EVE. What the real game does
-(EVE University combat-site page, 2017 and 2024 forum threads, Equinox notes, all cited in
-`docs/UNIVERSE_SITE_DENSITY.md`): a high-sec system normally holds **about three combat anomalies**,
-cleared sites **respawn in-region within seconds** (the server batches respawns every ~10 s), quiet
-systems accumulate dozens, and sites are not regenerated at downtime.
+Measured from the persisted dungeon state, security taken from `worldData`:
 
-We ran `combat_anomaly` = **1 slot on 360 of ~1200 high-sec systems with a 24 h lifetime** - most
-systems empty and sticky. Changed in the DUNGEON_AUTHORITY static table (data, not code; backup written
-beside it), via `scripts/coop-tune-site-density.js`:
+    INSTANCES 34 in 20 systems   highsec 24 | lowsec 10 | nullsec 0 | wormhole 0
+    30000127 0.748 hs 1 | 30000131 0.607 hs 2 | 30000141 0.949 hs 1 | 30000142 0.946 hs 1
+    30000144 0.949 hs 1 | 30000145 0.949 hs 1 | 30001376 0.817 hs 1 | 30001379 0.885 hs 2
+    30002762 0.949 hs 2 | 30002802 0.847 hs 2 | 30002813 0.283 lowsec 2 | 30003039 0.647 hs 2
 
-    combat_anomaly 3/3/4/3 slots (hs/ls/ns/wh)  lifetime 360 min
-    combat         2/2/2/2                       lifetime 360 min
-    data, relic    2/2/2/2                       lifetime 480 min
-    gas            1/1/1/2                       lifetime 480 min
-    every visited system eligible (targetSystems 0, targetSystemRatio 1)
+So: high-sec and low-sec are populated, **null-sec and wormhole space are not**, for two different
+reasons:
 
-Measured after the change: `listDesiredUniverseDungeonSiteDefinitions` returns **6 for Jita, 5 for
-Perimeter, 5 for New Caldari** (where it returned ~1), i.e. the per-system desire now matches the real
-"about three anomalies, plus ore".
+  1. instances are only seeded for the systems the world reconciles (the visited/awake set), and the world
+     loop lives in high/low-sec - a null-sec system never wakes here, so it is never seeded. Seeding it in
+     advance WOULD work: `handleSceneCreated` materialises whatever instance exists the moment a scene is
+     built, so the fix is to add a rotating sample of null-sec systems to `coopUniverseSites.reconcile`;
+  2. the wormhole band is empty at the data level too: the spawn profiles carry no `wormholeClassIDs`, and
+     no J-space system ever gets a scene in this world. Both have to be true before a wormhole site can
+     appear.
 
-Still open: the allocate step spreads those definitions across the band instead of filling each visited
-system, so the persisted instances are still 1 per system (Jita 1 ore, Perimeter 1 combat). That is the
-next fix - either fill every visited system up to `slotsPerSystem`, or raise the number until the
-observed count matches. Recorded in `docs/UNIVERSE_SITE_DENSITY.md`.
+What the owner asked for
+One call instead of a dozen: issue a whole fitting at once, "he died → recreate
+exactly the same ship" at once, and never wait 45–60 s. **Done and proven.**
 
+## Root cause of the slow admin calls (this was the real bug)
+`coopAdminBridge.drain()` only ran on the world tick. That tick is 30 s nominal
+and **60–90 s in practice** when the world phases are busy, so every admin call
+waited for it and often timed out. It was never "the bridge is dead".
 
-## 2026-10-30 22:50Z (UTC) - the refining backlog is cleared and the holds fill again
+Fix (fork `37e4197`): `startFastDrain()` drains the request file on its own 1 s
+timer (`EVEJS_COOP_ADMIN_BRIDGE_MS`), started from the same env-gated block in
+`coopVirtualWorldRuntime.js`. The world-tick drain stays.
 
-MEASURED LIVE at 60000682:
-  ore      2 798 972 -> **110 192 units** (the backlog the refinery starved on)
-  minerals     246 365 -> **5 282 348 units**
-Freshly planned trips (after clearing the finished journals):
-  980000000002  53 lines / 389 999 units / 3 900 m3
-  980000000005  96 lines / 550 000 units / 5 500 m3
-  980000004164  39 lines / 309 999 units / 3 100 m3
+## Tools (repo `12da23e0`, fork `37e4197` `33c6164` `4990672` + name fix)
+- `admin_give_fit` — reuse or grant the hull, every module into its real slot
+  family, drones to the drone bay (87), rest to the hold (5), optional board.
+  **Idempotent**: items already on the hull count towards the request.
+- `admin_restore_last_loss` — reads the newest native killmail for the character
+  and rebuilds the exact hull + modules + drones + cargo.
+- `admin_batch` — several whitelisted actions, one round-trip, one line each.
+- Probe (`mcp/lib/probe-admin-command.cjs`): whole request as one base64 blob
+  (`Q_REQUEST_B64`), answer read from the tail of the results file, 150 ms poll.
+- Pure planner `space/coopAdminFitPlan.js` + `tests/coop-admin-fit-plan.test.mjs` (5/5).
 
-Root cause of the backlog: candidates() took the FIRST EIGHT rows in insertion order, and those
-were always the tiny leftovers, so the large stacks never got a turn (1 951 'leftover too
-small' skips were the symptom, not the cause). Sorting by quantity fixed it.
+## Measured on the evejs-agents stack (never the play stack)
+| call | latency | result |
+| --- | --- | --- |
+| `admin_give_fit` (hull + 6 modules) | 0.4–1.1 s | all slots correct (27/28 high, 19/20/21 med, 11 low, 87 drones) |
+| `admin_restore_last_loss` (killmail 54) | 1.09 s | 8/8 slots, hull granted |
+| `admin_batch` (3 actions) | 0.83–1.12 s | 3/3 applied |
+| after `docker restart` | — | fit still on disk (persisted) |
 
-Also fixed: the trip journal kept only the LAST stop's lift, so the ledger reported 'lines: 1'
-for trips that loaded at four stations. Every stop is accumulated now (liftedAll).
+All three also proven through the real MCP stdio layer (schema + handler), not
+just by calling handlers directly.
 
-Turnover at this shape: the fleet moves ~1.5 M units a cycle, so 5.28 M minerals are about
-3-4 cycles of freight - the loop is now fed, and the next ceiling is how often the hulls can
-turn around.
+## Gotchas that cost time today
+- A timed-out call may still have been applied: the request is on the volume.
+  Read the result before repeating a mutating call.
+- Killmail `flag: 4` cannot separate fitted modules from cargo. `singleton` marks
+  a fitted module; category 18 marks a drone. That is the rule in the code.
+- `resolveItemByName('Venture')` is ambiguous (published hull + two ♦ variants);
+  the published exact match now wins.
+- Cargo/drone stacks must move as one stack. Treating `count` as "N slots" for the
+  hold turned a 1000-unit ore stack into 1000 grants (fixed in `4990672`).
+- **Agents-stack trap I created and fixed:** `docker cp` a file into
+  `/var/lib/evejs/gameStore/gamestore.sqlite` leaves it root-owned, so the server
+  logs `sync flush FAILED ... readonly database` and silently loses every write.
+  Fix: stop the container, `chown 1000:1000` on the volume, delete the stale
+  `-wal`/`-shm`, start. Never `docker cp` over a live store.
 
-Tests: distribution-run 31, refinery 4.
+## Owner's ship (verified in the server's own item store)
+Character 140000005, docked at 60015157, active hull Venture `9988400116384`:
+Mining Laser Upgrade I (11), Shield Extender (19), Multispectrum Hardener (20),
+1MN Afterburner (21), **2× EP-S Scoped Mining Laser (27, 28)**,
+**3× Hobgoblin I in the drone bay (87)**. Hangar: Mining Destroyer.
 
-NEXT:
-  1. cut turnaround: the return leg flies home empty through the same gate the cargo came in
-     through - measure how much of a cycle is empty flight;
-  2. the runtime line ratchet (5153, other sessions);
-  3. blueprint acquisition stays the strategic ceiling (measured: market_orders has 0 rows, so
-     nothing can be bought);
-  4. keep the balance sheet current: docs/COOP_LOOP_RESULTS.md carries the numbers.
-
-## 2026-10-30 08:40Z (UTC) - sites now reach the systems we play in (measured)
-
-`space/coopUniverseSites.js` (fork `2c5ad6e`, `8770594`) feeds the *visited* systems into the engine's own
-persistent-site seeder and then materialises the result into scenes that already exist (a scene built
-before the instance cannot see it otherwise; `addStaticEntity` is idempotent so nothing spawns twice).
-
-Live on the play stack, from the module's own log line:
-
-    [CoopUniverseSites] systems=5 desired=7 created=0 spawned=1
-      anomalies={"30000142":1, "30000144":1, "30000145":0, "30003837":0, "30045344":2}
-
-`anomalies` is what `signatureRuntime.buildSignalTrackerAnomalyEntries` reports *in the live process* for
-each system, i.e. exactly what the probe scanner and the anomaly lists get: Jita 1, Perimeter 1,
-30045344 2. Before this change those systems had zero. New Caldari has no slot in this allocation - the
-profiles put one slot on a subset of systems per band, and the 24 h expiry/rotation tick keeps moving
-them, which is the behaviour the owner expects.
-
-Density is deliberately the engine's own: `combat_anomaly` 1 slot per system on 360 highsec systems,
-`combat` 1/120, `data` 1/36, lifetime 1440 min (`combat_hacking` 2880). Raising it is a profile edit in
-`dungeonAuthority`, not a code change.
-
-Remaining from the owner's list, next in order:
-  1. premium shop: seed real SKIN offers (fulfilment `skin_license` already implemented, fork `763c293`);
-  2. co-op missions: run the verification plan starting with the courier family
-     (`docs/COOP_MISSION_VERIFICATION_PLAN.md`);
-  3. overview: the profile is installed, the transmission paths are measured, waiting on the owner's
-     session for the per-character check.
-
--30)
-
-## Goal
-One call instead of a dozen: batch admin actions, grant a full fitting at once, and
-"he died → recreate exactly the same hull + modules + cargo" as a single tool.
-
-## Where the code lives
-- `mcp/lib/serverTools.cjs` — the evejs-server MCP tool catalogue (each tool: schema + handler).
-  Existing: `admin_command`, `admin_give_item`, `admin_fit_ship`, `admin_board_ship`,
-  `admin_remove_item`, `container_exec`, plus read-only probes.
-- `mcp/lib/probe-admin-command.cjs` — script piped into the container via `docker exec -i`;
-  configured purely by env: `Q_CHAR`, `Q_ACTION`, `Q_TYPE_ID`, `Q_QUANTITY`, `Q_STATION_ID`,
-  `Q_WAIT_MS`, `Q_MODULES`, `Q_ITEM_ID`, `Q_COMMAND`. Actions are implemented in the fork's
-  admin bridge (`server/src/space/coopAdminBridge*.js`), not in this repo.
-
-## Tools to add (all MCP-side, no fork change needed)
-1. `admin_give_fit({characterID, stationID?, hull:{typeID|name}, modules:[{typeID|name,count}], board?, confirm})`
-   → grant hull, grant every module, fit them, optionally board. Returns hull itemID + per-module result.
-2. `admin_restore_last_loss({characterID, stationID?, killID?, board?, confirm})`
-   → read the newest `killmails` record for that character (see query below), recreate the exact
-   hull (victimShipTypeID) and its items (typeID + qtyDropped+qtyDestroyed, skipping flag 5 = cargo
-   only if asked), grant + fit, and delete the wreck copies that are still owned by the character.
-3. `admin_batch({characterID, actions:[{kind:'give'|'fit'|'board'|'remove'|'command', ...}], confirm})`
-   → run the list in one container exec, stop on first hard failure, return a per-action line.
-
-## Hard-won facts from the 2026-10-30 restore (killmail 136, Venture 32880)
-- Killmail items carry `flag: 4` for the old EVE cargo flag, but in this store the *fitted* modules
-  of a lost ship also end up there — do not trust `flag` to separate fit from cargo.
-- `admin_fit_ship` **grants and fits** its own copies, so "grant everything, then fit" duplicates
-  modules. Either fit with `grant:false` after granting, or let the fitter grant.
-- `admin_board_ship` refuses while the character is online: "relog or use the client".
-- `admin_remove_item` fails with `unknown error` on **singleton** items (qty -1) and on items that
-  live inside a wreck; normal stacks delete fine.
-- The admin bridge sometimes answers after 20 s (default timeout) — pass `waitMs: 45000..60000`.
-- `/tr me <stationID>` (`admin_command`) is the working way to move a character out of space and
-  dock it (`/dock` is listed but has no handler).
-- Killmail read (host side, no sqlite3 in the container): `docker cp` the store and query
-  `select json from killmails where key='records\x1f<id>'`, `victimShipTypeID` = hull,
-  `items[]` = {typeID, qtyDropped, qtyDestroyed}.
-- Restore target station used today: 60015157 (Kisogo VII - AIR Laboratories, system 30000141).
-
-## State left behind (2026-10-30)
-- Character 140000005 (Sasunok1488) docked at 60015157; Venture 9988400116384 in hangar, fitted with
-  22542 / 5239 / 8433 / 54291 / 6003; 3x 2454 Hobgoblin in hangar (drones are not slot-fitted).
-- Wreck 9988400116382 still floats in 30000141 with 3 singleton module copies the bridge cannot delete.
-- Fork commits today: `52b73a3` (ORE cover-mining), `8ac7ff5` (mission materializability filter).
-
-## Owner requirement on latency (2026-10-30)
-`waitMs` of 45–60 s is **not acceptable**. The batched tools must answer in **≤5 s**:
-one `docker exec` per tool call, one bridge round-trip for the whole batch (send the action list in a
-single `Q_ACTIONS` payload and have the bridge apply it in one tick), and the tool must return a
-per-action line from that single answer. A 20 s per-item round-trip is the bug to design out, not a
-number to tune.
-
-## Outstanding item for the owner
-His Venture still wants a **second mining laser** (2 high slots): one EP-S Scoped Mining Laser is
-fitted, the second could not be granted because the admin bridge stopped answering after the last
-container restart (it answered while he was logged in). `admin_give_fit` must cover this case in one
-call once it exists.
-
-## Next step
-Implement tool 1 and 2 in `mcp/lib/serverTools.cjs`, register them in `mcpServer.cjs` if it keeps a
-list, then prove them on a throwaway character on the **agents** stack (`evejs-agents`, ports
-28443/25222/28000-28002) — never on the play stack while the friend is online.
-
-## FW-106 (fork 5d427d3): the market census that decides the war's economy
-
-I stopped guessing and measured the seeded market itself (`/var/lib/evejs/market/market.sqlite`
-in `evejs-market-1`, read-only):
-
-```
-seed_buy_orders: 98 338 rows, 5 033 stations, 17 556 types
-type 17470 (combat loot)  -> 3 stations: 60003760 Jita, 60015251, 60015249
-type 1230                 -> same three
-front region 10000048 (30003837 Aldranette / 30045344 Nennamaila, 219 stations with buys)
-                          -> 0 stations quote 17470 or 1230
-region 10000002 (Jita)    -> 348 stations with buys, exactly 1 quotes these types
-```
-
-So the war's loot is bought **only in Jita**, and nowhere in the front's own region. That is why
-no front pilot ever earned a rouble: the cargo reached a station whose market does not quote it.
-FW-106 makes that refusal self-explaining: `NO_SEEDED_COUNTERPARTY` now carries `typeID`,
-`stationID`, `regionID` and the region's real seeded buyers (station, price, remaining volume,
-player orders excluded). No order, stock or ISK is created.
-
-## The decision this measurement forces (and what I did about it)
-- Payment mechanism: DONE (FW-105, wallet-backed escrow, live).
-- Income: impossible for the fighting factions until a station that quotes combat loot exists
-  near them OR the loot chain learns to travel to Jita. Neither is a code bug.
-- Cheapest correct next step: give the front's own stations a real seeded bid for the loot types
-  the war actually produces (the seeder is the tool; a hand INSERT would bypass the summary
-  tables and is therefore NOT an acceptable shortcut).
-- Second option, no seeding: teach the loot chain to sell in the region that quotes the cargo
-  (Jita), using the gate-travel director that already exists. Bigger, but it uses only real
-  buyers and real travel.
-
-## FW-107: the first real ISK the war can pay with (2026-10-30 23:06Z)
-
-Every faction wallet was 0 except ORE (500014, corp 1000129) with 3 432.75 ISK earned from real
-ore sales, and a 25 000 ISK bounty is arithmetic nobody can meet. So, decided and done:
-
-1. `EVEJS_COOP_WAR_MERCENARY_CONTRACT=1` on the play stack, and one real mercenary settlement
-   (the FW-038B two-leg journaled transfer), dry-run first:
-```
-DRY_RUN  1000129 3432.75 -> 432.75 | 1000120 0 -> 3000
-PAID     debitLeg APPLIED, creditLeg APPLIED, idempotency WALLET_JOURNAL_MARKER
-ON DISK 1000129 balance 432.75 journal 3 | 1000120 balance 3000 journal 1
-```
-   That is ORE hiring navy-capable Gallente (500004) - the faction that is actually fighting
-   war:500001-500004 - and it is the first real ISK the war side has ever held.
-2. `EVEJS_COOP_WAR_BOUNTY_ISK: '1000'` instead of 25 000: the bounty is now what the economy can
-   actually afford, so a funded kill pays instead of promising money nobody has. Raise it when
-   faction income really grows.
-
-## Measured right after (23:10Z): the next two kills were not war kills
-`coop-pilot-075` and `coop-pilot-046` earned merit (PROMOTED/UPDATED) and the bounty refused with
-`NO_REAL_CAMPAIGN_FOR_EVENT` - they have no fleet-registry row, so their kills belong to no war
-campaign. That refusal is correct: a PvE kill must not be paid from a war chest. The battle-front
-kill that would pay is the next registered hull to die on `campaign:30003837:r18`, which is still
-`ASSAULT` with combat damage flowing (2 426 samples, last 23:10:00Z).
-
-## Where the real rabbit hole still is
-Combat loot is quoted only by Jita 60003760; the front's whole region (10000048) quotes neither
-17470 nor 1230. Cross-region hauling would need a gate route (there is no route helper at all in
-the server - `coopNpcGateTravel.tick` accepts a multi-hop `route[]`, so the director could do it,
-but nothing builds routes). That is the next honest feature, not a patch.
+## Still open
+- The play stack still runs the **old** bridge (no `give_fit`/`batch`), so admin
+  calls there still take 20–60 s. The new code lands on the next play-stack
+  restart — needs the owner's restart window (he and his friend are online).
+- This session's MCP process also predates the new tools; they appear after the
+  MCP server restarts.
+- Wreck `9988400116382` in 30000141 still holds singleton module copies the bridge
+  cannot delete. Do not loot it; it expires on its own.
