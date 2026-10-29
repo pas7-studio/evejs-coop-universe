@@ -2426,3 +2426,14 @@ Why: the skin editor could not save a design at all: every draft.api call had no
 Detail: Seven draft.api calls answer real rows; the layout is kept verbatim and capacity is enforced, not just reported. 7/7 new tests.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-third-party-skin-drafts.test.mjs
 Evidence: fork 157ed2c; live on 140000001 through the registry: capacity 20, save 200 (16-byte id, yaw 90 round trip), stored layout byte-identical, getall 200/1, get 200, get shared 200, update 200 layout replaced, missing get 5, delete 200 then 5 with 0 left; 7/7 tests; register 51 unhandled
+### 2026-10-29T16:17Z · 68f0d2f · L2 · alife21g: multi-hull freight, repositioning, per-hull timeout, retry-after-cooldown
+
+Why: One hull cycled but the corporation had two idle haulers in the buyer system, and a single hung market call could stall every hull at once
+Where: integration/coopDistributionPlan.cjs, integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, tests/coop-component-licences.test.mjs, tests/coop-distribution-plan.test.mjs, tests/coop-distribution-run.test.mjs
+Evidence: live: 3 marked hulls, both ex-fleet haulers repositioned home, loaded and crossed; one sale settled 5224110 ISK; 97/97 loop tests
+### 2026-10-29T16:17Z · 228e42d · L2 · docs/tests: component licences are real rows now
+
+Why: component licences were not readable at all (GetOwned answered an empty list from the compatibility service) and the finite/infinite Get+Grant/Revoke calls had no handler
+Detail: Finite capacity is spent down and never negative, infinite is free, and GetOwned no longer answers an empty list from the compatibility service. 5/5 new tests.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md
+Evidence: fork bc6ee18; live on 140000001 through the registry: GetOwned 0/0, grants 200, GetOwned 1/1, finite capacity 5, infinite free, spend 3 -> 2, spend 9 refused, unknown 5, revoke 200 then 5; 5/5 tests; register 45 unhandled
