@@ -2544,3 +2544,8 @@ Why: our own achievement catalogue needs a flatbuffer writer, and the titles fil
 Detail: 2/2 tests, with a reader written separately from the builder.
 Where: tests/coop-flatbuffer.test.mjs
 Evidence: fork flatbuffer writer + 2/2 round-trip tests; schema of 18 achievement tables extracted from the client builders into docs/client-contracts/achievement-flatbuffer.json
+### 2026-10-29T18:38Z · 668b28b · L2 · alife23a: manufacture for a buyer one gate away, with its own event
+
+Why: The manufacturer refused to build because no local station bids, while the corporation's own goods sell one gate away and the freight run can carry them
+Where: integration/coopLoopTick.cjs, integration/coopNpcManufactureTick.cjs, tests/coop-npc-manufacture-tick.test.mjs
+Evidence: live BUYER_ELSEWHERE + JOB_INSTALLED for 444 and 60764; distribution trips now carry 46-54 item lines; 13/13 manufacture tests

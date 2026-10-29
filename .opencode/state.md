@@ -1,5 +1,35 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 18:40Z (UTC) - demand first: build for the buyer the freight can reach
+
+PROVEN LIVE: within a minute of the deploy the manufacturer installed jobs for 444 and 60764,
+each announced by living-npc-manufacture-buyer-elsewhere naming the system that really bids,
+and the distribution hulls began planning multi-item trips (46 and 54 lines) instead of a
+single stack.
+
+What changed:
+  - bidElsewhere(): when the blueprint's own station bids for nothing, the manufacturer asks
+    the loop for the best seeded bid one reciprocal gate away (read-only sqlite; the market RPC
+    timed out live on 2026-10-29 and must never decide production);
+  - the job records that its buyer is elsewhere, and says so in its own event, so "no local
+    demand" can never again be mistaken for "no demand at all";
+  - planBundle already fills the hold across types, which is why trips now carry dozens of
+    item lines.
+
+The loop now reads, in one sentence: honour real demand -> build where the materials are ->
+carry it with the freight run -> sell where it pays -> come home and do it again.
+
+Fleet at hand-off: 980000000005 loading a 54-line trip, 980000000002 finished its load,
+980000004164 finished its leftovers (1 490 464 ISK).
+
+NEXT:
+  1. freight income in the economy ledger (the balance sheet still shows only station sales)
+     so the money a trip earns is visible where the money is accounted;
+  2. a hull that loads at TWO stations in one trip (the planner already returns multi-station
+     stacks; the lift still lifts at one station);
+  3. relocate-on-arrival for the identity file (merge covers the live case);
+  4. the runtime line ratchet (5153, other sessions).
+
 ## 2026-10-30 18:30Z (UTC) - leftovers crossed a gate and sold; identity writes now merge
 
 PROVEN LIVE this round:
