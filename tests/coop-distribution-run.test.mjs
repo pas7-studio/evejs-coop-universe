@@ -304,3 +304,15 @@ test("an empty hold that proves the sale does not invent an amount", async () =>
   assert.equal(result.state.iskUnknown, true, "the amount is unknown, not zero");
   assert.equal(result.state.isk, 0);
 });
+
+test("goods already aboard are sold, not parked when the planner refuses a full hold", async () => {
+  // Measured 2026-10-30: a hull that had sold only part of its load was refused a new trip
+  // HOLD_ALREADY_FULL and the run simply ended, leaving the freight sitting in the hold.
+  const sixteenth = 980000004185;
+  const result = await run.tick(sixteenth, { recycle: true, hullSystemOf: () => 30000142,
+    planTrip: () => ({ status: "HOLD_ALREADY_FULL" }),
+    stationForCargo: () => 60003760, now: 19000 });
+  assert.equal(result.status, "LIQUIDATING");
+  assert.equal(run.read(sixteenth).phase, "SELL");
+  assert.equal(run.read(sixteenth).toStationID, 60003760);
+});

@@ -51,8 +51,9 @@ test("a real trip is chosen from real stock, a real bid and a real gate", () => 
   assert.equal(trip.toStationID, DEST_STATION);
   assert.equal(trip.toSystemID, 30000142);
   assert.equal(trip.expectedIsk, 310000 * 4);
-  assert.deepEqual(trip.demand, { 34: { price: 4, volume: 4000000 } },
-    "the lift serves the destination bid, not a local one");
+  // The demand the lift serves is what this trip intends to satisfy, not the whole book.
+  assert.deepEqual(trip.demand, { 34: { price: 4, volume: 310000 } });
+  assert.equal(trip.items.length, 1, "one line of cargo for one type of stock");
   assert.deepEqual(trip.gate, { sourceGateID: 50001250, destinationGateID: 50002198,
     sourceSystemID: 30000145, destinationSystemID: 30000142 });
 });
@@ -89,4 +90,15 @@ test("the planner can say which system holds the corporation's freight", () => {
   const systems = plan.stockSystems({ items, worldData: world(), corpID: 1000129 });
   assert.equal(systems[0].systemID, 30000145);
   assert.equal(systems[0].units, 499596, "every hangar row in that system counts");
+});
+
+test("leftovers find the station that really bids for them", () => {
+  // Measured 2026-10-30: two hulls carried raw ore (1228) and the run had no way to find a
+  // station that buys it, so the freight sat in the hold for ever.
+  const answer = plan.stationForTypes({ db, systemID: 30000142, typeIDs: [34, 35] });
+  assert.equal(answer.status, "OK");
+  assert.equal(answer.stationID, 60003760);
+  const none = plan.stationForTypes({ db, systemID: 30000142, typeIDs: [999999] });
+  assert.equal(none.status, "NO_BUYER_FOR_CARGO");
+  assert.equal(plan.stationForTypes({ db: null, systemID: 30000142, typeIDs: [1] }).status, "UNKNOWN");
 });

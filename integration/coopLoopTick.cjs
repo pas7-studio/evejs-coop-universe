@@ -50,7 +50,11 @@ function distributionRunAuthorities(options = {}) {
         const Better = require("better-sqlite3");
         db = new Better(env.EVEJS_MARKET_DB || "/var/lib/evejs/market/market.sqlite",
           {readonly: true, fileMustExist: true});
-      } catch (_error) { db = false; }
+      } catch (error) {
+        db = false;
+        observeLoop("living-distribution-book-unavailable",
+          {reason: String((error && error.message) || error).slice(0, 90)});
+      }
       return db || null;
     };
     // The hull needs an identity the registry will accept: the one already bound to it, or
@@ -258,27 +262,11 @@ function distributionRunAuthorities(options = {}) {
         try {
           const native = store.getNativeEntity(haulerID);
           const systemID = Number(native && native.systemID) || 0;
-          const scene = sceneFor(systemID);
-          const stations = (scene && Array.isArray(scene.staticEntities) ? scene.staticEntities : [])
-            .filter((row) => String(row.kind) === "station")
-            .map((row) => Number(row.itemID)).filter(Boolean);
           const carried = (store.listNativeCargoForEntity(haulerID) || [])
             .map((row) => Number(row.typeID)).filter(Boolean);
-          const db = openDb();
-          if (!db || !stations.length || !carried.length) return 0;
-          const rows = db.prepare(
-            "select station_id, type_id, sum(quantity) as volume from seed_buy_orders " +
-            "where solar_system_id=? and quantity>0 group by station_id, type_id")
-            .all(systemID);
-          let best = {stationID: 0, units: 0};
-          for (const row of rows) {
-            const stationID = Number(row.station_id);
-            if (!stations.includes(stationID)) continue;
-            if (!carried.includes(Number(row.type_id))) continue;
-            const units = Number(row.volume) || 0;
-            if (units > best.units) best = {stationID, units};
-          }
-          return best.stationID;
+          const answer = require("./coopDistributionPlan").stationForTypes({
+            db: openDb(), systemID, typeIDs: carried});
+          return Number(answer && answer.stationID) || 0;
         } catch (_error) { return 0; }
       },
       // Where the corporation really keeps its freight, so a hull parked in the buyer system

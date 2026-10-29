@@ -179,6 +179,29 @@ function planTrip({ haulerID, store, items, inventory, db, worldData, connectedG
 }
 
 
+
+/** The station in this system whose seeded book takes the most of what the hull carries. */
+function stationForTypes({ db, systemID, typeIDs = [] } = {}) {
+  const system = pos(systemID);
+  const want = (Array.isArray(typeIDs) ? typeIDs : []).map(Number).filter(Boolean);
+  if (!db || !system || !want.length) return { status: "UNKNOWN", stationID: 0 };
+  let rows = [];
+  try {
+    rows = db.prepare("select station_id, type_id, sum(quantity) as volume " +
+      "from seed_buy_orders where solar_system_id=? and quantity>0 " +
+      "group by station_id, type_id").all(system);
+  } catch (_error) { return { status: "BOOK_UNREADABLE", stationID: 0 }; }
+  let best = 0;
+  let units = 0;
+  for (const row of rows) {
+    if (!want.includes(Number(row.type_id))) continue;
+    // The seeded book is read with a sum() alias; a plain row count is equally valid.
+    const volume = num(row.volume !== undefined ? row.volume : row.quantity);
+    if (volume > units) { best = pos(row.station_id); units = volume; }
+  }
+  return best ? { status: "OK", stationID: best, units } : { status: "NO_BUYER_FOR_CARGO", stationID: 0 };
+}
+
 /**
  * Where the corporation actually holds hangar stock, by system - the answer to "where does this
  * hull have to go to find freight?". Measured 2026-10-30: a distribution hull parked in Jita has
@@ -205,4 +228,4 @@ function stockSystems({ items, worldData, corpID = 1000129 } = {}) {
   return [...totals.values()].sort((a, b) => b.units - a.units);
 }
 
-module.exports = { stockSystems, planTrip, gateNeighbours, seededBids, stationRowsOfSystem };
+module.exports = { stationForTypes, stockSystems, planTrip, gateNeighbours, seededBids, stationRowsOfSystem };

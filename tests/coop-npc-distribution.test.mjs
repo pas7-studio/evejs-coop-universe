@@ -88,3 +88,52 @@ test("an empty or unknown destination is a refusal, not a guess", () => {
   assert.equal(answer.status, "NO_TRIP");
   assert.equal(answer.refusals[0].reason, "NO_BUYER_AT_DESTINATION");
 });
+
+test("a trip fills the hold with the densest cargo, not one lucky stack", () => {
+  // Measured 2026-10-30: an Impel left with 1 unit of 560 000 ISK ammunition and 3 099 m3 of
+  // hold empty, while a full hold of 4 ISK ore would have earned more for the same trip.
+  const { planBundle } = require("../integration/coopNpcDistribution.cjs");
+  const answer = planBundle({
+    stacks: [
+      { stationID: 60000682, typeID: 28338, quantity: 100, m3PerUnit: 0.13 },
+      { stationID: 60000682, typeID: 34, quantity: 498596, m3PerUnit: 0.01 },
+    ],
+    destination: { systemID: 30000142, stationID: 60003760, bids: {
+      28338: { price: 560000, volume: 1 },
+      34: { price: 4, volume: 4000000 },
+    } },
+    local: { stationID: 0, bids: {} },
+    capacityM3: 3100,
+    minIsk: 200000,
+  });
+  assert.equal(answer.status, "TRIP");
+  const byType = new Map(answer.items.map((row) => [row.typeID, row]));
+  assert.equal(byType.get(28338).quantity, 1, "the bid takes exactly one unit of ammunition");
+  // 3 100 m3 minus the 0.13 m3 of ammunition, at 0.01 m3 a unit.
+  assert.equal(byType.get(34).quantity, 309987, "and the rest of the hold is filled with ore");
+  assert.ok(answer.m3 <= 3100, "the hold is never overbooked");
+  assert.equal(answer.totalIsk, 560000 + 309987 * 4);
+});
+
+test("cargo nobody buys is refused by name, not silently skipped", () => {
+  const { planBundle } = require("../integration/coopNpcDistribution.cjs");
+  const answer = planBundle({
+    stacks: [{ stationID: 60000682, typeID: 999, quantity: 10, m3PerUnit: 1 }],
+    destination: { systemID: 30000142, stationID: 60003760, bids: {} },
+    capacityM3: 3100,
+  });
+  assert.equal(answer.status, "NO_TRIP");
+  assert.equal(answer.refusals[0].reason, "NO_BUYER_AT_DESTINATION");
+});
+
+test("a trip that cannot pay for itself is refused before the hold is filled", () => {
+  const { planBundle } = require("../integration/coopNpcDistribution.cjs");
+  const answer = planBundle({
+    stacks: [{ stationID: 60000682, typeID: 34, quantity: 1000, m3PerUnit: 0.01 }],
+    destination: { systemID: 30000142, stationID: 60003760, bids: { 34: { price: 1, volume: 1000 } } },
+    capacityM3: 3100,
+    minIsk: 200000,
+  });
+  assert.equal(answer.status, "TRIP_NOT_WORTH_IT");
+  assert.equal(answer.items.length, 0);
+});
