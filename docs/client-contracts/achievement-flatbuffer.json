@@ -1,0 +1,380 @@
+{
+ "Achievement": {
+  "fields": {
+   "Archived": {
+    "kind": "uoffset",
+    "slot": 12
+   },
+   "Contribution": {
+    "kind": "UOffsetTFlags",
+    "slot": 6
+   },
+   "Description": {
+    "kind": "uoffset",
+    "slot": 2
+   },
+   "ExpirationDateUnixMs": {
+    "kind": "uoffset",
+    "slot": 9
+   },
+   "FlavorText": {
+    "kind": "uoffset",
+    "slot": 3
+   },
+   "IconId": {
+    "kind": "UOffsetTFlags",
+    "slot": 4
+   },
+   "Id": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "InternalName": {
+    "kind": "UOffsetTFlags",
+    "slot": 13
+   },
+   "IssuerNpcCorp": {
+    "kind": "uoffset",
+    "slot": 5
+   },
+   "Milestones": {
+    "kind": "UOffsetTFlags",
+    "slot": 7
+   },
+   "Name": {
+    "kind": "uoffset",
+    "slot": 1
+   },
+   "ReleaseDateUnixMs": {
+    "kind": "uoffset",
+    "slot": 8
+   },
+   "Tags": {
+    "kind": "UOffsetTFlags",
+    "slot": 11
+   },
+   "UiAnnotations": {
+    "kind": "UOffsetTFlags",
+    "slot": 10
+   }
+  },
+  "nfields": 14
+ },
+ "AchievementData": {
+  "fields": {
+   "Challenges": {
+    "kind": "UOffsetTFlags",
+    "slot": 1
+   },
+   "ContributionMethods": {
+    "kind": "UOffsetTFlags",
+    "slot": 3
+   },
+   "Goals": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "TimeLimited": {
+    "kind": "UOffsetTFlags",
+    "slot": 2
+   }
+  },
+  "nfields": 4
+ },
+ "AchievementMilestone": {
+  "fields": {
+   "CategoryPoints": {
+    "kind": "uoffset",
+    "slot": 2
+   },
+   "Id": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "InternalName": {
+    "kind": "UOffsetTFlags",
+    "slot": 4
+   },
+   "Rewards": {
+    "kind": "UOffsetTFlags",
+    "slot": 3
+   },
+   "Target": {
+    "kind": "uoffset",
+    "slot": 1
+   }
+  },
+  "nfields": 5
+ },
+ "Category": {
+  "fields": {
+   "Achievements": {
+    "kind": "UOffsetTFlags",
+    "slot": 6
+   },
+   "Categories": {
+    "kind": "UOffsetTFlags",
+    "slot": 5
+   },
+   "Description": {
+    "kind": "uoffset",
+    "slot": 2
+   },
+   "IconId": {
+    "kind": "UOffsetTFlags",
+    "slot": 3
+   },
+   "Id": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "InternalName": {
+    "kind": "UOffsetTFlags",
+    "slot": 7
+   },
+   "Milestones": {
+    "kind": "UOffsetTFlags",
+    "slot": 4
+   },
+   "Name": {
+    "kind": "uoffset",
+    "slot": 1
+   },
+   "UiAnnotations": {
+    "kind": "UOffsetTFlags",
+    "slot": 8
+   }
+  },
+  "nfields": 9
+ },
+ "CategoryMilestone": {
+  "fields": {
+   "Id": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "InternalName": {
+    "kind": "UOffsetTFlags",
+    "slot": 3
+   },
+   "Rewards": {
+    "kind": "UOffsetTFlags",
+    "slot": 2
+   },
+   "Target": {
+    "kind": "uoffset",
+    "slot": 1
+   }
+  },
+  "nfields": 4
+ },
+ "ChecklistMode": {
+  "fields": {
+   "TargetParameter": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   }
+  },
+  "nfields": 1
+ },
+ "ContributionConfig": {
+  "fields": {
+   "MethodId": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "Parameters": {
+    "kind": "UOffsetTFlags",
+    "slot": 1
+   }
+  },
+  "nfields": 2
+ },
+ "ContributionMethodDefinition": {
+  "fields": {
+   "ContentTags": {
+    "kind": "UOffsetTFlags",
+    "slot": 4
+   },
+   "Description": {
+    "kind": "uoffset",
+    "slot": 2
+   },
+   "IconId": {
+    "kind": "UOffsetTFlags",
+    "slot": 3
+   },
+   "Id": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "Name": {
+    "kind": "uoffset",
+    "slot": 1
+   },
+   "Parameters": {
+    "kind": "UOffsetTFlags",
+    "slot": 6
+   },
+   "Progress": {
+    "kind": "UOffsetTFlags",
+    "slot": 8
+   },
+   "ProgressDescription": {
+    "kind": "uoffset",
+    "slot": 5
+   },
+   "ProgressType": {
+    "kind": "uoffset",
+    "slot": 7
+   },
+   "UiAnnotations": {
+    "kind": "UOffsetTFlags",
+    "slot": 9
+   }
+  },
+  "nfields": 10
+ },
+ "ContributionParam": {
+  "fields": {
+   "Key": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "Matchers": {
+    "kind": "UOffsetTFlags",
+    "slot": 1
+   }
+  },
+  "nfields": 2
+ },
+ "IskReward": {
+  "fields": {
+   "Quantity": {
+    "kind": "uoffset",
+    "slot": 0
+   }
+  },
+  "nfields": 1
+ },
+ "ItemReward": {
+  "fields": {
+   "Quantity": {
+    "kind": "uoffset",
+    "slot": 1
+   },
+   "TypeId": {
+    "kind": "uoffset",
+    "slot": 0
+   }
+  },
+  "nfields": 2
+ },
+ "MatcherValues": {
+  "fields": {
+   "ValueType": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "Values": {
+    "kind": "UOffsetTFlags",
+    "slot": 1
+   }
+  },
+  "nfields": 2
+ },
+ "MethodParamDefinition": {
+  "fields": {
+   "AcceptedValueTypes": {
+    "kind": "UOffsetTFlags",
+    "slot": 2
+   },
+   "Description": {
+    "kind": "uoffset",
+    "slot": 5
+   },
+   "IconId": {
+    "kind": "UOffsetTFlags",
+    "slot": 6
+   },
+   "Key": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "Name": {
+    "kind": "uoffset",
+    "slot": 4
+   },
+   "Optional": {
+    "kind": "uoffset",
+    "slot": 3
+   },
+   "Type": {
+    "kind": "UOffsetTFlags",
+    "slot": 1
+   }
+  },
+  "nfields": 7
+ },
+ "Reward": {
+  "fields": {
+   "Id": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "InternalName": {
+    "kind": "UOffsetTFlags",
+    "slot": 3
+   },
+   "Payload": {
+    "kind": "UOffsetTFlags",
+    "slot": 2
+   },
+   "PayloadType": {
+    "kind": "uoffset",
+    "slot": 1
+   }
+  },
+  "nfields": 4
+ },
+ "SetMode": {
+  "fields": {
+   "TargetValueType": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   }
+  },
+  "nfields": 1
+ },
+ "SpReward": {
+  "fields": {
+   "Quantity": {
+    "kind": "uoffset",
+    "slot": 0
+   }
+  },
+  "nfields": 1
+ },
+ "TitleReward": {
+  "fields": {
+   "TitleId": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   }
+  },
+  "nfields": 1
+ },
+ "UiAnnotation": {
+  "fields": {
+   "Key": {
+    "kind": "UOffsetTFlags",
+    "slot": 0
+   },
+   "Value": {
+    "kind": "UOffsetTFlags",
+    "slot": 1
+   }
+  },
+  "nfields": 2
+ }
+}
