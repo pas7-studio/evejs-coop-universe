@@ -1,5 +1,32 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 20:20Z (UTC) - a production job names the demand it answers
+
+PROVEN LIVE after the deploy: a job for product 444 was installed with **buyer=30000142**
+(Jita), both in the durable job record (coop-native-industry/jobs/*.json: buyerSystemID) and
+in living-npc-manufacture-installed (buyerSystemID), so production and freight no longer have
+to discover the same buyer twice.
+
+Changed:
+  - the candidate carries the buyer it was chosen for (system + station) when the bid came from
+    a reachable system instead of the build station;
+  - manufacture.install() keeps buyerSystemID / buyerStationID in the durable job, and the
+    installed event reports it.
+
+Tests: manufacture 14, spawn tool 3, gate-crossing 20, distribution-run 26, identity 5.
+
+NOTE FOR THE NEXT SESSION: the agents stack was recreated by another session twice during this
+work (container came back healthy each time; journals on the volume survived). Nothing was
+lost, but a session that starts mid-cycle should re-check `docker ps` before concluding a
+phase is stuck.
+
+NEXT:
+  1. the runtime line ratchet (5153, other sessions) - split a module rather than grow it;
+  2. watch a full four-hull cycle: several settled sales, several freight rows, the FREIGHT
+     line growing (two rows exist: 44 104 ISK settled and 52 404 units with an unknown price);
+  3. give the mining side the same treatment - its slots still carry ore that only the drain
+     sells, and a miner cannot fly its own ore to a buyer.
+
 ## 2026-10-30 00:30Z (UTC) - the suite is clean again, and one dead A-Life path was found by it
 
 `node --test tests/coop-*.test.mjs` -> **6590 pass / 0 fail / 84 skipped** (was 10 failing). What each

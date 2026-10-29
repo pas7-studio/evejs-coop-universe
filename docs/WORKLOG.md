@@ -2608,3 +2608,8 @@ Why: ten failing tests: undeclared flags, two modules missing from the overlay, 
 Detail: An explicit .cjs cannot resolve in the installed tree and a bare name cannot resolve in this archive, so the archived copy now uses the same adaptive require the fork uses elsewhere: extensionless when the file is a .js module, .cjs when it is this archive copy.
 Where: integration/coopDistributionPlan.cjs
 Evidence: 6590 pass / 0 fail / 84 skipped; fork dc0654b adds materialNeeds to the station authority; integration archive synced
+### 2026-10-29T20:17Z · 016ab13 · L2 · alife24b: production jobs record the buyer they were built for
+
+Why: Production and freight each discovered the same distant buyer separately, and a job could not say whose demand it answered
+Where: integration/coopFwEnlistmentGate.cjs, integration/coopNpcManufacture.cjs, integration/coopNpcManufactureTick.cjs, tests/coop-fw-enlist-standing.test.mjs, tests/coop-npc-manufacture-tick.test.mjs
+Evidence: live: job for 444 INSTALLED with buyer=30000142 in the durable record and in the event; 14/14 manufacture tests
