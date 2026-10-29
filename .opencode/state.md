@@ -9170,3 +9170,18 @@ State at 11:5xZ: no live campaign (the map is 30000145/30003836/30003837/3004534
 30045343 = 500020), so `war_payout_diagnose` honestly answers NOTHING_PAYABLE. Keeper and watcher are
 running for the next funded front; the chain campaign -> ASSAULT -> casualty -> capture -> refund is now
 proven, and only a kill inside a live funded campaign is still missing for `war-bounty PAID`.
+
+## 2026-10-29T12:20Z - stargate locks + world name lookups (5 more client types)
+
+Fork `f0ff7c1`, register 82 -> 77 unhandled.
+
+- **Stargate locks** (3 admin types) are real: persisted rows with an expiry in
+  `space/coopStargateLocks`, and `startStargateJump` refuses a locked gate with
+  `STARGATE_LOCKED` (one env-gated statement, `EVEJS_COOP_STARGATE_LOCKS=1`). Expired rows drop
+  on read; a past expiry is refused; delete removes one solar system as the request says.
+  The public `stargate.lock.api.GetRequest` is deliberately left to the empty default: its
+  response is one `gate` and the request carries no fields, so the gateway cannot know which
+  gate the player stands at - enforcement happens where the gate is known.
+- **solarsystem.api.Get / station.api.Get** answer the real static rows (Perimeter 0.949000000,
+  the Jita IV station name), structures included, NOT_FOUND otherwise. Security is units+nanos
+  with -0 normalised (a negative sec below one starts at units 0).

@@ -2,9 +2,9 @@
 
 Generated from the pinned client's own bytecode, not from guesswork: `docs/client-contracts/gateway-types.json`
 holds every `eve_public.*Request` string the client (V24.01, compiled 2026-06-16) can send —
-**217** of them. The local gateway knows **135** names (gateway services plus four inline handlers:
+**217** of them. The local gateway knows **140** names (gateway services plus four inline handlers:
 `user.license.api.Get`, `plex.vault.api.Balance`, `cosmetic.ship.api.Get`,
-`cosmetic.ship.api.GetAllInBubble`). The remaining **82** have no handler at all.
+`cosmetic.ship.api.GetAllInBubble`). The remaining **77** have no handler at all.
 
 They are not fatal any more: since fork `f256261` an unknown `eve_public.*Request` is answered with
 a default-encoded empty message and a warning that names the type, so the client gets a valid
@@ -48,7 +48,7 @@ This file is the work queue for those surfaces. Refresh the numbers with
 | **Career portal** (`career.goal.*`, `app.eveonline.career.goal.*`, 4) | progress, completion, claim reward | the career portal raises `AttributeError: 'NoneType' object has no attribute 'progress'` on the client side because progress is missing | a career path definition plus your progress and claim state |
 | **Assetholding / entitlements** (`assetholding.*`, 4) | asset holdings, entitlements, redeem, admin expire | ESS/main-bank entitlement UI shows nothing | entitlement rows bound to real structures and an ISK/PLEX redemption path |
 | ~~Presence~~ (`presence.api.*`, 3) | corporation/alliance/faction of a character | **done** (`0d1205f`): live session → durable character record → corporation record; unknown character is `NOT_FOUND` | - |
-| **Stargate locks** (`stargate.lock.*`, 3) | admin apply/delete/get-all restrictions | answered with an empty default: no gate is ever restricted (honest today, but the feature does not exist) | a restriction table the transition path consults before allowing a jump |
+| ~~Stargate locks~~ (`stargate.lock.api.admin.*`, 3) | admin apply/delete/get-all restrictions | **done** (`f0ff7c1`): persisted locks with an expiry, enforced in `startStargateJump` (`STARGATE_LOCKED`). The public `stargate.lock.api.GetRequest` stays an empty default on purpose - it returns one `gate` and carries no fields, so the gateway cannot know which gate the player is at; the jump path knows and refuses there | - |
 | **Payment schedules / codes** (`payment.*`, 3) | active schedules by type, redeem code | nothing to show; codes cannot be redeemed | schedule rows and a code redemption store |
 | ~~Faction activity admin~~ (`faction.activity.admin.*`, 2) | increment/set contribution score | **done** (`0d1205f`): writable ledger applied to the derived score on both client surfaces; a pair outside the war is refused | - |
 | **Mercenary den / hub / skyhook admin** (`sovereignty.*`, 4) | anarchy/development level, upgrade list, theft window | mercenary den activity list is answered; the admin knobs are not | persisted den/hub state with validated admin actions |
