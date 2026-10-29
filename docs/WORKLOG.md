@@ -2399,3 +2399,8 @@ Evidence: fork 95bced3; live registry probe: 4x NOT_FOUND with reasons, 2x FAILE
 Why: A hull sold once and then sat in the buyer system, and the market's single refusal code hid which of twelve predicates actually failed
 Where: compose/compose.agents.yaml, integration/coopDistributionRun.cjs, integration/coopIdentityRegistry.cjs, integration/coopLoopTick.cjs, integration/coopNativeNpcMarket.cjs, tests/coop-distribution-run.test.mjs, tests/coop-identity-refresh.test.mjs
 Evidence: live: return crossing ARRIVED home, second load 164504 units lifted and crossed; refusals now named (NO_IDENTITY_LINK fixed by registry refresh, then COOLDOWN); 19/19 run+registry tests
+### 2026-10-29T14:58Z · 3e8890d · L2 · test(fw): FW-078 - keep the integration copies in sync
+
+Why: the third-party SKIN designer had no licence store at all, so every licence list was empty and a skin could never be owned or activated
+Where: integration/coopVirtualWorldRuntime.cjs, integration/coopWarBounty.cjs, integration/coopWarKillMerit.cjs
+Evidence: fork 469cbff, e93d044; live: GetOwned 0 -> admin grant 200 (hex a1b2c3d4e5f60718) -> 1 owned -> Get activated=false unactivated=2 -> Activate 200 (activated=true, unactivated=1) -> second Activate 9 'already activated' -> Revoke 200 -> 0; foreign character licence refused 5; register 59->56; 8/8 tests
