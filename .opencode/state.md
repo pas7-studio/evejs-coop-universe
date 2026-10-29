@@ -182,3 +182,34 @@ player orders excluded). No order, stock or ISK is created.
 - Second option, no seeding: teach the loot chain to sell in the region that quotes the cargo
   (Jita), using the gate-travel director that already exists. Bigger, but it uses only real
   buyers and real travel.
+
+## FW-107: the first real ISK the war can pay with (2026-10-30 23:06Z)
+
+Every faction wallet was 0 except ORE (500014, corp 1000129) with 3 432.75 ISK earned from real
+ore sales, and a 25 000 ISK bounty is arithmetic nobody can meet. So, decided and done:
+
+1. `EVEJS_COOP_WAR_MERCENARY_CONTRACT=1` on the play stack, and one real mercenary settlement
+   (the FW-038B two-leg journaled transfer), dry-run first:
+```
+DRY_RUN  1000129 3432.75 -> 432.75 | 1000120 0 -> 3000
+PAID     debitLeg APPLIED, creditLeg APPLIED, idempotency WALLET_JOURNAL_MARKER
+ON DISK 1000129 balance 432.75 journal 3 | 1000120 balance 3000 journal 1
+```
+   That is ORE hiring navy-capable Gallente (500004) - the faction that is actually fighting
+   war:500001-500004 - and it is the first real ISK the war side has ever held.
+2. `EVEJS_COOP_WAR_BOUNTY_ISK: '1000'` instead of 25 000: the bounty is now what the economy can
+   actually afford, so a funded kill pays instead of promising money nobody has. Raise it when
+   faction income really grows.
+
+## Measured right after (23:10Z): the next two kills were not war kills
+`coop-pilot-075` and `coop-pilot-046` earned merit (PROMOTED/UPDATED) and the bounty refused with
+`NO_REAL_CAMPAIGN_FOR_EVENT` - they have no fleet-registry row, so their kills belong to no war
+campaign. That refusal is correct: a PvE kill must not be paid from a war chest. The battle-front
+kill that would pay is the next registered hull to die on `campaign:30003837:r18`, which is still
+`ASSAULT` with combat damage flowing (2 426 samples, last 23:10:00Z).
+
+## Where the real rabbit hole still is
+Combat loot is quoted only by Jita 60003760; the front's whole region (10000048) quotes neither
+17470 nor 1230. Cross-region hauling would need a gate route (there is no route helper at all in
+the server - `coopNpcGateTravel.tick` accepts a multi-hop `route[]`, so the director could do it,
+but nothing builds routes). That is the next honest feature, not a patch.
