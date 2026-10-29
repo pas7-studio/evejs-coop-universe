@@ -2460,3 +2460,13 @@ Why: component.license.item.Consume had no handler, so an item could never becom
 Detail: 7/7 component licence tests, including the singleton quantity that used to refuse every consume.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-component-licences.test.mjs
 Evidence: fork e18b98d; live on 140000001 with real item 9988400000001: unmapped 9, foreign 7, quantity 2 refused 9 with nothing spent, quantity 1 200 with capacity 1 on component 53002 and the item consumed, unknown id 5; singleton quantity -1 bug fixed; 7/7 tests; register 40 unhandled
+### 2026-10-29T16:52Z · 93c186a · OPS · state(fw): planner proven healthy, escrow release for refused borders, bounty priced for the agents stack
+
+Why: Make the agents-stack war economy survivable and record the exact way to finish
+Where: .opencode/state.md, compose/compose.agents.yaml
+Evidence: 4 fronts planned from live state; 25000 ISK lost per refused border before FW-085; militia wallets at 5000
+### 2026-10-29T17:01Z · 4e4b286 · L2 · alife22a: hold-filling bundles, volume-aware lift, leftover liquidation
+
+Why: Trips were chosen one stack at a time and left most of the hold empty, and freight that could not be re-planned stayed in the hold for ever
+Where: integration/coopDistributionPlan.cjs, integration/coopLoopTick.cjs, tests/coop-distribution-plan.test.mjs, tests/coop-distribution-run.test.mjs, tests/coop-npc-distribution.test.mjs
+Evidence: planBundle tests: ammo 1 unit + 309987 ore fills a 3100 m3 hold exactly; lift bounded by m3; 101/101 loop tests; live liquidation search still limited to one system (documented)

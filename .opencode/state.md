@@ -1,5 +1,28 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 17:40Z (UTC) - the trip fills the hold; leftovers need a gate
+
+Changed (tests: distribution-plan 7, distribution-run 22, npc-distribution 9, 101 across the
+loop suites):
+  - planBundle() ranks cargo by value per m3 and fills the hold greedily. Proof in a test:
+    1 unit of 560 000 ISK ammunition + 309 987 units of 4 ISK ore fill a 3 100 m3 hold exactly
+    (560 000 + 1 239 948 ISK) instead of flying 3 099 m3 empty;
+  - the lift measures the hold in m3 (capM3 + volumeOf) instead of a per-type unit cap, so a
+    bundle can no longer overbook the ship;
+  - a hull whose hold is already full no longer ends its run: it looks for the station that
+    really bids for what it carries (stationForTypes over the seeded book) and sells there;
+  - the loop reports living-distribution-book-unavailable when the seeded book cannot be
+    opened, so an empty answer can never look like "nobody buys this".
+
+KNOWN GAP, measured: the leftover search only looks inside the hull's own system. Ore carried
+in New Caldari is refused NO_BUYER_FOR_CARGO while Jita one gate away bids 4 035 826 units for
+it (seed_buy_orders, type 1228 at 60003760). NEXT: search the neighbouring systems and reuse
+the crossing leg - a two-beat extension of the liquidation path, not a new mechanism.
+
+Fleet state at hand-off: three coop-distribution-* hulls; 980000000005 is cycling (last sale
+44 104 ISK settled and returning home); 980000004164 and 980000000002 hold ore leftovers in
+New Caldari and are waiting on the gap above.
+
 ## 2026-10-30 16:20Z (UTC) - three hulls share the freight; a stuck call cannot freeze them
 
 PROVEN LIVE: the two idle Jita haulers were re-marked as distribution hulls through
