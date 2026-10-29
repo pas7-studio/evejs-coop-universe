@@ -22,6 +22,15 @@ test("a user licence lookup is answered with NOT_FOUND and a reason", () => {
   assert.match(text, /emptyAnswer\(NOT_FOUND, "no user licences exist in this world",\s*\n\s*"eve_public\.user\.license\.api\.GetResponse"\)/);
 });
 
+test("absent records answer the HTTP status the client compares, not a gRPC code", () => {
+  // The client's own messengers test `status_code == 404` (httplib) and treat anything else as an
+  // unexpected exception, so these answers must be 404/412 - not 5/9.
+  const text = service();
+  assert.match(text, /const NOT_FOUND = 404;/);
+  assert.match(text, /const FAILED_PRECONDITION = 412;/);
+  assert.doesNotMatch(text, /const NOT_FOUND = 5;/);
+});
+
 test("the licence branch sits inside handleRequest, before the payment-code fallthrough", () => {
   // The type used to be answered by the default-encoded empty response; it now has an explicit branch
   // inside handleRequest instead of falling through to the last catch-all refusal.
