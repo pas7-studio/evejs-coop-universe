@@ -9822,3 +9822,28 @@ no listing; 99 copies 9; unknown 5. Register 19 (`handled=263`).
 Remaining market work: `InitiatePurchaseListing` (ISK transfer + buyer fee), `component.listing.
 InitiatePurchaseListing`, `transaction.api.Get`. Character records carry a `balance` field, so a
 wallet path exists natively - find the native debit/credit function before writing the purchase.
+
+## FW-087/088 + acceptance result (18:0xZ): attribution now PASSES
+
+FW-087: a dead ship in a contested system could be counted as a campaign casualty (and could feed a
+capture) even when the war never mobilised it. The runtime now requires a war fleet row before recording
+anything and reports NOT_A_MOBILISED_WAR_HULL otherwise; campaign and war come from that row.
+
+FW-088: FW-079's witness paid off immediately. At 17:33:25Z the victim showed disk 0, live 0, fleet 0
+while its war casualty row existed at that very millisecond - the durable ledger is written BEFORE
+attribution in the same death path and carries pilot, entity and system. It is now an identity source.
+
+ACCEPTANCE (20-minute window): `casualty-recorded` PASS, `attacker-attributed` PASS
+(attacker=coop-pilot-007 victim=coop-pilot-003 wreck=980300000047), `merit-promoted` PASS (from 14:47Z),
+`bounty-paid` PENDING. So attribution - the rung that failed all day in four different ways - is proven on
+a real casualty.
+
+NEXT CONCRETE QUESTION (measured, not guessed): that 17:33 kill produced NO `war-merit` event and NO
+`war-bounty-skipped` event at all, which means `coopWarKillMerit.note` never reached the payer for it
+(the 14:47 kill did, and answered NO_REAL_CAMPAIGN_FOR_EVENT, which FW-078 fixed). So the thread is inside
+coopWarKillMerit after a successful attribution: which branch returns before awarding. Everything needed
+to see it is in `living-native-destruction-attacker` + `living-native-war-merit`; the wrapper emits for
+any non-paid outcome, so silence means the function itself returned early or threw.
+
+Also measured: the war economy is now priced at 5 000 ISK per side and both sides reserve it successfully
+(17:38:52Z and 17:48:55Z, two campaigns funded on both sides), so funding is no longer the blocker.
