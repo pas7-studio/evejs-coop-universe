@@ -2618,3 +2618,24 @@ Evidence: live: job for 444 INSTALLED with buyer=30000142 in the durable record 
 Why: the overview panel filters on slimItem.groupID, and ships either omitted it or reported the frigate default
 Where: .opencode/state.md, docs/WORKLOG.md
 Evidence: fork 2bd33c5; throwaway container on the real SDE: Catalyst 420/6, Capsule 29/6, Merlin 25/6, bare entity 0/0; tests/coop-overview-slim-item.test.mjs green
+### 2026-10-29T20:32Z · 3d62fa5 · OPS · state(perf): FW-097 shipped and proven, FW-098 named with its two exact hot spots
+
+Why: Hand off the measured CPU root cause and the next fix
+Where: .opencode/state.md
+Evidence: live profile: cloneValue 82% gone after FW-097; transact 36.5% + reconcileObject 14.7% + loadTableObject 14.3%
+### 2026-10-29T20:41Z · 33511b8 · L2 · alife25a: stall telemetry with a bound, and empty stops are skipped
+
+Why: Four hulls looked healthy while loading nothing for half an hour, and a single empty stop could kill a loaded trip
+Where: integration/coopDistributionRun.cjs, integration/coopGameStoreAtomic.cjs, integration/nativeNpcStore.cjs, tests/coop-atomic-rows-write-set.test.mjs, tests/coop-distribution-run.test.mjs, tests/coop-npc-store-read-cost.test.mjs
+Evidence: live: waiting telemetry with distance, STOP after 40 beats, two blocked hulls advanced to stops 3/4 and 2/4 after the skip fix; 27/27 run tests
+### 2026-10-29T20:42Z · ea5010b · L3 · perf: FW-098 - commit applies only its own write set (test + state)
+
+Why: Remove the whole-table reload and deep reconcile from every atomic commit (measured 36.5%+14.7%+14.3% of the live server CPU)
+Where: .opencode/state.md
+Evidence: fork commit 0cc7158; tests/coop-atomic-rows-write-set.test.mjs 4/4 (0 loadTableObject calls per commit); 1744 coop-native/alife/fw/war/mining tests pass
+### 2026-10-29T20:49Z · 92a6587 · DOCS · tool: gate the overview feed against the running server
+
+Why: the overview panel needed a measured server-side answer and a preset set that matches this build's group ids
+Detail: The panel hides a row when 'slimItem.groupID not in filterGroups', and one slim item without the field aborts michelle.AddBalls2 for every following ball - so 'every ball carries a group' is a property the server has to keep, not a one-off fix. This asks the running container through the read-only scene_slim_diagnose action and fails when any entity is unclassified or a ship reports group 0. Measu
+Where: scripts/coop-overview-check.cjs
+Evidence: fork 554066a scene_slim_diagnose; OVERVIEW_CHECK_OK 32 dynamic/233 static/0 unclassified; coop-overview.yaml installed with 7 presets x semantic groups

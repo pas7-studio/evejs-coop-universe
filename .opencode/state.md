@@ -1,5 +1,41 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 02:05Z (UTC) - overview panel: server proven, presets rewritten, gate added
+
+Server side of the overview is now measured, not argued. New read-only admin action
+`scene_slim_diagnose` (fork `554066a`) walks a live scene and reports, per ball, exactly the fields the
+client's own `SlimItemDisplayChecker` dereferences. On the play stack, system 30000145:
+
+    32 dynamic + 233 static entities, missingGroupID = 0, 32 ships all classified
+    Arden Renn [Miner]  typeID 42533 group 1764 cat 11 owner 1000129 corp 1000129 warFaction 500014
+    Vega Vey [Miner]    typeID 22544 group 543  cat 6  (exhumer)
+    ♦ Venture / ♦ Retriever (the NPC mining hull groups 1764/1765/1766)
+    stations: group 15 cat 3 with real names and corp owners
+
+`node scripts/coop-overview-check.cjs --system 30000145` repeats that as a gate: it fails if any ball
+lacks `groupID` or a ship reports group 0, and prints `OVERVIEW_CHECK_OK` otherwise.
+
+The remaining cause was client-side: presets whose group ids predate this build. A destroyer is 420
+here, an exhumer 543, the NPC mining hulls 1764/1765/1766, stations 15 - a preset listing 26/27/28
+matches almost nothing. `scripts/coop-overview-profile.py` derives a profile from the running SDE:
+All 591 groups, Ships 436, Hostile 317 (Mining/Industrial groups deliberately excluded so the friendly
+fleet is not "hostile"), Travel 19, Loot 6, Deployable 67, Drones 10, with one tab each. Verified
+against groups that really appear live (25, 420, 543, 1764, 1765, 1766, 15, 10, 186, 100, 101, 29,
+1149) - each lands in All plus its semantic tab. Installed as
+`Documents/EVE/Overview/coop-overview.yaml`; the owner imports it once (Overview > Settings > Misc >
+Import).
+
+Client exception seen in the server log and explained, not a server bug:
+`GenericException(status_code=5, "no payment schedules exist in this world")` in
+`upsell_neocom_controller._update_neocom_button` (2 occurrences at login). The dev client's mocked
+Omega state can hand out a payment-schedule identifier the server never issued; `payment.schedule.api.Get`
+answers NOT_FOUND by id, which is the honest answer for an id that does not exist. Not changed.
+
+Observation for the raid/NPC-combat owner (not touched): `living-native-raid-diagnose` shows a pirate
+deciding `action: attack` at `distanceMeters 11231` with `gunRange 1000` and its warp-to-target
+`REFUSED reason TARGET_NOT_LOCKED`, i.e. it cannot close in and cannot fire from there.
+
+
 ## 2026-10-30 01:20Z (UTC) - the overview panel: what the client actually filters on
 
 The client's own contract, read from `eve/client/script/ui/inflight/overview/slimItemDisplayChecker.pyj`:
