@@ -10492,3 +10492,49 @@ Engine audit still reports its PRE-EXISTING state: AUDIT_REGRESSION with integra
 4 (coopAdminBridgeActions, coopDistributionPlan, coopWarAdvantage differ by design/past
 edits; nativeNpcStore.cjs has no .js-free counterpart) and coopVirtualWorldRuntime.js at
 5397 lines vs the 4800 ceiling. FW-098 is not in that drift list (its mirror is identical).
+
+## FW-098 DEPLOYED TO THE PLAY STACK AND MEASURED (owner-authorised restart, 2026-10-30)
+
+Same tool, same window (9 s, ~13 400 samples), `evejs-server-1`:
+
+| | before | after |
+|---|---|---|
+| container CPU | 118 % (later 93 %) | **14-32 %** |
+| idle in profile | ~0 % | **71 %** |
+| cloneValue nativeNpcStore | 82 % | 1.0 % |
+| transact / reconcileObject | 36.5 % / 14.7 % | not in top 10 |
+| loadTableObject | 14.3 % | 0.6 % |
+| rebuildFlushBaselineFromDisk | 18.4 % | 0.6 % |
+| memory | 4.86 GiB | 2.22 GiB |
+
+No `POSTCOMMIT`/`CACHE_UNSAFE`/`NATIVE_GAMESTORE`/`POISON` lines in the log, world alive
+(living-mining-cycle-settled 214/600 lines, native combat + weapon events flowing), 65
+durable NPC links intact, war state intact (3 wars, 5 territories, 19 campaigns,
+18 EXPIRED + 1 OCCUPIED).
+
+## NEXT: FW-099 - the expired-target cooldown outlives the reason it existed
+
+Measured right now on the play stack (`war_diagnose`):
+- `war:500001-500004` decision = **open:true, BOTH_SIDES_CAN_FIELD_NAVY** (500001 CAN_FIELD,
+  1 armed hull; 500004 CAN_FIELD, 1 armed hull),
+- `war:500004-500014` and `war:500014-500019` = NO_NAVY_CAPABILITY:ATTACKER (those factions
+  field only industrials),
+- and yet the ONLY armed border, 30003837 (Caldari, 5 ships) <-> 30045344 (Gallente, 3
+  ships, gates 50016294/50016293), is refused with `TARGET_RECENTLY_EXPIRED`
+  (`living-native-war-opening-blocked`, 20:52:20Z).
+
+Cause: `coopFactionWarOpening.js` `targetCooldownMs` = `stallMs() * multiplier`, multiplier
+grows with the number of EXPIRED campaigns on that target and caps at 8x, so five expiries
+= 8 x 45 min = ~6 h of a dead border. Those five expiries happened while the defender could
+not field navy at all; the condition has since changed (the war decision is now
+BOTH_SIDES_CAN_FIELD_NAVY), but the cooldown does not know it.
+
+Planned fix (pure function + test, default ON because it only removes a stale refusal):
+the cooldown applies only while its recorded reason still holds - when the last expiry was
+a navy/supply refusal and the current war decision is open, the target is eligible again on
+the next tick. A target that expires with navy present keeps the full growing cooldown.
+Bumping `EVEJS_COOP_WAR_OPENING_STALL_MS` does NOT help: the cooldown is derived from it.
+
+Also still open: militia corporations have no income of their own (everything came from a
+manual `war_mercenary_settle` from ORE 1000129), so the funded garrison competes with hull
+purchases for the same wallet.
