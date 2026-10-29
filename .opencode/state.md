@@ -79,3 +79,34 @@ One call instead of a dozen: batch admin actions, grant a full fitting at once, 
 Implement tool 1 and 2 in `mcp/lib/serverTools.cjs`, register them in `mcpServer.cjs` if it keeps a
 list, then prove them on a throwaway character on the **agents** stack (`evejs-agents`, ports
 28443/25222/28000-28002) — never on the play stack while the friend is online.
+
+## FW-106 (fork 5d427d3): the market census that decides the war's economy
+
+I stopped guessing and measured the seeded market itself (`/var/lib/evejs/market/market.sqlite`
+in `evejs-market-1`, read-only):
+
+```
+seed_buy_orders: 98 338 rows, 5 033 stations, 17 556 types
+type 17470 (combat loot)  -> 3 stations: 60003760 Jita, 60015251, 60015249
+type 1230                 -> same three
+front region 10000048 (30003837 Aldranette / 30045344 Nennamaila, 219 stations with buys)
+                          -> 0 stations quote 17470 or 1230
+region 10000002 (Jita)    -> 348 stations with buys, exactly 1 quotes these types
+```
+
+So the war's loot is bought **only in Jita**, and nowhere in the front's own region. That is why
+no front pilot ever earned a rouble: the cargo reached a station whose market does not quote it.
+FW-106 makes that refusal self-explaining: `NO_SEEDED_COUNTERPARTY` now carries `typeID`,
+`stationID`, `regionID` and the region's real seeded buyers (station, price, remaining volume,
+player orders excluded). No order, stock or ISK is created.
+
+## The decision this measurement forces (and what I did about it)
+- Payment mechanism: DONE (FW-105, wallet-backed escrow, live).
+- Income: impossible for the fighting factions until a station that quotes combat loot exists
+  near them OR the loot chain learns to travel to Jita. Neither is a code bug.
+- Cheapest correct next step: give the front's own stations a real seeded bid for the loot types
+  the war actually produces (the seeder is the tool; a hand INSERT would bypass the summary
+  tables and is therefore NOT an acceptable shortcut).
+- Second option, no seeding: teach the loot chain to sell in the region that quotes the cargo
+  (Jita), using the gate-travel director that already exists. Bigger, but it uses only real
+  buyers and real travel.

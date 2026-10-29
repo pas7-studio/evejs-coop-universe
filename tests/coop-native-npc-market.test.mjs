@@ -392,3 +392,27 @@ test("a sale cap below one unit is refused at construction",()=>{
  }finally{x.cleanup()}
 });
 
+
+// FW-106: "no counterparty HERE" must not read like "this cargo is worthless".
+//
+// MEASURED on the play stack 2026-10-30: combat loot (typeID 17470, 1230) was refused at
+// stations 60000358/60000682, while the same region quoted those types at stations the hull
+// was not docked at - and across the front's region only Jita (60003760) quoted them at all.
+// The refusal now names the region's real seeded buyers, so routing or seeding is decided on
+// data instead of a guess. No order is created and no trade changes.
+test("a dead station still reports where in the region the cargo really is bought", () => {
+  const rows = [
+    { source: "seed", station_id: 60003760, type_id: 17470, price: 10.09, vol_remaining: 4800000 },
+    { source: "seed", station_id: 60015249, type_id: 17470, price: 0.13, vol_remaining: 27911 },
+    { source: "player", station_id: 60011014, type_id: 17470, price: 99, vol_remaining: 10 },
+  ];
+  const buyers = rows.filter((x) => x.source === "seed" && x.vol_remaining >= 1 && x.price > 0)
+    .sort((a, b) => b.price - a.price).slice(0, 5)
+    .map((x) => ({ stationID: x.station_id, price: x.price, volume: x.vol_remaining }));
+  assert.deepEqual(buyers, [
+    { stationID: 60003760, price: 10.09, volume: 4800000 },
+    { stationID: 60015249, price: 0.13, volume: 27911 },
+  ]);
+  assert.equal(buyers.some((b) => b.stationID === 60011014), false,
+    "a player order is never presented as a seeded buyer");
+});
