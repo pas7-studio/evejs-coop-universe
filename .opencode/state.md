@@ -9524,3 +9524,20 @@ needs them, but they are not part of a read answer.
 Next: sequencing jobs (`Initiate`/`Get`/`CompleteEarly`) must consume a **real** inventory item
 and only then mint a skin hex in the licence store; then component licences (finite/infinite
 Get + admin Grant/Revoke) and `component.license.item.Consume`.
+
+### 2026-10-29T19:20Z - SKIN step 4a done (component licences, 7 types, one real bug)
+
+Fork `bc6ee18`: `space/coopComponentLicences.js` + `componentLicenceGatewayService.js`.
+Finite = capacity spent down (refuses to go negative, second grant adds and keeps the first
+date); infinite = free, never spent; both per character and keyed by coating component id.
+GetOwned had been answered with an empty list by `compatibilityGatewayService` - a real
+regression for anyone who held a licence; the new service sits before it and reads real rows.
+
+Live on 140000001: GetOwned 0/0 -> grants 200 -> GetOwned 1/1 -> finite Get capacity 5,
+infinite free true -> spend 3 leaves 2 -> spend 9 NOT_ENOUGH_CAPACITY -> infinite spend FREE ->
+unknown component 5 -> revoke 200, again 5, both kinds gone. Register 45 unhandled
+(`handled=235`).
+
+Next: sequencing jobs (Initiate/Get/CompleteEarly) - they must consume these licences and a
+real inventory item, and only a completed job may mint a third-party skin licence; then
+`component.license.item.Consume`; then the skin market (10), which needs escrow + ISK.
