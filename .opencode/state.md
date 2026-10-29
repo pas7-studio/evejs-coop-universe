@@ -10991,3 +10991,20 @@ Remaining, in order:
 2. Bounty payout still needs a product decision: the play stack runs REQUIRE_FUNDING=0 and its
    factions earn nothing, so every real kill answers NO_HELD_ESCROW_FOR_FACTION. Escrow is
    never minted; either fund the factions for real or state that merit-only is the intended shape.
+
+## Live combat confirmed 22:44Z (the assault is firing, not idling)
+`living-native-combat-damage SAMPLED` every 5 s (22:44:20 / 22:44:25 / 22:44:30 / 22:44:35), on a
+campaign that is `ASSAULT` and survived the FW-104 restart. The phase skips in the same window
+are the healthy ones: `assault NO_PREPARING_CAMPAIGN` (nothing left to open), `garrison
+GARRISON_COOLDOWN` (the sanctioned spawner throttles itself), `capture-by-force NO_DEFENDER_WRECK`
+(waiting for the first defender hull to die at the target).
+
+Registry at 22:42Z: 8 rows, all 30003837 - 5 of 500001 and 1 of 500004 shown, i.e. the defender
+side accumulates rows while only some hulls are physically live; dead rows are ignored by the
+mobiliser (`rowIsLive`), so they reserve no pilot and block nothing.
+
+## Not a bug, a pace: how fast a side refills
+`maxSpawnsPerTick` 1 with a per-side cooldown means a wiped side takes several minutes to come
+back, and during that window the mobiliser honestly reports `NO_ELIGIBLE_PATROL` on the empty
+side. Do not "fix" that with a bigger spawn budget before measuring whether it actually starves
+the front; the 22:33Z round had both sides staffed and killed two hulls.
