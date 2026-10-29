@@ -8939,3 +8939,47 @@ for the campaign's systems even while real armed hulls stand there, because the 
 accepts hulls it reserved itself. That is the next fix: either the mobilizer adopts patrol-role native
 hulls that are physically present, or the seeding path must reserve them through `spawn_war_fleet`.
 Until then no campaign reaches ASSAULT, so the payout rung stays unproven however healthy the money is.
+
+## 2026-10-29T09:55Z - five of the six surfaces are live, daily goals is the last one
+
+Owner: "I'm not in the game, do whatever is needed until you finish everything." No restart batching
+question any more - each surface was built, rebuilt, deployed and measured on the play stack.
+
+| # | surface | state | fork commit |
+| --- | --- | --- | --- |
+| 2 | career portal progress (`career.goal.*`) | DONE | `fb6c025` |
+| 4 | presence (`presence.api.*`) | DONE | `0d1205f` |
+| 5 | faction activity admin (`faction.activity.admin.*`) | DONE | `0d1205f` |
+| 3 | skill plans (`skill.plan.*`) | DONE | `2b137c5` |
+| 6 | goal contributions (`goal.contribution.*`) | DONE | `2b137c5` |
+| 1 | daily goals (`dailygoal.*`) | NOT STARTED - needs a funded payout + real progress feed | - |
+
+Measured on the running play stack (container probes, `_testing.gatewayServiceRegistry`):
+- presence: character 140000001 -> `corporation.sequential 1000044`, `no_alliance: true`, 200.
+- admin: increment +777 changed `GetSolarSystemScores` 0 -> 777, -777 restored 0; a system outside
+  the war is refused with `solar system 39999999 is not part of the advantage war` (status 3).
+- skill plans: `eve_public.skill.plan.GetAllRequest` -> 200 with type
+  `eve_public.skill.plan.GetAllResponse` (the alias answers in the caller's package).
+- goal contributions: 200 (empty, no goals in that corporation), and no goal id -> status 3
+  `goal is required`.
+
+Register: **86** client request types remain unhandled (was 100 at the start of this pass).
+`node scripts/coop-client-contracts.cjs --check` = `CONTRACTS_OK calls=542 missing=0 stub=44`.
+
+Traps learned here, all now pinned by tests:
+- the shared local proto root lacks several client messages and an eager `lookupType()` on a missing
+  type throws **at require time** - declare new messages in a private root (`presenceGatewayService`,
+  `CAREER_PROTO_ROOT`, `FACTION_ADMIN_PROTO_ROOT`, `CONTRIBUTION_PROTO_ROOT`).
+- a `uint64` protobuf field decodes to a `Long`; `Number(Long)` is `NaN`, so `normalizeProtoNumber`
+  (or `.toNumber()`) is mandatory or every admin request looks empty.
+- `protobuf.parse()` renames snake_case fields to camelCase unless `{keepCase: true}` - a probe that
+  forgets it silently drops `target_system` and looks like a server bug.
+- the fork's `gameStore` refuses to open inside an unisolated `node:test` process, so repo tests that
+  only need proto shapes import the proto module, not the service.
+
+Daily goals design (next session, decide with the owner):
+1. definition catalog = seeded config, never fabricated activity;
+2. progress feed from an existing real per-character record (wallet journal / market transactions)
+   so a goal is measurable without new instrumentation;
+3. payout from a **funded** account (`space/coopCorpWallet.applyDelta` with a negative delta, or a
+   treasury), plus a persisted claim row so a goal cannot be paid twice.
