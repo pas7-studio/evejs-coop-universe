@@ -9125,3 +9125,25 @@ already holds the real jobs the industry window shows, so today's jobs (by real 
 12 000 SP each with a 20 000 floor. Name/description are real client ids (1040182 "Manufacture",
 61487 "Manufacturing"). Live: `GetAllCurrent` = 5 cards / 569 bytes; `listJobsByOwner(140000001)` = 0
 jobs, so the card honestly reads 0/2.
+
+## FW-073/FW-074 (11:2x-12:0xZ): a real capture happened, and the last hole is attribution
+
+PROVEN LIVE: campaign `war:500001-500011:campaign:30045342` reached OCCUPIED at 11:26:12Z and 11:26:40Z
+(`living-native-war-capture-by-force CAPTURE_APPLIED`) after a real casualty in that system - the first
+capture produced by the mobiliser fixes. FW-066 then refunded both HELD rows at 11:27:07Z, so money
+followed the outcome instead of staying locked.
+
+FW-073 (measured cause): repeated seeding asked for pilots whose link already existed; the spawn created
+a SECOND physical hull and the link correctly refused, leaving an armed orphan no war can mobilize. The
+spawn action now answers PILOT_ALREADY_LINKED with the existing entity and system before creating
+anything, so a caller reuses the hull that is really there.
+
+FW-074 (the last hole before a payout): at 11:24:26Z the casualty of that same campaign was recorded and
+capture followed, but attribution answered NOT_UNIQUE_NAMED_PIRATE - the disk copy of the link and the
+live registry both held the SAME entity under different recorded systems, so the stock path counted two
+attacker links. `mergeLinks` now collapses per ENTITY and per PILOT, keeping the newest record.
+
+State at 11:5xZ: no live campaign (the map is 30000145/30003836/30003837/30045342/30045344 = 500011,
+30045343 = 500020), so `war_payout_diagnose` honestly answers NOTHING_PAYABLE. Keeper and watcher are
+running for the next funded front; the chain campaign -> ASSAULT -> casualty -> capture -> refund is now
+proven, and only a kill inside a live funded campaign is still missing for `war-bounty PAID`.
