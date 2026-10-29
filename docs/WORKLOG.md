@@ -2339,3 +2339,9 @@ Evidence: live: plan->warp->lift 1x28338->cross ARRIVED->station 60003760->SALE_
 Why: Half the mining fleet sat in a system with zero asteroid belts and an empty hold, so every belt system ran at half strength
 Where: integration/coopNativeMiningFleetDurable.cjs, tests/coop-fleet-hauler-shortfall.test.mjs
 Evidence: live: 4x living-mining-skipped NO_BELTS_IN_SYSTEM after deploy, zero ALIFE08 slot 30000142 lines; 4/4 fleet tests
+### 2026-10-29T11:50Z · d24de2e · L2 · docs/tests: hull-weighted combat credit, partial assists, reward scale, manufacture goal
+
+Why: combat was flat (1 per hull, final blow only) and the SP rewards were pocket change; ship size had to matter and assisting a kill had to pay something
+Detail: Daily goals now score what the player actually did: a battleship is 6 points against a frigate's 1 (from the real SDE hull group, with a mass fallback), a target you damaged but did not finish pays your share of the damage (capped at 0.9 of the hull), and the SP reward follows the earned progress instead of a flat token amount. A fifth goal, Manufacture, counts real industry jobs installed today. 
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, tests/coop-daily-goals-gateway.test.mjs, tests/coop-daily-goals.test.mjs
+Evidence: fork c2fdfbf + b0f5b5a; live container probe with the real SDE: Bantam 1, Sansha destroyer 2, Retriever barge 4, Raven battleship 6; half-damage frigate 0.5, full battleship 6; rewards kill@10 30000, kill@20 60000, cap 90000, mine@5000 20000; 5 goal cards, 569 bytes; 19/19 tests
