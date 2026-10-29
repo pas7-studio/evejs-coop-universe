@@ -2476,3 +2476,9 @@ Why: the whole character-title state surface had no handler, so a title could ne
 Detail: 4/4 tests: a title exists only after a grant, an ungranted title cannot be worn, and revoking the worn title clears it.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-character-titles.test.mjs
 Evidence: fork 738b145; live on 140000001: GetOwned 0 -> 2 grants -> GetOwned 2, equip 200 with no_title false, ungranted 9, revoke worn 200 and no_title true, second revoke 5; 4/4 tests; register 35 unhandled; UI still gated by the client LaunchDarkly flag character_titles_feature_enabled
+### 2026-10-29T17:40Z · 619f9f0 · L2 · docs/tests: achievements record real progress and honest rewards
+
+Why: eight achievement calls had no handler, so progress, completion, rewards and the showcase score were all dead
+Detail: 5/5 new tests: a zero delta is refused, completion unlocks exactly one reward, reset withdraws it, claim mints nothing, and a checklist delta is refused rather than dropped.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-achievements.test.mjs
+Evidence: fork aaebf64; live on 140000001: add 7 -> 200/progress 7, add 0 -> 3, checklist -> 9, complete 200 then 9, Get not_completed false with timestamp, 1 unclaimed then claim 200/5 and 0 left, category+showcase 0, reset 200 then 5; 5/5 tests; register 27 unhandled
