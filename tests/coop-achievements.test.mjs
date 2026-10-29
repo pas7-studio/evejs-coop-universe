@@ -203,3 +203,24 @@ test("a checklist delta is refused instead of being silently dropped", () => {
   assert.equal(service.handleRequest(`${PKG}.api.GetRequest`, envelope()).statusCode, 200,
     "and the refusal left no progress behind");
 });
+
+test("the admin ResetAll clears one character's progress and its unclaimed list together", async () => {
+  // eve_public.achievement.api.admin.ResetAllRequest carries no fields: it clears the character in
+  // the request context. A reward left claimable after its progress was wiped would pay for
+  // something the character no longer did, so both go.
+  const state = fakeCharacterState({"7": {characterID: 7}, "8": {characterID: 8}});
+  const store = createAchievements({characterState: state, env: {EVEJS_COOP_ACHIEVEMENTS: "1"}});
+  const id = Buffer.from(CATEGORIES[0].achievements[0].id, "hex");
+  assert.equal(store.addProgress(7, id, 1).status, "RECORDED");
+  assert.equal(store.complete(7, id).status, "COMPLETED");
+  assert.equal(store.unclaimed(7).length, 1);
+  const cleared = store.clear(7);
+  assert.equal(cleared.status, "CLEARED");
+  assert.equal(cleared.achievements, 1);
+  assert.equal(store.get(7, id), null);
+  assert.deepEqual(store.unclaimed(7), []);
+  // Clearing is per character: another one keeps its own row.
+  assert.equal(store.addProgress(8, id, 1).status, "RECORDED");
+  assert.equal(store.clear(7).achievements, 0);
+  assert.notEqual(store.get(8, id), null);
+});
