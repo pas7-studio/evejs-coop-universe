@@ -1,5 +1,37 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 05:35Z (UTC) - fitting-window search fixed; premium shop has no SKINs at all
+
+**Fitting window search (any language).** The native client indexes `marketProxy.GetMarketGroups` by
+PARENT: `marketGroups[None]` are roots and `marketGroups[9]` must be the groups under Ship Equipment
+(`appConst.marketCategoryShipEquipment`), `[955]` Ship Modifications, `[157]` Drones, `[11]` Charges.
+The catalog built from itemTypes put every group at the top level with `parentGroupID: 0`, so those
+lookups returned nothing, `SearchFittingHelper.GetSearcableTypeIDs` built an empty type set and the
+search box produced no rows - which is why it failed in every language. The SDE export that produced
+this data ships the real tree in `marketGroups.jsonl` (2083 rows, `parentGroupID`, localized names,
+`hasTypes`, `iconID`), so `space/coopMarketCatalog.js` now serves it (fork `ba09545`), roots as
+`parentGroupID: null`.
+
+Measured in the container against the real file: `GROUPS 2102 roots=19`, and
+`CATEGORY 4 -> 11`, `9 -> 13`, `11 -> 16`, `157 -> 7`, `955 -> 3`, `2202 -> 6` children with real names
+(Shuttles/Frigates/Cruisers, Turrets & Launchers, Projectile Ammo, Mining Drones, Rigs/Subsystems/
+Mutaplasmids, Electronic Warfare …). 1663 groups carry `hasTypes`.
+
+**Premium shop / cosmetics.** Measured on the running store: `categories 9 products 15 offers 15` -
+Omega, MCT, resculpt, skill extractor and friends, and **not one SKIN**. Two separate gaps:
+  1. the store authority data has no cosmetic products at all (it is seeded data, not code);
+  2. `grantFulfillmentToCharacter` had no way to deliver a skin, so even a seeded offer could only have
+     failed after taking the money.
+(2) is now implemented: a `skin_license` fulfilment kind that calls
+`services/ship/shipCosmeticsState.giveSkin` and refuses when the skin or licence is not in the catalogue
+(fork `763c293`). (1) is the next step: seed real SKIN offers from `shipCosmeticsCatalog`
+(11784 licence rows) with their real `licenseTypeID` and a price, then prove a purchase debits the
+wallet and grants the licence.
+
+**Overview.** Unchanged from the earlier entry: all three transmission paths measured, nothing left on
+the server side; it needs the owner's session plus the generated profile import.
+
+
 ## 2026-10-30 04:50Z (UTC) - "unfinished" is now a classified list, and one real stub is gone
 
 The owner walked the UI and asked what is still broken. Two sources audited:

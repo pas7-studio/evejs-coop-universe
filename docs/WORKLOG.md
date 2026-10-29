@@ -2686,3 +2686,13 @@ Evidence: 44 placeholders grouped 31 null/8 data/4 empty/1 scalar; userSvc playt
 Why: The loop's real ceiling (what it can build) was invisible in the live log and only visible in an operator tool
 Where: integration/coopDemandGap.cjs, integration/coopLoopTick.cjs, integration/coopNpcManufactureTick.cjs, tests/coop-demand-gap-module.test.mjs, tests/coop-ore-mission-mining-objective.test.mjs
 Evidence: module tests 3/3; wiring emits DEMAND_WITHOUT_BLUEPRINT when no job is possible (today the manufacturer is busy, so no event yet - stated, not faked)
+### 2026-10-29T21:33Z · 44273f9 · L3 · state: the gap is computed in the server and wired into the manufacture phase
+
+Why: ORE mission sites: cover-mining quantity (1 rock per ore type x 500 m3, ~a few Venture cycles) instead of a barge-sized objective, and derived rocks are a fallback only so authored miningRocks are never duplicated
+Where: .opencode/state.md, docs/WORKLOG.md
+Evidence: fork commit 52b73a3; tests/coop-ore-mission-mining-objective.test.mjs 4/4; image rebuilt; play stack healthy; relay banner OK on 37471; in-client mining still unverified
+### 2026-10-29T21:51Z · 831193f · L2 · docs: measured results of the co-op loop, and what is missing (blueprints are the ceiling)
+
+Why: the fitting search returned nothing in any language and the premium shop had no cosmetic offers at all
+Where: docs/COOP_LOOP_RESULTS.md, integration/coopDistributionRun.cjs, tests/coop-distribution-run.test.mjs, tests/coop-war-garrison.test.mjs, tests/coop-war-mobilizer-diagnose.test.mjs
+Evidence: marketGroups tree 2102 groups/19 roots served (fork ba09545); store catalog measured 9 categories/15 offers, zero SKINs; skin_license fulfilment added (fork 763c293)
