@@ -2470,3 +2470,9 @@ Evidence: 4 fronts planned from live state; 25000 ISK lost per refused border be
 Why: Trips were chosen one stack at a time and left most of the hold empty, and freight that could not be re-planned stayed in the hold for ever
 Where: integration/coopDistributionPlan.cjs, integration/coopLoopTick.cjs, tests/coop-distribution-plan.test.mjs, tests/coop-distribution-run.test.mjs, tests/coop-npc-distribution.test.mjs
 Evidence: planBundle tests: ammo 1 unit + 309987 ore fills a 3100 m3 hold exactly; lift bounded by m3; 101/101 loop tests; live liquidation search still limited to one system (documented)
+### 2026-10-29T17:23Z · d5ea764 · L2 · docs/tests: character titles have real ownership and a real worn slot
+
+Why: the whole character-title state surface had no handler, so a title could never be granted, worn or revoked
+Detail: 4/4 tests: a title exists only after a grant, an ungranted title cannot be worn, and revoking the worn title clears it.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-character-titles.test.mjs
+Evidence: fork 738b145; live on 140000001: GetOwned 0 -> 2 grants -> GetOwned 2, equip 200 with no_title false, ungranted 9, revoke worn 200 and no_title true, second revoke 5; 4/4 tests; register 35 unhandled; UI still gated by the client LaunchDarkly flag character_titles_feature_enabled
