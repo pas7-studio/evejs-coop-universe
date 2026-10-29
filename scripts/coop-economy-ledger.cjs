@@ -27,6 +27,10 @@ const ROOT = "/var/lib/evejs";
 const CORP = Number(process.env.EVEJS_COOP_FACTORY_CORP_ID || 1000129);
 const json = process.argv.includes("--json");
 
+const {reconcileFreight} = require("./freight-check.cjs");
+
+
+
 const readDir = (dir) => {
   try { return fs.readdirSync(dir).filter((n) => n.endsWith(".json")); }
   catch (_error) { return []; }
@@ -181,6 +185,32 @@ try {
 } catch (_error) { /* no freight ledger yet is a valid state */ }
 console.log("freight             " + freight.rows + " trips, " + fmt(freight.isk) + " ISK, " +
   freight.units + " units" + (freight.unknown ? " (" + freight.unknown + " without a captured price)" : ""));
+
+// Every freight row must have a settlement behind it, read from the same events file the
+// server writes. A missing one is named, never averaged away.
+let settlements = [];
+try {
+  const events = path.join(process.env.EVEJS_COOP_NPC_MARKET_ROOT ||
+    process.env.EVEJS_COOP_NPC_MARKET_DIR || "/var/lib/evejs/coop-native-market",
+    "..", "coop-events.jsonl");
+  for (const line of fs.readFileSync(events, "utf8").split(/\r?\n/)) {
+    if (!line.includes("sale-settlement")) continue;
+    try { settlements.push(JSON.parse(line)); } catch (_error) { /* one bad line */ }
+  }
+} catch (_error) { /* no events file is a valid state on a fresh volume */ }
+let freightRows = [];
+try {
+  const file = path.join(process.env.EVEJS_COOP_NPC_MARKET_ROOT ||
+    process.env.EVEJS_COOP_NPC_MARKET_DIR || "/var/lib/evejs/coop-native-market",
+    "freight-ledger.jsonl");
+  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+    if (line.trim()) freightRows.push(JSON.parse(line));
+  }
+} catch (_error) { /* no ledger is a valid state */ }
+const freightCheck = reconcileFreight(freightRows, settlements);
+console.log("freight check        " + (freightCheck.ok ? "RECONCILED"
+  : "UNRECONCILED " + JSON.stringify(freightCheck.problems.slice(0, 4))));
+
 for (const [route, row] of [...freight.routes.entries()].sort((a, b) => b[1].isk - a[1].isk).slice(0, 4))
   console.log("  " + route + "  " + row.trips + " trips, " + fmt(row.isk) + " ISK");
 console.log("");
