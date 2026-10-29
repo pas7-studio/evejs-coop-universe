@@ -9323,3 +9323,50 @@ NOT_FOUND for a specific asset/entitlement/schedule, FAILED_PRECONDITION for a r
 `GetActiveByType` the honest empty shape (its response carries one optional schedule, left
 unset). `absentStateGatewayService` is now the single place that must read a real store if
 one is ever built.
+
+## 2026-10-29T15:00Z - session handoff: the next surface is third-party SKINs (19 types)
+
+Register is at 59 unhandled after this session (100 at its start). Everything below was
+measured live on the play stack, not just tested.
+
+### What is left, and why SKINs is the right next block
+
+The remaining types are all one of: a big content subsystem (SKINs 19 + skin market 10,
+freelance projects 14, achievements 9, titles 6), absent state (mercenary den/hub/skyhook 4),
+or transport/auth artefacts that are not features (`debug.Request`, `internal_gateway.*`,
+`auth.*`, `ai.assistant`).
+
+### Third-party SKINs - the exact shapes, already extracted
+
+Schemas (client `eveProto/generated/eve_public/cosmetic/ship/skin/thirdparty/...`):
+- `thirdparty.Identifier{hex string}` - a player-designed skin id, **not** a type id.
+- `license.Identifier{character{sequential}, skin{hex}}` and `license.Attributes{activated,
+  unactivated uint64, escrowed uint64, first_acquired Timestamp}`.
+- `license.api`: GetOwned, Get, Activate, Apply{license, ship{sequential}}, Unapply, admin
+  Grant{skin, unactivated}/Revoke. `Apply`/`Unapply` carry the real ship item id.
+- `draft.api`: Get, Save, Update, Delete, GetShared, GetSaveCapacity (design blobs).
+- `sequencing.job.api`: Initiate, Get, CompleteEarly (a real job queue with a duration).
+- `component.license.{finite,infinite}.api`: Get + admin Grant/Revoke.
+- `component.license.item.api.Consume` - must consume a real inventory item.
+
+Important: `services/ship/shipCosmeticsState` already models **catalog** skins
+(`giveSkin(charId, skinID)`, `removeSkin`, `applySkinToShip(shipID, skinID)`,
+`getAppliedSkinRecord`, `getAppliedSkinRecordsForOwner`, `getLicenseCatalogEntry`) where
+`skinID` is a catalogue/type id. The third-party system is a *different* store keyed by hex,
+so it needs its own state module; the catalog one cannot be reused for hex ids.
+
+### Suggested order (each step is independently shippable)
+
+1. `space/coopThirdPartySkins.js`: a per-character licence store keyed by hex
+   (`{activated, unactivated, escrowed, firstAcquired}`) + a skin registry (hex -> ship type,
+   layout). Gateway: GetOwned, Get, Activate, admin Grant/Revoke (5 types).
+2. Apply/Unapply onto a real ship item id, reusing the applied-skin record so the client's
+   appearance change is real (2 types).
+3. Drafts (5 types + capacity): design blob per character, share by uuid.
+4. Sequencing jobs (3 types): initiate -> real duration -> complete early -> licence minted;
+   item consumption (1 type) must consume a real inventory item via
+   `consumeInventoryItemQuantity`, never a virtual count.
+5. Component licences (7 types) last: finite/infinite per component.
+
+Never fake a licence or an applied skin: if the store has no row, the answer is NOT_FOUND and
+the appearance must not change.
