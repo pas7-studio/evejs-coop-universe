@@ -2,9 +2,9 @@
 
 Generated from the pinned client's own bytecode, not from guesswork: `docs/client-contracts/gateway-types.json`
 holds every `eve_public.*Request` string the client (V24.01, compiled 2026-06-16) can send —
-**217** of them. The local gateway knows **163** names (gateway services plus four inline handlers:
+**217** of them. The local gateway knows **161** names (gateway services plus four inline handlers:
 `user.license.api.Get`, `plex.vault.api.Balance`, `cosmetic.ship.api.Get`,
-`cosmetic.ship.api.GetAllInBubble`). The remaining **54** have no handler at all.
+`cosmetic.ship.api.GetAllInBubble`). The remaining **56** have no handler at all.
 
 They are not fatal any more: since fork `f256261` an unknown `eve_public.*Request` is answered with
 a default-encoded empty message and a warning that names the type, so the client gets a valid
