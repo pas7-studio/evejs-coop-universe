@@ -2522,3 +2522,9 @@ Why: a listing could not be bought: InitiatePurchaseListing had no handler, so t
 Detail: 6/6 listing tests, including the tax split and the rollback when the buyer cannot pay.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-skin-listings.test.mjs
 Evidence: fork 27d9c09; live between 140000001 and 140000002: seller 1 000 000 000 -> 1 000 975 000, buyer 1 000 000 000 -> 999 000 000, buyer got the copy, escrow 0, listing gone; own listing 9; 6/6 tests; register 18 unhandled
+### 2026-10-29T18:21Z · aa4a6aa · L2 · docs/tests: a purchase leaves a transaction both sides can read
+
+Why: transaction.api.Get had no handler and the purchase stored no transaction row, so a completed sale could not be shown to either side
+Detail: 8/8 listing tests, including the transaction rows and the gateway answer.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-skin-listings.test.mjs
+Evidence: fork 0595472; live after a 750 000 ISK purchase: both actors read status 200/state 3/timestamp, buyer GetAll 1 matching id, unknown 5; status enum read from the client descriptor; 8/8 tests; register 17 unhandled
