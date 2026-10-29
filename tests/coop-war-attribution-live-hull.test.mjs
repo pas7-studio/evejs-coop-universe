@@ -116,3 +116,31 @@ test("a link without an entity is merged by pilot, never dropped", () => {
   assert.equal(merged.length, 1);
   assert.equal(merged[0].pilotID, "coop-pilot-016");
 });
+
+// FW-076: a hull can be in the war fleet registry while its identity link is gone.
+// Measured 13:11:43Z: the casualty knew pilot coop-pilot-012 and entity 980000014126 from
+// the fleet registry, but no identity link existed anywhere, so attribution refused.
+test("a fleet registry row is identity evidence for a real hull", () => {
+  const merged = mergeLinks([], [], [
+    { pilotID: "coop-pilot-012", entityID: 980000014126, systemID: 30045339, source: "WAR_FLEET_REGISTRY" },
+  ]);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].pilotID, "coop-pilot-012");
+  const victim = { itemID: 980000014126, nativeNpc: true, kind: "ship" };
+  const attacker = { itemID: 980000014127, nativeNpc: true, kind: "ship" };
+  const wreckEntity = { itemID: 980300000099, nativeNpcWreck: true, launcherID: 980000014126 };
+  const scene = { systemID: 30045339, sessions: new Map(),
+    getEntityByID: (id) => (id === 980000014126 ? victim
+      : id === 980000014127 ? attacker
+        : id === 980300000099 ? wreckEntity : null) };
+  const proof = attackerProof.verify({
+    scene,
+    victim,
+    wreck: { wreckID: 980300000099, systemID: 30045339,
+      sourceEntityID: 980000014126, launcherID: 980000014126 },
+    options: { attackerEntity: attacker },
+    links: merged,
+  });
+  assert.equal(proof.status, "ATTACKER_NOT_NAMED", "the victim is named by the registry, the attacker is not");
+  assert.equal(proof.victimPilotID, "coop-pilot-012");
+});
