@@ -9223,3 +9223,25 @@ FW-005B war-economy work owned by the parallel agent. Do not flip it to 0.
 
 Next after the restart: watch 30003837 reopen, confirm both sides muster
 (>1 hull each), then native attack orders + weapon events, then the client view.
+
+## FW-075 and the state of the payout rung at 12:5xZ
+
+FW-075: `release_identity` while the hull is still flying leaves an armed ship that can be killed but
+can never be attributed. Measured 12:36:31Z and 12:40:04Z: two real war casualties in the contested
+system answered NOT_UNIQUE_NAMED_PIRATE because their hulls had no identity link at all - the pilots had
+been released minutes earlier to free the spawn pool. A release now refuses with HULL_STILL_PHYSICAL
+unless `force: true`.
+
+What the campaign record proves now (all measured, in order):
+- a front opens on a freshly bootstrapped territory: 30045342 = 500001 registered by FW-045, campaign
+  `war:500001-500011:campaign:30045342` opened with escrow on BOTH sides (FW-046/068);
+- the campaign reaches ASSAULT with BOTH sides mustered on the contested field
+  (`SIDE_MUSTERED assigned 1` for defender and attacker in 30003839) after FW-069..072;
+- real native attack orders are accepted and real casualties are recorded in that system;
+- the campaign is decided: `capture-by-force CAPTURE_APPLIED` and the territory changes hands
+  (30045342 OCCUPIED, 30003839 OCCUPIED), then FW-066 refunds the escrow (12:44:42Z).
+
+What is still missing is exactly ONE event: a casualty in a live funded campaign whose hulls all have
+healthy identities, so `NATIVE_DESTRUCTION_ATTACKER_PROVIDED` fires and the HELD escrow pays. The two
+casualties we did get were unattributable for the reason FW-075 now prevents; the next campaign will not
+have that defect, and the watcher plus `scripts/coop-war-acceptance.cjs` are both armed for it.
