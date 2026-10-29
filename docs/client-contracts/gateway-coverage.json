@@ -2,22 +2,17 @@
  "note": "Derived from the installed client archive and the running server; contains type names only, never client code.",
  "clientRequestTypes": 1282,
  "consumedByClient": 213,
- "answeredByServer": 282,
+ "answeredByServer": 287,
  "consumedNotAnswered": [
   "eve_public.Request",
-  "eve_public.achievement.api.admin.ResetAllRequest",
   "eve_public.ai.assistant.chat.api.QueryRequest",
   "eve_public.cosmetic.market.component.listing.api.GetAllRequest",
   "eve_public.cosmetic.market.component.listing.api.InitiatePurchaseListingRequest",
-  "eve_public.cosmetic.ship.api.GetAllInBubbleRequest",
-  "eve_public.cosmetic.ship.api.GetRequest",
   "eve_public.cosmetic.ship.skin.thirdparty.sequencing.api.GetEarlyCompletionPricingRequest",
   "eve_public.cosmetic.ship.skin.thirdparty.sequencing.api.GetTierDurationsRequest",
   "eve_public.cosmetic.ship.skin.thirdparty.sequencing.api.GetTierPricingRequest",
   "eve_public.freelance.contributionmethod.itemdelivery.api.DeliverRequest",
   "eve_public.sovereignty.resource.planet.api.GetAllConfigurationsRequest",
-  "eve_public.stargate.lock.api.GetRequest",
-  "eve_public.stargate.lock.api.GetRestrictedSystemsRequest",
   "eve_public.user.license.api.GetRequest"
  ],
  "answeredNotInClient": [

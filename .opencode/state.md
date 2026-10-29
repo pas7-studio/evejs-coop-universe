@@ -1,5 +1,55 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-29 20:05Z (UTC) - the gap list is now measured, and 5 more types answer
+
+The "remaining N types" list was written by hand, so it could only contain what somebody had already
+noticed. `scripts/coop-gateway-gap-audit.py` now derives it from the two artefacts that decide it:
+the client's own generated descriptors (every request message) and whether a non-generated client
+module names that proto module together with the request class, versus the types the running server
+answers. On this build: **1282** client request messages, **213** the client really sends, **287**
+answered, **10** consumed-but-unanswered. The derived list lives in
+`docs/client-contracts/gateway-coverage.json`.
+
+Two instruments came with it:
+  - `scripts/coop-gateway-gap-audit.py` - the coverage comparison above;
+  - `scripts/coop-verify-client-proto.cjs` - decodes bytes we produced with **CCP's own
+    FileDescriptorProto** (lifted from the module's marshal stream, because the generated modules
+    cannot be imported on a modern runtime). This is the protobuf twin of the flatbuffer
+    client-reader check: our encoder and our own decoder agree on a wrong field number as happily as
+    on a right one.
+
+ANSWERED NOW (fork `ff09ec8`, `6133d3e`), each proven on `evejs-agents` after redeploy:
+  - `stargate.lock.api.GetRestrictedSystems` - live `[]` -> Apply -> `[30000144]` -> Delete -> `[]`;
+  - `stargate.lock.api.Get` - answers the character's own system from the live session; 404 with an
+    explicit reason when the system is unknown, when no lock exists, or when the system has several
+    locked gates (the response carries one gate, so it refuses instead of picking one);
+  - `cosmetic.ship.api.Get` / `GetAllInBubble` - a real ship of character 140000004
+    (`9988400000003`) got a licence, was activated and had `c0c0ffee12345678` applied; the gateway
+    returned 200/43 bytes that CCP's descriptor decodes to character 140000004 / ship 9988400000003 /
+    hex `c0c0ffee12345678`; after unapply+revoke the same call answers 404. The bubble is answered
+    from `space/runtime.getSceneForSession`, so it only reports ships in the character's own scene
+    (0 bytes when the character has no live session);
+  - `achievement.api.admin.ResetAll` - `status=200`, the row disappears for that character only.
+
+STILL OPEN (10), with the honest reason:
+  - sequencing `GetTierPricing` / `GetTierDurations` / `GetEarlyCompletionPricing` - our jobs cost
+    component licences, not PLEX. Serving a PLEX price we never charge would be a lie, and charging
+    would need a PLEX balance this world does not mint for sequencing. Either the price becomes 0
+    everywhere (honest but useless) or sequencing starts charging PLEX first;
+  - component listings (2) - blocked on real SKIN component item type ids: a listing carries
+    `component_item.sequential`, which the client resolves through its own `ComponentsDataLoader`
+    FSD (`res:/staticdata/ship_skin_design_components.fsdbinary`), and that binary is not decodable
+    with what is on this machine yet. The item types in group 4726 ("Ship SKIN Design Element", 924
+    rows) do exist in the server's SDE, but which of them the FSD maps to a component is in that
+    binary, and guessing would break the market window;
+  - `freelance.contributionmethod.itemdelivery.Deliver` - our freelance projects are stub-empty, so
+    there is no project or delivery location to deliver to;
+  - `sovereignty.resource.planet.api.GetAllConfigurations` - no planet resource configurations exist
+    in this world;
+  - `user.license.api.Get` - the end-user licence acceptance has no record here;
+  - `eve_public.Request` (the envelope itself) and `ai.assistant.chat.api.Query` - not ours.
+
+
 ## 2026-10-30 20:00Z (UTC) - the identity moves with a proven arrival; fleet walks its stops
 
 PROVEN LIVE: the whole fleet is on multi-stop trips - all three hulls loaded their first stop
