@@ -475,3 +475,24 @@ test("any BUSY answer from the world is a not-yet, whatever its spelling", async
   assert.equal(result.status, "WAITING_FOR_SALE");
   assert.equal(run.read(twentyFourth).phase, "SELL");
 });
+
+test("the ledger reports the whole load, not only the last stop", async () => {
+  // Measured 2026-10-30: rows said "lines: 1" for trips that loaded at four stations, because
+  // only the last lift was kept in the journal.
+  const twentyFifth = 980000004194;
+  const trip = { ...TRIP, fromStationID: 60000682, items: [
+    { stationID: 60000682, typeID: 34, quantity: 1000, price: 4, m3PerUnit: 0.01 },
+    { stationID: 60014935, typeID: 35, quantity: 500, price: 15, m3PerUnit: 0.01 },
+  ] };
+  await run.tick(twentyFifth, { planTrip: () => ({ status: "OK", trip }), now: 28000 });
+  await run.tick(twentyFifth, { distanceTo: () => 100,
+    lift: async () => ({ status: "LIFTED", lifted: [{ typeID: 34, quantity: 1000, price: 4 }] }),
+    now: 28001 });
+  const done = await run.tick(twentyFifth, { distanceTo: () => 100,
+    lift: async () => ({ status: "LIFTED", lifted: [{ typeID: 35, quantity: 500, price: 15 }] }),
+    planCrossing: () => ({ status: "PLANNED" }), now: 28002 });
+  assert.equal(done.status, "CROSS");
+  const state = run.read(twentyFifth);
+  assert.equal(state.lifted.length, 2, "both stops are in the journal");
+  assert.equal(state.quantity, 1500, "and so is the whole load");
+});
