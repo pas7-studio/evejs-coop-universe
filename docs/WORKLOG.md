@@ -2788,3 +2788,8 @@ Why: premium shop had no SKIN offers at all; the client searches offers by licen
 Detail: The in-game store had 15 offers and zero cosmetics, so the SKIN panel had nothing to match. Each new offer carries a product whose typeId is the SKIN licence type (that is what Store.SearchOffersByTypeIDs(GetLicenseTypesForMaterial()) matches) and a skin_license fulfilment. Live after apply: offers 1402, categories 10, skins 1387, Venture 5 offers, payload 649KB/95ms.
 Where: scripts/coop-seed-skin-offers.js
 Evidence: live get_offers=1402 categories=10 skins=1387, sample Venture Morphite Shine SKIN, marshal 649497 bytes in 95ms; seed script scripts/coop-seed-skin-offers.js
+### 2026-10-30T20:22Z · f91ffd6 · L2 · worklog: skin offer seeding
+
+Why: sites never expired or rotated while nobody was in space, because the ticker only swept awake systems and a docked player has no scene
+Where: docs/WORKLOG.md
+Evidence: startup resume tick now expired=273 rotated=273 removed=273 (was expired=0 with 281 stale); expiredNow=0 after; nextSeq 1645->1926; only 5 instances remain without a lifetime (1 landmark, 4 old combat)
