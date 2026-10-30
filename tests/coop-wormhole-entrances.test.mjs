@@ -55,17 +55,29 @@ test("a direct entrance is planned and satisfies its own system", () => {
   assert.deepEqual(planned.spawnSystemIDs, [30000144]);
 });
 
-test("a hole elsewhere in the region gives that system the signature, not ours", () => {
+test("a hole elsewhere in the region is only used when the caller allows it", () => {
   const planned = plan({
     systemIDs: [30000142],
     pairs: [pair(11, 31000150, 30000200)],
     world,
     nowMs: now,
+    maxScope: "region",
   });
   assert.equal(planned.entrances.length, 1);
   assert.equal(planned.entrances[0].destinationSystemID, 30000200);
   assert.equal(planned.entrances[0].scope, "region");
   // Jita itself still has nothing scannable, so it must still get a hole.
+  assert.deepEqual(planned.spawnSystemIDs, [30000142]);
+});
+
+test("by default a hole in another system is not planned at all", () => {
+  const planned = plan({
+    systemIDs: [30000142],
+    pairs: [pair(17, 31000190, 30000200)],
+    world,
+    nowMs: now,
+  });
+  assert.equal(planned.entrances.length, 0);
   assert.deepEqual(planned.spawnSystemIDs, [30000142]);
 });
 
