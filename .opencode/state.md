@@ -187,3 +187,27 @@ Live after deploy: `healthy`, fleet registry restored to 10 hulls (500001 x7, 50
 3. Next lever, in this order: (a) watch `living-native-war-casualty-skipped` on the next front
    wreck to learn the exact refusal, (b) give the assault a winnable, honest path (attacker
    hull count or a siege rule), (c) the loot journey to Jita (FW-108 route finder is ready).
+
+## FW-110/110b/110c (fork fa74808, b084641, 9aebabb): the war now survives a restart
+Root cause of "the front freezes and expires after every restart": the durable war fleet registry
+keeps the OLD entity ids while the restart re-materializes the same pilots with NEW hulls.
+MEASURED 2026-10-30: 6 of 10 rows pointed at ids the pilot no longer owned (pilot-003 registry
+980000062777 vs real hull 980000067050) and 4 pilots had no link at all. Every muster then
+answered PILOT_IN_USE, both sides reported `assigned 0`, and r13..r17 expired with
+`objectiveEvidence: []` - the capture phase can never find a defender wreck that does not exist.
+
+- FW-110: `staleCustodyRows({ships,links})` (pure, 6 tests) finds rows whose pilot provably flies
+  another hull; the mobiliser releases that custody through the native RELEASE command, bounded,
+  never in a dry run, never under a live order lease. A pilot with no link or two links is
+  ambiguous and is never guessed at.
+- FW-110b: `verifyRelease` refuses those rows by design (absence is not destruction), so a
+  separate `verifyReplacement` proof was added: the pilot must have exactly one hull and the
+  successor must be a real ship. Exact proof `native-replaced:<campaign>:<hull>:<successor>`.
+- FW-110c: uniqueness is counted in distinct HULLS (a pilot legitimately appears in an order
+  lease and in the identity link at once) and a durable record + controller also proves the
+  successor while a headless scene is still being rebuilt.
+
+LIVE after the third deploy (00:12Z): `living-native-war-custody-stale ... "status":"APPLIED"`
+for pilot-002 (980000067361 -> 980000067524), registry back to real hulls, and the muster now
+reports `DEFENDER assigned 1 limit 2` (was 0 for both sides). Remaining rejects are honest:
+ORDER_LEASE_ACTIVE and WRONG_FACTION.

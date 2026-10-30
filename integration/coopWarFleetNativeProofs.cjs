@@ -77,6 +77,44 @@ function createWarFleetNativeProofs({sceneForSystem,getController,getNativeEntit
   return !c.manualOrder&&!c.currentTargetID&&!v.ship.pendingWarp&&
    !v.ship.warpState&&!v.ship.isWarping&&m!=="WARP";
  }
- return Object.freeze({verifyNativeShip,verifyCampaign,verifyRelease});
+ // FW-110: custody follows the pilot's PROVEN physical ship.
+ //
+ // MEASURED on the play stack 2026-10-30: a restart re-materialized the front fleet with new
+ // entity ids while the registry kept the old ones, so 6 pilots were permanently PILOT_IN_USE
+ // and 4 rows pointed at pilots with no link at all. `verifyRelease` cannot decide that case:
+ // the old hull is neither present in a scene nor destroyed with a wreck, and absence is
+ // deliberately not a destruction witness. This is NOT a destruction claim - it is the much
+ // stronger statement that the same pilot provably flies exactly ONE other real ship right
+ // now, so custody of the old hull cannot be theirs. Anything ambiguous stays refused.
+ function verifyReplacement(details){
+  if(!pos(details?.entityID)||!named(details?.pilotID)||!pos(details?.currentEntityID))
+   return false;
+  if(Number(details.currentEntityID)===Number(details.entityID))return false;
+  let rows=[];
+  try{rows=assignments()||[]}catch{return false}
+  // One pilot may appear in several authorities at once (an order lease AND the identity
+  // link both name the same hull), so uniqueness is counted in HULLS, not in rows. Two
+  // different hulls for one pilot is still ambiguous and still refused.
+  const mine=rows.filter(r=>r&&r.pilotID===details.pilotID&&pos(r.entityID));
+  const hulls=[...new Set(mine.map(r=>Number(r.entityID)))];
+  if(hulls.length!==1)return false;
+  const currentID=hulls[0];
+  if(currentID!==Number(details.currentEntityID))return false;
+  // The successor must be a real hull NOW. A live scene ship is the strongest form; a
+  // durable native record with its own controller is accepted as well, because a headless
+  // front can hold the record before the scene is rebuilt after a restart.
+  try{
+   const now=mine.find(r=>Number(r.entityID)===currentID)||{};
+   const scene=pos(now.systemID)?sceneForSystem(Number(now.systemID)):null;
+   const ship=scene&&typeof scene.getEntityByID==="function"
+    ?scene.getEntityByID(currentID):null;
+   if(ship&&ship.kind==="ship"&&Number(ship.itemID)===currentID)return true;
+   const record=getNativeEntity(currentID);
+   const controller=getController(currentID);
+   return Boolean(record&&Number(record.entityID)===currentID&&
+    controller&&Number(controller.entityID)===currentID);
+  }catch{return false}
+ }
+ return Object.freeze({verifyNativeShip,verifyCampaign,verifyRelease,verifyReplacement});
 }
 module.exports={createWarFleetNativeProofs};

@@ -2772,3 +2772,8 @@ Evidence: fork a424285; live SDE 30003837->30000142 = 10 hops, 30045344->3000014
 Why: The fleet stopped for good once each hull reached its trip cap, and the 45 s beat dominated the cycle time
 Where: compose/compose.agents.yaml, integration/coopDistributionRun.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarTreasury.cjs, tests/coop-distribution-run.test.mjs, tests/coop-war-treasury-bounty.test.mjs
 Evidence: ledger: median gap 10.9 min, worst 95.6; live after deploy all four hulls carrying again with no operator reset; 32/32 run tests
+### 2026-10-30T00:00Z · 1dd8819 · L2 · state: fed, full, self-restarting; measured cycle and ledger
+
+Why: A restart re-materialized war pilots with new hulls while the registry kept the old ids, so every muster answered PILOT_IN_USE and campaigns expired unfought
+Where: .opencode/state.md
+Evidence: fork fa74808/b084641/9aebabb; stale-custody 6/6, custody-replacement 4/4, registry+mobilizer+bounty 38/38; live APPLIED release pilot-002 980000067361->980000067524 and defender assigned 0->1
