@@ -1,5 +1,37 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 00:30Z (UTC) - fitting: save works, the window is killed by the VGS offer service
+
+MEASURED LIVE:
+
+    charFittingMgr.SaveFitting() callID=188 -> response OK, OnFittingAdded charid
+    savedFittings owner=140000005: 1620 "*Venture-My-Very-Expensive" 12 items (19:45:40Z)
+                                   1621 "*Venture-My-Very-Expensive2" 11 items (20:12:09Z)
+    GetFittings returns both (dict keyed by fittingID, util.KeyVal carries
+    description/fitData/fittingID/name/ownerID/savedDate/shipTypeID)
+
+So saving, persistence and read-back are correct. What breaks the window is the client side:
+
+    EXCEPTION: Failed to search the NES for offers
+      IOError: [Errno 9] Bad file descriptor
+      eve/client/script/ui/shared/skins/skinPanel.py(1047) FindOffersAndReveal
+    -> store.SearchOffersByTypeIDs() -> vgsService.GetStore() (VGS, NOT our gRPC gateway)
+
+plus `ShipTreeDockablePanel.ToggleMinimize -> AttributeError: infoPanelContainer`.
+
+Root cause: the client's NES/skin offers come from the **VGS HTTP service**, which this server does
+not implement at all (`vgs` appears nowhere under server/src). Our store lives behind gRPC
+(`newEdenStore`, `eve_public.cosmetic.*`), which the gateway does answer. The proxy only intercepts
+`public-gateway.evetech.net` + launchdarkly; any VGS host is blocked/absent, so the client's HTTP call
+dies with EBADF inside the skin panel tasklet.
+
+Next: implement the VGS offer surface (get_offers for store 4 from `storeState.getLegacyCatalog` +
+`publicOffers`) and route it through the local gateway, then the SKIN panel and product search work.
+
+**High-sec NPC guard** (fork `3a2d1fb`) is live: NPC -> player aggression is blocked at security >= 0.45
+unless the player shot first (5 min) or is an enemy militia hull; killmail 173 was a pirate kill in Jita 0.94.
+
+
 ## 2026-10-31 00:20Z (UTC) - sites in every band, scannable wormholes from known space
 
 MEASURED LIVE (play stack, after fork `f95d822` + this repo's tests):
