@@ -2793,3 +2793,9 @@ Evidence: live get_offers=1402 categories=10 skins=1387, sample Venture Morphite
 Why: sites never expired or rotated while nobody was in space, because the ticker only swept awake systems and a docked player has no scene
 Where: docs/WORKLOG.md
 Evidence: startup resume tick now expired=273 rotated=273 removed=273 (was expired=0 with 281 stale); expiredNow=0 after; nextSeq 1645->1926; only 5 instances remain without a lifetime (1 landmark, 4 old combat)
+### 2026-10-30T22:06Z · 4cfdbbf · L2 · test(dungeon): the mining objective is satisfied by ore only
+
+Why: A mining mission completed itself when the site's NPCs disappeared (restart pruned them); only extracted ore may satisfy a site that declares objectiveQuantity
+Detail: Regression for the owner's report: a mining mission showed Complete without a single cycle of ore because the destroyed-target path completed it once the site's NPCs were pruned by a restart. The rule lives in declaresMiningObjective and the destroyed-target path now skips sites that declare objectiveQuantity. 5/5 with the existing derivation cases.
+Where: tests/coop-ore-mission-mining-objective.test.mjs
+Evidence: tests/coop-ore-mission-mining-objective.test.mjs 5/5; evejs-agents healthy on image 493e222; fork 1b9d8c3
