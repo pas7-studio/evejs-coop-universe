@@ -1,5 +1,22 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 23:59Z (UTC) - fed, full, and self-restarting
+
+MEASURED LIVE:
+  freight        39 trips, 2 398 577 ISK, 370 962 units, RECONCILED (7 deliveries counted apart)
+  treasury       766 087 600.48 ISK   (722 134 486.21 at the start of this work)
+  ore @ 60000682 2 798 972 -> 15 076 units;  minerals 246 365 -> 5 708 787 units
+  trip shape     389 999 / 550 000 / 309 999 units (holds full)
+  cycle          median 10.9 min between settled sales per hull (was capped by a 45 s beat)
+
+Changed this round: a DONE run RESTS 2 min and starts a new cycle (it used to end the hull for
+good at its trip cap - four hulls sat idle while 5.28 M minerals waited); MAX_STOP_WAITS 40 -> 20;
+the loop beat runs at 20 s on the agents stack instead of 45 s.
+
+NEXT: the runtime line ratchet (5153, other sessions); blueprint acquisition stays the
+strategic ceiling (market_orders has 0 rows - nothing can be bought); watch the ledger for a
+full day to confirm the faster beat really raises throughput rather than just the event rate.
+
 ## 2026-10-30 10:00Z (UTC) - sites now ~3-4 per visited system; null/J-space: two concrete blockers
 
 After the density change and the null/J sampling (fork `2d4318c`), the live reconcile reports:
