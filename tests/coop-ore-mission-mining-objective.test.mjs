@@ -14,7 +14,7 @@ import { createRequire } from "node:module";
 
 const forkRoot = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
 const require = createRequire(import.meta.url);
-const { deriveMiningObjectiveFromResources } = require(
+const { deriveMiningObjectiveFromResources, declaresMiningObjective } = require(
   `${forkRoot}/Code/server/src/services/dungeon/dungeonMissionMiningObjective.js`,
 );
 
@@ -71,3 +71,17 @@ test("junk input never throws and never yields an objective", () => {
     assert.equal(mining.objectiveQuantity, 0);
   }
 });
+
+// The owner's report: a mining mission showed Complete although he had mined
+// nothing. The site's objective had been satisfied by the destroyed-target path
+// once its defenders were gone (a world restart pruned them). Ore must be the only
+// way to satisfy a site that declares a mining objective.
+test("a site that declares an ore objective is finished by mining, not by kills", () => {
+  const oreSite = { miningRocks: [{ typeID: 1228, count: 1, quantity: 500 }], objectiveQuantity: 1000 };
+  assert.equal(declaresMiningObjective(oreSite), true);
+  assert.equal(declaresMiningObjective({ miningRocks: [{ typeID: 1228, count: 1, quantity: 500 }] }), false);
+  assert.equal(declaresMiningObjective({ objectiveQuantity: 0 }), false);
+  assert.equal(declaresMiningObjective(null), false);
+  assert.equal(declaresMiningObjective({ objectiveQuantity: "1000" }), true);
+});
+
