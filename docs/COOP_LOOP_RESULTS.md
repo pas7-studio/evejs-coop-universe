@@ -18,9 +18,9 @@ mine (native fleet, belt systems)
 
 | What | Value | Where it comes from |
 |---|---|---|
-| Freight trips settled | **28 trips, 1 965 747 ISK, 319 108 units** (7 deliveries without a captured price) | `coop-native-market/freight-ledger.jsonl` |
+| Freight trips settled | **39 trips, 2 398 577 ISK, 370 962 units** (7 deliveries without a captured price) |
 | Freight rows proven against settlements | `RECONCILED` (payments); deliveries counted separately | `scripts/freight-check.cjs`, printed by the ledger |
-| Corporation treasury | **764 991 505.71 ISK** (722 134 486.21 at the start of this work) | `coop-native-market/corp-treasury/1000129.json` |
+| Corporation treasury | **766 087 600.48 ISK** (722 134 486.21 at the start of this work) |
 | Hold utilisation | 309 999 units in exactly 3 100 m3 (Impel), 543 746 in 5 500 m3 | live trip journals |
 | Trip shape | 3-5 loading stops, 50-78 cargo lines | live trip journals |
 | Station sales (historical, pre-freight) | 160 fills, 165 357 081 ISK | economy ledger |
@@ -34,6 +34,12 @@ docker exec evejs-agents-server-1 sh -c "cd /app/server && node _ledger.cjs"
 ```
 
 ## What is proven
+
+- **The refining backlog is cleared and the fleet is fed**: ore at 60000682 went 2 798 972 ->
+  15 076 units while minerals there climbed 246 365 -> 5 708 787 units, and the hulls fill their
+  holds again (389 999 / 550 000 / 309 999 units per trip).
+- **A finished run rests and restarts by itself** (2 min), so the fleet no longer dies at its
+  trip cap.
 
 - **A refinery backlog of 2 798 972 ore units was cleared**: the candidate list took the first
   eight rows in insertion order, so the tiny leftovers starved the big stacks for hours. After
