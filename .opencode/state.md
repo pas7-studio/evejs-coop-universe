@@ -1,5 +1,42 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 00:20Z (UTC) - sites in every band, scannable wormholes from known space
+
+MEASURED LIVE (play stack, after fork `f95d822` + this repo's tests):
+
+    [CoopUniverseSites] systems=30 desired=271 created=0 spawned=18
+      anomalies={"30000142":4,"30000144":4,"30000145":4,"30003837":4,"30045344":4,"30100032":4}
+
+    wormhole signatures: 30000142 Jita "Wormhole C125", 30000144 Perimeter "Wormhole Y683",
+                         30000145 New Caldari "Wormhole Z060"
+    persisted instances 1601: highsec 261, lowsec 320, nullsec 264, J-space 756 in 108 J systems
+    Jita's hole leads to J165006 (31000845) and that system holds 7 sites (combat 5, gas 2)
+
+What changed and why it was empty before:
+
+1. null-sec definitions were computed all along (11-13 per system) but the reconcile only ever ran for
+   the world's visited set, so no null-sec instance was ever created. The reconcile now also covers
+   every live scene and a deterministic daily sample of 12 null-sec + 12 J-space systems. J-space is
+   classified by its 31xxxxxx id range - the SDE solar-system rows have no `wormholeClassID` column -
+   and special space (32xxxxxx, Pochven) is excluded because no player gate reaches it.
+2. known space could not reach J-space at all: the engine makes the J-space source endpoint visible and
+   the K162 end invisible, nothing scans from J-space, so `listWormholeSignatureSites(30000142)` was 0
+   with 1193 active J->k pairs map-wide (the three pairs that landed in Jita were already collapsed).
+   `space/coopWormholeEntrances.js` opens one real direct entrance per world system through the
+   runtime's own `revealOppositeEndpoint`, or spawns one real native `spawnRandomPairs` hole when no
+   pair lands in the system; the J-space side and any spawned destination are seeded with sites in the
+   same pass (with a bounded retry when that seeding comes back empty).
+3. opening holes in the whole region every tick was measured to spray the map (4 reveals / 10 min,
+   instance count 1327 -> 1601 and 108 J systems): entrances are direct-only now (`maxScope:
+   direct`), and the last reconcile reported `created=0` - no churn, no growth.
+
+Tests: `tests/coop-wormhole-entrances.test.mjs` 7/7 (direct wins, region holes only when asked,
+collapsed/expired/already-visible ignored, one pair opened once, J-space id range).
+
+Still unproven in a real client: the owner must open the probe scanner in Jita/Perimeter/New Caldari
+and see the wormhole signature, then scan, warp and jump. That is a human click, not a server claim.
+
+
 ## 2026-10-30 23:59Z (UTC) - fed, full, and self-restarting
 
 MEASURED LIVE:

@@ -2777,3 +2777,8 @@ Evidence: ledger: median gap 10.9 min, worst 95.6; live after deploy all four hu
 Why: A restart re-materialized war pilots with new hulls while the registry kept the old ids, so every muster answered PILOT_IN_USE and campaigns expired unfought
 Where: .opencode/state.md
 Evidence: fork fa74808/b084641/9aebabb; stale-custody 6/6, custody-replacement 4/4, registry+mobilizer+bounty 38/38; live APPLIED release pilot-002 980000067361->980000067524 and defender assigned 0->1
+### 2026-10-30T19:05Z · 4868068 · L2 · test: wormhole entrances are direct-only by default
+
+Why: null-sec and wormhole space now have live sites, and known space has scannable wormhole entrances instead of none
+Where: tests/coop-wormhole-entrances.test.mjs
+Evidence: live: systems=30 desired=271 created=0 spawned=18, anomalies 4/4/4/4/4/4; wormhole signatures C125/Y683/Z060 in Jita/Perimeter/New Caldari; instances 1601 (highsec 261 lowsec 320 nullsec 264 wormhole 756 in 108 J systems); J destination J165006 seeded 7 sites
