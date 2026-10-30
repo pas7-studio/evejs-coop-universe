@@ -2782,3 +2782,9 @@ Evidence: fork fa74808/b084641/9aebabb; stale-custody 6/6, custody-replacement 4
 Why: null-sec and wormhole space now have live sites, and known space has scannable wormhole entrances instead of none
 Where: tests/coop-wormhole-entrances.test.mjs
 Evidence: live: systems=30 desired=271 created=0 spawned=18, anomalies 4/4/4/4/4/4; wormhole signatures C125/Y683/Z060 in Jita/Perimeter/New Caldari; instances 1601 (highsec 261 lowsec 320 nullsec 264 wormhole 756 in 108 J systems); J destination J165006 seeded 7 sites
+### 2026-10-30T20:22Z · 95f2b57 · L2 · shop: seed 1387 real SKIN offers from the cosmetics catalogue
+
+Why: premium shop had no SKIN offers at all; the client searches offers by licence type and found nothing
+Detail: The in-game store had 15 offers and zero cosmetics, so the SKIN panel had nothing to match. Each new offer carries a product whose typeId is the SKIN licence type (that is what Store.SearchOffersByTypeIDs(GetLicenseTypesForMaterial()) matches) and a skin_license fulfilment. Live after apply: offers 1402, categories 10, skins 1387, Venture 5 offers, payload 649KB/95ms.
+Where: scripts/coop-seed-skin-offers.js
+Evidence: live get_offers=1402 categories=10 skins=1387, sample Venture Morphite Shine SKIN, marshal 649497 bytes in 95ms; seed script scripts/coop-seed-skin-offers.js
