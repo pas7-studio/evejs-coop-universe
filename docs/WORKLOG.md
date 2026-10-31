@@ -2981,3 +2981,9 @@ Why: The component purchase answer packed a descriptive order key into 16 UTF-8 
 Detail: Plus the state note: the play stack needs one more window for the transaction uuid and the daily-goal RedeemedNotice.
 Where: .opencode/state.md, tests/coop-component-market.test.mjs
 Evidence: live on evejs-agents: InitiatePurchaseListing 200, 16-byte v4 uuid 66d8a433166c4e33a405617a006db15f; coop-component-market 8/8
+### 2026-10-31T16:25Z · ca12f1f · L2 · test: starting a sequencing job publishes StartedNotice with the same job id
+
+Why: The client subscribes to sequencing StartedNotice and nothing published it
+Detail: Deployed to evejs-agents (fork 1bb2ff9); the play stack is healthy on the previous build, which already carries the daily-goal RedeemedNotice and the real transaction uuid.
+Where: tests/coop-skin-sequencing.test.mjs
+Evidence: coop-skin-sequencing 6/6; notice payload id equals the InitiateResponse id
