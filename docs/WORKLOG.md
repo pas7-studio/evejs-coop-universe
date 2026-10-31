@@ -2839,3 +2839,8 @@ Evidence: contract 980000004 Jita 60003760 -> Perimeter 60000358 status=4; coop-
 Why: A bought blueprint would sit unusable because its materials are at another station, and the purchase only triggered after a sale
 Where: integration/coopBlueprintPurchase.cjs, integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarBattleDirector.cjs, integration/coopWarDoctrine.cjs, integration/coopWarTargetPriority.cjs, tests/coop-war-target-priority.test.mjs
 Evidence: chooser prefers recipes buildable at that station; purchase moved to the loading stop; 37/37 run+chooser tests; measured Jita Tritanium demand now exhausted (seed_buy_orders quantity 0)
+### 2026-10-31T08:40Z · 6861b2b · L2 · state: demand is now the limit; Jita's Tritanium order is empty
+
+Why: Five different hulls and roles all shot the nearest enemy, so the new roles existed only in the fitting
+Where: .opencode/state.md
+Evidence: fork a1c887e; target-priority 7/7; live attackerRole tackle + targetRole tackle; hull map 14359 tackle/45462 anti-tackle/15320 brawler/15972 logistics/12394 ewar

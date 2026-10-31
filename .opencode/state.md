@@ -456,3 +456,24 @@ Suite: composition+doctrine+garrison+navy 42/42.
   system id + flagID 0 while the scene lost the entity). Recovery now repairs honestly, but a scene
   entity that vanishes between ticks is not explained yet; needs a targeted probe before claiming the
   family is stable.
+
+## FW-117 (fork a1c887e): roles decide who shoots whom
+A five-hull squad-lead formation fielded tackle, anti-tackle, brawler, EWAR and logistics, and
+every one of them shot the NEAREST enemy - the destroyer, the EWAR ship and the repair frigate all
+behaved like a brawler.
+
+New pure module coopWarTargetPriority (7/7 tests): anti-tackle -> tackle, ewar, logistics;
+ewar -> logistics, ewar, tackle; tackle -> tackle; sniper -> heavy, sniper; heavy -> brawler.
+The battle director orders candidates by that priority, then by the old nearest-first rule, and
+publishes attackerRole + per-candidate targetRole. A roleless hull scores 0 everywhere, so a fleet
+without roles behaves exactly as before.
+
+coopWarDoctrine.roleForHullType maps hull typeID -> role from the doctrines themselves.
+LIVE: 14359 tackle, 45462 anti-tackle, 15320 brawler, 15972 logistics, 12394 ewar, 25127
+anti-tackle. Event 08:40:55Z carries attackerRole tackle with a tackle target.
+
+## Still honest gaps
+EWAR (sensor dampener / tracking disruptor) and logistics (remote reps) are fitted but have no
+engine effect - they are non-weapon modules, so the ship carries them and never uses them. Role
+behaviour today = who is aimed at, not what the module does. Next: either native effect support or
+a posture rule (logistics keeps range, EWAR stays behind the line).
