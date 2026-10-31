@@ -1247,3 +1247,26 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   keeps miner/hauler), so the only signal will be the actual shooting.
 - Also confirmed on play: `[CoopFactionWar] opening skipped: NO_FUNDED_FRONT` -> no campaign, so no
   war fleets and no bounty (`NO_REAL_CAMPAIGN_FOR_EVENT`). Separate from this fix.
+
+## FW-142/143 + measured 18:44Z: Sansha has a navy, and the real bottleneck is now visible
+- Fork d22eb2b (FW-142): a pirate faction has no militia corporation (Sansha and Serpentis both
+  report militiaCorporationID 0) and no presence pilots before it has mustered once, so
+  warFactionCorporation() answered 0 forever and a pirate front could never spawn. The faction's own
+  corporation is now the fallback - the same wallet the capital grant sits in, and the one Serpentis
+  hulls already use (1000135).
+- Fork 9ca7985 (FW-143): the mobiliser may only place a pilot in a system it considers reachable,
+  and reachability came from the fleet roster alone, so a front whose source system has no hull yet
+  could never bootstrap itself. Live campaigns now contribute their own source and target systems
+  to the tracked set every tick.
+- MEASURED 18:44Z (honest, NOT a success): Sansha's Nation still has **0 hulls**. Its four
+  PREPARING fronts (30000133, 30000156, 30001393, 30002754) all source from 30000145, and the
+  virtual world had no residents there - presence was measured in 30000144 (14), 30045344 (9),
+  30003837 (18), 30001363 (0). A front may only muster where its pilots physically are.
+- Bigger measurement, unrelated to Sansha: **16 living-war-fleet-spawned in 15 minutes but only 3
+  custody rows and 3 recorded casualties** - hulls are spawned and then lost from the registry
+  without a wreck, so the fleet cannot accumulate. That, not the doctrines, is what limits the war
+  to a handful of hulls now.
+- NEXT (precise): diagnose the in-process mobiliser (diagnoseMobilization only works inside the
+  server; out-of-process it answers NO_VISITED_SYSTEMS by construction) to split SIDE_MUSTERED /
+  NO_PATROL_CANDIDATE / released-without-wreck per campaign, and steer virtual-world residents into
+  live war source systems.
