@@ -2992,3 +2992,9 @@ Evidence: coop-skin-sequencing 6/6; notice payload id equals the InitiateRespons
 Why: The factory was building at a loss and buying the first affordable blueprint instead of the profitable one
 Where: integration/coopBlueprintPurchase.cjs, integration/coopLoopTick.cjs, integration/coopNpcManufactureTick.cjs, tests/coop-blueprint-purchase.test.mjs, tests/coop-npc-manufacture-tick.test.mjs
 Evidence: losesMoney gate (NO_MARGIN) in the manufacture tick; blueprint chooser now values a blueprint by real material cost and the units it can build and sell (unitCostOf, buildable, profit); measured Miner I inputs 12 739 vs bid 6 028, bulkheads blueprint 175 000 for 242 x 5 122; tests 21 + 7
+### 2026-10-31T16:38Z · ae1739f · L2 · titles: prove the title notices and correct the measured notice surface
+
+Why: Title changes were written with no notice, so a worn title stayed stale until the window was reopened
+Detail: Equip/Unequip and admin Grant/Revoke announce the real change to the character's solar system (fork 3a9ac81). The war rank keeps its gap, honestly: a rank writes plain text, every title notice needs a catalogue title uuid.
+Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json, tests/coop-character-titles.test.mjs
+Evidence: coop-character-titles 6/6; notice audit 33 published / 74 silent; deployed on evejs-agents, healthy
