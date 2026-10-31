@@ -1,19 +1,9 @@
 {
  "note": "Derived from the installed client archive and the running server; contains type names only, never client code.",
  "clientRequestTypes": 1282,
- "consumedByClient": 189,
- "answeredByServer": 288,
- "consumedNotAnswered": [
-  "eve_public.Request",
-  "eve_public.ai.assistant.chat.api.QueryRequest",
-  "eve_public.cosmetic.market.component.listing.api.GetAllRequest",
-  "eve_public.cosmetic.market.component.listing.api.InitiatePurchaseListingRequest",
-  "eve_public.cosmetic.ship.skin.thirdparty.sequencing.api.GetEarlyCompletionPricingRequest",
-  "eve_public.cosmetic.ship.skin.thirdparty.sequencing.api.GetTierDurationsRequest",
-  "eve_public.cosmetic.ship.skin.thirdparty.sequencing.api.GetTierPricingRequest",
-  "eve_public.freelance.contributionmethod.itemdelivery.api.DeliverRequest",
-  "eve_public.user.license.api.GetRequest"
- ],
+ "consumedByClient": 188,
+ "answeredByServer": 297,
+ "consumedNotAnswered": [],
  "ambiguousAttribution": [
   "eve_public.achievement.api.GetRequest",
   "eve_public.achievement.category.api.GetRequest",

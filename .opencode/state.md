@@ -804,3 +804,11 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   once in the last hour and that kill was in 30000144, not a war system. Bounty payment needs an
   explicit native attacker, which is now the single remaining gap between a fought war and a
   paid one.
+
+## Gateway gap closed 2026-10-31 (measured, not claimed)
+- `coop-gateway-gap-audit.py` now reads the DEPLOYED registry (291 -> 297 handled) instead of a
+  source scan. The old scan could not see template-literal type lists, so 3 of the "8 open" were
+  never open (`achievement.definition...GetLatest`, `user.license..Get`, `eve_public.Request`).
+- `CONSUMED_NOT_ANSWERED 0` and all 24 AMBIGUOUS_ATTRIBUTION types are answered in both forms.
+- Fork `8c2213a`; tests `tests/coop-gateway-gap-closure.test.mjs` 7/7; register 37 stub / 403 ok.
+- Play stack NOT yet redeployed: needs one owner restart window (same image `evejs-local`).

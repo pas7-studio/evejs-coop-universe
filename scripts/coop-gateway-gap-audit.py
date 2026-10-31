@@ -33,6 +33,10 @@ import zlib
 DEFAULT_CCP = r"W:/EVE Online - 3396210/tq/code.ccp"
 GENERATED_PREFIX = "eveProto/generated/"
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
+# `eve_public.Request` is the envelope's own parent message. Every generated request module names
+# it, so it looks "consumed" to this audit, but it has no response and no handler: it is the thing
+# the other requests are wrapped in. Counting it as a gap would demand an answer that cannot exist.
+NON_SURFACE_REQUESTS = {"eve_public.Request"}
 
 
 def strings_of(data):
@@ -127,6 +131,7 @@ def main():
                 continue
             consumed.add(full_names[0])
     consumed -= ambiguous
+    consumed -= NON_SURFACE_REQUESTS
 
     unhandled = sorted(consumed - handled)
     extra = sorted(handled - set(requests))

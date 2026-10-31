@@ -10,7 +10,6 @@
     "charUnboundMgr.GetCharacterLockType",
     "clientStatLogger.LogString",
     "eventLog.LogPlayerRequestedDisconnect",
-    "industryMonitor.DisconnectJob",
     "keeper.GetLevelEditor",
     "localizationServer.UpdateLocalizationQAWrap",
     "milestoneMgr.ProcessCharacterLogon",

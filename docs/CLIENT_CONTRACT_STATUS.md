@@ -13,9 +13,9 @@ actually issues, taken from its own bytecode, with the modules that call it.
 | NULLABLE | the handler can answer `null` on some path |
 | OK | the handler builds a real answer |
 
-Total client calls: 542 · MISSING 0 · STUB 38 · NULLABLE 101 · OK 403
+Total client calls: 542 · MISSING 0 · STUB 37 · NULLABLE 102 · OK 403
 
-## STUB (38)
+## STUB (37)
 
 | call | sites | client module | server file | why it is acceptable today |
 | --- | --- | --- | --- | --- |
@@ -27,7 +27,6 @@ Total client calls: 542 · MISSING 0 · STUB 38 · NULLABLE 101 · OK 403
 | `charUnboundMgr.GetCharacterLockType` | 1 | characterSelection.pyj | services\character\charService.js | `if lockTypeID is not None` |
 | `clientStatLogger.LogString` | 4 | michelle.pyj | services\logging\clientStatLoggerService.js | fire-and-forget proxy |
 | `eventLog.LogPlayerRequestedDisconnect` | 1 | clientStatsSvc.pyj | services\logging\eventLogService.js | fire-and-forget proxy |
-| `industryMonitor.DisconnectJob` | 1 | industrySvc.pyj | services\industry\industryMonitorService.js | fire-and-forget |
 | `keeper.GetLevelEditor` | 2 | scenarioMgr.pyj | services\dungeon\keeperService.js | **unreviewed** |
 | `localizationServer.UpdateLocalizationQAWrap` | 2 | localizationClient.pyj | services\support\localizationServerService.js | QA only |
 | `milestoneMgr.ProcessCharacterLogon` | 1 | milestoneSvc.pyj | services\character\milestoneMgrService.js | fire-and-forget |
@@ -58,7 +57,7 @@ Total client calls: 542 · MISSING 0 · STUB 38 · NULLABLE 101 · OK 403
 | `survey.ClaimSurveyRewards` | 1 | surveySvc.pyj | services\support\surveyService.js | fire-and-forget |
 | `survey.PerformSurveyChecks` | 1 | surveySvc.pyj | services\support\surveyService.js | fire-and-forget |
 
-## NULLABLE (101)
+## NULLABLE (102)
 
 | call | sites | client module | server file | why it is acceptable today |
 | --- | --- | --- | --- | --- |
@@ -106,6 +105,7 @@ Total client calls: 542 · MISSING 0 · STUB 38 · NULLABLE 101 · OK 403
 | `fighterMgr.ExecuteMovementCommandOnFighters` | 1 | fightersSvc.pyj | services\fighter\fighterMgrService.js | **unreviewed** |
 | `fwCharacterEnlistmentMgr.CreateMyDirectEnlistment` | 1 | fwEnlistmentSvc.pyj | services\corporation\fwCharacterEnlistmentMgrService.js | **unreviewed** |
 | `fwCharacterEnlistmentMgr.RemoveMyDirectEnlistment` | 1 | fwEnlistmentSvc.pyj | services\corporation\fwCharacterEnlistmentMgrService.js | **unreviewed** |
+| `industryMonitor.DisconnectJob` | 1 | industrySvc.pyj | services\industry\industryMonitorService.js | fire-and-forget |
 | `inSpaceCompressionMgr.CompressItemInSpace` | 1 | itemCompression.pyj | services\mining\inSpaceCompressionMgrService.js | **unreviewed** |
 | `killRightMgr.ActivateKillRight` | 2 | bountySvc.pyj | services\bounty\killRightMgrService.js | **unreviewed** |
 | `killRightMgr.BuyKillRight` | 1 | bountySvc.pyj | services\bounty\killRightMgrService.js | **unreviewed** |
@@ -164,17 +164,15 @@ Total client calls: 542 · MISSING 0 · STUB 38 · NULLABLE 101 · OK 403
 | `wormholeMgr.WormholeJump` | 1 | movementFunctions.pyj | services\exploration\wormholes\wormholeMgrService.js | **unreviewed** |
 | `XmppChatMgr.EnsureResourceWarsChannelExists` | 1 | rwservice.pyj | services\chat\xmppChatMgrService.js | **unreviewed** |
 
-## gRPC gateway types (216 client request types, 255 names known to the gateway, 13 of those client types defaulted)
+## gRPC gateway types (216 client request types, 262 names known to the gateway, 11 of those client types defaulted)
 
 A type no gateway service names is answered with a default-encoded 200
 (`fork f256261`): the client gets a valid empty message instead of a 404 it
 cannot decode, and the gateway logs the type. These carry no data yet:
 
 - `eve_public.achievement.definition.api.cdn.GetLatestRequest`
-- `eve_public.ai.assistant.chat.api.QueryRequest`
 - `eve_public.auth.AuthenticateUsernameRequest`
 - `eve_public.auth.steam.AuthenticateSteamRequest`
-- `eve_public.cosmetic.market.component.listing.api.InitiatePurchaseListingRequest`
 - `eve_public.debug.Request`
 - `eve_public.freelance.contributionmethod.itemdelivery.api.DeliverRequest`
 - `eve_public.internal_gateway.ConsumeEventsRequest`

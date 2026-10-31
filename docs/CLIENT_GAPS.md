@@ -101,10 +101,28 @@ checked that way, and both were proven live on `evejs-agents`:
 - `achievement.api.admin.ResetAll` (fork `6133d3e`) - clears one character's rows and unclaimed list
   in one write.
 
-Still open (8): the three sequencing price/duration quotes (our jobs cost component licences, not
-PLEX - a PLEX price we never charge would be a lie), `freelance...Deliver` (no project system),
-`sovereignty.resource.planet.GetAllConfigurations` (no configurations exist here),
-`user.license.Get` (no acceptance record), and `eve_public.Request` / `ai.assistant` (not ours).
+Still open (0): every request type the installed client's code really sends now has an explicit
+answer (`CONSUMED_NOT_ANSWERED 0`). The last six were closed on 2026-10-31 (fork `8c2213a`), after
+the audit was pointed at the *deployed* registry instead of a source scan - three types that looked
+open (`achievement.definition...GetLatest`, `user.license..Get`, both listed above as "not ours")
+had been answered all along through template-literal type lists a string scan cannot see.
+
+How each of the last six answers, and why it is the truth:
+
+| call | answer | why |
+| --- | --- | --- |
+| `sequencing.api.GetTierPricing` | 0 PLEX per tier | a sequencing job is paid in component licences, spent by `Initiate`; no PLEX is ever charged |
+| `sequencing.api.GetTierDurations` | the store's own duration | the client shows this number and the job completes when it has passed |
+| `sequencing.api.GetEarlyCompletionPricing` | 0 PLEX, one window (0 < remaining <= duration) | `CompleteEarly` charges nothing |
+| `freelance...itemdelivery.Deliver` | `project_does_not_exist` | there is no freelance project system to deliver into; the client has that exact oneof branch |
+| `ai.assistant.chat.api.Query` | `501` + "this world has no AI assistant service" | a friendly fabricated "AI" reply would be a lie |
+| `sovereignty.resource.planet.GetAllConfigurations` | empty list (the call is deprecated in the client's own proto) | no planet-level resource configurations exist; the star-level call answers the real ones |
+
+`eve_public.Request` is not a surface: it is the envelope's parent message that every generated
+request module names, and `scripts/coop-gateway-gap-audit.py` now excludes it by name instead of
+demanding an answer that cannot exist. All 24 `AMBIGUOUS_ATTRIBUTION` types (planet/star, pirate
+corruption/suppression, campaign/objective and the licence namespaces) are answered in both forms,
+so whichever the client means, it gets a real answer.
 
 Answered since 2026-10-31: `cosmetic.market.component.listing.api.GetAll` and
 `InitiatePurchaseListing` (fork `38bea4d`, `3873cf9`). The recorded blocker was wrong - the 924 real
