@@ -1005,3 +1005,14 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - War state at 16:55Z: 62 campaigns [49 EXPIRED, 5 OCCUPIED, 4 ASSAULT, 4 PREPARING], 7 wars
   ACTIVE. Suites: war 561/561, target-cooldown 13/13 (rewritten to the FW-127/128 bounded
   policy), stock-wreck 6/6, capture+casualty 19/19.
+
+## Skin licence notices, 2026-10-31
+- DONE (fork `69b72f1`, live on `evejs-agents`): admin Grant -> `AddedNotice` with the real row,
+  Activate -> `UpdatedNotice` with before/after attributes, Revoke -> `DeletedNotice`, and a market
+  purchase -> `AddedNotice` for the buyer only (`skinListingGatewayService` reuses
+  `buildAttributes`/`licenseIdentifier` from the licence service rather than duplicating the shape).
+- Measured on the deployed server: `CREATE=200 BUY=200`, notice skin = the sold skin, attributes
+  unactivated 1 = the buyer's real row, target `{character: 140000002}`.
+- Notice surface: 144 client types, 106 subscribed, 39 published, 68 silent, 0 published-not-in-client.
+- Play stack still runs the 16:23 build: it misses StartedNotice, CompletedNotice, the title notices,
+  the purchase notice and these licence notices. One restart window delivers all of them.
