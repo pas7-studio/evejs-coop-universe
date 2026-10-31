@@ -2919,3 +2919,9 @@ Evidence: agents: GetAll 120 listings (type 82340 @250000 ISK); purchase -> 200,
 Why: The component-listing calls are no longer open and their recorded blocker was false; gateway gap register corrected
 Where: docs/CLIENT_GAPS.md
 Evidence: node --test coop-component-market + coop-industry-monitor-ownership + coop-admin-blueprint-auto = 16/16
+### 2026-10-31T14:28Z · 61a6dcb · TEST · integration: archive the bridge copies this session changed
+
+Why: integration copies of the admin bridge must equal the deployed fork file; refreshed the two this session changed
+Detail: coopAdminBridgeActions/copy now include blueprint_auto; the engine audit no longer reports them as drifted. The remaining 6-7 drifted copies and the oversized coopVirtualWorldRuntime are pre-existing work from other sessions and are recorded in state.md as the next gate task.
+Where: .opencode/state.md, integration/coopAdminBridge.cjs, integration/coopAdminBridgeActions.cjs
+Evidence: node scripts/coop-engine-audit.cjs drift 9 -> 7; coop-admin-bridge tests 14/14
