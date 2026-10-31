@@ -108,12 +108,32 @@ for (const shipTypeID of hulls) {
       canPurchase: true,
       singlePurchase: false,
       tags: ["skin", "cosmetic"],
-      fulfillment: { kind: "skin_license", licenseTypeID: licence.licenseTypeID },
+      fulfillment: {
+        kind: "skin_license",
+        licenseTypeID: licence.licenseTypeID,
+        // storeFulfillment refuses a licence with no skinID: the grant goes through
+        // shipCosmeticsState.giveSkin(characterID, skinID, {licenseTypeID}), which needs both.
+        skinID: toInt(licence.skinID, 0),
+      },
     });
   }
 }
 
-console.log(`SKIN licenceHulls=${hulls.length} newOffers=${newOffers.length} existingOffers=${(store.offers || []).length}`);
+// Repair pass: offers seeded before the fix carry only licenseTypeID, and the store refuses such a
+// purchase with INVALID_SKIN_LICENSE. Fill the missing skinID from the licence catalogue.
+let repairedOffers = 0;
+for (const offer of store.offers || []) {
+  const fulfillment = offer && offer.fulfillment;
+  if (!fulfillment || fulfillment.kind !== "skin_license") continue;
+  if (toInt(fulfillment.skinID, 0) > 0) continue;
+  const licence = licenceTypes[String(fulfillment.licenseTypeID)];
+  const skinID = toInt(licence && licence.skinID, 0);
+  if (!(skinID > 0)) continue;
+  fulfillment.skinID = skinID;
+  repairedOffers += 1;
+}
+
+console.log(`SKIN licenceHulls=${hulls.length} newOffers=${newOffers.length} repaired=${repairedOffers} existingOffers=${(store.offers || []).length}`);
 if (newOffers.length > 0) {
   console.log(`SKIN sample=${JSON.stringify(newOffers[0]).slice(0, 320)}`);
 }
@@ -121,7 +141,7 @@ if (!apply) {
   console.log("SKIN DRY_RUN (pass --apply to write)");
   process.exit(0);
 }
-if (newOffers.length <= 0) {
+if (newOffers.length <= 0 && repairedOffers <= 0) {
   console.log("SKIN NOTHING_TO_DO");
   process.exit(0);
 }
