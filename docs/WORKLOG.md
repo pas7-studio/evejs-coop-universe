@@ -3022,3 +3022,9 @@ Why: Daily goal progress is measured, not pushed: the card only moved when the w
 Detail: Live on evejs-agents: first sight silent, a real 0 -> 1 step announced the same goal id, the next measurement announced nothing. Notice surface: 41 published / 66 silent.
 Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json, tests/coop-daily-goals-gateway.test.mjs
 Evidence: coop-daily-goals-gateway 9/9, coop-daily-goals 22/22 together; live on evejs-agents BASELINE=0 RECORDED=RECORDED SAME_GOAL=true REPEAT=true
+### 2026-10-31T17:53Z · c50d8a1 · OPS · state: publish today's notice work, and stop the state scanner reading rules as tokens
+
+Why: The state publisher reported STATE_PROBLEMS on its own output: separator rules read as long tokens and status.json over budget
+Detail: A separator rule in a client log is 40+ characters and was reported as a leaked token, and so was a repository path; status.json also grew past its 4 KB budget only because it was pretty-printed. The publisher now keeps the rules out of the evidence, writes status.json compact, and the scanner ignores runs that cannot be a secret.
+Where: scripts/coop-state.cjs, state/NOW.md, state/changelog.jsonl, state/digests/20261025-131734.md, state/digests/20261025-132207.md, state/digests/20261025-141915.md, state/digests/20261025-141928.md, state/digests/20261025-141937.md, state/digests/20261025-142742.md, state/digests/20261031-173518.md, state/digests/20261031-175211.md, state/digests/20261031-175251.md, state/ledger.json, state/manifest.json, state/status.json
+Evidence: node scripts/coop-state.cjs --verify -> STATE_OK after the change; state/NOW.md republished
