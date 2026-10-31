@@ -3016,3 +3016,9 @@ Why: The client subscribes to the ship skin licence notices and nothing publishe
 Detail: Live: a real sale published AddedNotice for the buyer with its real licence row. Notice surface: 39 published / 68 silent.
 Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json, tests/coop-skin-listings.test.mjs, tests/coop-third-party-skins.test.mjs
 Evidence: coop-third-party-skins 12/12, coop-skin-listings 9/9; live on evejs-agents CREATE=200 BUY=200 SAME_SKIN=true MATCHES_ROW=true
+### 2026-10-31T17:18Z · b709cde · L2 · daily goals: prove the progress notices, measured on the deployed server
+
+Why: Daily goal progress is measured, not pushed: the card only moved when the window was reopened
+Detail: Live on evejs-agents: first sight silent, a real 0 -> 1 step announced the same goal id, the next measurement announced nothing. Notice surface: 41 published / 66 silent.
+Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json, tests/coop-daily-goals-gateway.test.mjs
+Evidence: coop-daily-goals-gateway 9/9, coop-daily-goals 22/22 together; live on evejs-agents BASELINE=0 RECORDED=RECORDED SAME_GOAL=true REPEAT=true
