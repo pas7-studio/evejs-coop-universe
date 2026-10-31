@@ -1016,3 +1016,23 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - Notice surface: 144 client types, 106 subscribed, 39 published, 68 silent, 0 published-not-in-client.
 - Play stack still runs the 16:23 build: it misses StartedNotice, CompletedNotice, the title notices,
   the purchase notice and these licence notices. One restart window delivers all of them.
+
+## FW-137 + measured 17:10Z: THE FRONTIER MOVES AND THE WAR PAYS
+- Fork 9b0970a (FW-137): a fallen pilot had no faction left - the identity link and the war fleet
+  registry row are both released with the confirmed wreck, so warPilotFaction() returned 0 and the
+  pilot's own death benefit answered WAR_TREASURY_PAYOUT_NOT_AUTHORIZED (measured 16:58:14Z on
+  coop-pilot-018). The persisted casualty ledger is now the last authority, used only for a pilot
+  it really recorded.
+- THREE capture-by-force applications since 16:50Z, all real native wrecks with an empty defender:
+  16:51:01Z **30000142** (war:500001-500011:r3), 16:57:20Z **30000144** (war:500011-500020:r4),
+  17:06:05Z **30000139** (war:500001-500020:r5). OCCUPIED 4 -> **7**; before FW-136 the last
+  capture was 09:23:09Z.
+- THREE bounties paid from the factions' own wallets in the same window, 1 000 ISK each:
+  16:58:14Z coop-pilot-015 (journal 8000000000000016), 17:00:15Z and 17:01:55Z coop-pilot-023
+  (journals 8000000000000032/34).
+- War state 17:10Z: 68 campaigns [49 EXPIRED, **7 OCCUPIED**, 5 ASSAULT, 7 PREPARING], 7 wars
+  ACTIVE. Wallets: 1000035 4 975 000, 1000120 4 994 000, 1000135 4 992 000, 1000129 13 022.53,
+  1000436/1000162 5 000 000 ISK.
+- Remaining measured tails (not defects of the capture path): NO_REAL_CAMPAIGN_FOR_EVENT for kills
+  whose victim was never a mobilised war hull (stock/neutral), and NO_DEFENDER_WRECK where the
+  garrison really refilled.
