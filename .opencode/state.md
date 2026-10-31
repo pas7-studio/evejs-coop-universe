@@ -1,5 +1,24 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 17:05Z - margin gates: the factory stopped burning ISK
+
+- Live chain proven: shopping trip -> hangar -> `living-npc-manufactured` (Miner I, q=1) ->
+  product in the hangar. Payroll pays from the real corporation wallet (coopCorpWallet).
+- Found the leak: Miner I costs 481 Pyerite + 119 Mexallon = 12 739 ISK at the regional bids
+  and the only real bid is 6 028. Every job burned 7 467 ISK. The manufacture tick now refuses
+  such a recipe with `NO_MARGIN` (`losesMoney`), keeping `isTrivialRecipe` for the other side.
+- Blueprint purchase is now by real profit: `unitCostOf` (materials at local bid prices),
+  `buildable` (min of runs the factory can feed and units the buyer absorbs), `profit`, and
+  `runsAtStation` measured at the FACTORY, not at the shop. Best measured candidate:
+  Reinforced Bulkheads I blueprint 1334 at Jita 60003760, 175 000 ISK, 6 944 Trit per unit,
+  bid 242 x 5 122 = 1 064 524 ISK profit potential (Trit has no bid in The Forge = free input).
+- Known repair case: pilot coop-pilot-006 journal is `MARKET_ORDER_NOT_FILLED` but the order row
+  shows 825 007 units traded since issue, so no single fill can be attributed. It stays
+  NEEDS_OPERATOR_REPAIR; hull 980000000002 remains blocked on purpose.
+
+Next: confirm `living-npc-blueprint-bought` for 1334 and the first Bulkheads run, then its sale
+into the 242-unit Jita bid.
+
 ## 2026-10-31 16:20Z - the shopping trip works; payroll was the real blocker
 
 - Root cause found: `coopPilotPayroll.walletRead` transacted the `corporations` table, which the

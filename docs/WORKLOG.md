@@ -2987,3 +2987,8 @@ Why: The client subscribes to sequencing StartedNotice and nothing published it
 Detail: Deployed to evejs-agents (fork 1bb2ff9); the play stack is healthy on the previous build, which already carries the daily-goal RedeemedNotice and the real transaction uuid.
 Where: tests/coop-skin-sequencing.test.mjs
 Evidence: coop-skin-sequencing 6/6; notice payload id equals the InitiateResponse id
+### 2026-10-31T16:34Z · 2f3b772 · L2 · alife30d: margin gates for manufacturing and blueprint purchase, tested
+
+Why: The factory was building at a loss and buying the first affordable blueprint instead of the profitable one
+Where: integration/coopBlueprintPurchase.cjs, integration/coopLoopTick.cjs, integration/coopNpcManufactureTick.cjs, tests/coop-blueprint-purchase.test.mjs, tests/coop-npc-manufacture-tick.test.mjs
+Evidence: losesMoney gate (NO_MARGIN) in the manufacture tick; blueprint chooser now values a blueprint by real material cost and the units it can build and sell (unitCostOf, buildable, profit); measured Miner I inputs 12 739 vs bid 6 028, bulkheads blueprint 175 000 for 242 x 5 122; tests 21 + 7
