@@ -2969,3 +2969,9 @@ Evidence: audit CONSUMED_NOT_ANSWERED 0 on the play stack (297 handled); coop-cl
 Why: The shopping trip existed but fired only after a sale at a seller, and payroll could never pay: the atomic bridge refuses the corporations table
 Where: integration/coopLoopTick.cjs
 Evidence: import phase + importPlan with reciprocal gate and one-trip lock; payroll now debits through coopCorpWallet (corporationRuntimeState) with a written debit marker; live living-npc-input-bought TRADE_SETTLED and bought counters 160/140
+### 2026-10-31T16:17Z · 43022d8 · TEST · audit: measure the notice surface the request audit cannot see
+
+Why: The request audit says nothing about notices; the client waits on 107 of them and the server publishes 31
+Detail: A request is answered or not; a notice is waited for and the window stays frozen if nobody publishes it. The new audit derives the 107 notice types the client really subscribes to from its own archive and compares them with the 31 the server can publish, so the gap is a number instead of a guess: 77 silent, and the ones that matter are listed by owning domain.
+Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json, scripts/coop-gateway-notice-audit.py, scripts/coop-published-notices.cjs
+Evidence: coop-gateway-notice-audit: 144 client notice types, 107 subscribed, 31 published, 77 subscribed-not-published, 0 published-not-in-client
