@@ -1,5 +1,23 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 17:15Z - blueprint shopping trip is live; the factory no longer builds at a loss
+
+- Live proof of the margin gate: `living-npc-manufacture-attempt` reports
+  `rejected: ["60000682:785:NO_MARGIN"]` - Miner I is refused instead of burning 7 467 ISK/unit.
+  A second bug was fixed with it: the input valuation only ran for a LOCAL bid, so a buyer one
+  gate away skipped it entirely and the loss-making recipe passed every gate.
+- New `mode: "blueprint"` shopping trip (env `EVEJS_COOP_BLUEPRINT_SHOP_TRIP=1`):
+  `blueprintPlan` ranks seeded blueprint asks by real profit = (product bid - material cost at
+  local bids) x units the factory can feed x units the bid absorbs, minus the ask; it crosses
+  only on a reciprocal gate, buys through `buyBlueprint`, returns home, and the hold is stowed
+  and adopted at the factory. All shopping modes share one `SHOPPING_MODES` set in the run.
+- Tests: 81/81 across the run, manufacture tick, blueprint purchase, input supply, payroll and
+  the scope guard. Commits: fork `f4a2977`, repo `1f8cd90b`, plan `.opencode/plan.md`.
+
+Still open: nothing is *waiting* for the blueprint trip yet, because the factory keeps needing
+Mexallon, and the input trip has priority - that is the intended order. The 1334 run will start
+when the hangar is no longer short.
+
 ## 2026-10-31 17:05Z - margin gates: the factory stopped burning ISK
 
 - Live chain proven: shopping trip -> hangar -> `living-npc-manufactured` (Miner I, q=1) ->
