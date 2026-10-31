@@ -1,0 +1,47 @@
+# MISSION 001 - isolated test world for the native NPC wreck loot refactor.
+#
+# Isolation contract (docs/TWO_STACKS_PLAY_AND_WORK.md says why a project name
+# alone is not enough):
+#   * project evejs-m001, never `evejs` (owner's PLAY) and never `evejs-agents`;
+#   * volumes evejs-m001-data / evejs-m001-images - its own game DB, market DB,
+#     writable certificates and generated images, no mount of live PLAY data;
+#   * host ports 29443/26222/29000-29002/42110 (loopback only), so no PLAY or
+#     agent-stack port is involved;
+#   * immutable image tag built from the mission worktree at a pinned SHA.
+#
+# Usage:
+#   docker compose -p evejs-m001 --project-directory <Code> \
+#     -f compose.yaml -f compose.coop-probe.yaml -f compose.mission001.yaml up -d
+services:
+  init:
+    image: ${EVEJS_M001_IMAGE:?set EVEJS_M001_IMAGE to the pinned build tag}
+  market-tools:
+    image: ${EVEJS_M001_IMAGE:?set EVEJS_M001_IMAGE to the pinned build tag}
+  market:
+    image: ${EVEJS_M001_IMAGE:?set EVEJS_M001_IMAGE to the pinned build tag}
+    ports: !override
+      - "127.0.0.1:42110:40110"
+  server:
+    image: ${EVEJS_M001_IMAGE:?set EVEJS_M001_IMAGE to the pinned build tag}
+    ports: !override
+      - "127.0.0.1:29443:26003"
+      - "127.0.0.1:26222:5222"
+      - "127.0.0.1:29000:26000"
+      - "127.0.0.1:29001:26001"
+      - "127.0.0.1:29002:26002"
+    environment:
+      EVEJS_COOP_STACK: m001
+      # Real pacing: this mission measures behaviour, not travel time.
+      EVEJS_COOP_TIME_SCALE: "1"
+      # The four co-op paths the refactor touches stay ON as in the owner's world
+      # (compose.coop-probe.yaml already enables evidence + quarantine), and the
+      # other two are opt-in knobs the scenarios switch explicitly:
+      #   EVEJS_COOP_NPC_EXPEDITION_WRECK, EVEJS_COOP_SALVAGE_ATOMIC_TRANSFER,
+      #   EVEJS_COOP_PVE_BOSS_LOOT_FENCE
+      # They are deliberately left at their code defaults here.
+      EVEJS_COOP_MISSION: "001"
+volumes:
+  evejs-data:
+    name: evejs-m001-data
+  evejs-images:
+    name: evejs-m001-images
