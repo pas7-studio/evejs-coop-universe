@@ -1,5 +1,26 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 15:10Z - the factory and the merchant no longer fight over the same minerals
+
+Measured, then fixed: the lift shipped EVERY type the destination bids for, so the refiner's
+Pyerite and Mexallon were sold the moment they appeared while the manufacturer kept answering
+`MATERIALS_MISSING 34:1324/3892702 35:481/0 36:119/0`. The hangar held 3.8 M Tritanium and
+nothing the two buildable-for-demand blueprints needed.
+
+- `coopNpcInputSupply.planSupply` names the exact shortfall from the blueprints that really sit
+  at a station, their real recipes and the real hangar (union across recipes, biggest hole
+  first, bounded per trip); `heldAt` reads hangar rows honestly (a singleton counts as one).
+- The reserve is DEMAND-AWARE: only a blueprint whose product has a seeded bid in
+  30000142/30000144/30000145 reserves material. Live: Pyerite 962, Mexallon 238, Trit 2 650 -
+  without that filter the ammunition nobody bids for would have locked 12 562 Pyerite.
+- `planLift` and `planTrip` subtract the reserve, so the factory's stock is never freight.
+
+**What is still missing for the loop to close:** the refinery only sees Veldspar in this window
+(`living-npc-refined 17471 -> 1 mineral`, i.e. Tritanium only), so Pyerite arrives rarely; the
+demand-backed Miner I needs 481 Pyerite + 119 Mexallon per run. Next: buy inputs at the station
+that really sells them (Jita asks 16.03 / 48.61) and carry them home - payroll is already in
+place, so such a purchase can settle from the corporation's own wallet.
+
 ## 2026-10-31 14:40Z - the economy can now BUY, STORE and ADOPT (and still cannot get materials)
 
 Proven live on evejs-agents:

@@ -2931,3 +2931,13 @@ Why: integration copies for courier, market catalog and war advantage drifted fr
 Detail: Brings the archived copies back to the fork so the extraction gate stops reporting them as drifted (drift was 7, now 1). Courier/market/war tests stay green (31/31).
 Where: integration/coopCourierFlightDriver.cjs, integration/coopCourierGateHop.cjs, integration/coopCourierRuntime.cjs, integration/coopDistributionPlan.cjs, integration/coopLoopTick.cjs, integration/coopMarketCatalog.cjs, integration/coopNpcInputSupply.cjs, integration/coopNpcMineralLift.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarAdvantage.cjs
 Evidence: coop-engine-audit drift 7 -> 1; courier+market+war tests 31/31
+### 2026-10-31T14:36Z · 366dab5 · OPS · docs: worklog for the integration archive batch
+
+Why: Owner authorized a restart window; deployed the component market and blueprint_auto to the play stack
+Where: docs/WORKLOG.md
+Evidence: evejs-server-1 healthy, EVEJS_COOP_COMPONENT_MARKET=1, play GetAll 120 listings (82340 @ 45922 ISK), no exceptions in 2 min
+### 2026-10-31T14:39Z · e4d63c9 · L2 · alife30c: input supply and reserve, tested
+
+Why: The merchant and the factory competed for the same minerals and the merchant always won, so the manufacturer starved while 3.8M Tritanium sat unsold
+Where: tests/coop-npc-input-supply.test.mjs
+Evidence: reserve computed live: Pyerite 962, Mexallon 238, Tritanium 2650 for the two blueprints that have a real bid nearby; only demand-backed products reserve; planLift/planTrip subtract it; tests input-supply 7/7, run 32/32, plan 12/12
