@@ -332,3 +332,23 @@ derived) -> OPENED. New campaign war:500001-500004:campaign:30045339 is PREPARIN
 GARRISON_APPLIED. Campaign states: 20 EXPIRED, 2 OCCUPIED, 1 PREPARING.
 
 Suite: coop-faction-war-fronts 11/11, opening/front suites 17/17.
+
+## FW-113 / FW-114 (fork f964aad, 5af2fe5): scale-up - 1 live campaign -> 7
+- FW-113: expansion borders are ADDITIONAL candidates, not a last resort (registered borders are
+  still planned first). maxPerSide 2 -> 3, still bounded by the merit rank.
+- FW-114: the declaration proof accepts real military CONTROL of the source as the attacker
+  authority, not only hulls parked there. MEASURED 2026-10-31: 500020 holds 30000144 with one
+  hull in the world while 23 foreign ships sit there, so that faction could never open any war.
+  START_CAMPAIGN already requires the source to be the attacker's own territory and the garrison
+  is what puts hulls there; the navy gate still decides whether the faction can shoot.
+
+LIVE after both deploys (07:52Z): campaigns 20 EXPIRED / 2 OCCUPIED / **1 ASSAULT + 6 PREPARING**
+(was one live), territories **13** (was 6), active wars **6** (was 4), fleet 7 registered hulls.
+Live fronts: 30045339 ASSAULT; PREPARING 30000139/30000140/30000143 (500001-500020),
+30002642 (500004-500020), 30045338/30045342 (500001-500004). 3 war-opened events, 18
+GARRISON_APPLIED, 4 casualties RECORDED.
+
+## The one money blocker, now named exactly
+living-native-war-bounty-wallet-backed -> reserve BLOCKED:WAR_TREASURY_FUNDS_UNAVAILABLE
+(faction 500001 has 0 ISK; 500004 has 3000). FW-111 instrumentation is what made this visible.
+Next: real income (sell loot to seeded buyers) or a funded side; no minting.
