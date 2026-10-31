@@ -615,12 +615,15 @@ test("a hull with nothing to carry shops for the factory's missing input", async
     goTo: () => true, now: 36000 });
   assert.equal(arrived.status, "IMPORT_HOME", "home in system is not home at the station");
   let unloaded = null;
+  let refreshed = false;
   const back = await run.tick(hull, { distanceTo: () => 900, hullSystemOf: () => 30000145, now: 37000,
+    refreshFactorySupply: () => { refreshed = true; return true; },
     stow: (args) => { unloaded = args; return { status: "STOWED",
       stowed: [{ typeID: 35, quantity: 20, status: "STOWED" }] }; } });
   assert.equal(back.status, "REPLANNING");
   assert.deepEqual(unloaded.types, [35], "only what this trip bought is unloaded");
   assert.equal(back.state.lastReason, "UNLOADED_AT_FACTORY");
+  assert.equal(refreshed, true, "a delivery must invalidate the cached shortfall");
 });
 
 test("a paying trip is still preferred over a shopping trip", async () => {
