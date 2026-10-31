@@ -1,5 +1,30 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 10:20Z (UTC) - the blueprint purchase decides correctly and then throws
+
+MEASURED this round:
+  - the corporation holds 3 231 796 Tritanium at 60000682 and Jita bids **0** for it - the raw
+    mineral trade is over, which is exactly why production must grow;
+  - station 60000682 offers **38 blueprints** (60014935 offers 189, Jita 60003760 the rest);
+  - with demand read ACROSS reachable systems the chooser answers **BUY: Caldari Shuttle
+    Blueprint (type 967) at 42 500 ISK, 1 227 runs possible at that very station** - the
+    decision layer works end to end, verified by replaying its inputs;
+  - the live call then fails: living-distribution-blueprint BUY_THREW with an EMPTY reason and
+    stack. Instrumentation for both catch sites is deployed (loop + runtime helper), but no new
+    attempt has happened since (the runs rest in DONE and the purchase only fires from the
+    planning/idle path when the journal is replanned).
+
+Fixed and kept:
+  - demand for the purchase is read where the PRODUCT sells (system + one gate), not where the
+    blueprint is bought - that alone turned NO_BLUEPRINT_WORTH_BUYING into BUY;
+  - the chooser prefers blueprints whose recipe can be run at that station (runsAtStation);
+  - the purchase runs at the loading stop AND when no trip is worth taking, at the station that
+    holds the most corporation stock.
+
+NEXT (precise): force one purchase attempt against the instrumented build and read the stack;
+the empty message means a non-Error throw inside the trader path (most likely the market
+trader refusing a hull that is not physically at the station scene it was handed).
+
 ## 2026-10-31 08:45Z (UTC) - the loop ran out of DEMAND, which is the point
 
 MEASURED: Jita's Tritanium buy order is now **quantity 0** (price 3.71) - the fleet sold into it
