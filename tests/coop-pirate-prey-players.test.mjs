@@ -151,3 +151,24 @@ test("the eligibility gate refuses a player hull by default and allows it only w
     env: {EVEJS_COOP_PIRATE_PREY_PLAYERS: "1"},
   }), false, "an NPC hull still needs the real mining fleet and its own rules");
 });
+
+test("a refused release is retried on a backoff, not on every tick", () => {
+  let now = Date.UTC(2026, 9, 31, 22, 30, 0);
+  const raids = createRaids({
+    clock: () => now,
+    warp: () => ({success: true}),
+    attack: () => ({success: true}),
+    release: () => ({success: false, errorMsg: "WRECK_CLAIM_OWNS_HULL"}),
+  });
+  const first = raids.releaseExcluded([501], "WRECK_CLAIM_OWNS_HULL", {force: true});
+  assert.equal(first.length, 1, "the first attempt really talks to the owner");
+  assert.equal(first[0].released, false, "and it was refused");
+  assert.equal(raids.releaseExcluded([501], "WRECK_CLAIM_OWNS_HULL", {force: true}).length, 0,
+    "the same refusal is not repeated a tick later");
+  now += 30_000;
+  assert.equal(raids.releaseExcluded([501], "WRECK_CLAIM_OWNS_HULL", {force: true}).length, 0,
+    "still inside the backoff window");
+  now += 31_000;
+  assert.equal(raids.releaseExcluded([501], "WRECK_CLAIM_OWNS_HULL", {force: true}).length, 1,
+    "retried once the window ends");
+});
