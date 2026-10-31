@@ -78,6 +78,10 @@ services:
       # seeded world sells 2 772 of them from station stock. A hull that has just sold at the
       # buyer station may buy ONE, with real ISK, through the native trader (seeded ask only).
       EVEJS_COOP_BLUEPRINT_PURCHASE: "1"
+      # Payroll: the market settles a purchase out of the PILOT's earned balance and the
+      # treasury sweep empties every pilot after each sale, so the corporation pays its own
+      # pilot from its real wallet instead of holding 1.45 billion nobody can spend.
+      EVEJS_COOP_NPC_PAYROLL: "1"
       EVEJS_COOP_BLUEPRINT_PRICE_CAP: "500000"
       EVEJS_COOP_BLUEPRINT_BUDGET: "5000000"
       # The economic phases get their own beat: measured 2026-10-29, the stock hook ran at
@@ -169,6 +173,7 @@ services:
       # record (wallet/treasury), not in a row that can disappear, so no money may
       # move until that is fixed. Keep 0.
       EVEJS_COOP_WAR_MERCENARY_CONTRACT: "1"
+      EVEJS_COOP_COMPONENT_MARKET: "1"
       # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
       # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
       # Remove this line for normal agent runs.

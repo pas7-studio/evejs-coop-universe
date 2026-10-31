@@ -421,6 +421,10 @@ async function tick(haulerID, authorities = {}, env = process.env) {
           lastReason: "STOWED:" + moved.map((row) => row.typeID).join(",") }, env);
         note(observe, "living-distribution-run", now2, { reason: now2.lastReason });
         state = now2;
+      } else if (stored && stored.status && stored.status !== "NOTHING_TO_STOW") {
+        // A refusal that says nothing is the same as no attempt: name every one of them.
+        note(observe, "living-distribution-stow", state,
+          { reason: String(stored.status).slice(0, 60), stationID: pos(state.fromStationID) });
       }
     }
   }
@@ -481,6 +485,9 @@ async function tick(haulerID, authorities = {}, env = process.env) {
         const moved = (stored.stowed || []).filter((row) => row.status === "STOWED");
         note(observe, "living-distribution-run", state,
           { reason: "STOWED:" + moved.map((row) => row.typeID).join(",") });
+      } else if (stored && stored.status && stored.status !== "NOTHING_TO_STOW") {
+        note(observe, "living-distribution-stow", state,
+          { reason: String(stored.status).slice(0, 60), stationID: stop.stationID });
       }
     }
     // Buy a blueprint where the hull LOADS: that is the station the corporation keeps its
