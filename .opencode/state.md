@@ -1,5 +1,28 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 13:35Z (UTC) - the blueprint purchase names its refusals one by one, and each is fixed
+
+The decision is proven: with demand read across reachable systems the chooser answers **BUY**
+for the **Caldari Shuttle Blueprint (type 967) at 42 500 ISK, 1 227 runs buildable at station
+60000682** - replaying the exact inputs of the live authority reproduces it.
+
+Each live attempt then refused in turn, and every refusal was a real defect, now fixed:
+  1. BUY_THREW 'registry is not defined' - the helper used the wrong variable name for the
+     identity registry (it is `identityRegistry` in that file);
+  2. INSUFFICIENT_EARNED_ISK - the market funds a purchase from the PILOT's earned balance, not
+     the corporation treasury, so the hull now takes a pilot that has actually earned the price
+     (same link mechanism as the sale);
+  3. TOO_FAR_FROM_STATION - the trader only trades through a hull that is at the station, so the
+     idle path flies there first and buys on the beat that arrives.
+
+What is left is TIMING, not logic: an attempt needs a hull at the stock station while either no
+trip is worth taking or it is loading there. Three hulls are cycling (HOME_AGAIN) and the buy
+fires from the loading stop; watch for the first LOADED_STOP at 60000682 and then
+living-npc-blueprint-bought.
+
+Open from before: 980000000002 is blocked UNRESOLVED_MARKET_JOURNAL (market row proves NOT
+filled, so the world correctly refuses to credit it).
+
 ## 2026-10-31 10:20Z (UTC) - the blueprint purchase decides correctly and then throws
 
 MEASURED this round:
