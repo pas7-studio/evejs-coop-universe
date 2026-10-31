@@ -830,3 +830,14 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   NPC_NATIVE_HARDWARE_CHARGE_POLICY_VIOLATION - the doctrine's ammo is not in those families'
   chargeTypeIDs. Until the charge allowlist matches the doctrine ammo, pirate fronts cannot
   muster and only the navy pairs (500001/500004) actually fight.
+
+## Client coverage verdict 2026-10-31 (measured)
+- gateway request types: 0 unanswered on the PLAY stack too (297 handled, redeployed 15:52).
+- client calls: 542 total, MISSING 0, OK 403, NULLABLE 102, STUB 37.
+- of the STUBs: 14 are QA/GM-only, 8 logon/housekeeping, and of the 15 "window" ones only
+  `survey.ClaimSurveyRewards` + `survey.PerformSurveyChecks` are true no-ops (they log an audit
+  event and return null). structureDeployment rename/unanchor + petitioner.MarkAsRead are real;
+  the rest are honest empties. The static STUB label over-reports.
+- daily-goal RedeemedNotice now published (fork 7e04f8f); play stack redeployed and healthy.
+- next real work if the owner wants it: survey rewards need a real reward source first; everything
+  else in the register is either QA-only or honest.

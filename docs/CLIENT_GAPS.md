@@ -140,7 +140,23 @@ The 37 stubs, by what they can actually reach:
 | --- | --- | --- |
 | QA / GM / programmer only | 14 | `node_graph.qa_*`, `keeper.GetLevelEditor`, `publicQaToolsServer.*`, `localizationServer.UpdateLocalizationQAWrap`, `clientStatLogger.LogString`, `bountyProxy.GM*`. A normal player can never send these. |
 | logon and housekeeping | 8 | `milestoneMgr.ProcessCharacterLogon`, `eventLog.LogPlayerRequestedDisconnect`, `operationsManager.process_client_event`, `charMgr.GetCohortsForCharacter`, `charUnboundMgr.*`, `browserLockdownSvc.*`, `pingService.Ping`. Fire-and-forget or tolerated by the client. |
-| windows that would look inert | 15 | `petitioner.*` (5, the petition log read side), `structureDeployment.*` (3, unanchor/rename), `survey.*` (2), `pvpFilamentMgr.*` (4), `rewardMgr.GetRewardLPLogs`. These are the real remaining work. |
+| windows | 15 | see the next table: the label over-reports |
+
+The label is **static**: it says "returns only a constant null / empty answer". Reading the 15
+handlers one by one (2026-10-31) shows most of them are not gaps at all:
+
+| call | what the handler really does | verdict |
+| --- | --- | --- |
+| `structureDeployment.RenameStructure`, `CancelUnanchor` | call `renameStructureByID` / `cancelStructureUnanchorByID`; the client watches a notice, so `null` is the protocol | functional |
+| `petitioner.MarkAsRead` | `store.markMessageRead(character, messageID)` | functional |
+| `petitioner.GetCategoryProperties`, `PropertyPopulationInfo`, `GetClientPickerInfo` | empty lists - a petition here has subject, body, category and nothing else | honest empty |
+| `petitioner.GetLog` | empty - the client wants a `DBRowDescriptor` event log this world does not keep | honest empty, documented |
+| `pvpFilamentMgr.*` (4) | audit-event only, return `null`: this world runs no PVP filament events | by design |
+| `rewardMgr.GetRewardLPLogs` | empty: no LP log store exists | honest empty |
+| `survey.ClaimSurveyRewards`, `PerformSurveyChecks` | record an audit event and return `null` - **nothing happens** | the only two real no-ops |
+
+So the honest count of client calls that pretend to work is **2, not 15** - and both need a real
+survey reward source before they can do anything that is not invented.
 
 Notices were checked separately: the client subscribes to notices and a domain that never publishes
 one stays stale until the window is reopened. `eve_public.dailygoal.api.RedeemedNotice` was exactly
