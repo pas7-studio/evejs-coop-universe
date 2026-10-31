@@ -2964,3 +2964,8 @@ Why: The owner asked what is still uncovered: separate the answered gateway surf
 Detail: Gateway request types are 0 unanswered against the deployed registry; the remaining gaps are 15 player-window stubs (petitioner, structure deployment, survey, PVP filament, reward LP logs), 8 logon/housekeeping and 14 QA-only. Also records the daily-goal RedeemedNotice that was never published.
 Where: docs/CLIENT_GAPS.md, tests/coop-daily-goals-gateway.test.mjs
 Evidence: audit CONSUMED_NOT_ANSWERED 0 on the play stack (297 handled); coop-client-contracts --verify OFFLINE_OK 542 calls, 0 missing, 37 stub, 102 nullable; coop-daily-goals 22/22
+### 2026-10-31T16:04Z · d32d71a · L2 · alife30d: import lock, tested
+
+Why: The shopping trip existed but fired only after a sale at a seller, and payroll could never pay: the atomic bridge refuses the corporations table
+Where: integration/coopLoopTick.cjs
+Evidence: import phase + importPlan with reciprocal gate and one-trip lock; payroll now debits through coopCorpWallet (corporationRuntimeState) with a written debit marker; live living-npc-input-bought TRADE_SETTLED and bought counters 160/140

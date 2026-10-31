@@ -1,5 +1,25 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 16:20Z - the shopping trip works; payroll was the real blocker
+
+- Root cause found: `coopPilotPayroll.walletRead` transacted the `corporations` table, which the
+  native atomic bridge REFUSES (`ATOMIC_TABLE_ALLOWLIST_VIOLATION`). Every salary therefore
+  ended PREPARED with no debit and every purchase answered `INSUFFICIENT_EARNED_ISK`.
+  The payroll now pays through `coopCorpWallet` (owner: corporationRuntimeState) and writes a
+  `debit: PENDING -> DONE` marker before crediting, so a crash can never pay twice (recover()
+  refuses to credit a row whose debit is not DONE).
+- The shopping trip is live: mode=import, empty/roomy hull crosses to the seller, SUPPLY buys
+  through the native trader, RETURN crosses home, REPLAN flies the last leg and unloads ONLY
+  what the trip bought (`importTypes`) into the factory hangar.
+- Live evidence: `living-npc-input-bought` with real quantities (importBought 160 / 140),
+  cargo rows `36x20` appear in the holds, hangar now holds Pyerite 6042 and Mexallon 40.
+- One shopping trip per input at a time: three hulls planned the same Mexallon shortage and
+  bought 420 units for a 119-unit need (material sits in the HOLD, not the hangar).
+
+Next: confirm `living-npc-manufactured` for Miner I (785 -> 483) and its sale into the Jita bid
+(182 units @ 6 028); then check that the refinery's Tritanium and the imported minerals keep
+the factory fed without over-buying.
+
 ## 2026-10-31 15:35Z - exact spec for the last missing leg (shopping trip)
 
 Goal: when the factory is short of an input and no cargo trip pays, a hull flies EMPTY to the
