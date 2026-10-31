@@ -1,5 +1,37 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 17:35Z - the blueprint and the factory finally met
+
+Live, in order (hull 980000000005):
+
+- `living-distribution-blueprint-carry ... CARRY_HOME:1334` (17:27:19)
+- `living-npc-cargo-lifted ... t=1334 s=60003760 LIFTED` (17:28:37) - the physical copy left
+  Jita's shelf and entered the hold through the journaled lift.
+- `BLUEPRINT_CARRIED:1334` -> `RETURN_CROSSING_PLANNED` -> `IMPORT_FLYING_HOME`
+- `living-npc-cargo-stowed STOWED` + `UNLOADED:1334` + `UNLOADED_AT_FACTORY` (17:29:37):
+  item `9988400019945` now sits at 60000682 and the Jita receipt is `MOVED -> 60000682`.
+
+Three bugs were fixed to get here:
+
+1. The 'a hold is not a warehouse' stow ran at the SELLER on the beat after a purchase, so a
+   bought blueprint was shelved and adopted in the wrong system. A shopping trip that has
+   bought something is carrying it, not tidying it.
+2. A blueprint the corporation already owns away from the factory is now a hauling job of its
+   own (`carryOnly` trip, `coopNpcCargoStow.lift`: shelf -> hold, journaled, and the old
+   receipt is marked MOVED rather than deleted). Carrying our own capital comes BEFORE buying
+   more inputs: it costs nothing and unblocks a product.
+3. Every salary was exactly 100 000 ISK, so a 175 000 ISK blueprint could never be bought -
+   `INSUFFICIENT_EARNED_ISK` at 17:14:58 and 17:22:33. The salary is now the price + 2 %,
+   bounded by `EVEJS_COOP_PAYROLL_MAX_CENTS` (default 5 M ISK), keyed by amount so a bigger
+   need is a new payment while the same one never pays twice; DUPLICATE counts as funded.
+
+Tests: 96/96 across run, cargo stow, purchase funding, manufacture tick, blueprint purchase,
+input supply, payroll, scope. Commits: fork `b4e1326`, repo `7b5da1d6`.
+
+Watching next: `BLUEPRINT_ADOPTED` at 60000682, then `living-npc-manufactured` for 1333 and a
+sale into the 242 x 5 122 Jita bid. A second hull (521) is on a carry trip for a copy that has
+already moved; it must answer NOTHING_TO_LIFT and come home, not spin.
+
 ## 2026-10-31 17:20Z - the blueprint trip worked, and exposed the next gap
 
 - Live: `living-distribution-blueprint-trip PROFIT:1064524 BUILDABLE:242`, then the buy settled,
