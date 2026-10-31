@@ -53,6 +53,24 @@ It only UPDATES an existing `seed_stock` row; a new station needs the offline se
 (`scripts/Bootstrap-Coop-Market.ps1`, which takes the `.market.lock` and therefore a
 market stop). Verify with `GET /v1/orders/{region_id}/{type_id}`.
 Result: 100 units at 704,900 ISK, `source: seed`, confirmed in the order book.
+Whole 350mm hybrid line then stocked the same way at 60003760 (region 10000002):
+14280 Carbide 100, 14282 Scout 50, 14284 Compressed Coil 50, 14286 Prototype
+Gauss 50, 12354 Railgun I 50, 12356 Railgun II 50.
+
+**Why the client can still show the old quantity** (`eve/client/script/ui/services/
+marketsvc.pyj`, `RefreshOrderCache`): the client keeps `orderCache[typeID]` and after
+calling `GetOrders` it compares `GetCachedMethodCallVersion` with its stored version;
+if the version matches it DISCARDS the fresh payload. The server only rebuilds that
+version inside `buildCachedMethodCallResult` (i.e. when GetOrders is actually served),
+so a market window opened before an out-of-band change keeps its copy until that type
+is re-selected. `CACHE_INTERVAL = 300` is defined but unused — there is no timer.
+The client's Quantity column is `volRemaining` (`market/quote.pyj GetQuantity`).
+
+**Known cosmetic defect of the live adjust path:** `adjust_seed_stock` updates
+`seed_stock.quantity` but not `initial_quantity`, and the seed sell row maps
+`vol_entered = initial_quantity` (`state.rs query_order_book_rows_with_connection`),
+so an adjusted row reads "remaining 100 / entered 1". Harmless for quantity display,
+wrong for anything showing `volEntered`; a reseed sets it correctly.
 
 ## Traps
 - `docker cp` over `/var/lib/evejs/gameStore/gamestore.sqlite` makes the file
