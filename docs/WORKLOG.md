@@ -2952,3 +2952,9 @@ Why: Every request type the client's own code sends now has an explicit gateway 
 Detail: The audit now reads the deployed registry, so it sees template-literal type lists; measured on evejs-agents: 297 handled types, CONSUMED_NOT_ANSWERED 0, and every one of the 24 ambiguous (planet/star, pirate, campaign, licence) types answered in both forms. Includes the six newly answered calls and the register refresh (37 stub, 403 ok, ai.assistant + component listing no longer defaulted).
 Where: .opencode/state.md, docs/CLIENT_CONTRACT_STATUS.md, docs/CLIENT_GAPS.md, docs/client-contracts/baseline.json, docs/client-contracts/gateway-coverage.json, scripts/coop-gateway-gap-audit.py, tests/coop-gateway-gap-closure.test.mjs
 Evidence: coop-gateway-gap-audit CONSUMED_NOT_ANSWERED 0 (297 handled, live on evejs-agents), all 24 ambiguous types answered, coop-gateway-gap-closure 7/7, contracts --verify OFFLINE_OK
+### 2026-10-31T15:29Z · 8fdb95b · L2 · test: an overshot daily goal must report exactly its target
+
+Why: The owner could not collect a daily-goal reward: the client's completion test is exact equality and payment.schedule.Get 404 crashed a client tasklet
+Detail: The pinned client decides 'completed' with current_progress == target, so the wire value is clamped; the reward still follows the raw haul. Plus the fork-side fix that stops the payment-schedule 404 the client raised as an uncaught exception.
+Where: tests/coop-daily-goals.test.mjs
+Evidence: coop-daily-goals 20/20; client rule read from dailygoals/client/goal.pyj; owner's log shows RequestException(404, no payment schedules exist in this world) at 15:01:43
