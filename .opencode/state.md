@@ -963,3 +963,27 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - Notice surface: 144 client types, 106 subscribed, 36 published, 71 silent, 0 published-not-in-client.
 - Play stack still runs the 16:23 build: it misses StartedNotice, CompletedNotice, the title notices
   and this purchase notice. One restart window delivers all four.
+
+## FW-135/136 (2026-10-31 16:51Z): THE MAP MOVES - first capture-by-force in 7.5 hours
+- Fork 32c62d4 (FW-136): the flat row `coop-faction-war␟casualties-v1` was ABSENT from SQLite
+  while a validated copy of the same document sat in the legacy row group the cache is built
+  from. Every atomic reader saw an EMPTY ledger, so capture-by-force answered NO_DEFENDER_WRECK
+  for all five live ASSAULT fronts even where a real defender wreck and zero live defenders
+  existed. The ledger now reads through its own authority and heals a missing durable row from
+  the validated cache copy inside the caller's transaction.
+- MEASURED 16:51:01Z, first tick after the deploy: `CAPTURED` system **30000142**
+  (war:500001-500011:campaign:30000142:r3, wreck 980300000233, receipt APPLIED). OCCUPIED
+  4 -> 5. The previous capture was 09:23:09Z, seven and a half hours earlier.
+- 16:51:01Z/16:51:10Z the same tick recorded the objective for
+  war:500001-500020:campaign:30000139:r5 (wreck 980300000234). It did not capture because the
+  defending garrison refilled one hull there (liveDefenders 1), which is the FW-134 attrition
+  rule doing its job, not a defect.
+- Fork 30af580 (FW-135): two attribution tails named honestly instead of hiding behind one
+  status - a NAMED war hull killing a stock mining-fleet hull is now ATTACKER_NOT_A_RAID_PIRATE
+  (with pilot and roles) instead of NOT_UNIQUE_NAMED_PIRATE; and the bounty payout/credit eventID
+  now carries the kind, because one wreck legitimately pays twice (killer's warship-kill and the
+  fallen pilot's force-lost death benefit) and the second payout was refused
+  WAR_TREASURY_EVENT_CONFLICT.
+- War state at 16:55Z: 62 campaigns [49 EXPIRED, 5 OCCUPIED, 4 ASSAULT, 4 PREPARING], 7 wars
+  ACTIVE. Suites: war 561/561, target-cooldown 13/13 (rewritten to the FW-127/128 bounded
+  policy), stock-wreck 6/6, capture+casualty 19/19.
