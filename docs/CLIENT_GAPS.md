@@ -101,12 +101,17 @@ checked that way, and both were proven live on `evejs-agents`:
 - `achievement.api.admin.ResetAll` (fork `6133d3e`) - clears one character's rows and unclaimed list
   in one write.
 
-Still open (10): the three sequencing price/duration quotes (our jobs cost component licences, not
-PLEX - a PLEX price we never charge would be a lie), the two component-listing calls (blocked on the
-real SKIN component item ids inside the client's `ship_skin_design_components.fsdbinary`),
-`freelance...Deliver` (no project system), `sovereignty.resource.planet.GetAllConfigurations` (no
-configurations exist here), `user.license.Get` (no acceptance record), and `eve_public.Request` /
-`ai.assistant` (not ours).
+Still open (8): the three sequencing price/duration quotes (our jobs cost component licences, not
+PLEX - a PLEX price we never charge would be a lie), `freelance...Deliver` (no project system),
+`sovereignty.resource.planet.GetAllConfigurations` (no configurations exist here),
+`user.license.Get` (no acceptance record), and `eve_public.Request` / `ai.assistant` (not ours).
+
+Answered since 2026-10-31: `cosmetic.market.component.listing.api.GetAll` and
+`InitiatePurchaseListing` (fork `38bea4d`, `3873cf9`). The recorded blocker was wrong - the 924 real
+component item types were already in the item-type table; the market itself was missing. Live on
+`evejs-agents`: 120 listings, a purchase debits real ISK and grants the real component to the
+buyer's station hangar, a failed delivery refunds the money and restores the stock
+(`tests/coop-component-market.test.mjs`, 7/7).
 
 ## If you have no client: read this instead of decompiling
 
