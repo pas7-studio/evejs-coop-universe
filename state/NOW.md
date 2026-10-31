@@ -1,20 +1,25 @@
-# COOP STATE 2026-10-25T14:27:42.404Z
-rev da549fd2 | pin c3ea396b | overlay OVERLAY_OK
+# COOP STATE 2026-10-31T17:52:51.905Z
+rev 244e340c | pin c3ea396b | overlay WRONG_PIN
 
 ## TESTS
-83 files / 542 pass / 0 fail / 18 skip | baseline BASELINE_MATCH
+769 files / 6852 pass / 10 fail / 84 skip | baseline REGRESSION
+REGRESSION coop-absent-state.test.mjs
+REGRESSION coop-client-contracts.test.mjs
+REGRESSION coop-flag-registry.test.mjs
+REGRESSION coop-hook-requires.test.mjs
+REGRESSION coop-installer-module-coverage.test.mjs
 
 ## GATES
-telemetry events 3918
+telemetry events 5000
 client logs 3 file(s)
 
 ## LAST RUN
-runId 20261025-142742 | note one client launcher started
-server events 3918 (native-npc-combat-sample, living-native-activity, living-world-topology, living-native-industry, living-native-materialization-attempt) | client log files 3
+runId 20261031-175251 | note Gateway notices: sequencing Started/Completed, title, component purchase, skin licence, daily-goal progress. All measured on evejs-agents; play stack still one build behind.
+server events 5000 (living-native-combat-damage, living-native-activity, living-world-topology, virtual-faction-patrol, virtual-world-presence) | client log files 3
 
 ## NEXT
-log in, then capture the client log tail via -Action Publish
+Restart the play stack in an owner window, then confirm in-client. War suite was not re-run: node --test tests/coop-war-*.test.mjs did not finish in 15 min.
 
 ## READ
-state/digests/20261025-142742.md | state/ledger.json
+state/digests/20261031-175251.md | state/ledger.json
 docs/DEVELOPMENT_DOCTRINE.md | docs/GAMEPLAY_TESTING.md

@@ -49,7 +49,12 @@ function leaks(text) {
   const found = [];
   if (/[A-Za-z]:\\Users\\(?!<redacted>)/.test(text)) found.push("windows-user-path");
   if (/\b(?:(?!127\.0\.0\.1)\d{1,3}\.){3}\d{1,3}\b/.test(text)) found.push("public-ip");
-  if (/\b(?![0-9a-f]{40}\b)[A-Za-z0-9+/=_-]{40,}\b/.test(text)) found.push("long-token");
+  // A 40-character run is a token only when it could be one: a separator rule (`------...`) and a
+  // repository path (`server/src/services/...`) are 40 characters long and are not secrets.
+  const longRuns = (text.match(/\b(?![0-9a-f]{40}\b)[A-Za-z0-9+/=_-]{40,}\b/g) || [])
+    .filter(run => !/^(.)\1+$/.test(run))
+    .filter(run => !(/^[\w./-]+$/.test(run) && run.includes("/") && !/[+=]/.test(run)));
+  if (longRuns.length) found.push("long-token");
   if (/(?:Bearer|password|secret)\s*[:=]\s*\S+/i.test(text)) found.push("credential");
   if (/Listener:\s*(?!<pilot>)\S+/.test(text)) found.push("pilot-name");
   return found;
@@ -101,11 +106,14 @@ function summarizeClientLogs(files, names = []) {
     // the run still leaves evidence, redacted the same way.
     const tail = interesting.length ? interesting : lines.slice(-3)
       .map(line => redact(line, names).replace(LISTENER, "Listener: <pilot>").slice(0, 240));
+    // A separator rule in a log is not evidence: it is also what a secret scanner reads as a
+    // 40-character token, so it never enters the state.
+    const evidence = tail.filter(line => !/^[-=_*~·—\s]{3,}$/.test(String(line || "")));
     return {
       name: maskLogName(redact(String(file.name || "unknown"), names)),
       bytes: Number(file.bytes) || 0,
       lines: Number(file.lines) || lines.length,
-      tail
+      tail: evidence
     };
   });
 }
@@ -258,7 +266,7 @@ function publish(input, options = {}) {
   const ledger = buildLedger(fs.existsSync(path.join(project, "docs", "ROADMAP.md")) ? fs.readFileSync(path.join(project, "docs", "ROADMAP.md"), "utf8") : "");
   const nowText = renderNow(state);
   const digestText = renderDigest(state);
-  const statusText = JSON.stringify({ ...state, ledgerSummary: summarizeLedger(ledger) }, null, 2) + "\n";
+  const statusText = JSON.stringify({ ...state, ledgerSummary: summarizeLedger(ledger) }) + "\n";
 
   writeFile(path.join(stateDir, "NOW.md"), nowText);
   writeFile(path.join(stateDir, "status.json"), statusText);
