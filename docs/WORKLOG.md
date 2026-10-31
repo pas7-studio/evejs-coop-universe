@@ -2998,3 +2998,9 @@ Why: Title changes were written with no notice, so a worn title stayed stale unt
 Detail: Equip/Unequip and admin Grant/Revoke announce the real change to the character's solar system (fork 3a9ac81). The war rank keeps its gap, honestly: a rank writes plain text, every title notice needs a catalogue title uuid.
 Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json, tests/coop-character-titles.test.mjs
 Evidence: coop-character-titles 6/6; notice audit 33 published / 74 silent; deployed on evejs-agents, healthy
+### 2026-10-31T16:43Z · 6e279b7 · L2 · skins: prove the completion notice and record the remaining failed-job gap
+
+Why: A sequencing job completes inside a read, so the client never learned that the mint had happened
+Detail: Deployed on evejs-agents (fork 81af2d9), healthy. Notice surface: 35 published / 72 silent.
+Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json, tests/coop-skin-sequencing.test.mjs
+Evidence: coop-skin-sequencing 7/7; one CompletedNotice per job after the due read, none on repeat; deployed healthy on evejs-agents
