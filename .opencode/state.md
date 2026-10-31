@@ -1187,3 +1187,22 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   `garrison skipped: GARRISON_COOLDOWN`. That is why every bounty answers
   `NO_REAL_CAMPAIGN_FOR_EVENT`: no campaign is ever opened without a funded front. Not a notice gap,
   and not touched.
+
+## FW-141 (2026-10-31 18:17Z): Sansha's Nation fields a real laser navy
+- Fork 7caa1c5: 500019 had NO doctrine at all, so its war could only be retired. The build carries
+  real Sansha parity profiles (pulse and beam, frigate to battleship - verified in npcProfiles:
+  parity_sansha_pulse_frigate/destroyer/cruiser/battleship, parity_sansha_beam_destroyer/cruiser/
+  battleship) and real frequency crystals, so the nation now flies the same seven roles as the
+  others. The hardware family allowlist also gains the real SDE lasers 453/458/462/454/459/463 and
+  crystals Multifrequency/Radio/Standard S-M-L (246/254/262/239/247/255/242/250) - the same
+  omission FW-133 fixed for Angel and Serpentis.
+- MEASURED with the live capability: faction 500019 **CAN_FIELD**, armed 1,
+  loadout `coop_war_doctrine_500019_tackle`; Sansha vs Gallente decision open:true. ORE (500014)
+  stays NO_NAVY - its only "weapons" are mining lasers, so that refusal is honest.
+- MEASURED after the deploy: a NEW war **war:500001-500019** (Sansha attacking Caldari) opened with
+  FOUR PREPARING campaigns (30000133, 30000156, 30001393, 30002754). State 18:17Z: 9 wars,
+  85 campaigns [56 EXPIRED, 10 OCCUPIED, 4 ASSAULT, 15 PREPARING].
+- Suites: war + npc 1925/1925.
+- NOTE: the play container was recreated at 18:11:44Z by a compose recreate (exit 0, restarts 0,
+  fresh CreatedAt) - not a crash of this code; the Sansha doctrine is present in the running image
+  and the world rebuilt its fleets afterwards (13 hulls and climbing).
