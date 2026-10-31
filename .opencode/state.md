@@ -72,6 +72,24 @@ The client's Quantity column is `volRemaining` (`market/quote.pyj GetQuantity`).
 so an adjusted row reads "remaining 100 / entered 1". Harmless for quantity display,
 wrong for anything showing `volEntered`; a reseed sets it correctly.
 
+## Owner's Talos: 10 ready fits (2026-11-01, Jita IV-4 60003760)
+Granted 10 Talos hulls (4308) via `admin_batch` (10x `give_item`) and fitted each in
+one `admin_batch` of 10x `give_fit` with an explicit `itemID` (omitting `itemID` makes
+`giveFit` reuse the OLDEST docked hull of that type — never do that for a batch).
+Every hull verified 8 high / 4 mid / 5 low / 3 rig + drones + ammo:
+695 Rail Sniper T1 (350mm I, Iron/Lead, 4x Tracking Computer, 3x Locus)
+696 Rail Sniper T2 (350mm II, Spike, MFS II, DC II, 3x TC II/Sensor)
+697 Blaster Brawler T1 (Neutron I, Antimatter, scram/web/cap booster, 1600 plate)
+698 Blaster Brawler T2 (Neutron II, Void, MFS II, 1600 plate)
+699 Shield Kiter (350mm Prototype Gauss, 50MN MWD, disruptor, 2x LSE, 3x extender rig)
+700 Armor Buffer (350mm Compressed Coil, 1600 plate, 2x multispec membrane, 3x Trimark)
+701 Active Armor PvE (350mm Scout, MAR II, cap rechargers, 2x aux nano pump)
+702 Drone Support (Electron I, 2x DDA I, 2 Hammerhead + 1 Hobgoblin)
+703 Anti-Tackle (350mm I, Lead, 2x TE I, 3x Metastasis, 5x Warrior)
+704 Null Blaster Kite (Ion II, Null, 50MN MWD, disruptor, web)
+Item IDs are `9988400120695..9988400120704`. Ship names are still the default "Talos";
+there is no admin rename action, the owner renames them in the client.
+
 ## Traps
 - `docker cp` over `/var/lib/evejs/gameStore/gamestore.sqlite` makes the file
   root-owned; the server then logs `sync flush FAILED ... readonly database` and loses
