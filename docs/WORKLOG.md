@@ -3010,3 +3010,9 @@ Why: The client subscribes to TransactionSucceededNotice and nothing published i
 Detail: Deployed on evejs-agents (fork 0f3de0f, healthy). Live: BUY=200 txBytes=16, the notice carries the same id and the buyer as its target. Notice surface: 36 published / 71 silent.
 Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json
 Evidence: coop-component-market 10/10; live on evejs-agents BUY=200 txBytes=16 SAME_ID=true
+### 2026-10-31T17:03Z · e22d706 · L2 · skins: prove the licence notices, measured live on the agents stack
+
+Why: The client subscribes to the ship skin licence notices and nothing published them, so a bought or activated licence only appeared after reopening the collection
+Detail: Live: a real sale published AddedNotice for the buyer with its real licence row. Notice surface: 39 published / 68 silent.
+Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json, tests/coop-skin-listings.test.mjs, tests/coop-third-party-skins.test.mjs
+Evidence: coop-third-party-skins 12/12, coop-skin-listings 9/9; live on evejs-agents CREATE=200 BUY=200 SAME_SKIN=true MATCHES_ROW=true
