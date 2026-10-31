@@ -74,6 +74,12 @@ services:
       # After a sale the hull goes home and takes another load, instead of sitting in the
       # buyer system with an empty hold (bounded to MAX_TRIPS per run).
       EVEJS_COOP_DISTRIBUTION_CYCLE: "1"
+      # Blueprints: the corporation owned four and could never grow new products, while the
+      # seeded world sells 2 772 of them from station stock. A hull that has just sold at the
+      # buyer station may buy ONE, with real ISK, through the native trader (seeded ask only).
+      EVEJS_COOP_BLUEPRINT_PURCHASE: "1"
+      EVEJS_COOP_BLUEPRINT_PRICE_CAP: "500000"
+      EVEJS_COOP_BLUEPRINT_BUDGET: "5000000"
       # The economic phases get their own beat: measured 2026-10-29, the stock hook ran at
       # 23:30:26 and then not for eight minutes while a journaled crossing waited 6 km from
       # its gate. A phase that only runs when another system happens to call it is not a

@@ -161,3 +161,24 @@ test('an expansion border is provable from the SDE, not from ships that are not 
  // And an attacker with no presence in the source is still refused.
  assert.equal(proofs.declaration({attackerFactionID:500009,defenderFactionID:500002}),false);
 });
+
+test('expansion borders are additional fronts, and a registered border is planned first',()=>{
+ const {planWars}=require('../integration/coopFactionWarOpening.cjs');
+ const pilots=[];
+ for(let n=0;n<3;n+=1)pilots.push({systemID:2,factionID:'500001',pilotID:'p'+n,entityID:100+n});
+ for(let n=0;n<3;n+=1)pilots.push({systemID:3,factionID:'500002',pilotID:'q'+n,entityID:200+n});
+ // System 3 is registered to 500002, so 2-3 is a DECIDED border. System 1 is unregistered
+ // and SDE-owned by 500003, so 2-1 is an EXPANSION border off the same held system.
+ const state={version:1,territories:{3:{militaryControllerFactionID:500002}},wars:{},campaigns:{}};
+ const sde={1:500003};
+ const planned=planWars({state,presence:{pilots},...world(),nowMs:1000,
+  navyCapability:()=>({open:true,reason:'BOTH_SIDES_CAN_FIELD_NAVY'}),
+  ownerOfSystem:(id)=>sde[id]||0});
+ assert.equal(planned.status,'READY',planned.reason);
+ assert.equal(planned.expansion,true);
+ assert.equal(planned.fronts.length,2,'the decided border and the expansion border are both fronts');
+ assert.equal(planned.openings.length,2,'the frontier can carry more than one live campaign');
+ assert.equal(planned.openings[0].edge.expanded,false,'the decided border is spent first');
+ assert.equal(planned.openings[1].edge.expanded,true);
+ assert.equal(planned.openings[1].plan.campaign.targetSystemID,1);
+});
