@@ -81,12 +81,11 @@ test("the destination grant happens before the wreck source row is removed", () 
   assert.equal(observed.sourceStillThere, true);
 });
 
-// BASELINE-DEFECT (pre-existing; this refactor preserves it and must not fix it): the destination
-// grant is committed before the source update, and removeNativeWreckItem's result is not checked,
-// so a failing source store leaves the same units in the wreck and in the character's inventory
-// while the call reports success. Recorded here so the behaviour cannot change silently; the
-// separately reviewed fix is proposed in its own change, not in this refactor.
-test("a failing source store duplicates the granted units and still reports success", () => {
+// FIXED IN MISSION 002 (was BASELINE-DEFECT): a failing wreck-source store used to leave the granted
+// units in the inventory AND in the wreck while reporting success. The pickup now reserves a durable
+// intent, checks the source write, undoes the grant when it fails and reports the failure. The
+// invariant Q_wreck + Q_inventory == Q_before holds.
+test("a failing source store refuses the pickup and conserves the units", () => {
   const fixture = seedWreck(4, false);
   const originalRemove = nativeNpcStore.removeNativeWreckItem;
   nativeNpcStore.removeNativeWreckItem = () => ({ success: false, errorMsg: "SIMULATED_SOURCE_FAILURE" });
@@ -96,14 +95,13 @@ test("a failing source store duplicates the granted units and still reports succ
   } finally {
     nativeNpcStore.removeNativeWreckItem = originalRemove;
   }
-  assert.equal(result.success, true);
-  assert.equal(result.data.quantity, 4);
-  assert.equal(result.data.changes[0].removed, true);
+  assert.equal(result.success, false);
+  assert.equal(result.errorMsg, "WRECK_SOURCE_NOT_REMOVED");
   const granted = total(destination(fixture.characterID));
   const stillInWreck = nativeNpcStore.getNativeWreckItem(fixture.wreckItemID).quantity;
-  assert.equal(granted, 4);
+  assert.equal(granted, 0);
   assert.equal(stillInWreck, 4);
-  assert.equal(granted + stillInWreck, 8);
+  assert.equal(granted + stillInWreck, 4);
 });
 
 test("the native loot quarantine flag is consulted when it is enabled", () => {
