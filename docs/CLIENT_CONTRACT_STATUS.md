@@ -13,9 +13,9 @@ actually issues, taken from its own bytecode, with the modules that call it.
 | NULLABLE | the handler can answer `null` on some path |
 | OK | the handler builds a real answer |
 
-Total client calls: 542 · MISSING 0 · STUB 44 · NULLABLE 103 · OK 395
+Total client calls: 542 · MISSING 0 · STUB 43 · NULLABLE 103 · OK 396
 
-## STUB (44)
+## STUB (43)
 
 | call | sites | client module | server file | why it is acceptable today |
 | --- | --- | --- | --- | --- |
@@ -62,7 +62,6 @@ Total client calls: 542 · MISSING 0 · STUB 44 · NULLABLE 103 · OK 395
 | `structureDeployment.Unanchor` | 1 | structureDeployment.pyj | services\structure\structureDeploymentService.js | fire-and-forget, the structure refresh tells the truth |
 | `survey.ClaimSurveyRewards` | 1 | surveySvc.pyj | services\support\surveyService.js | fire-and-forget |
 | `survey.PerformSurveyChecks` | 1 | surveySvc.pyj | services\support\surveyService.js | fire-and-forget |
-| `userSvc.GetSessionPlaytimeMinutes` | 1 | utils.pyj | services\user\userService.js | wrapped in try/except in userSvc |
 
 ## NULLABLE (103)
 
@@ -172,7 +171,7 @@ Total client calls: 542 · MISSING 0 · STUB 44 · NULLABLE 103 · OK 395
 | `wormholeMgr.WormholeJump` | 1 | movementFunctions.pyj | services\exploration\wormholes\wormholeMgrService.js | **unreviewed** |
 | `XmppChatMgr.EnsureResourceWarsChannelExists` | 1 | rwservice.pyj | services\chat\xmppChatMgrService.js | **unreviewed** |
 
-## gRPC gateway types (216 client request types, 254 names known to the gateway, 14 of those client types defaulted)
+## gRPC gateway types (216 client request types, 255 names known to the gateway, 13 of those client types defaulted)
 
 A type no gateway service names is answered with a default-encoded 200
 (`fork f256261`): the client gets a valid empty message instead of a 404 it
@@ -188,7 +187,6 @@ cannot decode, and the gateway logs the type. These carry no data yet:
 - `eve_public.internal_gateway.ConsumeEventsRequest`
 - `eve_public.internal_gateway.Request`
 - `eve_public.ship.unlock.ClaimRewardRequest`
-- `eve_public.sovereignty.hub.upgrade.api.GetRequest`
 - `eve_public.sovereignty.mercenaryden.api.admin.ModifyAnarchyLevelRequest`
 - `eve_public.sovereignty.mercenaryden.api.admin.ModifyDevelopmentLevelRequest`
 - `eve_public.sovereignty.skyhook.api.admin.ScheduleTheftVulnerabilityWindowRequest`
