@@ -2829,3 +2829,13 @@ Evidence: fork 907104e/1a5b1fe; garrison 19/19; live merit 155 -> 4 hulls, merit
 Why: Fleets were one identical frigate per side; the doctrine table lacked a destroyer role and two cartels could never form a complete gang
 Where: .opencode/state.md
 Evidence: fork 22a0dbe; live squad-lead spawn = Condor + CA Destroyer + Moa + Delta II + Blackbird; doctrine resolve 500001 7/7, 500004 7/7, 500020 7/7, 500011 6/7; 42/42
+### 2026-10-31T08:33Z · d425432 · L2 · state(war): FW-116 live - five different hulls in one squad-lead formation
+
+Why: Co-op courier family proven live end to end: real contract accept, native gate jump, package handover
+Where: .opencode/state.md, docs/WORKLOG.md, integration/coopWarDoctrine.cjs, integration/coopWarFleetComposition.cjs, tests/coop-war-fleet-composition.test.mjs
+Evidence: contract 980000004 Jita 60003760 -> Perimeter 60000358 status=4; coop-events.jsonl courier-accepted 07:41:44Z, courier-gate-hop 08:32:17Z JUMP_VERIFIED 30000142->30000144, courier-delivered 08:34:36Z HANDED_OVER; earlier 980000002 and 980000003 delivered; fork commits 875b685 5df155c 86aa4e6 ca971da 2f2587e c2831e4 fb23e9b
+### 2026-10-31T08:39Z · 9f6033f · L2 · alife29d: blueprint preference for buildable-here, purchase at the loading stop
+
+Why: A bought blueprint would sit unusable because its materials are at another station, and the purchase only triggered after a sale
+Where: integration/coopBlueprintPurchase.cjs, integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarBattleDirector.cjs, integration/coopWarDoctrine.cjs, integration/coopWarTargetPriority.cjs, tests/coop-war-target-priority.test.mjs
+Evidence: chooser prefers recipes buildable at that station; purchase moved to the loading stop; 37/37 run+chooser tests; measured Jita Tritanium demand now exhausted (seed_buy_orders quantity 0)
