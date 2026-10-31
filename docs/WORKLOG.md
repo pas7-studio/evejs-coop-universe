@@ -2892,3 +2892,15 @@ Evidence: events: BUY_THREW registry is not defined -> INSUFFICIENT_EARNED_ISK -
 Why: IndustryMonitor.DisconnectJob deleted any monitor id without an owner; monitors now store characterID and only the owner may detach (fork 5955015)
 Where: .opencode/state.md
 Evidence: node --test tests/coop-industry-monitor-ownership.test.mjs -> pass 6 fail 0
+### 2026-10-31T13:49Z · b2b4c4c · DOCS · coop(industry): monitor ownership test + refreshed client-gap register
+
+Why: CLIENT_GAPS listed implemented surfaces as unfinished; register refreshed and the monitor ownership test committed
+Detail: The fork now stamps an owner on an industry monitor (fork 5955015). This keeps the reproducing test in the repository and corrects docs/CLIENT_GAPS.md, which still listed petitioner.*, structureDeployment.*, charUnboundMgr.CancelCharacterDeletePrepare and the crate/overview claims as unimplemented.
+Where: .opencode/state.md, docs/CLIENT_GAPS.md, docs/WORKLOG.md, tests/coop-industry-monitor-ownership.test.mjs
+Evidence: git b2b4c4cb; node --test tests/coop-industry-monitor-ownership.test.mjs pass 6
+### 2026-10-31T14:00Z · 913650d · L2 · coop(admin): test for blueprint_auto (no second industry path)
+
+Why: Industry had no reachable content: /bpauto needs a docked client session, so the admin bridge now runs the same chat command for a docked character (fork 74bbd64)
+Detail: Pins that the bridge action is whitelisted, refuses without a docked station, and runs the ordinary /bpauto command instead of calling the seeding or job writers itself.
+Where: tests/coop-admin-blueprint-auto.test.mjs
+Evidence: agents stack: seed frigate -> BPO 9988400017127, build -> job 970000000000000 cost 20480 ISK, deliver -> Rifter 9988400017255 in hangar 60003760

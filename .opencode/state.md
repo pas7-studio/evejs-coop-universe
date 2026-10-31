@@ -628,3 +628,23 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   campaign war:500001-500004:campaign:30045338:r2, PHYSICAL_NATIVE_WRECK_VERIFIED.
 - Open: bounty.pay is not invoked for that casualty (no bounty event), so the money still
   has no payer. 500011 Angel doctrine fails NPC_NATIVE_HARDWARE_POLICY_VIOLATION.
+
+## Industry content - PROVEN on evejs-agents 2026-10-31 (fork 74bbd64)
+- Root problem was reachability, not data: `/bpauto seed|quote|build|deliver` needs a docked session and no
+  QA client can dock. New bridge action `blueprint_auto` builds the session fields the command reads and
+  runs the SAME `/bpauto` through the chat dispatch (nothing seeded or installed outside the runtime).
+- Measured on characters 140000004 at station 60003760: `seed frigate 1 original` -> BPO Rifter
+  itemID 9988400017127 + materials; `build frigate 1 ready` -> job 970000000000000, cost 20,480 ISK;
+  `deliver ready` -> Rifter hull itemID 9988400017255 in hangar 60003760, materials consumed, wallet paid.
+- Materials/recipe/product come from the local SDE (`/var/lib/evejs/sde/.../blueprints.jsonl`), 5005 BPO
+  types available; 169 manufacturing facilities exist in The Forge (region 10000002).
+- On the play stack the same thing needs only a DOCKED character: `/bpauto seed frigate 1 original`, then
+  the Industry window install (no server change, the chat command is stock).
+
+## SKIN component listings - the recorded blocker was wrong 2026-10-31
+- `readStaticTable("itemTypes").types` already holds 52,590 types INCLUDING the 924 SKIN design components
+  (group 4726, category 2118; e.g. typeID 82340 "Division - Limited"). So no typeID extraction is needed.
+- The real gap: `eve_public.cosmetic.market.component.listing.api.GetAll` / `InitiatePurchase` are simply
+  unanswered (not in the compat empty-success list). Implementing them needs a listing stock model
+  (seed real component types + ISK price + bundle size, like the SKIN offers) and a purchase path that
+  debits ISK and either grants the component item or an infinite licence via coopComponentLicences.
