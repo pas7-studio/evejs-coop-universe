@@ -1,5 +1,20 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 17:20Z - the blueprint trip worked, and exposed the next gap
+
+- Live: `living-distribution-blueprint-trip PROFIT:1064524 BUILDABLE:242`, then the buy settled,
+  and the corporation now owns `seed_1000129_60003760_1334.json` (Reinforced Bulkheads I).
+- **Gap:** it was adopted at 60003760 (Jita), while the 4.5 M Tritanium sits at the factory
+  60000682 (New Caldari). Manufacturing happens where the blueprint receipt is, so the recipe
+  has its materials 1.5 million km away.
+
+Next (in this order):
+1. Make the shopping-trip RETURN unload at the FACTORY station and adopt there (the trip
+   already sets `returnStationID = homeStationID`; check why the stow/adopt landed in Jita).
+2. If a blueprint is adopted away from home, HAUL it home as freight (category 9, 0.01 m3) so
+   the factory's own reserve can feed it.
+3. Then assert `living-npc-manufactured` for 1333 and the sale into the 242-unit Jita bid.
+
 ## 2026-10-31 17:15Z - blueprint shopping trip is live; the factory no longer builds at a loss
 
 - Live proof of the margin gate: `living-npc-manufacture-attempt` reports
