@@ -1,5 +1,32 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 18:05Z - MILESTONE: the loop closes, mine -> refine -> build -> sell
+
+One hull (980000018521) carried the corporation's own product to a real buyer and the buyer's
+book proves it:
+
+- `seed_buy_orders` type 1333 at 60003760 was **242 -> 222** at 17:59:28 (`initial_quantity`
+  242, `updated_at` that second): twenty Reinforced Bulkheads I, 5 122 ISK each = 102 440 ISK.
+- Produced at the factory 60000682 from our own refined Tritanium: five completed jobs of 5
+  (`living-npc-manufactured`, 17:39-18:00), each 34 720 Tritanium, product 1333.
+- The blueprint that made it (1334) was carried home by `coopNpcCargoStow.lift` and unloaded
+  at the factory: `UNLOADED_AT_FACTORY`, item at 60000682, Jita receipt `MOVED -> 60000682`.
+- Manufacturing continues on its own: a sixth job is installed and the bid still holds 222.
+
+This is the first complete economic cycle with a measurable counterparty: ore we mined, metal
+we refined, a product we designed, freight we flew, ISK from a buyer who is not us.
+
+Open, smaller things worth doing next:
+- A sale attempt can report `NO_REAL_NATIVE_CARGO` for a type that was just sold in the same
+  batch: the settlement names the batch, the per-type answers arrive earlier. Make the batch
+  report each type's final state once.
+- `Return crossing` answered `RETURN_NO_GATE:NO_RECIPROCAL` twice at 17:58 for two hulls in
+  Jita: check the reciprocal-gate mapping for 30000142 <-> 30000145 rather than re-planning
+  from a different system.
+- The audit gate is red for two pre-existing reasons (`integration drift 1 > 0` on
+  `nativeNpcStore.cjs`, and `coopVirtualWorldRuntime.js` 5718 lines over the 4800 ratchet);
+  neither was introduced by this work.
+
 ## 2026-10-31 17:35Z - the blueprint and the factory finally met
 
 Live, in order (hull 980000000005):

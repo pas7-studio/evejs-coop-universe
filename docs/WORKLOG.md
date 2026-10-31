@@ -3028,3 +3028,9 @@ Why: The state publisher reported STATE_PROBLEMS on its own output: separator ru
 Detail: A separator rule in a client log is 40+ characters and was reported as a leaked token, and so was a repository path; status.json also grew past its 4 KB budget only because it was pretty-printed. The publisher now keeps the rules out of the evidence, writes status.json compact, and the scanner ignores runs that cannot be a secret.
 Where: scripts/coop-state.cjs, state/NOW.md, state/changelog.jsonl, state/digests/20261025-131734.md, state/digests/20261025-132207.md, state/digests/20261025-141915.md, state/digests/20261025-141928.md, state/digests/20261025-141937.md, state/digests/20261025-142742.md, state/digests/20261031-173518.md, state/digests/20261031-175211.md, state/digests/20261031-175251.md, state/ledger.json, state/manifest.json, state/status.json
 Evidence: node scripts/coop-state.cjs --verify -> STATE_OK after the change; state/NOW.md republished
+### 2026-10-31T17:59Z · e3e738f · L1 · war: retire a war nobody can fight, and stop two retirements erasing each other
+
+Why: carry our own blueprint home and fund purchases by their real price
+Detail: Six ACTIVE wars are now the ones that can really field a navy; the two ORE wars are ENDED by the navy authority's own proof. Six captures and 13 000 ISK paid since 16:50Z.
+Where: .opencode/state.md, integration/coopVirtualWorldRuntime.cjs, integration/coopWarRetirement.cjs, tests/coop-war-retirement.test.mjs
+Evidence: live: bid 242->222 at 17:59:28, 20x Reinforced Bulkheads I sold at 5122
