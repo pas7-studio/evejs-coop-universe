@@ -3058,3 +3058,9 @@ Why: The new player-prey flag must be declared before any module may read it
 Detail: The flag registry test still fails on 16 pre-existing undeclared flags from other modules; this one is no longer among them.
 Where: docs/coop-flags.json
 Evidence: coop-flags --check no longer lists EVEJS_COOP_PIRATE_PREY_PLAYERS; coop-pirate-prey-players 6/6
+### 2026-10-31T18:54Z · 2a4b77a · L2 · raids: prove the player-prey hostility rule
+
+Why: Pirates with real attack orders stood still and never fired at the player: npcBehaviorLoop treats npc->player as friendly
+Detail: The stock loop hard-codes npc->player as friendly; the rule answers only that question, for a real order or a fresh retaliation, and never overrides high-sec safety.
+Where: tests/coop-player-prey-hostility.test.mjs
+Evidence: measured 18:49:33 in 30000142 sample: pirate mode STOP, shield 1, zero damage at 207 m while the player killed it; coop-player-prey-hostility 5/5, pirate-prey 12/12
