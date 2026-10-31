@@ -689,3 +689,27 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - Tests: tests/coop-component-market.test.mjs -> pass 7 fail 0.
 - NEEDS_OWNER_RESTART_WINDOW: the play stack runs an older image, so it needs a rebuild + restart (and
   `EVEJS_COOP_COMPONENT_MARKET=1` in compose.yaml) before the owner can see the component window.
+
+## FW-125..128 (2026-10-31, owner: "war must pay and never stop")
+- FW-125 (c4b8a3a): the payout authority demanded an INTEGER pilot id, so every real kill was
+  refused WAR_TREASURY_PAYOUT_NOT_AUTHORIZED while its escrow sat HELD. Named co-op pilots
+  (coop-pilot-060) are now accepted; a pilot whose link was released with its wreck resolves
+  its faction from the same war fleet registry row. FW-125b (d408909) keeps numeric ids valid.
+- FW-126 (cba4764): every pirate hardware family listed its tackle modules only under
+  utilityTypeIDs, so tackle resolved to "tackle" and failed the policy - the 500011 Angel
+  garrison answered NO_SHIP_SPAWNED with loadout null. Angel + Serpentis now allow the real
+  SDE modules the doctrine fits (448/527/3244, 2109, 11357, 2048, real turrets).
+- FW-127 (94e8792) + FW-128 (05bef6d): a border's whole expiry history counted forever, so the
+  multiplier reached 8x45 min = 6 h and the live war answered NO_OPENABLE_FRONT with 5 of 8
+  borders closed (13:59Z, 14:14Z). Only recent expiries count, a border retries within 15 min
+  and never waits more than 30. After the deploy all 8 borders read TARGET_ALREADY_CONTESTED:
+  the cooldown no longer blocks anything.
+- Money is real and journaled: wallets after the 5 000 000 ISK grants and the first war escrows
+  - 1000035 Caldari Navy 4 999 000 (1 000 paid as a bounty escrow)
+  - 1000120 Federation Navy 5 002 000 (1 000 paid as a bounty escrow)
+  - 1000129 ORE 2 130 311.68, 1000436/1000162/1000135 5 000 000 each
+  Two HELD bounty rows (1 000 ISK each) belong to the 13:52Z kill and will pay on the next kill
+  of that campaign.
+- Measured war state: 7 wars, 46 campaigns [40 EXPIRED, 4 OCCUPIED, 2 ASSAULT], 17 territories.
+  Both live assaults are in 30045338 and 30045342; every other border is one of those two
+  systems seen from a different edge, so the frontier is two systems until one resolves.
