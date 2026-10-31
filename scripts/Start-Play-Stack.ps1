@@ -8,12 +8,12 @@
   The friend does not connect to the game port directly. He opens ONE SSH
   connection to the host on the ProtonVPN-forwarded port:
 
-      ssh -N -T -p 37471 evefriend@130.195.241.6 `
+      ssh -N -T -p 64410 evefriend@156.146.50.8 `
         -L 443:127.0.0.1:443 -L 5222:127.0.0.1:5222 `
         -L 26000:127.0.0.1:26000 -L 26001:127.0.0.1:26001 `
         -L 26002:127.0.0.1:26002
 
-  Proton forwards only one port (currently 37471; it changes on every VPN
+  Proton forwards one port at a time (currently 64410 on 156.146.50.8; it changes on every VPN
   reconnect), and that port must carry SSH.
   `evejs-ssh-relay` (alpine/socat, restart unless-stopped) bridges
   0.0.0.0:<PublicPort> to the host's hardened sshd on 127.0.0.1:55346
@@ -38,7 +38,7 @@ param(
   [string]$Action = 'Status',
   [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
   [string]$Project = 'evejs',
-  [int]$PublicPort = 37471,
+  [int]$PublicPort = 64410,
   [int]$SshPort = 55346,
   [string]$RelayName = 'evejs-ssh-relay'
 )
