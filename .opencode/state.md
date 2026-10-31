@@ -1,5 +1,29 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 18:20Z - the economy is armed on the OWNER'S play stack
+
+Owner gave a restart window ("то давай"). Deployed with NO rebuild: the play stack keeps the
+image it already had (46c7202adc09, built 18:03 by another session) and only gained the keys it
+was missing, through `compose/compose.play-coop.yaml`.
+
+What the play stack (`evejs`) now runs, verified live:
+- `living-coop-loop-driver OK`, `living-npc-manufacture-attempt` every interval: the margin gate
+  refuses `60000358:950:NO_MARGIN` there too, so it will not build Miner I at a loss.
+- `living-npc-manufacture-buyer-elsewhere system 30000142`: the only blueprint it owns sells
+  into Jita, one gate away - exactly the case the remote-buyer valuation was fixed for.
+- No distribution hull existed at all (2973 native entities, all `coop-mining-*`), so the freight
+  run had nothing to drive. Spawned one durable hull through the operator script:
+  `980000093319` (Impel, `coop-distribution-1-hauler`, system 30000145).
+- First real trip: `PLANNED` -> `FLYING_TO_ORIGIN` for 309 999 Pyerite, expected 1 530 724.89 ISK.
+
+Still blocked on the play stack, by design, and NOT touched:
+- `living-npc-refinery-blocked NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED`: the refinery will not
+  waive a native reprocessing fee; it needs a real paid witness. 29.4 M Tritanium already in the
+  factory hangar, so manufacturing is not starved while this is decided.
+
+Rollback (no image change): drop `compose/compose.play-coop.yaml` from the compose command and
+`up -d --force-recreate server`, or set any single phase key to "0".
+
 ## 2026-10-31 18:05Z - MILESTONE: the loop closes, mine -> refine -> build -> sell
 
 One hull (980000018521) carried the corporation's own product to a real buyer and the buyer's

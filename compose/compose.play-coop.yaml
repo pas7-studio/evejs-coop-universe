@@ -1,0 +1,36 @@
+# Co-op economy on the OWNER'S play stack (compose project `evejs`).
+#
+# Approved restart window: 2026-10-31, owner said "то давай" after the agent stack proved the
+# loop end to end (bid 242 -> 222 for our own Reinforced Bulkheads I). Nothing here is a new
+# experiment: every key below is the value the agents stack has been running, copied verbatim.
+#
+# This file only ADDS the co-op economy keys. It never overrides the play stack's own market
+# tuning (cooldown 5 s, max qty 20, sell allowlist) or the public endpoint.
+#
+# Turn the whole economy off again without touching the image:
+#   docker compose -f Code/compose.yaml -f Code/compose.coop-probe.yaml -p evejs \
+#     up -d --force-recreate server          # drop this file from the command
+# One phase can also be switched off on its own by setting its key to "0".
+services:
+  server:
+    environment:
+      # The loop itself: refinery already runs on the play stack; these are the phases that
+      # were missing, so ore accumulated with nothing to build or sell.
+      EVEJS_COOP_LOOP_DRIVER: "1"
+      EVEJS_COOP_LOOP_INTERVAL_MS: "20000"
+      EVEJS_COOP_NPC_MANUFACTURE: "1"
+      EVEJS_COOP_INDUSTRY_TIME_SCALE: "0.002"
+      EVEJS_COOP_DISTRIBUTION: "1"
+      EVEJS_COOP_DISTRIBUTION_RUN: "1"
+      EVEJS_COOP_DISTRIBUTION_CYCLE: "1"
+      # Buying what the factory lacks and buying capital where it is sold. Bounded by price cap
+      # and budget; the corporation pays from its own wallet through payroll, never invented.
+      EVEJS_COOP_INPUT_RUNS: "1"
+      EVEJS_COOP_INPUT_IMPORT_TRIP: "1"
+      EVEJS_COOP_BLUEPRINT_SHOP_TRIP: "1"
+      EVEJS_COOP_BLUEPRINT_PURCHASE: "1"
+      EVEJS_COOP_BLUEPRINT_PRICE_CAP: "500000"
+      EVEJS_COOP_BLUEPRINT_BUDGET: "5000000"
+      EVEJS_COOP_NPC_PAYROLL: "1"
+      # Freight may lift any type, not only ore: a manufactured module is a deliverable too.
+      EVEJS_COOP_LIFT_ANY_TYPE: "1"

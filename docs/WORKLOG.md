@@ -3034,3 +3034,9 @@ Why: carry our own blueprint home and fund purchases by their real price
 Detail: Six ACTIVE wars are now the ones that can really field a navy; the two ORE wars are ENDED by the navy authority's own proof. Six captures and 13 000 ISK paid since 16:50Z.
 Where: .opencode/state.md, integration/coopVirtualWorldRuntime.cjs, integration/coopWarRetirement.cjs, tests/coop-war-retirement.test.mjs
 Evidence: live: bid 242->222 at 17:59:28, 20x Reinforced Bulkheads I sold at 5122
+### 2026-10-31T18:18Z · 680c323 · OPS · war: Sansha's Nation fields a real laser navy, and opens a war against the Caldari
+
+Why: arm the co-op economy on the owner play stack with a no-rebuild env override and one distribution hull
+Detail: 500019 was NO_NAVY only because it had no doctrine; with the real parity profiles and real frequency crystals it is CAN_FIELD and war:500001-500019 opened with four fronts.
+Where: .opencode/state.md, integration/coopWarDoctrine.cjs, integration/npcHardwareCatalog.cjs
+Evidence: loop driver OK, freight trip 309999 Pyerite expected 1.53M ISK, margin gate refuses 950
