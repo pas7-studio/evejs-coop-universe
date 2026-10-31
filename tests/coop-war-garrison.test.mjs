@@ -397,3 +397,33 @@ test("an unknown commander merit is zero, never a guess", () => {
   assert.equal(out.status, "GARRISON_APPLIED");
   assert.equal(f.calls[0].merit, 0);
 });
+
+// FW-119: the best free commander leads.
+//
+// MEASURED 2026-10-31: the garrison always took the FIRST free identity, so a fresh pilot with
+// merit 0 commanded a whole side and the formation was one hull while veterans with 150 merit
+// stood idle - ten registered hulls, every one of them a tackle frigate.
+test("the best free commander leads the refill", () => {
+  const merit = { "coop-pilot-001": 0, "coop-pilot-002": 150, "coop-pilot-003": 25 };
+  const f = fixture({
+    ships: [{ entityID: 1, systemID: 30045344, factionID: 500001 }],
+    free: ["coop-pilot-001", "coop-pilot-002", "coop-pilot-003"],
+    meritOf: (pilotID) => merit[pilotID] || 0,
+  });
+  const out = f.garrison.tick();
+  assert.equal(out.status, "GARRISON_APPLIED");
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].commanderPilotID, "coop-pilot-002",
+    "the veteran with 150 merit leads, not the first free identity");
+  assert.equal(f.calls[0].merit, 150);
+});
+
+test("without a merit authority the first free identity still leads", () => {
+  const f = fixture({
+    ships: [{ entityID: 1, systemID: 30045344, factionID: 500001 }],
+    free: ["coop-pilot-001", "coop-pilot-002"],
+  });
+  const out = f.garrison.tick();
+  assert.equal(out.status, "GARRISON_APPLIED");
+  assert.equal(f.calls[0].commanderPilotID, "coop-pilot-001");
+});

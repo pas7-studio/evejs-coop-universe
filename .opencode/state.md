@@ -477,3 +477,18 @@ EWAR (sensor dampener / tracking disruptor) and logistics (remote reps) are fitt
 engine effect - they are non-weapon modules, so the ship carries them and never uses them. Role
 behaviour today = who is aimed at, not what the module does. Next: either native effect support or
 a posture rule (logistics keeps range, EWAR stays behind the line).
+
+## FW-118 / FW-119 (fork 140f5d9, 58e0e55): roles fly their own ranges, veterans lead
+- FW-118 posture: one shared 500 m orbit became per-role engagement ranges - tackle 2.5 km,
+  anti-tackle 6, brawler 5, heavy 12, EWAR 45, sniper 60, logistics 70 km, each with a matching
+  leash. An unknown role keeps the operator posture exactly (5/5 tests). LIVE 09:14/09:17Z:
+  living-native-war-engagement-posture applied role=tackle orbitDistanceMeters=2500.
+- FW-119 commander: the garrison always took the FIRST free identity, so a merit-0 pilot led a
+  whole side while 150-merit veterans stood idle. It now picks the highest earned merit. LIVE
+  09:24Z: pilot-080 merit 150, pilot-018 merit 140, pilot-013 merit 75 each spawned a formation.
+
+LIVE PROOF of the whole role stack (09:24Z, commander merit 150, five hulls):
+14359 Condor = tackle | 45462 CA Destroyer = anti-tackle | 15320 Moa = brawler |
+15972 Delta II = logistics | 12394 Blackbird = ewar.
+
+Campaign states 09:17Z: 29 EXPIRED, 3 OCCUPIED, 1 ASSAULT (30045341) - captures keep happening.

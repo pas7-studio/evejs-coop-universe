@@ -2849,3 +2849,8 @@ Evidence: fork a1c887e; target-priority 7/7; live attackerRole tackle + targetRo
 Why: Unsellable stock (3.2M Tritanium with no bid) is exactly why a corporation needs a new product, but the purchase only ran during a trip
 Where: integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarEngagementPosture.cjs, tests/coop-war-role-posture.test.mjs
 Evidence: purchase now also runs when no trip is worth taking, at the station holding the most stock; 32/32 run tests; measured Jita Tritanium bid = 0
+### 2026-10-31T09:18Z · c693908 · L2 · worklog: alife29e
+
+Why: Every hull orbited at one distance and the first free identity always commanded, so veteran formations never formed
+Where: docs/WORKLOG.md
+Evidence: fork 140f5d9/58e0e55; role-posture 5/5, garrison 21/21; live posture role=tackle 2500 m and commander merit 150 spawning 5 role-complete hulls
