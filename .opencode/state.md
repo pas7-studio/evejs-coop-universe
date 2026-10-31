@@ -812,3 +812,21 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - `CONSUMED_NOT_ANSWERED 0` and all 24 AMBIGUOUS_ATTRIBUTION types are answered in both forms.
 - Fork `8c2213a`; tests `tests/coop-gateway-gap-closure.test.mjs` 7/7; register 37 stub / 403 ok.
 - Play stack NOT yet redeployed: needs one owner restart window (same image `evejs-local`).
+
+## FW-130..132 (2026-10-31 15:45Z): attribution, muster, two-sided garrison
+- FW-130 (1b35c4b): coopNpcDestructionAttacker.casualtyLinks() guards on
+  untime.warCasualtySnapshot being a function - and it was never in the module exports, so the
+  casualty ledger was silently never consulted and two real war kills answered
+  NOT_UNIQUE_NAMED_PIRATE. One export line.
+- FW-131 (d28766f): a campaign only became an ASSAULT when the attacker had a hull in its SOURCE
+  system, but the garrison musters both sides in the TARGET. A hull of the attacking faction
+  inside the campaign target now counts as mustered.
+- FW-132 (1712ab7): one garrison spawn per tick meant two cycles before both sides existed, so
+  five PREPARING fronts sat WAITING. Two sides per tick (still one spawn per side).
+- Live after the deploys: campaigns 46 -> 58, four new fronts opened by 500020 from 30000144,
+  garrisons field size 3 / cap 3 / tackle+anti-tackle+ewar, 500011 Angel spawns.
+- Wallets intact: 1000035 4 998 000, 1000120 5 001 000, 1000129 3 956.73, others 5 000 000.
+- NEXT BLOCKER (measured 15:45:10Z): 500020 and 500011 spawns fail with
+  NPC_NATIVE_HARDWARE_CHARGE_POLICY_VIOLATION - the doctrine's ammo is not in those families'
+  chargeTypeIDs. Until the charge allowlist matches the doctrine ammo, pirate fronts cannot
+  muster and only the navy pairs (500001/500004) actually fight.
