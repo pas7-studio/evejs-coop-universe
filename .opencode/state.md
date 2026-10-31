@@ -744,3 +744,22 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   (coopAdminBridge.cjs, coopAdminBridgeActions.cjs) - tests for them stay 14/14 green.
 - Next real task: refresh those 6-7 copies and split coopVirtualWorldRuntime (coop-split-module.cjs) so the
   gate prints AUDIT_OK again. Not caused by today's market/industry work.
+
+## FW-129 (2026-10-31 14:44Z): a front is a squadron, not a duel
+- Fork 3e06b08: every fresh side mustered at merit 0 (composition reads that as a recruit's
+  SINGLE frigate) and the battle director issued at most 2 attack orders per tick with a
+  2-minute re-order. A side now starts at the wingman tier (merit 70, 3 hulls; earned rank still
+  raises it), the mobiliser obeys the same floor, and the director arms 3 hulls per tick and
+  re-orders every 45 s.
+- MEASURED after deploy: garrisons spawn size 3, cap 3, roles tackle+anti-tackle+ewar in
+  30045338 / 30045342 / 30000138 / 30000139 (was one lone tackle frigate).
+- FW-126 confirmed live: 500011 Angel spawned in 30000142 (size 1, cap 3, roles ewar) - the
+  pirate family can finally field hardware.
+- FW-128 confirmed live: campaigns went 46 -> 52 with 6 PREPARING fronts opened after the
+  border cooldown stopped blocking (was 0 PREPARING at 14:25Z).
+- Real war casualties RECORDED at 14:27:04Z (30045338) and 14:35:27Z (30045342).
+- Still open: those two casualties carry NO attacker proof (NATIVE_VICTIM_WRECK_ONLY_NO_KILLER),
+  so no bounty is paid for them; the engine supplied NATIVE_DESTRUCTION_ATTACKER_PROVIDED only
+  once in the last hour and that kill was in 30000144, not a war system. Bounty payment needs an
+  explicit native attacker, which is now the single remaining gap between a fought war and a
+  paid one.
