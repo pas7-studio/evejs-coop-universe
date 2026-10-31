@@ -128,3 +128,94 @@ test('a pending journal blocks a second grant of the same stack', () => {
   assert.equal(answer.status, 'JOURNAL_PENDING');
   assert.equal(w.hangar.length, 0, 'an ambiguous record is never repeated');
 });
+
+// A blueprint bought in Jita is only useful where its materials are. The shelf-to-hold move is
+// the inverse of a stow and must be just as honest: one real hangar row becomes one real hold
+// row, with the intent written down before the move.
+function hangarWorld({gap = 1000, stacks = []} = {}) {
+  const held = stacks.map((row, index) => ({itemID: row.itemID ?? 500 + index,
+    ownerID: 1000129, locationID: 60000682, typeID: row.typeID,
+    quantity: row.quantity ?? 0, singleton: row.singleton === true ? 1 : 0,
+    categoryID: 9, stacksize: row.quantity ?? 0}));
+  const cargo = [];
+  const store = {
+    getNativeEntity: (id) => (Number(id) === 9001
+      ? {entityID: 9001, systemID: 30000145, ownerID: 1000129} : null),
+    listNativeCargoForEntity: (id) => (Number(id) === 9001 ? cargo.map((row) => ({...row})) : []),
+    removeNativeCargo: () => ({success: true}),
+    allocateCargoID: () => ({success: true, data: 77}),
+    upsertNativeCargo: (row) => { cargo.push({...row}); return {success: true}; },
+  };
+  const items = {
+    ITEM_FLAGS: {HANGAR},
+    listOwnedItems: (ownerID, {locationID} = {}) => held
+      .filter((row) => !locationID || Number(row.locationID) === Number(locationID))
+      .map((row) => ({...row})),
+    removeInventoryItem: (itemID) => {
+      const at = held.findIndex((row) => Number(row.itemID) === Number(itemID));
+      if (at < 0) return {success: false, errorMsg: 'MISSING'};
+      held.splice(at, 1);
+      return {success: true};
+    },
+    updateInventoryItem: (itemID, change) => {
+      const at = held.findIndex((row) => Number(row.itemID) === Number(itemID));
+      if (at < 0) return {success: false, errorMsg: 'MISSING'};
+      held[at] = change({...held[at]});
+      return {success: true};
+    },
+  };
+  const scene = {
+    getEntityByID: (id) => (Number(id) === 9001
+      ? {position: {x: 0, y: 0, z: 0}, radius: 100} : null),
+    staticEntities: [{kind: 'station', itemID: 60000682, radius: 2000,
+      position: {x: 0, y: 0, z: gap}}],
+  };
+  return {store, items, cargo, held,
+    sceneFor: () => scene,
+    getStation: () => ({stationID: 60000682, solarSystemID: 30000145}),
+    resolveType: (typeID) => ({typeID, categoryID: 9, groupID: 105, name: 'Blueprint ' + typeID})};
+}
+
+test('a blueprint the corporation owns comes off the shelf and into the hold once', () => {
+  const root = tempRoot();
+  const w = hangarWorld({stacks: [{itemID: 501, typeID: 1334, quantity: 0, singleton: true}]});
+  const stow = createCargoStow({store: w.store, items: w.items, sceneFor: w.sceneFor,
+    getStation: w.getStation, resolveType: w.resolveType, ownerID: 1000129, root,
+    probe: null, now: () => 1});
+  const answer = stow.lift({haulerID: 9001, stationID: 60000682, typeID: 1334});
+  assert.equal(answer.status, 'LIFTED');
+  assert.equal(answer.cargoID, 77);
+  assert.equal(w.held.length, 0, 'the hangar row really left the shelf');
+  assert.equal(w.cargo.length, 1, 'the same asset is now in the hold');
+  assert.equal(w.cargo[0].typeID, 1334);
+  assert.equal(w.cargo[0].singleton, true, 'a blueprint stays a singleton');
+  const journal = JSON.parse(fs.readFileSync(path.join(root, 'lift', '501.json'), 'utf8'));
+  assert.equal(journal.phase, 'COMPLETED');
+  assert.equal(stow.lift({haulerID: 9001, stationID: 60000682, typeID: 1334}).status,
+    'NOTHING_TO_LIFT', 'a second copy is never invented');
+});
+
+test('a refused shelf debit leaves the blueprint on the shelf and a journal behind', () => {
+  const root = tempRoot();
+  const w = hangarWorld({stacks: [{itemID: 502, typeID: 1334, quantity: 0, singleton: true}]});
+  w.items.removeInventoryItem = () => ({success: false, errorMsg: 'LOCKED'});
+  const stow = createCargoStow({store: w.store, items: w.items, sceneFor: w.sceneFor,
+    getStation: w.getStation, resolveType: w.resolveType, ownerID: 1000129, root});
+  const answer = stow.lift({haulerID: 9001, stationID: 60000682, typeID: 1334});
+  assert.equal(answer.status, 'HANGAR_DEBIT_FAILED');
+  assert.equal(w.held.length, 1, 'the asset is still on the shelf');
+  assert.equal(w.cargo.length, 0, 'nothing appeared in the hold');
+  const journal = JSON.parse(fs.readFileSync(path.join(root, 'lift', '502.json'), 'utf8'));
+  assert.equal(journal.phase, 'NEEDS_OPERATOR_REPAIR');
+});
+
+test('a hull far from the station lifts nothing off its shelf', () => {
+  const root = tempRoot();
+  const w = hangarWorld({gap: 400000,
+    stacks: [{itemID: 503, typeID: 1334, quantity: 0, singleton: true}]});
+  const stow = createCargoStow({store: w.store, items: w.items, sceneFor: w.sceneFor,
+    getStation: w.getStation, resolveType: w.resolveType, ownerID: 1000129, root});
+  assert.equal(stow.lift({haulerID: 9001, stationID: 60000682, typeID: 1334}).status,
+    'TOO_FAR_FROM_STATION');
+  assert.equal(w.held.length, 1);
+});

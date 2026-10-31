@@ -750,3 +750,68 @@ test("a blueprint purchase the market refused still goes home instead of spinnin
   assert.match(refused.reason, /^BLUEPRINT_BUY_FAILED:INSUFFICIENT_EARNED_ISK/);
   assert.equal(refused.state.importBought, 0);
 });
+
+test("a purchase on its way home is never shelved at the seller", async () => {
+  // Measured 2026-10-31: on the beat after BLUEPRINT_BOUGHT the "a hold is not a warehouse"
+  // stow ran at the SELLER station, so the copy was adopted in Jita while its material sat at
+  // the factory. A shopping trip that bought something is carrying it, not tidying it.
+  const hull = 980000004203;
+  run.write({version: 1, haulerID: hull, phase: "RETURN", mode: "blueprint",
+    importTypes: [1334], importBought: 1, typeID: 1334,
+    fromStationID: 60003760, fromSystemID: 30000142,
+    homeStationID: 60000682, homeSystemID: 30000145,
+    returnStationID: 60000682, returnToSystemID: 30000145, updatedAt: 50000});
+  const stowCalls = [];
+  const result = await run.tick(hull, { now: 50100,
+    distanceTo: () => 100,
+    stow: (args) => { stowCalls.push(args.stationID); return {status: "NOTHING_TO_STOW"}; },
+    planCrossingTo: () => ({status: "PLANNED"}) });
+  assert.equal(result.status, "RETURN_CROSSING");
+  assert.deepEqual(stowCalls, [], "the purchase travels with the hull, not onto a shelf");
+});
+
+test("a blueprint the corporation already owns away from the factory is carried home", async () => {
+  const hull = 980000004204;
+  const trip = { mode: "blueprint", carryOnly: true, blueprintTypeID: 1334, typeID: 1334,
+    quantity: 0, expectedIsk: 0, price: 0, buildable: 242,
+    fromStationID: 60003760, fromSystemID: 30000142, toStationID: 60003760,
+    toSystemID: 30000142, homeStationID: 60000682, homeSystemID: 30000145, gate: null,
+    items: [{ stationID: 60003760, typeID: 1334, quantity: 0 }] };
+  const planned = await run.tick(hull, {
+    planTrip: () => ({ status: "NO_TRIP" }),
+    importPlan: () => ({ status: "NOTHING_TO_BUY" }),
+    blueprintPlan: () => ({ status: "OK", trip }), now: 51000 });
+  assert.equal(planned.status, "PLANNED_IMPORT");
+  assert.equal(planned.state.carryOnly, true, "the run knows there is nothing to buy");
+  assert.deepEqual(planned.state.importTypes, [1334]);
+  await run.tick(hull, { distanceTo: () => 900, now: 51050 });
+  await run.tick(hull, { distanceTo: () => 900, now: 51060 });
+  const carried = await run.tick(hull, { distanceTo: () => 900, now: 51100,
+    buyBlueprint: async () => { throw new Error("a copy we own is not bought twice"); },
+    liftBlueprint: ({ stationID, typeID }) => {
+      assert.equal(stationID, 60003760);
+      assert.equal(typeID, 1334);
+      return { status: "LIFTED", typeID: 1334, quantity: 1 }; } });
+  assert.equal(carried.status, "RETURN");
+  assert.equal(carried.reason, "BLUEPRINT_CARRIED:1334");
+  assert.equal(carried.state.importBought, 1);
+  assert.equal(carried.state.returnStationID, 60000682, "it goes to the factory, not to Jita");
+});
+
+test("a copy that could not be loaded is reported, not counted as delivered", async () => {
+  const hull = 980000004205;
+  const trip = { mode: "blueprint", carryOnly: true, blueprintTypeID: 1334, typeID: 1334,
+    quantity: 0, expectedIsk: 0, fromStationID: 60003760, fromSystemID: 30000142,
+    toStationID: 60003760, toSystemID: 30000142, homeStationID: 60000682,
+    homeSystemID: 30000145, gate: null, items: [{ stationID: 60003760, typeID: 1334 }] };
+  await run.tick(hull, { planTrip: () => ({ status: "NO_TRIP" }),
+    importPlan: () => ({ status: "NOTHING_TO_BUY" }),
+    blueprintPlan: () => ({ status: "OK", trip }), now: 52000 });
+  await run.tick(hull, { distanceTo: () => 900, now: 52050 });
+  await run.tick(hull, { distanceTo: () => 900, now: 52060 });
+  const refused = await run.tick(hull, { distanceTo: () => 900, now: 52100,
+    liftBlueprint: () => ({ status: "NOTHING_TO_LIFT" }) });
+  assert.equal(refused.status, "RETURN");
+  assert.match(refused.reason, /^BLUEPRINT_CARRY_FAILED:NOTHING_TO_LIFT/);
+  assert.equal(refused.state.importBought, 0, "nothing is waiting to be unloaded");
+});
