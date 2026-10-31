@@ -1173,3 +1173,17 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   23 territories (500001 11, 500004 6, 500020 4, 500011 1, 500019 1).
 - Since 16:50Z: **6 captures** and **13 bounties paid = 13 000 ISK** (12 warship-kill, 1 force-lost).
 - Retirement suite 7/7; whole war suite 561/561.
+
+## Play stack deployed 2026-10-31 18:0x (owner window, explicit go)
+- `Start-Play-Stack.ps1 -Action Up` recreated `evejs-server-1`/`evejs-market-1` on the current
+  `evejs-local` build: both `healthy`, no errors in the logs, the world keeps running (native pirate
+  raids, civilian routes) and `coop-events.jsonl` still writes.
+- Verified in the running container: `STARTED_NOTICE_TYPE`, `SET_NOTICE_TYPE`,
+  `TransactionSucceededNotice`, licence `AddedNotice` and `ProgressedNotice` all present, and a real
+  `GetAllCurrentRequest` for 140000005 answers `STATUS=200 GOALS=5` (all still 0), so the daily-goal
+  service and its 15 s measurement tick are live on play.
+- The owner's client was at the character screen (gamelog stale ~1.8 h), so nothing was interrupted.
+- Observed while checking the war loop: `[CoopFactionWar] opening skipped: NO_FUNDED_FRONT` and
+  `garrison skipped: GARRISON_COOLDOWN`. That is why every bounty answers
+  `NO_REAL_CAMPAIGN_FOR_EVENT`: no campaign is ever opened without a funded front. Not a notice gap,
+  and not touched.
