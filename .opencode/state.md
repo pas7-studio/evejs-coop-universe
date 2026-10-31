@@ -942,3 +942,13 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   titles real catalogue entries is a content change, not a notice; it is the only honest route.
 - Notice surface now: 144 client types, 106 subscribed, 33 published, 74 silent, 0 published-not-in-client.
 - Play stack still runs the build without `StartedNotice` and the title notices: needs one restart window.
+
+## Sequencing completion notice, 2026-10-31
+- DONE (fork `81af2d9`, deployed on `evejs-agents`, healthy): a job that comes due completes
+  inside a read, so `coopSkinSequencing` now queues the completion and the gateway drains it after
+  the answer. One `sequencing.job.api.CompletedNotice{id}` per job, to its owner, and only when
+  `licenceStore().grant` really minted the copies; a second read announces nothing.
+- Deliberately not published: `FailedNotice` - its `reason` is an enum this store cannot name.
+- Notice surface: 144 client types, 106 subscribed, 35 published, 72 silent, 0 published-not-in-client.
+- Play stack still runs the 16:23 build: it lacks StartedNotice, CompletedNotice and the title
+  notices. One restart window delivers all three.
