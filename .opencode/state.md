@@ -1,5 +1,21 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 15:20Z - importing inputs exists; it still needs a SHOPPING trip to fire
+
+- `EVEJS_COOP_INPUT_RUNS=1` reserve computed live: Pyerite 481, Mexallon 119 (Miner I only - the
+  demand filter keeps ammunition nobody bids for out of the reserve).
+- New `SUPPLY` phase in the distribution run: a hull whose hold is empty at the buyer's station
+  imports the factory's shortfall through the native trader (bounded to 40 beats, one event per
+  intent `living-npc-input-bought`, payroll funds the pilot on INSUFFICIENT_EARNED_ISK).
+- Market limits raised for this stack only: 20 units per purchase, 30 s cooldown (module floor),
+  so a 481-unit Pyerite import takes ~25 small honest trades.
+
+**Why it has not fired yet:** the import is reached only AFTER a sale at a station that sells the
+inputs, and there is nothing profitable to sell there - Tritanium has no bid in Jita (measured:
+3.9 M units, best bid 12 jumps away at 2.72). The next change is a SHOPPING TRIP: when the
+factory is short and no cargo trip pays, the run should fly empty to the station that sells the
+input, buy it, and come home. That is the last missing leg of the loop.
+
 ## 2026-10-31 15:10Z - the factory and the merchant no longer fight over the same minerals
 
 Measured, then fixed: the lift shipped EVERY type the destination bids for, so the refiner's

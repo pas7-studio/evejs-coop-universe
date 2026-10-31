@@ -2941,3 +2941,8 @@ Evidence: evejs-server-1 healthy, EVEJS_COOP_COMPONENT_MARKET=1, play GetAll 120
 Why: The merchant and the factory competed for the same minerals and the merchant always won, so the manufacturer starved while 3.8M Tritanium sat unsold
 Where: tests/coop-npc-input-supply.test.mjs
 Evidence: reserve computed live: Pyerite 962, Mexallon 238, Tritanium 2650 for the two blueprints that have a real bid nearby; only demand-backed products reserve; planLift/planTrip subtract it; tests input-supply 7/7, run 32/32, plan 12/12
+### 2026-10-31T14:58Z · f4aba9c · L2 · alife30d: import phase, input purchase authority, tested
+
+Why: Nothing ever imported: the refinery here only sees Veldspar, so the Pyerite and Mexallon the factory needs exist only where they are sold
+Where: integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-distribution-run.test.mjs
+Evidence: SUPPLY phase added to the distribution run with bounded tries, buyInputs authority over the native trader, payroll funding on refusal, one event per intent; run tests 34/34, supply 7/7, payroll 6/6
