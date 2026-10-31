@@ -3004,3 +3004,9 @@ Why: A sequencing job completes inside a read, so the client never learned that 
 Detail: Deployed on evejs-agents (fork 81af2d9), healthy. Notice surface: 35 published / 72 silent.
 Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json, tests/coop-skin-sequencing.test.mjs
 Evidence: coop-skin-sequencing 7/7; one CompletedNotice per job after the due read, none on repeat; deployed healthy on evejs-agents
+### 2026-10-31T16:48Z · 3e9b845 · L2 · market: prove the purchase notice, with the live server measurement
+
+Why: The client subscribes to TransactionSucceededNotice and nothing published it, so a purchase was only known from the answer
+Detail: Deployed on evejs-agents (fork 0f3de0f, healthy). Live: BUY=200 txBytes=16, the notice carries the same id and the buyer as its target. Notice surface: 36 published / 71 silent.
+Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json
+Evidence: coop-component-market 10/10; live on evejs-agents BUY=200 txBytes=16 SAME_ID=true
