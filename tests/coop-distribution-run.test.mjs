@@ -511,3 +511,63 @@ test("a finished run rests and then takes another load while recycling", async (
   assert.equal(run.read(twentySixth).phase, "PLAN");
   assert.equal(run.read(twentySixth).cycles, 1);
 });
+
+test("a hull that has sold imports the inputs its factory lacks, then goes home", async () => {
+  // Measured 2026-10-31: the refinery in this system only ever sees Veldspar, so the Pyerite and
+  // Mexallon the factory needs exist only at the station that sells them. A hull standing at the
+  // buyer's station with an empty hold is the ship that carries them home.
+  const hull = 980000004173;
+  await run.tick(hull, { planTrip: () => ({ status: "OK", trip: { ...TRIP } }), now: 20000 });
+  run.write({ ...run.read(hull), phase: "CROSS", updatedAt: 20050 });
+  await run.tick(hull, { crossingPhase: () => "ARRIVED", distanceTo: () => 500000,
+    goTo: () => true, now: 20060 });
+  const bought = [];
+  const sold = await run.tick(hull, {
+    distanceTo: () => 900,
+    sell: async () => ({ status: "SOLD", isk: 250000 }),
+    buyInputs: async (args) => {
+      bought.push(args);
+      return bought.length === 1
+        ? { status: "BOUGHT", typeID: 35, quantity: 20, price: 16.03 }
+        : { status: "NOTHING_TO_BUY" };
+    },
+    now: 21000,
+  });
+  assert.equal(sold.status, "IMPORTING");
+  assert.equal(sold.state.phase, "SUPPLY");
+  assert.equal(sold.state.toStationID, 60003760, "inputs are bought where the hull really is");
+  const first = await run.tick(hull, {
+    distanceTo: () => 900,
+    cargoUnits: () => 0,
+    buyInputs: async (args) => { bought.push(args); return { status: "BOUGHT", typeID: 35,
+      quantity: 20, price: 16.03 }; },
+    now: 22000,
+  });
+  assert.equal(first.status, "SUPPLIED:35x20");
+  assert.equal(bought.length, 1);
+  const second = await run.tick(hull, {
+    distanceTo: () => 900,
+    cargoUnits: () => 0,
+    buyInputs: async (args) => { bought.push(args); return { status: "NOTHING_TO_BUY" }; },
+    now: 23000,
+  });
+  assert.equal(second.status, "RETURN");
+  assert.equal(second.state.phase, "RETURN");
+  assert.equal(second.state.supplyTries, 0, "the import budget is per visit");
+  assert.equal(second.state.returnStationID, 60000682);
+});
+
+test("a station that sells nothing ends the import instead of spinning", async () => {
+  const hull = 980000004174;
+  await run.tick(hull, { planTrip: () => ({ status: "OK", trip: { ...TRIP } }), now: 24000 });
+  run.write({ ...run.read(hull), phase: "CROSS", updatedAt: 24050 });
+  await run.tick(hull, { crossingPhase: () => "ARRIVED", distanceTo: () => 500000,
+    goTo: () => true, now: 24060 });
+  await run.tick(hull, { distanceTo: () => 900, now: 25000,
+    sell: async () => ({ status: "SOLD", isk: 1000 }),
+    buyInputs: async () => ({ status: "NOTHING_TO_BUY" }) });
+  const result = await run.tick(hull, { distanceTo: () => 900, cargoUnits: () => 0, now: 26000,
+    buyInputs: async () => ({ status: "NO_SEEDED_COUNTERPARTY" }) });
+  assert.equal(result.status, "RETURN");
+  assert.match(result.reason, /^SUPPLY_STOPPED:NO_SEEDED_COUNTERPARTY/);
+});
