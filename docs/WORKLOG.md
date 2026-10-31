@@ -3064,3 +3064,9 @@ Why: Pirates with real attack orders stood still and never fired at the player: 
 Detail: The stock loop hard-codes npc->player as friendly; the rule answers only that question, for a real order or a fresh retaliation, and never overrides high-sec safety.
 Where: tests/coop-player-prey-hostility.test.mjs
 Evidence: measured 18:49:33 in 30000142 sample: pirate mode STOP, shield 1, zero damage at 207 m while the player killed it; coop-player-prey-hostility 5/5, pirate-prey 12/12
+### 2026-10-31T20:32Z · 98409a9 · L2 · mission001: freeze runtime wreck-refresh characterization
+
+Why: Mission 001: freeze independent characterization tests for the native NPC wreck loot pickup path before refactoring it (transfer semantics, failure paths, runtime refresh)
+Detail: Covers the emptiness rule that the refactor names: a wreck with loot stays non-empty, a wreck emptied by a pickup becomes empty, the broadcast happens only when asked and only once, and a wreck missing from the scene reports WRECK_NOT_FOUND. The scene is a test double at the runtime boundary; the stores are real.
+Where: tests/coop-native-wreck-loot-runtime-refresh.test.mjs
+Evidence: 16 tests in tests/coop-native-wreck-loot-*.test.mjs against the untouched engine baseline 9de4f74 on an attested disposable gameStore; 69 related suites unchanged (798/795/0 fail); see docs/MISSION001-WRECK-LOOT.md
