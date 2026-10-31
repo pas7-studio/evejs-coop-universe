@@ -1,5 +1,34 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 08:25Z (UTC) - the blueprint purchase exists but has not fired yet
+
+Answer to "is production crafting varied goods?": NOT YET, and now for one measurable reason.
+The corporation owns 4 blueprints (3 buildable, 1 static-data artifact), so its product range
+cannot grow. Measured: the seeded world DOES sell blueprints - seed_stock carries 2 772 of them
+at 10 500-20 000 ISK across Jita and New Caldari - and the market has a real sell side
+(GetStationAsks returns 18 640 rows for Jita 4-4).
+
+BUILT AND TESTED (5/5) this round:
+  - space/coopBlueprintPurchase.js - pure: which blueprint is worth the ISK, by the demand its
+    product really has, against its price; refuses owned/overpriced/no-recipe/no-buyer by name;
+  - coopVirtualWorldRuntime.buyFromStationStock() - buys ONE unit through the native trader
+    (seeded ask only, real ISK, real copy) and emits living-npc-blueprint-bought;
+  - the loop's buyBlueprint() gathers asks (seed_stock), demand (seed_buy_orders) and recipes,
+    and the distribution run calls it once per trip after a sale, at the buyer station.
+  Env on the agents stack: EVEJS_COOP_BLUEPRINT_PURCHASE=1, price cap 500 000, budget 5 000 000.
+
+WHY IT HAS NOT FIRED: the buy step needs a completed distribution sale, and since the deploy the
+fleet has been blocked or cooling down (a pending trade journal, cooldowns, a hull loading).
+The drain's sales are separate and do not trigger it.
+
+Also fixed this round (each measured): the manufacturer's "Cannot access 'ready' before
+initialization" throw (production had been dead for hours); UNRESOLVED_MARKET_JOURNAL now settles
+itself from market proof or hands the cargo to a clean pilot identity; an empty hold ends the
+trip; a hull that times out three beats is blocked instead of looking busy for ever.
+
+NEXT: watch for one completed distribution sale, then verify the first blueprint lands in a
+hangar (jobs/blueprints), let the manufacturer build its product, and the freight run sell it.
+
 ## 2026-10-31 07:35Z (UTC) - the manufacturer runs again, and has nothing legitimate to build
 
 The stack was down for ~3 hours (containers exited 255, engine gone); it was brought back with
