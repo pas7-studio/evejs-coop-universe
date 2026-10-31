@@ -109,6 +109,40 @@ test("a design that cannot be paid for spends nothing at all", () => {
   }).status, "LICENCE_NOT_FOUND");
 });
 
+test("a job that completes on read announces CompletedNotice once, to its owner", () => {
+  const {sequencing, clock} = world();
+  const job = sequencing.initiate(7, {
+    name: "Nova", layout: LAYOUT.toString("base64"), kinds: [{component: 22, infinite: true}],
+    quantity: 2,
+  }).job;
+  const published = [];
+  const service = createSkinSequencingGatewayService({
+    skinSequencing: sequencing,
+    publishGatewayNotice(typeName, payload, target) {
+      published.push({typeName, payload, target});
+    },
+  });
+  const request = {
+    payload: {value: Buffer.alloc(0)},
+    authoritative_context: {identity: {character: {sequential: 7}}},
+  };
+
+  service.handleRequest(`${JOB_API}.GetAllActiveRequest`, request);
+  assert.equal(published.length, 0, "a job that is still running announces nothing");
+
+  clock.now = START + 60001;
+  service.handleRequest(`${JOB_API}.GetAllActiveRequest`, request);
+  assert.equal(published.length, 1, "the completion is announced once");
+  assert.equal(published[0].typeName, `${JOB_API}.CompletedNotice`);
+  assert.deepEqual(published[0].target, {character: 7});
+  const notice = SEQUENCING_PROTO_ROOT.lookupType(`${JOB_API}.CompletedNotice`)
+    .decode(published[0].payload);
+  assert.deepEqual([...notice.id.uuid], [...Buffer.from(job.uuid, "hex")]);
+
+  service.handleRequest(`${JOB_API}.GetAllActiveRequest`, request);
+  assert.equal(published.length, 1, "a second read does not repeat the announcement");
+});
+
 test("a due job completes on read and mints exactly its copies, once", () => {
   const {sequencing, skins, clock} = world();
   const job = sequencing.initiate(7, {

@@ -2,7 +2,7 @@
  "note": "Derived from the installed client archive and the deployed server; type names only, never client code.",
  "clientNoticeTypes": 144,
  "subscribedByClient": 106,
- "publishedByServer": 33,
+ "publishedByServer": 35,
  "subscribedNotPublished": [
   "eve_public.achievement.api.CompletedNotice",
   "eve_public.achievement.definition.version.api.CheckVersionNotice",
@@ -27,9 +27,7 @@
   "eve_public.cosmetic.ship.skin.thirdparty.license.api.AddedNotice",
   "eve_public.cosmetic.ship.skin.thirdparty.license.api.DeletedNotice",
   "eve_public.cosmetic.ship.skin.thirdparty.license.api.UpdatedNotice",
-  "eve_public.cosmetic.ship.skin.thirdparty.sequencing.job.api.CompletedNotice",
   "eve_public.cosmetic.ship.skin.thirdparty.sequencing.job.api.FailedNotice",
-  "eve_public.cosmetic.ship.skin.thirdparty.sequencing.job.api.StartedNotice",
   "eve_public.dailygoal.api.CompletedNotice",
   "eve_public.dailygoal.api.CurrentGoalsNotice",
   "eve_public.dailygoal.api.ProgressedNotice",

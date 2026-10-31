@@ -170,8 +170,8 @@ that and is now published on a real redeem only (fork `7e04f8f`, `tests/coop-dai
 ```
 client notice types       144
 subscribed by client code 106
-published by this server   33
-SUBSCRIBED_NOT_PUBLISHED   74
+published by this server   35
+SUBSCRIBED_NOT_PUBLISHED   72
 PUBLISHED_NOT_IN_CLIENT     0
 ```
 
@@ -185,6 +185,8 @@ ones that matter are the domains we DO run, because there the client is waiting 
 | `cosmetic.ship.skin.thirdparty.component.license.api.GrantedNotice` | a component purchase that grants a licence | not published |
 | `cosmetic.ship.skin.thirdparty.license.api.AddedNotice` | a sequencing job that mints skins | not published |
 | `cosmetic.ship.skin.thirdparty.sequencing.job.api.StartedNotice` | the sequencing store | **published now** (fork `1bb2ff9`) |
+| `cosmetic.ship.skin.thirdparty.sequencing.job.api.CompletedNotice` | a job that came due and minted its copies | **published now** (fork `81af2d9`, 7/7) |
+| `cosmetic.ship.skin.thirdparty.sequencing.job.api.FailedNotice` | a job whose mint failed | not published - its `reason` is an enum this store cannot name, and a made-up reason is worse than none |
 | `cosmetic.character.title.api.Granted/Revoked/SetNotice` | a real title change (Equip/Unequip, admin Grant/Revoke) | **published now** (fork `3a9ac81`, `tests/coop-character-titles.test.mjs`, 6/6) |
 | `dailygoal.api.Completed/ProgressedNotice` | the measured daily-goal progress | not published |
 | `corporationgoal.api.RedeemedNotice` | corp goal redeem | not published |
