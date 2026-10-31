@@ -2925,3 +2925,9 @@ Why: integration copies of the admin bridge must equal the deployed fork file; r
 Detail: coopAdminBridgeActions/copy now include blueprint_auto; the engine audit no longer reports them as drifted. The remaining 6-7 drifted copies and the oversized coopVirtualWorldRuntime are pre-existing work from other sessions and are recorded in state.md as the next gate task.
 Where: .opencode/state.md, integration/coopAdminBridge.cjs, integration/coopAdminBridgeActions.cjs
 Evidence: node scripts/coop-engine-audit.cjs drift 9 -> 7; coop-admin-bridge tests 14/14
+### 2026-10-31T14:36Z · a87afb1 · TEST · integration: archive courier, market-catalog and war-advantage copies
+
+Why: integration copies for courier, market catalog and war advantage drifted from the fork; archived the deployed files
+Detail: Brings the archived copies back to the fork so the extraction gate stops reporting them as drifted (drift was 7, now 1). Courier/market/war tests stay green (31/31).
+Where: integration/coopCourierFlightDriver.cjs, integration/coopCourierGateHop.cjs, integration/coopCourierRuntime.cjs, integration/coopDistributionPlan.cjs, integration/coopLoopTick.cjs, integration/coopMarketCatalog.cjs, integration/coopNpcInputSupply.cjs, integration/coopNpcMineralLift.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarAdvantage.cjs
+Evidence: coop-engine-audit drift 7 -> 1; courier+market+war tests 31/31
