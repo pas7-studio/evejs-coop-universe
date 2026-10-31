@@ -21,7 +21,7 @@ const STATE = {
   },
 };
 
-function fixture({ ships = [], free = ["coop-pilot-001", "coop-pilot-002"], spawnOk = true } = {}) {
+function fixture({ ships = [], free = ["coop-pilot-001", "coop-pilot-002"], spawnOk = true, meritOf = null } = {}) {
   const calls = [];
   const garrison = createWarGarrison({
     readWarState: () => STATE,
@@ -34,6 +34,7 @@ function fixture({ ships = [], free = ["coop-pilot-001", "coop-pilot-002"], spaw
         : { ok: false, error: "DOCTRINE_REFUSED" };
     },
     env: ON,
+    meritOf,
     clock: () => 1000,
   });
   return { garrison, calls };
@@ -367,4 +368,32 @@ test("hulls of the attacker standing in the target do not man the source side", 
   assert.equal(f.calls[0].systemID, 30045344,
     "the ghost of a target hull must never be read as a mustered source");
   assert.equal(out.status, "GARRISON_APPLIED");
+});
+
+// FW-115: a garrison spawn is a FORMATION, not a hull.
+//
+// MEASURED 2026-10-31: every spawn passed merit 0, which the doctrine composition reads as a
+// recruit's single hull, so seven live campaigns fielded seven identical frigates while 1380
+// merit sat in the ledger. The commander's earned merit is now passed through, and the
+// composition turns it into tackle/EWAR/logistics roles.
+test("the commander spawns the formation its earned merit allows", () => {
+  const f = fixture({
+    ships: [{ entityID: 1, systemID: 30045344, factionID: 500001 }],
+    meritOf: (pilotID) => (pilotID === "coop-pilot-001" ? 70 : 0),
+  });
+  const out = f.garrison.tick();
+  assert.equal(out.status, "GARRISON_APPLIED");
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].merit, 70, "a wingman commands three hulls, not one");
+  assert.equal(out.applied[0].merit, 70, "the event carries the merit that shaped the formation");
+});
+
+test("an unknown commander merit is zero, never a guess", () => {
+  const f = fixture({
+    ships: [{ entityID: 1, systemID: 30045344, factionID: 500001 }],
+    meritOf: () => { throw new Error("ledger unreadable"); },
+  });
+  const out = f.garrison.tick();
+  assert.equal(out.status, "GARRISON_APPLIED");
+  assert.equal(f.calls[0].merit, 0);
 });
