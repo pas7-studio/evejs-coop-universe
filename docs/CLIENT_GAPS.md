@@ -170,8 +170,8 @@ that and is now published on a real redeem only (fork `7e04f8f`, `tests/coop-dai
 ```
 client notice types       144
 subscribed by client code 106
-published by this server   35
-SUBSCRIBED_NOT_PUBLISHED   72
+published by this server   36
+SUBSCRIBED_NOT_PUBLISHED   71
 PUBLISHED_NOT_IN_CLIENT     0
 ```
 
@@ -181,7 +181,8 @@ ones that matter are the domains we DO run, because there the client is waiting 
 
 | notice | where it should come from | state |
 | --- | --- | --- |
-| `cosmetic.market.transaction.api.TransactionSucceeded/FailedNotice` | the SKIN/component purchase path | not published |
+| `cosmetic.market.transaction.api.TransactionSucceededNotice` | a real component purchase | **published now** (fork `0f3de0f`, 10/10; live on `evejs-agents`: `BUY=200 txBytes=16`, notice id = answer id) |
+| `cosmetic.market.transaction.api.TransactionFailedNotice` | a purchase that fails after a transaction exists | not published - this store mints the transaction id only on a real sale, so a refusal has nothing to announce; the refusal is the answer itself |
 | `cosmetic.ship.skin.thirdparty.component.license.api.GrantedNotice` | a component purchase that grants a licence | not published |
 | `cosmetic.ship.skin.thirdparty.license.api.AddedNotice` | a sequencing job that mints skins | not published |
 | `cosmetic.ship.skin.thirdparty.sequencing.job.api.StartedNotice` | the sequencing store | **published now** (fork `1bb2ff9`) |

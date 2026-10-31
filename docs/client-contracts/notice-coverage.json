@@ -2,7 +2,7 @@
  "note": "Derived from the installed client archive and the deployed server; type names only, never client code.",
  "clientNoticeTypes": 144,
  "subscribedByClient": 106,
- "publishedByServer": 35,
+ "publishedByServer": 36,
  "subscribedNotPublished": [
   "eve_public.achievement.api.CompletedNotice",
   "eve_public.achievement.definition.version.api.CheckVersionNotice",
@@ -22,7 +22,6 @@
   "eve_public.cosmetic.character.title.api.SetAllInBubbleNotice",
   "eve_public.cosmetic.character.title.definition.version.api.CheckVersionNotice",
   "eve_public.cosmetic.market.transaction.api.TransactionFailedNotice",
-  "eve_public.cosmetic.market.transaction.api.TransactionSucceededNotice",
   "eve_public.cosmetic.ship.skin.thirdparty.component.license.api.GrantedNotice",
   "eve_public.cosmetic.ship.skin.thirdparty.license.api.AddedNotice",
   "eve_public.cosmetic.ship.skin.thirdparty.license.api.DeletedNotice",
