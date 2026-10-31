@@ -1,5 +1,34 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 08:45Z (UTC) - the loop ran out of DEMAND, which is the point
+
+MEASURED: Jita's Tritanium buy order is now **quantity 0** (price 3.71) - the fleet sold into it
+until it was gone. Seeds still offer 4 000 000 units at 3.93 (that is other people selling),
+and Pyerite still bids 2 541 923 at 15.13. The corporation holds 3 037 466 minerals at
+60000682.
+
+So the two hulls that report NO_TRIP_WORTH_TAKING are RIGHT: flying Tritanium to a station that
+no longer bids is a loss dressed as activity. The binding constraint moved once more: not
+ships, not refining, now DEMAND.
+
+Also fixed this round:
+  - the blueprint purchase now happens WHERE THE HULL LOADS (the station that holds the
+    materials), not where it sells, so a bought blueprint can be built at once;
+  - the chooser prefers blueprints whose recipe can be run AT THAT STATION (runsAtStation),
+    because a cheap blueprint nobody can feed is a purchase that only looks productive.
+
+OPEN: one hull (980000000002) is blocked UNRESOLVED_MARKET_JOURNAL with 1 959 units of Pyerite
+aboard. The world's own reconcile proves the market row is NOT filled, so it refuses to credit
+it - correct behaviour. The pilot-swap fallback did not take for this hull; that is the next
+thing to check (the swap relies on the journal being named after the bound pilot).
+
+NEXT, in order:
+  1. sell into the demand that still exists (Pyerite 2.54 M at 15.13) and let the planner look
+     further than one gate when the near system is exhausted;
+  2. get the first blueprint bought and its product made - that is what replaces exhausted raw
+     demand with something the corporation can keep supplying;
+  3. the blocked hull's journal swap.
+
 ## 2026-10-31 08:25Z (UTC) - the blueprint purchase exists but has not fired yet
 
 Answer to "is production crafting varied goods?": NOT YET, and now for one measurable reason.
@@ -414,3 +443,16 @@ LIVE proof 08:32:47Z - commander coop-pilot-009, merit 150 (squad-lead), spawned
 hulls: 14359 Condor (tackle), 45462 CA Destroyer (anti-tackle), 15320 Moa (brawler),
 15972 Delta II (logistics), 12394 Blackbird (ewar).
 Suite: composition+doctrine+garrison+navy 42/42.
+
+## Courier family - PROVEN LIVE 2026-10-31 (server side)
+- Contracts delivered by the courier runtime: 980000002 (Jita->Perimeter), 980000003, 980000004.
+  980000004 final: status=4, coop-events.jsonl `courier-accepted` 07:41:44Z, `courier-gate-hop`
+  08:32:17Z JUMP_VERIFIED 30000142->30000144, `courier-delivered` 08:34:36Z HANDED_OVER at 60000358.
+- Fixed this round (fork pas7-studio/EveJS): gate-hop event at the verified jump (875b685), hull-docked
+  replan + bounded timeout restart (5df155c), resume from the hull real system (86aa4e6, ca971da,
+  2f2587e), repaired station carries its solar system (c2831e4), drop a leg that can never progress
+  (fb23e9b).
+- Still open: courier legs are fragile when the ship row and the scene disagree (item locationID =
+  system id + flagID 0 while the scene lost the entity). Recovery now repairs honestly, but a scene
+  entity that vanishes between ticks is not explained yet; needs a targeted probe before claiming the
+  family is stable.
