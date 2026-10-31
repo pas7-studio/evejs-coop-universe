@@ -293,6 +293,33 @@ test("redeem refuses an incomplete goal and pays points exactly once", () => {
     "a goal never pays twice");
 });
 
+test("an overshot goal reports exactly its target, so the client can offer the claim", () => {
+  // Measured in the pinned client (dailygoals/client/goal.pyj): `is_completed()` is
+  // `current_progress == target`, an exact equality. A server that reported 6000/5000
+  // therefore never let the player claim a goal they had over-achieved.
+  const state = fakeCharacterState();
+  state.records["7"] = {characterID: 7, freeSkillPoints: 0};
+  const goals = createDailyGoals({
+    gameStore: memoryStore({characters: {"7": {characterID: 7}}}),
+    characterState: state,
+    industryJobsFor: () => [],
+    miningLogsFor: () => [
+      {eventDate: toFiletime(NOW - 1000), quantity: 6000, typeID: 1230},
+    ],
+    clock: () => NOW,
+    env: {EVEJS_COOP_DAILY_GOALS: "1"},
+  });
+  const mine = DEFINITIONS.find((goal) => goal.kind === "mine_ore");
+  const entry = goals.snapshotFor(7, NOW).goals
+    .find((goal) => goal.definition.kind === "mine_ore");
+
+  assert.equal(entry.progress, mine.target, "the wire never reports more than the target");
+  assert.equal(entry.completed, true);
+  assert.equal(entry.claimable, true);
+  assert.equal(entry.rewardSkillPoints, rewardSkillPoints(mine, 6000),
+    "the reward still follows the raw haul, not the clamped bar");
+});
+
 test("the bonus goal counts the goals actually redeemed today", () => {
   const state = fakeCharacterState();
   state.records["7"] = {characterID: 7, freeSkillPoints: 0};
