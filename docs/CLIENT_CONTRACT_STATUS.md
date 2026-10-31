@@ -13,9 +13,9 @@ actually issues, taken from its own bytecode, with the modules that call it.
 | NULLABLE | the handler can answer `null` on some path |
 | OK | the handler builds a real answer |
 
-Total client calls: 542 · MISSING 0 · STUB 41 · NULLABLE 103 · OK 398
+Total client calls: 542 · MISSING 0 · STUB 38 · NULLABLE 101 · OK 403
 
-## STUB (41)
+## STUB (38)
 
 | call | sites | client module | server file | why it is acceptable today |
 | --- | --- | --- | --- | --- |
@@ -39,14 +39,11 @@ Total client calls: 542 · MISSING 0 · STUB 41 · NULLABLE 103 · OK 398
 | `node_graph.qa_subscribe` | 1 | log_graph.pyj | services\nodegraph\nodeGraphService.js | QA only |
 | `node_graph.qa_unsubscribe` | 1 | log_graph.pyj | services\nodegraph\nodeGraphService.js | QA only |
 | `operationsManager.process_client_event` | 1 | eventHandler.pyj | services\character\operationsManagerService.js | telemetry, fire-and-forget |
-| `petitioner.AddPetitionRating` | 1 | petition.pyj | services\support\petitionerService.js | fire-and-forget |
-| `petitioner.CancelPetition` | 1 | petition.pyj | services\support\petitionerService.js | fire-and-forget, the window reloads |
-| `petitioner.ClaimPetition` | 1 | petition.pyj | services\support\petitionerService.js | py2 `None > 0` is False, the window just reloads |
-| `petitioner.ClosePetition` | 1 | petition.pyj | services\support\petitionerService.js | fire-and-forget, the window reloads |
-| `petitioner.DeletePetition` | 1 | petition.pyj | services\support\petitionerService.js | fire-and-forget, the window reloads |
+| `petitioner.GetCategoryProperties` | 1 | petitionWindow.pyj | services\support\petitionerService.js | **unreviewed** |
+| `petitioner.GetClientPickerInfo` | 1 | petitionWindow.pyj | services\support\petitionerService.js | **unreviewed** |
+| `petitioner.GetLog` | 1 | petition.pyj | services\support\petitionerService.js | **unreviewed** |
 | `petitioner.MarkAsRead` | 1 | petition.pyj | services\support\petitionerService.js | fire-and-forget, local list updated first |
-| `petitioner.UnClaimPetition` | 1 | petition.pyj | services\support\petitionerService.js | fire-and-forget, the window reloads |
-| `petitioner.UpdatePetitionRating` | 1 | petition.pyj | services\support\petitionerService.js | fire-and-forget |
+| `petitioner.PropertyPopulationInfo` | 1 | petitionWindow.pyj | services\support\petitionerService.js | **unreviewed** |
 | `pingService.Ping` | 1 | connectionService.pyj | services\ping\pingService.js | fire-and-forget proxy |
 | `publicQaToolsServer.MoveMeTo` | 2 | publicQaToolsClient.pyj | services\support\publicQaToolsServerService.js | QA only, wrapped in try/except UserError |
 | `publicQaToolsServer.SlashCmd` | 1 | publicQaToolsClient.pyj | services\support\publicQaToolsServerService.js | QA only |
@@ -61,7 +58,7 @@ Total client calls: 542 · MISSING 0 · STUB 41 · NULLABLE 103 · OK 398
 | `survey.ClaimSurveyRewards` | 1 | surveySvc.pyj | services\support\surveyService.js | fire-and-forget |
 | `survey.PerformSurveyChecks` | 1 | surveySvc.pyj | services\support\surveyService.js | fire-and-forget |
 
-## NULLABLE (103)
+## NULLABLE (101)
 
 | call | sites | client module | server file | why it is acceptable today |
 | --- | --- | --- | --- | --- |
@@ -127,8 +124,6 @@ Total client calls: 542 · MISSING 0 · STUB 41 · NULLABLE 103 · OK 398
 | `paperDollServer.UpdateExistingCharacterFull` | 1 | ccSvc.pyj | services\character\paperDollServerService.js | **unreviewed** |
 | `paperDollServer.UpdateExistingCharacterLimited` | 1 | ccSvc.pyj | services\character\paperDollServerService.js | **unreviewed** |
 | `petitioner.EscalatePetition` | 1 | petition.pyj | services\support\petitionerService.js | **unreviewed** |
-| `petitioner.PetitioneeChat` | 2 | petition.pyj | services\support\petitionerService.js | **unreviewed** |
-| `petitioner.PetitionerChat` | 2 | petition.pyj | services\support\petitionerService.js | **unreviewed** |
 | `ProjectDiscovery.fix_task_id` | 1 | devpopup.pyj | services\character\projectDiscoveryService.js | **unreviewed** |
 | `pvpFilamentMgr.GetCharacterStatistics` | 1 | pvpFilamentSvc.pyj | services\activity\pvpFilamentMgrService.js | **unreviewed** |
 | `repackagingSvc.RepackageItems` | 3 | invItemFunctions.pyj | services\station\repackagingService.js | **unreviewed** |
