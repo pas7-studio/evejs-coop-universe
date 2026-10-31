@@ -94,7 +94,17 @@ there is no admin rename action, the owner renames them in the client.
 uses `itemStore.updateInventoryItem({itemName})` (the primitive behind
 `invBroker.SetLabel`) and pushes `OnCfgDataChanged/evelocations` to the live session.
 Whitelisted as `rename_item`, exposed as MCP `admin_rename_item` (also usable as a
-batch action). Needs one play-stack restart to be live there; proven on `evejs-agents`.
+batch action). Proven on `evejs-agents` (image `1ac99b2`): renamed item
+`9988400020455` "Talos" -> "Rename Proof Hull", persisted to `items` in both
+`itemName` and `shipName`. The play stack still runs the older image, so there the
+tool answers `refused` until one restart window; the client's own right-click Rename
+(`invBroker.SetLabel`, stock code) works there today.
+
+Trap found the same day: the earlier PowerShell edit of `Code/compose.yaml` left the
+prey-debug comment/value at one leading space instead of six, so `docker compose
+config` failed with "did not find expected key" and NO recreate was possible (the
+running containers were unaffected). Fixed in `ce91a4b`; always run
+`docker compose -f compose.yaml config -q` after editing that file.
 
 **Also granted 2026-11-01: 5 Algos + 5 Vexor, all fitted and verified.**
 Algos `...120928..120932`: Rail (125mm I, Iron S), Blaster (Light Neutron, Antimatter S),
@@ -111,6 +121,19 @@ Planned labels for `admin_rename_item`: 695 "T1 Rail Sniper", 696 "T2 Rail Snipe
 704 "Null Kiter"; 928 "Algos Rail", 929 "Algos Blaster", 930 "Algos Drone",
 931 "Algos MWD Tackle", 932 "Algos Anti-Frig"; 933 "Vexor Rail", 934 "Vexor Blaster",
 935 "Vexor Drone", 936 "Vexor Shield Kite", 937 "Vexor Armor".
+
+**DONE on the play stack 2026-11-01 22:37** (image `8f4a4d1`, one owner-approved restart):
+all 20 hulls renamed and all 20 saved fittings created (ids 1633-1652, plus his three
+older ones 1620/1621/1631). Verified in the gameStore: `savedFittings` owner row
+`owners140000005` = 23 fittings, item names persisted.
+
+**Bridge starvation, still the open lag:** with the loop blocked in a long world phase
+the fast drain timer cannot fire, so an admin call answers only when a FULL tick
+completes (measured after the restart: 12 s, then >2 min twice). Requests are queued in
+`coop-admin-requests.jsonl` and execute later, so a timeout from a tool does NOT mean
+the action was lost. Also: a throwing action blocks the whole queue, because `drain()`
+aborts before `writeJsonLines` - clear the file to unblock. The remaining hot phases
+(`living-native-durable-slot`, `universe-sites`, `living-native-industry`) are the fix.
 
 ## Traps
 - `docker cp` over `/var/lib/evejs/gameStore/gamestore.sqlite` makes the file
