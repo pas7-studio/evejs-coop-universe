@@ -211,3 +211,25 @@ test("a faction reserve is declared, spent by a real loss and consumed by a repl
  assert.equal(roster.reserveOf({factionID:999}).totals.spawnable,0);
  assert.ok(store.rows.has(TABLE+"|"+KEY));
 });
+
+// FW-120: the roster must know every role a doctrine can field.
+//
+// MEASURED 2026-10-31: the new anti-tackle role was missing from the roster ROLES set, so
+// createFleet answered FLEET_DOCTRINE_REQUIRED and NO formation was recorded - five real hulls
+// in space, fleetID empty, and only the commander ever reached the fleet registry.
+test("a formation with an anti-tackle destroyer is really recorded",()=>{
+ const f=fixture();
+ const created=f.roster.createFleet({
+  factionID:500001,systemID:30003837,rank:"squad-lead",merit:150,commandCap:5,
+  ships:[
+   {entityID:9001,role:"tackle",doctrineID:"coop_war_doctrine_500001_tackle",hullName:"Condor"},
+   {entityID:9002,role:"anti-tackle",doctrineID:"coop_war_doctrine_500001_anti-tackle",hullName:"Caldari CA Destroyer"},
+   {entityID:9003,role:"brawler",doctrineID:"coop_war_doctrine_500001_brawler",hullName:"Moa"},
+  ],
+ });
+ assert.equal(created.status,"CREATED",JSON.stringify(created).slice(0,200));
+ const snapshot=f.roster.snapshot();
+ const fleets=Object.values((snapshot&&snapshot.state&&snapshot.state.fleets)||{});
+ assert.equal(fleets.length,1);
+ assert.deepEqual(fleets[0].ships.map((ship)=>ship.role),["tackle","anti-tackle","brawler"]);
+});

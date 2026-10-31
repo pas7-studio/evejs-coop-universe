@@ -2854,3 +2854,8 @@ Evidence: purchase now also runs when no trip is worth taking, at the station ho
 Why: Every hull orbited at one distance and the first free identity always commanded, so veteran formations never formed
 Where: docs/WORKLOG.md
 Evidence: fork 140f5d9/58e0e55; role-posture 5/5, garrison 21/21; live posture role=tackle 2500 m and commander merit 150 spawning 5 role-complete hulls
+### 2026-10-31T10:17Z · 4d4ae8d · L2 · state: the blueprint purchase decides BUY and then throws with an empty reason
+
+Why: The roster did not know the new anti-tackle role, so every multi-role formation was discarded and only the commander counted as a war hull
+Where: .opencode/state.md
+Evidence: fork 4ab17f2; roster 12/12; live fleetID coop-fleet-500004-0199 ACTIVE with tackle+anti-tackle+ewar, roster 199 fleets

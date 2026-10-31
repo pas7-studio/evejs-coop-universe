@@ -517,3 +517,14 @@ LIVE PROOF of the whole role stack (09:24Z, commander merit 150, five hulls):
 15972 Delta II = logistics | 12394 Blackbird = ewar.
 
 Campaign states 09:17Z: 29 EXPIRED, 3 OCCUPIED, 1 ASSAULT (30045341) - captures keep happening.
+
+## FW-120 (fork 4ab17f2): the roster knows the anti-tackle role - formations are recorded again
+Right after FW-116 the garrison reported fleetID "" and the roster held ZERO fleets while five real
+hulls with five roles stood in space. The new anti-tackle role was missing from the roster ROLES
+set, so createFleet answered FLEET_DOCTRINE_REQUIRED and the whole formation was discarded - only
+the commander ever reached the fleet registry, which is why 16 registered hulls were all tackle.
+
+LIVE after the fix (12:53-12:54Z): garrison applied rows carry real fleet ids
+(coop-fleet-500001-0198, coop-fleet-500004-0199) and the roster holds 199 fleets; the newest is
+ACTIVE with 3 ships: tackle + anti-tackle + ewar. Campaigns at 12:5xZ: 38 EXPIRED, 4 OCCUPIED,
+2 ASSAULT live.
