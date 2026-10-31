@@ -713,3 +713,13 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - Measured war state: 7 wars, 46 campaigns [40 EXPIRED, 4 OCCUPIED, 2 ASSAULT], 17 territories.
   Both live assaults are in 30045338 and 30045342; every other border is one of those two
   systems seen from a different edge, so the frontier is two systems until one resolves.
+
+## Extraction gate state 2026-10-31 (honest, red)
+- `node scripts/coop-engine-audit.cjs` -> AUDIT_REGRESSION: `integration drift 7 > 0` and
+  `server/src/space/coopVirtualWorldRuntime.js 5671L (ceiling 4800)`.
+- Drifted copies: coopCourierFlightDriver, coopCourierGateHop, coopCourierRuntime, coopMarketCatalog,
+  coopVirtualWorldRuntime, coopWarAdvantage (+1). These are OTHER sessions' fork work (FW-125..128, courier,
+  market catalog) not yet archived; I refreshed only the two files I changed
+  (coopAdminBridge.cjs, coopAdminBridgeActions.cjs) - tests for them stay 14/14 green.
+- Next real task: refresh those 6-7 copies and split coopVirtualWorldRuntime (coop-split-module.cjs) so the
+  gate prints AUDIT_OK again. Not caused by today's market/industry work.

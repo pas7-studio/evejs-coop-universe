@@ -18,7 +18,7 @@
 // runtime decision is never only in a chat log.
 
 // Pure helpers live in space/coopAdminBridgeActions.js (split by scripts/coop-split-module.cjs).
-const { fs, siblingSuffix, REQUESTS, RESULTS, EVENTS, ALLOWED_ACTIONS, MAX_REQUESTS_PER_DRAIN, readJsonLines, writeJsonLines, appendJsonLine, emitEvent, readRow, liveSessionFor, executeChatCommand, giveItem, removeItem, boardShip, moveItem, fitShip, fitSlots, deployStructure, resolveWarPatrolLoadout, spawnNativeNpc, militiaEnlist, warFleetAuthorities, freeHullLinks, listFreeHullsFor, spawnWarFleet, warFleetState, fleetReconstitute, releaseIdentity, assignIdentity } = require("./coopAdminBridgeActions");
+const { fs, siblingSuffix, REQUESTS, RESULTS, EVENTS, ALLOWED_ACTIONS, MAX_REQUESTS_PER_DRAIN, readJsonLines, writeJsonLines, appendJsonLine, emitEvent, readRow, liveSessionFor, executeChatCommand, blueprintAuto, createCourierContract, giveItem, removeItem, boardShip, moveItem, fitShip, fitSlots, giveFit, restoreLastLoss, deployStructure, resolveWarPatrolLoadout, spawnNativeNpc, militiaEnlist, warFleetAuthorities, freeHullLinks, listFreeHullsFor, spawnWarFleet, warFleetState, fleetReconstitute, releaseIdentity, assignIdentity } = require("./coopAdminBridgeActions");
 let stationIndex = null;
 function stationRecord(stationID) {
   const id = Number(stationID) || 0;
@@ -127,6 +127,142 @@ function executeRequest(request) {
   if (action === "release_identity") return releaseIdentity(request);
   if (action === "assign_identity") return assignIdentity(request);
   // Read-only war diagnostics: never reserves, orders or writes anything.
+  if (action === "scene_slim_diagnose") {
+    // Read-only: what the overview panel is actually fed, for the live scene of one character (or
+    // of one system when nobody is in space). Every row is built by the same destiny encoder the
+    // client unmarshals, so "hasGroup: false" here is exactly the ball that arrives without a slim
+    // item in michelle.
+    const characterID = Number(request.characterID) || 0;
+    const systemID = Number(request.systemID) || 0;
+    try {
+      const runtime = require("./runtime");
+      const destiny = require("./destiny");
+      const session = characterID > 0 ? liveSessionFor(characterID) : null;
+      let scene = null;
+      if (session && typeof runtime.getSceneForSession === "function") {
+        scene = runtime.getSceneForSession(session) || null;
+      }
+      if (!scene && systemID > 0 && runtime.scenes instanceof Map) {
+        scene = runtime.scenes.get(systemID) || null;
+      }
+      if (!scene) {
+        return { ok: false, error: "no scene for character " + characterID + " or system " + systemID };
+      }
+      const dynamic = scene.dynamicEntities instanceof Map
+        ? Array.from(scene.dynamicEntities.values())
+        : [];
+      const statics = scene.staticEntitiesByID instanceof Map
+        ? Array.from(scene.staticEntitiesByID.values())
+        : (Array.isArray(scene.staticEntities) ? scene.staticEntities : []);
+      const inspect = (entity) => {
+        const dict = destiny.buildSlimItemDict(entity);
+        const entries = dict && Array.isArray(dict.entries) ? dict.entries : [];
+        const map = Object.fromEntries(entries.map((row) => [row[0], row[1]]));
+        return {
+          kind: String(entity && entity.kind || ""),
+          itemID: Number(entity && entity.itemID) || 0,
+          typeID: Number(map.typeID) || 0,
+          groupID: map.groupID === undefined ? null : Number(map.groupID) || 0,
+          categoryID: map.categoryID === undefined ? null : Number(map.categoryID) || 0,
+          hasGroup: Object.prototype.hasOwnProperty.call(map, "groupID"),
+          name: String((map.name && typeof map.name === "object" ? map.name.value : map.name) || "").slice(0, 40),
+          ownerID: Number(map.ownerID) || 0,
+          corpID: Number(map.corpID) || 0,
+          warFactionID: Number(map.warFactionID) || 0,
+          charID: Number(map.charID) || 0,
+        };
+      };
+      const sample = (rows) => {
+        const out = [];
+        for (const entity of rows) {
+          if (out.length >= 40) break;
+          out.push(inspect(entity));
+        }
+        return out;
+      };
+      const all = [...dynamic, ...statics];
+      const missing = all.filter((entity) => {
+        const dict = destiny.buildSlimItemDict(entity);
+        const entries = dict && Array.isArray(dict.entries) ? dict.entries : [];
+        return !entries.some((row) => row && row[0] === "groupID");
+      }).length;
+      // What the client was actually told: the runtime keeps a per-session journal of every
+      // add/remove/visibility broadcast it sent, so "did the panel receive it" is answerable without
+      // guessing from a screenshot.
+      const journal = session && session._space && Array.isArray(session._space.visibilityJournal)
+        ? session._space.visibilityJournal.slice(-25).map((entry) => ({
+          seq: Number(entry && entry.seq) || 0,
+          event: String(entry && entry.event || ""),
+          atMs: Number(entry && entry.atMs) || 0,
+          added: Array.isArray(entry && entry.addedEntityIDs) ? entry.addedEntityIDs.slice(0, 12) : [],
+          removed: Array.isArray(entry && entry.removedEntityIDs) ? entry.removedEntityIDs.slice(0, 12) : [],
+          stamp: Number(entry && entry.destinyStamp) || 0,
+          source: String(entry && entry.source || ""),
+        }))
+        : [];
+      return {
+        ok: true,
+        characterID,
+        journal,
+        sessionSystemID: Number(session && (session.solarsystemid2 || session.solarsystemid)) || 0,
+        systemID: Number(scene.systemID) || 0,
+        dynamicCount: dynamic.length,
+        staticCount: statics.length,
+        missingGroupID: missing,
+        ships: sample(dynamic.filter((entity) => String(entity && entity.kind) === "ship")),
+        cells: sample(statics),
+      };
+    } catch (error) {
+      return { ok: false, error: "scene slim diagnose failed: " + String(error && error.message || error) };
+    }
+  }
+  if (action === "grant_evermarks") {
+    // EverMarks ARE loyalty points of the Heraldry issuer corporation (services/corporation/
+    // lpWalletState: EVERMARK_ISSUER_CORP_ID 1000419), so granting them means crediting that real
+    // ledger through the same function /addlp uses - not writing a number somewhere.
+    // characterID 0 means "every character the store knows".
+    const amount = Math.trunc(Number(request.amount) || 0);
+    if (!(amount > 0) || amount > 10_000_000) {
+      return { ok: false, error: "amount must be 1..10000000" };
+    }
+    try {
+      const wallet = require("../services/corporation/lpWalletState");
+      const issuerCorpID = Number(wallet.EVERMARK_ISSUER_CORP_ID) || 1000419;
+      const requested = Number(request.characterID) || 0;
+      let characterIDs = [];
+      if (requested > 0) {
+        characterIDs = [requested];
+      } else {
+        const read = require("../gameStore").read("characters", "/");
+        const rows = read && read.success === true && read.data && typeof read.data === "object"
+          ? read.data
+          : {};
+        // The characters table is keyed BY character id; the row itself may not repeat it.
+        characterIDs = Object.entries(rows)
+          .map(([key, row]) => Number(key) ||
+            Number(row && (row.characterID || row.charID)) || 0)
+          .filter((id) => id > 0);
+      }
+      const results = [];
+      for (const characterID of [...new Set(characterIDs)]) {
+        const before = Number(wallet.getCharacterWalletLPBalance(characterID, issuerCorpID)) || 0;
+        const written = wallet.adjustCharacterWalletLPBalance(characterID, issuerCorpID, amount, {
+          reason: "admin grant_evermarks",
+        });
+        const after = Number(wallet.getCharacterWalletLPBalance(characterID, issuerCorpID)) || 0;
+        results.push({
+          characterID,
+          before,
+          after,
+          credited: after - before,
+          ok: Boolean(written && written.success !== false),
+        });
+      }
+      return { ok: true, issuerCorpID, amount, characters: results.length, results };
+    } catch (error) {
+      return { ok: false, error: "grant evermarks failed: " + String(error && error.message || error) };
+    }
+  }
   if (action === "inspect_npc") {
     // Read-only: what a native hull really carries right now.
     const entityID = Number(request.entityID) || 0;
@@ -435,12 +571,60 @@ function executeRequest(request) {
   const characterID = Number(request.characterID) || 0;
   if (!(characterID > 0)) return { ok: false, error: "characterID is required" };
   if (action === "chat_command") return executeChatCommand(request);
+  if (action === "blueprint_auto") return blueprintAuto(request);
+  if (action === "create_courier_contract") return createCourierContract(request);
   if (action === "give_item") return giveItem(request);
   if (action === "remove_item") return removeItem(request);
   if (action === "fit_ship") return fitShip(request);
   if (action === "move_item") return moveItem(request);
   if (action === "fit_slots") return fitSlots(request);
+  if (action === "give_fit") return giveFit(request);
+  if (action === "restore_last_loss") return restoreLastLoss(request);
+  if (action === "batch") return runBatch(request);
   return boardShip(request);
+}
+
+// Runs a list of admin actions from ONE request, so a whole fitting or a full
+// "recreate exactly what I lost" costs one bridge round-trip instead of one per
+// item. Sub-actions pass the same whitelist and the same executeRequest, so a
+// batch can never do something a single action could not.
+const MAX_BATCH_ACTIONS = 64;
+function runBatch(request) {
+  const parentCharacterID = Number(request.characterID) || 0;
+  const list = Array.isArray(request.actions) ? request.actions : [];
+  if (!list.length) return { ok: false, error: "actions[] is required" };
+  if (list.length > MAX_BATCH_ACTIONS) {
+    return { ok: false, error: "too many actions: " + list.length + " (max " + MAX_BATCH_ACTIONS + ")" };
+  }
+  const stopOnError = request.stopOnError === true;
+  const results = [];
+  let applied = 0;
+  for (const sub of list) {
+    if (!sub || typeof sub !== "object" || Array.isArray(sub)) {
+      results.push({ action: "", ok: false, error: "action entry is not an object" });
+      if (stopOnError) break;
+      continue;
+    }
+    const action = String(sub.action || "");
+    if (action === "batch") {
+      results.push({ action, ok: false, error: "nested batch is not allowed" });
+      if (stopOnError) break;
+      continue;
+    }
+    const merged = Object.assign({}, sub, {
+      characterID: Number(sub.characterID) || parentCharacterID,
+    });
+    let result = null;
+    try {
+      result = executeRequest(merged);
+    } catch (error) {
+      result = { ok: false, error: "action threw: " + String(error && error.message || error) };
+    }
+    results.push(Object.assign({ action }, result));
+    if (result && result.ok) applied += 1;
+    else if (stopOnError) break;
+  }
+  return { ok: applied > 0, applied, attempted: results.length, results };
 }
 
 // Executes pending requests once. Called from the world tick; cheap when empty.
@@ -478,4 +662,27 @@ function drain(options) {
   return executed;
 }
 
-module.exports = { drain, executeRequest, REQUESTS, RESULTS, ALLOWED_ACTIONS };
+// The bridge used to run only on the world tick. That tick is 30 s nominal and in
+// practice 60-90 s when the world phases are busy, so every admin call waited for
+// it and often timed out. The bridge now also drains on its own short timer: one
+// admin request answers in about a second regardless of what the phases are doing.
+let fastDrainTimer = null;
+function startFastDrain(options) {
+  if (fastDrainTimer) return false;
+  const opts = options || {};
+  const configured = Number(opts.everyMs) || Number(process.env.EVEJS_COOP_ADMIN_BRIDGE_MS) || 1000;
+  const everyMs = Math.max(250, Math.min(5000, configured));
+  fastDrainTimer = setInterval(() => {
+    try {
+      drain(opts);
+    } catch (error) {
+      if (typeof opts.log === "function") {
+        opts.log("[CoopAdminBridge] fast drain failed: " + String(error && error.message || error));
+      }
+    }
+  }, everyMs);
+  if (typeof fastDrainTimer.unref === "function") fastDrainTimer.unref();
+  return true;
+}
+
+module.exports = { drain, executeRequest, startFastDrain, REQUESTS, RESULTS, ALLOWED_ACTIONS };
