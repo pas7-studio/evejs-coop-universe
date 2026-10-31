@@ -50,7 +50,8 @@ test("a recruit fields a tackle and a squad-lead a role-complete gang",()=>{
  assert.ok(squad.counts.tackle>=1);
  assert.ok(squad.counts.ewar>=1);
  assert.ok(squad.counts.logistics>=1);
- assert.deepEqual(squad.required,["tackle","ewar","logistics"]);
+ assert.ok(squad.counts["anti-tackle"]>=1,"FW-116: two hulls or more always include an anti-tackle destroyer");
+ assert.deepEqual(squad.required,["tackle","anti-tackle","ewar","logistics"]);
  const wing=api.compose({factionID:500004,merit:300});
  assert.equal(wing.size,8);
  assert.ok(wing.counts.heavy>=1);
@@ -97,8 +98,21 @@ test("a faction without a doctrine is refused with the doctrine reason",()=>{
 
 test("requirements grow with the cap and never shrink",()=>{
  assert.deepEqual(requirementsFor(1),["tackle"]);
- assert.deepEqual(requirementsFor(2),["tackle"]);
- assert.deepEqual(requirementsFor(3),["tackle","ewar"]);
- assert.deepEqual(requirementsFor(5),["tackle","ewar","logistics"]);
- assert.deepEqual(requirementsFor(25),["tackle","ewar","logistics","heavy"]);
+ assert.deepEqual(requirementsFor(2),["tackle","anti-tackle"]);
+ assert.deepEqual(requirementsFor(3),["tackle","anti-tackle","ewar"]);
+ assert.deepEqual(requirementsFor(5),["tackle","anti-tackle","ewar","logistics"]);
+ assert.deepEqual(requirementsFor(25),["tackle","anti-tackle","ewar","logistics","heavy"]);
+});
+
+// FW-116: the new destroyer role is real, not a label - it resolves to a destroyer hull.
+// (The hull class itself is verified against the live SDE: see the doctrine resolve check in
+// .opencode/state.md - Condor/Arcus/Defacer/Trooper are the real destroyer profiles.)
+test("an anti-tackle slot exists from two hulls and carries a real fitting",()=>{
+ const api=fixture();
+ const plan=api.compose({factionID:500004,merit:25});
+ assert.equal(plan.size,2);
+ assert.deepEqual(plan.counts,{tackle:1,"anti-tackle":1});
+ const destroyer=plan.ships.find((ship)=>ship.role==="anti-tackle");
+ assert.ok(destroyer.doctrineID.endsWith("_anti-tackle"));
+ assert.ok(destroyer.moduleCount>=1,"the slot carries a real fitting, never a bare count");
 });

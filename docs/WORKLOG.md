@@ -2824,3 +2824,8 @@ Evidence: run tests 32/32; timeouts now bounded; UNRESOLVED_MARKET_JOURNAL self-
 Why: Garrison spawns always passed merit 0, so every side fielded one identical frigate while the merit ledger held real ranks
 Where: docs/WORKLOG.md
 Evidence: fork 907104e/1a5b1fe; garrison 19/19; live merit 155 -> 4 hulls, merit 25 -> 2 hulls
+### 2026-10-31T08:19Z · fe9f7a4 · L2 · state: the blueprint purchase is built, tested and waiting for one clean sale
+
+Why: Fleets were one identical frigate per side; the doctrine table lacked a destroyer role and two cartels could never form a complete gang
+Where: .opencode/state.md
+Evidence: fork 22a0dbe; live squad-lead spawn = Condor + CA Destroyer + Moa + Delta II + Blackbird; doctrine resolve 500001 7/7, 500004 7/7, 500020 7/7, 500011 6/7; 42/42

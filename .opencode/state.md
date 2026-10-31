@@ -398,3 +398,19 @@ logistics from cap 5, heavy from cap 8, plus brawler/sniper fill. NOT yet true: 
 hulls carry no role, and the combat director does not yet give EWAR/logistics special behaviour -
 tactics today = target selection (WAR_SHIP ranking), engagement posture, battle-line relief, gate
 staging and engagement warp.
+
+## FW-116 (fork 22a0dbe): more hulls, a new destroyer role, two cartels completed
+Doctrine table extended with real SDE profiles already present in this build (nothing invented):
+- NEW role anti-tackle (destroyer) in every fleet from cap 2: Caldari CA Destroyer (4x rail75 +
+  web), Federation Arcus (4x light neutron blaster + web), Angel Defacer (4x gatling125 + web),
+  Serpentis Trooper (4x rail75 + web). Requirement ladder now: tackle always, anti-tackle from 2,
+  ewar from 3, logistics from 5, heavy from 8.
+- Angel Cartel: + logistics (Breaker, 2x remote armour) + ewar (artillery cruiser, 2x tracking
+  disruptor). Serpentis: + logistics, + heavy (blaster battleship), + sniper (rail battleship).
+- Angel sniper deliberately unsupported (no long-range hull we can back with real modules).
+
+Verified against the live SDE: 500001 7/7 roles, 500004 7/7, 500020 7/7, 500011 6/7.
+LIVE proof 08:32:47Z - commander coop-pilot-009, merit 150 (squad-lead), spawned 5 DIFFERENT
+hulls: 14359 Condor (tackle), 45462 CA Destroyer (anti-tackle), 15320 Moa (brawler),
+15972 Delta II (logistics), 12394 Blackbird (ewar).
+Suite: composition+doctrine+garrison+navy 42/42.
