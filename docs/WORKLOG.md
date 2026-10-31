@@ -2914,3 +2914,8 @@ Evidence: live 2026-10-31: cargo 980200084340 stowed COMPLETED, blueprint 785 ad
 Why: The SKIN-component market window had no answer at all; component listings and purchases now work on real component item types with real ISK debits (fork 38bea4d, 3873cf9)
 Where: .opencode/state.md, docs/WORKLOG.md
 Evidence: agents: GetAll 120 listings (type 82340 @250000 ISK); purchase -> 200, wallet -250000, component 9988400017511 in hangar 60003760; no character -> 7, unknown listing -> 5; tests 7/7
+### 2026-10-31T14:27Z · dbe4c43 · DOCS · docs: component listing calls are answered; gateway gap list now 8
+
+Why: The component-listing calls are no longer open and their recorded blocker was false; gateway gap register corrected
+Where: docs/CLIENT_GAPS.md
+Evidence: node --test coop-component-market + coop-industry-monitor-ownership + coop-admin-blueprint-auto = 16/16
