@@ -54,6 +54,16 @@ const LIVE_POLICY = Object.freeze({ sameSystemOnly: true, requireZeroCollateral:
 // Stock station docking range.
 const DOCKING_RANGE_M = 2500;
 
+// Telemetry: the mission-verification plan requires courier events with an explicit status in
+// coop-events.jsonl, not only console lines. Never throws.
+function courierEvent(eventName, extra = {}) {
+  try {
+    require("./coopRuntimeProbe").observe(eventName, null, null, extra);
+  } catch (_error) {
+    /* telemetry must never break a flight */
+  }
+}
+
 function num(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
@@ -451,16 +461,18 @@ function createCourierDispatch(deps = {}) {
     const shipID = num(identity.ship && identity.ship.itemID);
     if (!(characterID > 0) || !(shipID > 0) || !(target > 0)) return null;
     const stationID = num(identity.character.stationID);
-    const inSpace = !(stationID > 0);
+    // flagID 4 is a hangar; anything else means the hull is really in space (locationID is a system id).
+    const inSpace = Number(identity.ship && identity.ship.flagID) !== 4 || !(stationID > 0);
     return {
       contractID: characterID,
       characterID,
       shipItemID: shipID,
       originStationID: inSpace ? target : stationID,
       destinationStationID: target,
-      step: "undock",
+      // A ship already in space cannot undock again: the leg starts at the warp.
+      step: inSpace ? "warp" : "undock",
       stepStartedAtMs: now(),
-      entityID: 0,
+      entityID: inSpace ? shipID : 0,
       reposition: true,
       systemID: num(systemID),
       identity,
@@ -482,6 +494,34 @@ function createCourierDispatch(deps = {}) {
       if (!identity) continue;
       const pkg = itemRow(num(record.plasticWrapItemID));
       if (!pkg || num(pkg.ownerID) !== pilotID) continue;
+      // The hull is the physical truth after a restart: a gate jump moves the scene entity but the
+      // character row can still name the origin system. Resuming from the contract's start system
+      // docked a courier that had really jumped to Perimeter back into Jita (live 2026-10-31,
+      // contract 980000004).
+      const hull = itemRow(num(identity.ship && identity.ship.itemID)) || identity.ship || {};
+      const hullSystemID = num(hull.spaceState && hull.spaceState.systemID);
+      const realSystemID = hullSystemID || num(identity.character.solarSystemID) || num(record.startSolarSystemID);
+      // A hull in space carries the solar system id in locationID with flagID 0; only flagID 4 is a hangar.
+      const hullInSpace = num(hull.itemID) > 0 && Number(hull.flagID) !== 4;
+      if (hullInSpace) {
+        const plannedInSpace = flightCore.createFlight({ contract: record, identity, nowMs: now() });
+        if (plannedInSpace.status !== "FLIGHT_PLANNED") {
+          log(`[CoopCourier] contract ${contractID} resume ${plannedInSpace.status} ${plannedInSpace.reason || ""}`.trim());
+          continue;
+        }
+        flights.set(contractID, Object.assign({}, plannedInSpace, {
+          step: "warp",
+          stepStartedAtMs: now(),
+          entityID: num(hull.itemID) || num(plannedInSpace.shipItemID),
+          systemID: realSystemID,
+          destinationSystemID: num(record.endSolarSystemID),
+          identity,
+        }));
+        attempted.add(contractID);
+        log(`[CoopCourier] contract ${contractID} resumed in space in system ${realSystemID} by ${pilotID}, flying to ${num(record.endStationID)}`);
+        noteIncident(contractID, "resume-in-space", "ship already in space in " + realSystemID);
+        continue;
+      }
       if (num(identity.character.stationID) !== num(record.startStationID)) {
         // The character row can lag behind the real hull after a recovery. The
         // hull is the physical truth: if it sits in the origin station hangar,
@@ -491,7 +531,7 @@ function createCourierDispatch(deps = {}) {
           num(hull.locationID) === num(record.startStationID) && num(hull.flagID) === 4;
         if (!hullDockedAtOrigin) {
           if (!repositions.has(pilotID)) {
-            const move = planReposition(identity, num(record.startStationID), record.startSolarSystemID);
+            const move = planReposition(identity, num(record.startStationID), realSystemID);
             if (move) {
               repositions.set(pilotID, move);
               log(`[CoopCourier] courier ${pilotID} returning to origin ${move.destinationStationID} for contract ${contractID}`);
@@ -500,11 +540,17 @@ function createCourierDispatch(deps = {}) {
           }
           continue;
         }
-        const repaired = Object.assign({}, identity.character, { stationID: num(record.startStationID) });
+        // A repaired station must carry its own solar system: undocking reads the character's system,
+        // so a station in Perimeter with solarSystemID=Jita attached the hull to the wrong scene and
+        // the ship existed nowhere (live 2026-10-31, item 9988400102932).
+        const originSystemID = stationSystemID(num(record.startStationID));
+        const repaired = Object.assign({}, identity.character, { stationID: num(record.startStationID) },
+          originSystemID > 0 ? { solarSystemID: originSystemID } : {});
         delete repaired.characterID;
         gameStore.write("characters", String(pilotID), repaired);
         if (typeof gameStore.flushTableSync === "function") gameStore.flushTableSync("characters");
         identity.character.stationID = num(record.startStationID);
+        if (originSystemID > 0) identity.character.solarSystemID = originSystemID;
         log(`[CoopCourier] courier ${pilotID} hull is docked at origin ${num(record.startStationID)}, station record repaired`);
         noteIncident(contractID, "station-repair", "character station record lagged behind the hull");
       }
@@ -607,6 +653,17 @@ function createCourierDispatch(deps = {}) {
 
   // A real station of the system the hull is actually sitting in. A dock repair
   // must never move the ship into another system: that would fake a gate jump.
+  function stationSystemID(stationID) {
+    const id = num(stationID);
+    if (!(id > 0)) return 0;
+    try {
+      const station = typeof worldData.getStationByID === "function" ? worldData.getStationByID(id) : null;
+      return num(station && station.solarSystemID);
+    } catch (_error) {
+      return 0;
+    }
+  }
+
   function stationInSystem(systemID, preferredID) {
     try {
       const stations = typeof worldData.getStationsForSystem === "function"
@@ -652,8 +709,23 @@ function createCourierDispatch(deps = {}) {
     const missingSince = num(flight.missingSinceMs);
     if (!(missingSince > 0)) return Object.assign({}, flight, { missingSinceMs: now() });
     if (now() - missingSince < SCENE_ENTITY_GRACE_MS) return flight;
+    // The hull can be in the system the jump targeted while the flight still names the origin: the
+    // stored system is repaired from the real scene instead of docking a ship that really jumped.
+    const otherSystemID = num(flight.destinationSystemID);
+    if (otherSystemID > 0 && otherSystemID !== num(flight.systemID)) {
+      const otherScene = sceneFor(otherSystemID);
+      const otherEntity = otherScene && typeof otherScene.getEntityByID === "function"
+        ? otherScene.getEntityByID(shipID)
+        : null;
+      if (otherEntity) {
+        return Object.assign({}, flight, { systemID: otherSystemID, missingSinceMs: 0, stepStartedAtMs: now() });
+      }
+    }
     const identity = identityFor(num(flight.characterID));
-    if (!identity || num(identity.character.stationID)) return flight;
+    if (!identity) return flight;
+    const physicalHull = itemRow(shipID);
+    const reallyInSpace = physicalHull ? Number(physicalHull.flagID) !== 4 : !(num(identity.character.stationID) > 0);
+    if (!reallyInSpace) return flight;
     const dockAt = stationInSystem(num(flight.systemID), num(flight.destinationStationID));
     if (!(dockAt > 0)) return flight;
     const session = driver.buildCourierSession(identity.character, dockAt);
@@ -668,7 +740,9 @@ function createCourierDispatch(deps = {}) {
         // the interrupted undock threw. Repair the location through the store -
         // never by pretending a flight happened.
         const id = num(identity.character.characterID);
-        const row = Object.assign({}, identity.character, { stationID: dockAt });
+        const dockSystemID = stationSystemID(dockAt);
+        const row = Object.assign({}, identity.character, { stationID: dockAt },
+          dockSystemID > 0 ? { solarSystemID: dockSystemID } : {});
         delete row.characterID;
         gameStore.write("characters", String(id), row);
         if (typeof gameStore.flushTableSync === "function") gameStore.flushTableSync("characters");
@@ -695,7 +769,13 @@ function createCourierDispatch(deps = {}) {
     // is not only an undock case: a server restart while the ship was flying
     // leaves it in space with no entity, and the old code re-warped forever.
     const recovering = identityFor(num(flight.characterID));
-    const inSpace = recovering && !num(recovering.character.stationID);
+    // The hull row is the physical truth: a ship in space keeps its solar system id in locationID with
+    // flagID 0, while the character row can still say "docked" after a repair. Using only the character
+    // row left a flight with no scene entity ticking forever without any log (live 2026-10-31).
+    const hullRowForRecovery = itemRow(flight.shipItemID);
+    const hullInSpaceNow = num(hullRowForRecovery && hullRowForRecovery.itemID) > 0 &&
+      Number(hullRowForRecovery && hullRowForRecovery.flagID) !== 4;
+    const inSpace = (recovering && !num(recovering.character.stationID)) || hullInSpaceNow;
     if (inSpace && flight.step !== "done" && flight.step !== "failed") {
       const recovered = recoverInSpace(flight);
       if (recovered.recoveredInSpace) {
@@ -725,6 +805,65 @@ function createCourierDispatch(deps = {}) {
         else flights.set(contractID, stamped);
         return;
       }
+    }
+    // A "warp" step needs a hull that is really in space. A native undock can report OK while the hull
+    // row never leaves the hangar (live 2026-10-31, contract 980000004: five minutes of "no ship entity"
+    // and "warpToPoint NOT_IN_SPACE" before the step timed out, and a timed-out flight was never
+    // replaced). When the real hull is in a station hangar of the flight's own system, re-plan from that
+    // hangar - a real undock of a real ship, nothing invented - and keep it bounded.
+    const hullRow = (itemStore && typeof itemStore.findItemById === "function"
+      ? itemStore.findItemById(num(flight.shipItemID))
+      : null) || itemRow(flight.shipItemID);
+    const hullStationID = num(hullRow && hullRow.locationID);
+    if (flight.step !== "undock" && flight.step !== "done" && flight.step !== "failed" &&
+        hullStationID > 0 && Number(hullRow && hullRow.flagID) === 4) {
+      const restarts = num(flight.hullRestarts) + 1;
+      if (restarts > 3) {
+        log(`[CoopCourier] courier ${flight.characterID} hull back in station ${hullStationID} after ${restarts} restarts, abandoning the leg`);
+        if (flight.reposition) repositions.delete(num(flight.characterID));
+        else {
+          noteIncident(contractID, "flight-abandoned", "hull docked at " + hullStationID);
+          flights.delete(contractID);
+        }
+        saveFlights();
+        return;
+      }
+      const replannedSystemID = stationSystemID(hullStationID) ||
+        num(hullRow && hullRow.spaceState && hullRow.spaceState.systemID) || num(flight.systemID);
+      // The character row must name the hangar's system before undocking, otherwise the native undock
+      // attaches the hull to the wrong scene (that is exactly how item 9988400102932 got lost).
+      const replanIdentity = identityFor(num(flight.characterID));
+      if (replanIdentity && replannedSystemID > 0 &&
+          num(replanIdentity.character.solarSystemID) !== replannedSystemID) {
+        const systemRepair = Object.assign({}, replanIdentity.character, {
+          stationID: hullStationID,
+          solarSystemID: replannedSystemID,
+        });
+        delete systemRepair.characterID;
+        gameStore.write("characters", String(num(flight.characterID)), systemRepair);
+        if (typeof gameStore.flushTableSync === "function") gameStore.flushTableSync("characters");
+        replanIdentity.character.stationID = hullStationID;
+        replanIdentity.character.solarSystemID = replannedSystemID;
+      }
+      const replanned = Object.assign({}, flight, {
+        step: "undock",
+        // The hangar's own system decides where the leg restarts: a hull docked in another system
+        // must not be undocked as if it were at the origin (live: hull docked at 60000361 in
+        // Perimeter while the flight still named Jita).
+        stationID: replannedSystemID,
+        entityID: num(flight.entityID) || num(flight.shipItemID),
+        hop: null,
+        hopReason: "",
+        missingSinceMs: 0,
+        hullRestarts: restarts,
+        stepStartedAtMs: now(),
+      });
+      if (flight.reposition) repositions.set(num(flight.characterID), replanned);
+      else flights.set(contractID, replanned);
+      log(`[CoopCourier] courier ${flight.characterID} hull docked at ${hullStationID} mid-flight, replanning from undock (attempt ${restarts})`);
+      noteIncident(contractID, "hull-docked-replan", "step " + String(flight.step) + " restarted at " + hullStationID);
+      saveFlights();
+      return;
     }
     const action = flightCore.nextAction(flight, now());
     if (action.status === "FLIGHT_DONE") {
@@ -761,7 +900,38 @@ function createCourierDispatch(deps = {}) {
       return;
     }
     if (action.status !== "ACTION") {
+      // A timed-out step used to be logged and then retried forever with the same stale stamp, so a
+      // flight could never leave a step that genuinely failed (live: repeated FLIGHT_TIMEOUT warp for
+      // contract 980000004). Restart the step from its real state, bounded, and give up loudly instead.
+      if (action.status === "FLIGHT_TIMEOUT") {
+        const restarts = num(flight.hullRestarts) + 1;
+        if (restarts > 3) {
+          log(`[CoopCourier] contract ${contractID} flight gave up after ${restarts} timeouts at ${String(action.step || flight.step)}`);
+          if (flight.reposition) repositions.delete(num(flight.characterID));
+          else {
+            noteIncident(contractID, "flight-abandoned", "timeout at " + String(action.step || flight.step));
+            flights.delete(contractID);
+          }
+          saveFlights();
+          return;
+        }
+        const stamped = Object.assign({}, flight, {
+          stepStartedAtMs: now(),
+          missingSinceMs: 0,
+          hullRestarts: restarts,
+        });
+        if (flight.reposition) repositions.set(num(flight.characterID), stamped);
+        else flights.set(contractID, stamped);
+        log(`[CoopCourier] contract ${contractID} flight ${action.status} ${action.step || ""}, restarting ${String(flight.step)} (attempt ${restarts})`.trim());
+        saveFlights();
+        return;
+      }
       log(`[CoopCourier] contract ${contractID} flight ${action.status} ${action.step || ""}`.trim());
+      // A non-action status (NO_ACTION for an unknown step, or a failed leg) can never progress, so
+      // dropping it is the only honest outcome; a reposition had no way out and kept re-warping.
+      if (flight.reposition) repositions.delete(num(flight.characterID));
+      else flights.delete(contractID);
+      saveFlights();
       return;
     }
     const identity = identityFor(num(flight.characterID));
@@ -837,6 +1007,16 @@ function createCourierDispatch(deps = {}) {
         if (flight.reposition) repositions.set(num(flight.characterID), moved);
         else flights.set(contractID, moved);
         log(`[CoopCourier] ${hopLabel} native gate hop verified ${num(flight.systemID)} -> ${num(moved.systemID)}, warp -> arrive`);
+        if (!flight.reposition) {
+          courierEvent("courier-gate-hop", {
+            contractID: num(contractID),
+            characterID: num(flight.characterID),
+            status: "JUMP_VERIFIED",
+            fromSystemID: num(flight.systemID),
+            toSystemID: num(moved.systemID),
+            gateHopReason: hopReason,
+          });
+        }
         return;
       }
       if (hop.status === "FAILED") {
@@ -848,15 +1028,35 @@ function createCourierDispatch(deps = {}) {
         return;
       }
       const progressed = hopReason !== String(flight.hopReason || "");
+      // A verified jump really moved the hull: record the destination system on the flight, otherwise the
+      // recovery path still thinks it is in the origin system and docks the courier back home (live run
+      // 2026-10-30 21:5x: "lost scene entity, docked back ... in system 30000142" after a verified jump
+      // to Perimeter).
+      const verifiedSystemID = Math.max(0, num(hop.verified && hop.verified.toSystemID));
       const pending = Object.assign({}, flight, {
         hop: hop.state || flight.hop,
         hopReason,
         entityID: num(flight.entityID) || num(flight.shipItemID),
         stepStartedAtMs: progressed ? now() : num(flight.stepStartedAtMs),
-      });
+      }, verifiedSystemID > 0 && verifiedSystemID !== num(flight.systemID)
+        ? { systemID: verifiedSystemID, missingSinceMs: 0 }
+        : {});
       if (flight.reposition) repositions.set(num(flight.characterID), pending);
       else flights.set(contractID, pending);
       if (progressed) log(`[CoopCourier] ${hopLabel} gate hop ${hopReason}`);
+      // The verified jump is reported here, not in the OK branch: once the flight's systemID is the
+      // destination, the next tick no longer enters the cross-system branch at all (live run of
+      // contract 980000003 completed with no courier-gate-hop line).
+      if (verifiedSystemID > 0 && verifiedSystemID !== num(flight.systemID) && !flight.reposition) {
+        courierEvent("courier-gate-hop", {
+          contractID: num(contractID),
+          characterID: num(flight.characterID),
+          status: "JUMP_VERIFIED",
+          fromSystemID: num(flight.systemID),
+          toSystemID: verifiedSystemID,
+          gateHopReason: hopReason,
+        });
+      }
       return;
     }
     const observed = driver.runStep(ctx, flight, target);
@@ -868,6 +1068,15 @@ function createCourierDispatch(deps = {}) {
           : `[CoopCourier] contract ${contractID} package not handed over: ${handedOver.detail}`,
       );
       if (!handedOver.ok) noteIncident(contractID, "handover-failed", handedOver.detail);
+      if (handedOver.ok) {
+        courierEvent("courier-delivered", {
+          contractID: num(contractID),
+          characterID: num(flight.characterID),
+          status: "HANDED_OVER",
+          destinationStationID: num(flight.destinationStationID),
+          systemID: num(flight.systemID),
+        });
+      }
     }
     const token = flightCore.stepToken(flight);
     const next = flightCore.advanceFlight(flight, observed.status, now(), token);
@@ -887,6 +1096,14 @@ function createCourierDispatch(deps = {}) {
       if (flight.step === "undock" && !flight.reposition) {
         noteDeparture(contractID);
         notify("departing", contracts.getContractRecord(contractID), identity);
+        courierEvent("courier-accepted", {
+          contractID: num(contractID),
+          characterID: num(flight.characterID),
+          status: "DEPARTED",
+          originStationID: num(flight.originStationID),
+          destinationStationID: num(flight.destinationStationID),
+          systemID: num(flight.systemID),
+        });
       }
     }
     // A leg that failed must not sit in memory and block the resume scan: the
