@@ -930,3 +930,15 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   capture yet - the next defender wipe inside an assault is the moment to measure.
 - Bounties already proven: 15:51:39Z coop-pilot-053 and 16:07:46Z coop-pilot-023, 1 000 ISK each,
   from the faction wallet (journals 8000000000000020/21).
+
+## Title notices, settled 2026-10-31
+- DONE (fork `3a9ac81`): `Equip`/`Unequip` publish `SetNotice{character,title|no_title}` and admin
+  `Grant`/`Revoke` publish `GrantedNotice`/`RevokedNotice`, each only after the store wrote the
+  change. Audience = the character's solar system, or the owner alone when the session lookup is
+  unavailable (the lookup reaches the game store, so it stays lazy).
+- `identifierOf()` now accepts raw uuid bytes as well as hex text - a request carries bytes.
+- The earlier design note (runtime bus for the war rank) is DEAD: a rank writes plain text into the
+  character record, and every title notice carries a catalogue title id. Making the seven rank
+  titles real catalogue entries is a content change, not a notice; it is the only honest route.
+- Notice surface now: 144 client types, 106 subscribed, 33 published, 74 silent, 0 published-not-in-client.
+- Play stack still runs the build without `StartedNotice` and the title notices: needs one restart window.
