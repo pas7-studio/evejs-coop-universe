@@ -170,8 +170,8 @@ that and is now published on a real redeem only (fork `7e04f8f`, `tests/coop-dai
 ```
 client notice types       144
 subscribed by client code 106
-published by this server   36
-SUBSCRIBED_NOT_PUBLISHED   71
+published by this server   39
+SUBSCRIBED_NOT_PUBLISHED   68
 PUBLISHED_NOT_IN_CLIENT     0
 ```
 
@@ -184,7 +184,7 @@ ones that matter are the domains we DO run, because there the client is waiting 
 | `cosmetic.market.transaction.api.TransactionSucceededNotice` | a real component purchase | **published now** (fork `0f3de0f`, 10/10; live on `evejs-agents`: `BUY=200 txBytes=16`, notice id = answer id) |
 | `cosmetic.market.transaction.api.TransactionFailedNotice` | a purchase that fails after a transaction exists | not published - this store mints the transaction id only on a real sale, so a refusal has nothing to announce; the refusal is the answer itself |
 | `cosmetic.ship.skin.thirdparty.component.license.api.GrantedNotice` | a component purchase that grants a licence | not published |
-| `cosmetic.ship.skin.thirdparty.license.api.AddedNotice` | a sequencing job that mints skins | not published |
+| `cosmetic.ship.skin.thirdparty.license.api.Added/Updated/DeletedNotice` | a licence that really changed: grant, activation, revoke, a market purchase | **published now** (fork `69b72f1`, 12/12 and 9/9; live on `evejs-agents`: `CREATE=200 BUY=200`, notice row = the buyer's licence) |
 | `cosmetic.ship.skin.thirdparty.sequencing.job.api.StartedNotice` | the sequencing store | **published now** (fork `1bb2ff9`) |
 | `cosmetic.ship.skin.thirdparty.sequencing.job.api.CompletedNotice` | a job that came due and minted its copies | **published now** (fork `81af2d9`, 7/7) |
 | `cosmetic.ship.skin.thirdparty.sequencing.job.api.FailedNotice` | a job whose mint failed | not published - its `reason` is an enum this store cannot name, and a made-up reason is worse than none |

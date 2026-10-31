@@ -176,6 +176,62 @@ test("gateway: grant answers with the licence, Get reads it, a foreign id is ref
   assert.equal(again.statusCode, 9, "a licence is not activated twice");
 });
 
+test("gateway: a licence that really changed is announced, a refusal is not", () => {
+  const {createThirdPartySkinGatewayService, SKIN_LICENSE_PROTO_ROOT} = require(path.join(
+    forkRoot,
+    "Code/server/src/_secondary/express/gatewayServices/thirdPartySkinGatewayService.js",
+  ));
+  const state = fakeCharacterState({"7": {characterID: 7}});
+  const published = [];
+  const service = createThirdPartySkinGatewayService({
+    thirdPartySkins: make(state),
+    publishGatewayNotice(typeName, payload, target) {
+      published.push({typeName, payload, target});
+    },
+  });
+  const API = "eve_public.cosmetic.ship.skin.thirdparty.license.api";
+  const encode = (name, value) => {
+    const type = SKIN_LICENSE_PROTO_ROOT.lookupType(name);
+    return Buffer.from(type.encode(type.create(value)).finish());
+  };
+  const decode = (name, buffer) =>
+    SKIN_LICENSE_PROTO_ROOT.lookupType(name).decode(buffer || Buffer.alloc(0));
+  const envelope = (value) => ({
+    payload: {value},
+    authoritative_context: {identity: {character: {sequential: 7}}},
+  });
+
+  service.handleRequest(`${API}.admin.GrantRequest`,
+    envelope(encode(`${API}.admin.GrantRequest`, {skin: {hex: HEX}, unactivated: 2})));
+  assert.equal(published.length, 1);
+  assert.equal(published[0].typeName, `${API}.AddedNotice`);
+  assert.deepEqual(published[0].target, {character: 7});
+  const added = decode(`${API}.AddedNotice`, published[0].payload);
+  assert.equal(added.id.skin.hex, HEX);
+  assert.equal(Number(added.attributes.unactivated), 2);
+  assert.equal(added.attributes.activated, false);
+
+  // a refusal changes nothing, so nothing is announced
+  const refused = service.handleRequest(`${API}.ActivateRequest`,
+    envelope(encode(`${API}.ActivateRequest`, {license: {skin: {hex: "ff".repeat(8)}}})));
+  assert.notEqual(refused.statusCode, 200);
+  assert.equal(published.length, 1, "a refused activation announces nothing");
+
+  service.handleRequest(`${API}.ActivateRequest`,
+    envelope(encode(`${API}.ActivateRequest`, {license: {skin: {hex: HEX}}})));
+  assert.equal(published.length, 2);
+  assert.equal(published[1].typeName, `${API}.UpdatedNotice`);
+  const updated = decode(`${API}.UpdatedNotice`, published[1].payload);
+  assert.equal(updated.attributes.activated, true, "the licence is activated now");
+  assert.equal(updated.previous_attributes.activated, false, "and it was not before");
+
+  service.handleRequest(`${API}.admin.RevokeRequest`,
+    envelope(encode(`${API}.admin.RevokeRequest`, {license: {skin: {hex: HEX}}})));
+  assert.equal(published.length, 3);
+  assert.equal(published[2].typeName, `${API}.DeletedNotice`);
+  assert.equal(decode(`${API}.DeletedNotice`, published[2].payload).id.skin.hex, HEX);
+});
+
 test("apply records a real ship of this character, and only for an activated licence", () => {
   const state = fakeCharacterState({"7": {characterID: 7}});
   const skins = make(state, {EVEJS_COOP_THIRD_PARTY_SKINS: "1"}, ships);

@@ -219,6 +219,45 @@ function market() {
   return {listings, skins, wallet};
 }
 
+test("a bought skin appears in the buyer's collection without reopening it", () => {
+  const {listings, skins} = market();
+  const published = [];
+  const service = createSkinListingGatewayService({
+    skinListings: listings,
+    thirdPartySkins: skins,
+    publishGatewayNotice(typeName, payload, target) {
+      published.push({typeName, payload, target});
+    },
+  });
+  const {listing} = listings.create(7, {skin: HEX, quantity: 2, priceUnits: 1000000});
+  const encode = (typeName, value) =>
+    Buffer.from(SKIN_LISTING_PROTO_ROOT.lookupType(typeName).encode(value).finish());
+  const id = SKIN_LISTING_PROTO_ROOT.lookupType(`${API}.GetAllResponse`)
+    .decode(service.handleRequest(`${API}.GetAllRequest`, {
+      payload: {value: Buffer.alloc(0)},
+      authoritative_context: {identity: {character: {sequential: 8}}},
+    }).responsePayloadBuffer).listings[0].id;
+  const bought = service.handleRequest(`${API}.InitiatePurchaseListingRequest`, {
+    payload: {value: encode(`${API}.InitiatePurchaseListingRequest`,
+      {listing: id, quantity: 1})},
+    authoritative_context: {identity: {character: {sequential: 8}}},
+  });
+  assert.equal(bought.statusCode, 200, bought.statusMessage);
+
+  const added = published.filter((row) =>
+    row.typeName === "eve_public.cosmetic.ship.skin.thirdparty.license.api.AddedNotice");
+  assert.equal(added.length, 1, "the buyer hears about the licence it just bought");
+  assert.deepEqual(added[0].target, {character: 8}, "and nobody else does");
+  const notice = require(path.join(forkRoot,
+    "Code/server/src/_secondary/express/gatewayServices/thirdPartySkinGatewayService.js"))
+    .SKIN_LICENSE_PROTO_ROOT.lookupType(
+      "eve_public.cosmetic.ship.skin.thirdparty.license.api.AddedNotice")
+    .decode(added[0].payload);
+  assert.equal(notice.id.skin.hex, HEX);
+  assert.equal(Number(notice.id.character.sequential), 8);
+  assert.equal(Number(notice.attributes.unactivated), 1);
+});
+
 test("buying moves ISK, charges tax and hands over the escrowed copies", () => {
   const {listings, skins, wallet} = market();
   const {listing} = listings.create(7, {skin: HEX, quantity: 2, priceUnits: 1000000});
