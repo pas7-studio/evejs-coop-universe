@@ -2865,3 +2865,25 @@ Why: Client contract register regenerated so the stubbed-call list matches the r
 Detail: The register had gone stale (CONTRACTS_OFFLINE_STALE), so the 44-stub list no longer described the server: structureDeployment.Anchor/Unanchor/Rename and industry jobs are implemented now. After --write: 542 calls, 0 missing, 43 stub, 103 nullable, 396 ok, and --verify prints CONTRACTS_OFFLINE_OK.
 Where: docs/CLIENT_CONTRACT_STATUS.md, docs/client-contracts/baseline.json
 Evidence: REGISTER_WRITTEN calls=542 missing=0 stub=43 nullable=103 ok=396; CONTRACTS_OFFLINE_OK
+### 2026-10-31T13:12Z · 7f28299 · L2 · docs: register the deadspace map filters as answered (41 stub, 398 ok)
+
+Why: Map deadspace star modes answered from live dungeon instances instead of null
+Detail: map.GetDeadspaceComplexMap and GetDeadspaceAgentsMap now return real rows from the active dungeon instances instead of null.
+Where: docs/CLIENT_CONTRACT_STATUS.md, docs/client-contracts/baseline.json
+Evidence: fork bfd7578 ad11cd4; live probe: 1967 complex rows (78 KB) cold 758 ms then 0 ms cached, 1 agent row; Jita 3 rows with real template names; register stub 43->41, ok 396->398, CONTRACTS_OFFLINE_OK
+### 2026-10-31T13:20Z · 56dfd2d · L2 · docs: register the answered petition calls (38 stub, 403 ok)
+
+Why: Help window works: durable petition store replaces constant refusals
+Where: docs/CLIENT_CONTRACT_STATUS.md, docs/client-contracts/baseline.json
+Evidence: fork 6e48b58 a61a4fa; live: MayPetition=0, CreatePetition=true, listed row, message added, closed/rateable, ratings 4/5/5 stored, delete hides it, filetime 134379263940450000 = 2026-10-31T13:19:54Z; register stub 41->38 ok 398->403 CONTRACTS_OFFLINE_OK
+### 2026-10-31T13:29Z · a7a97d7 · OPS · seed: SKIN offers must carry the licence skinID
+
+Why: SKIN store offers were unbuyable (missing skinID in fulfillment)
+Detail: storeFulfillment refuses a skin_license purchase without skinID (INVALID_SKIN_LICENSE), so every seeded offer was unbuyable. New offers now carry both ids and a repair pass fills the missing skinID on the 1387 offers already seeded.
+Where: scripts/coop-seed-skin-offers.js
+Evidence: dry-run repaired=1387 of 1402; --apply WRITTEN offers=1402; live purchaseLegacyOffer success spent=10 PLX balance 0, licence skinID 1658/36326 visible in shipCosmeticsMgr.GetLicencedSkins, expireSkin cleanup ok, PLEX 0
+### 2026-10-31T13:37Z · 9312a46 · L2 · alife29g: purchase funding and station proximity, tested
+
+Why: The blueprint purchase named every one of its refusals in turn (undefined registry, unearned pilot ISK, a hull far from the station) and each is now fixed
+Where: integration/coopDistributionRun.cjs, integration/coopFactionTaxIncome.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarTreasury.cjs, tests/coop-faction-tax-income.test.mjs
+Evidence: events: BUY_THREW registry is not defined -> INSUFFICIENT_EARNED_ISK -> TOO_FAR_FROM_STATION, each fixed; decision proven BUY for Caldari Shuttle Blueprint 42500 ISK with 1227 runs buildable; 32/32 run tests

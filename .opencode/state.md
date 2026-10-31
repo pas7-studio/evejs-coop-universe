@@ -549,3 +549,22 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
    distribution run CROSS_AGAIN on intermediate arrivals (design already written).
 3. Then bounties can be funded: FW-109 reserves per kill from the faction wallet, and the chest levy
    (coopWarChestFunding.fund) still has no phase that calls it.
+
+## SKIN store purchase - PROVEN LIVE 2026-10-31 (server side)
+- Root cause of "nothing to buy"/unbuyable SKINs: each seeded offer carried only
+  fulfillment.licenseTypeID; storeFulfillment refuses that with INVALID_SKIN_LICENSE (it calls
+  shipCosmeticsState.giveSkin(characterID, skinID, {licenseTypeID})). Script fix + repair pass:
+  scripts/coop-seed-skin-offers.js, dry-run repaired=1387 of 1402 offers, --apply WRITTEN 1402.
+- Live proof on a test pilot (not the owner): PLEX set 10 -> purchaseLegacyOffer(store 4, offer 9300000)
+  = success, spent 10, balance 0, fulfilment skin_license skinID 1658 / licenceType 36326;
+  shipCosmeticsMgr.GetLicencedSkins returned that licence to the client shape; expireSkin removed it,
+  PLEX left at 0. No owner wallet was touched.
+- Still needs the owner's click to confirm the store window itself (offers render + Buy button).
+
+## SKIN apply - verified server side 2026-10-31 (no code change needed)
+- Bought skin_34668 (Charon Wiyrkomi, 10 PLX) for the courier test pilot and applied it to their real
+  Charon 9988400102932: applySkinToShip -> ok, getAppliedSkinRecord = {skinID 91, typeID 20185}.
+- Refusal path proven first: applying a Bestower skin to a Charon was refused SKIN_NOT_VALID_FOR_TYPE.
+- Cleanup: skin cleared from the ship, both test licences expired, PLEX back to 0.
+- Other clients get an applied skin through the gRPC cosmetic.ship.api.GetAllInBubble (answered from the
+  live scene, fork ff09ec8); nothing on the slim item carries it, so that gateway is the only path.
