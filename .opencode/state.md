@@ -1128,3 +1128,21 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   Wallets 17:35Z: 1000035 4 972 000, 1000120 4 994 000, 1000135 4 987 000,
   1000129 **155.83** (that militia is nearly drained - honest, it has almost no income),
   1000436/1000162 5 000 000 ISK.
+
+## FW-140 (2026-10-31 18:00Z): only real wars are called wars
+- Fork ce1e2f1 + 4a77ffb: the navy authority itself says factions 500014 (ORE) and 500019
+  (Sansha's Nation) are NO_NAVY - every loadout they carry is a mining hull - so
+  war:500004-500014 and war:500014-500019 answered NO_NAVY_CAPABILITY:ATTACKER on every tick and
+  produced six EXPIRED campaigns for one target from 07:48Z, while the world still reported seven
+  ACTIVE wars. The new phase ends such a war through the core's own END_WAR transition, and only
+  while the same capability still refuses it inside the ceasefire proof. A war with a PREPARING,
+  ASSAULT or OCCUPIED campaign is never touched.
+- Second defect found by the first live run (17:54:21Z): two retirements in one tick erased each
+  other, because every transition cloned the state read at the start of the tick. The working state
+  now advances per applied transition. MEASURED after the fix: 8 wars = **6 ACTIVE + 2 ENDED**
+  (war:500004-500014, war:500014-500019), and the opener opened a real new pair
+  war:500004-500011 (PREPARING) in the same window.
+- War state 18:00Z: 77 campaigns [54 EXPIRED, **10 OCCUPIED**, 4 ASSAULT, 9 PREPARING],
+  23 territories (500001 11, 500004 6, 500020 4, 500011 1, 500019 1).
+- Since 16:50Z: **6 captures** and **13 bounties paid = 13 000 ISK** (12 warship-kill, 1 force-lost).
+- Retirement suite 7/7; whole war suite 561/561.
