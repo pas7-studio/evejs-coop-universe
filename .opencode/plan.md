@@ -1,37 +1,68 @@
-# Plan: reclaim `%TEMP%\opencode` without losing anything (2026-10-29)
+# Plan — next legs of the co-op economy (2026-10-31)
 
-Measured before: **1.1 GB** total. Most of it is not ours-to-delete blindly.
+State: see `.opencode/state.md`. This file is the working spec for the next changes.
 
-| item | size | last write | verdict |
-| --- | --- | --- | --- |
-| `market-reseed/` | 467 MB | today 23:56 | **active** (another session's market seeding) - leave |
-| `market-audit.sqlite` | 199 MB | today 23:19 | **active** - leave |
-| `play-all.jsonl` + `play-30k` + `play-20k` | 187 MB | 2026-10-27 21:0x | idle traces - **move** to `O:\tmp` (reversible) |
-| `chrome-shot/` | 41 MB | - | browser pane components - leave |
-| `llamacpp/` | 38 MB | - | another session's toolchain - leave |
-| `rc/ dec/ ins/` (decompiled client) | 19 MB -> 9 MB after dropping `.pyc` | today | **archive** to `O:\tmp`, keep only the archive |
-| `evdec/` (uncompyle6) | 6.7 MB | today | keep while contracts are being audited; recipe is in `docs/CLIENT_CONTRACT_STATUS.md` |
+## Done and live
 
-Rules applied: nothing belonging to another session is touched; anything moved goes to
-`O:\tmp` instead of being deleted; the decompiled sources are reproducible from `code.ccp`
-with the recipe now in the register.
+1. Shopping trip for inputs (`mode: "import"`): empty/roomy hull → seller → `SUPPLY` buys
+   through the native trader → home → unload only `importTypes` into the hangar.
+2. Payroll pays from the real corporation wallet (`coopCorpWallet`, `corporationRuntimeState`)
+   with a `debit: PENDING → DONE` marker; the `corporations` table is NOT allowlisted.
+3. Margin gates: `losesMoney` refuses a recipe whose inputs are worth more than the product;
+   the blueprint chooser values `unitCostOf`, `buildable`, `profit`, `runsAtStation` (factory).
 
-Steps:
-1. `O:\tmp\opencode-archive-20261029\` receives `eve-client-decompile-v24.01.tar.gz`
-   (rc+dec+ins, one archive) and the three idle `play-*.jsonl` traces.
-2. Verify the archive holds the 370 decompiled modules, then remove `rc/ dec/ ins/` from `C:`.
-3. Re-measure and report; `market-*` stays untouched because it is being written right now.
+## Next: a blueprint SHOPPING trip (`mode: "blueprint"`)
 
-## Result (done 2026-10-29 03:22)
+Why: the factory owns 785/1076/28339/60767. The only product with real demand is Miner I,
+which loses 7 467 ISK per unit, so the margin gate now refuses it and the factory is idle.
+The measured profitable candidate is:
 
-- `O:	mp\opencode-archive-20261029\eve-client-decompile-v24.01.tar.gz` - **1.4 MB**, holds the
-  497 decompiled files (370 modules) from `rc/ dec/ ins/`; the `.pyc` intermediates were already
-  dropped and are reproducible from `code.ccp` (recipe in `docs/CLIENT_CONTRACT_STATUS.md`).
-- `play-all.jsonl` (146 MB), `play-30k.jsonl` (24 MB), `play-20k.jsonl` (17 MB) - moved to the same
-  folder, **187 MB**, untouched since 2026-10-27 21:0x.
-- `%TEMP%\opencode`: **1.1 GB -> 831 MB**. Left alone on purpose: `market-reseed` (467 MB, being
-  written today 23:56), `market-audit.sqlite` (199 MB, 23:19), `chrome-shot`, `llamacpp`, `wt-head`
-  (other sessions' tools), and `evdec/` (6.7 MB, the decompiler, needed for the next contract pass).
-- Nothing in the repository depended on the deleted copies: `docs/client-contracts/calls.json` and
-  `gateway-types.json` are tracked, and `node scripts/coop-client-contracts.cjs` still reports
-  `calls=542 missing=0 stub=44 nullable=103 ok=395`.
+    Reinforced Bulkheads I blueprint (1334) at Jita 60003760, ask 175 000 ISK
+    recipe: 6 944 Tritanium per unit (no inputs)   product 1333
+    bid: 242 units x 5 122 ISK in The Forge        potential profit ~1 064 524 ISK
+
+Tritanium has no bid in The Forge at all (`seed_buy_orders` type 34 only in region 10001004),
+so our own refined ore is free input: building is profit, hauling the ore is not.
+
+The blueprint is sold in Jita, the factory (60000682, New Caldari) holds the Trit, so the
+corporation must BUY IT AWAY AND CARRY IT HOME — the mirror image of the input shopping trip.
+
+### Design (reuse what already works)
+
+1. `coopLoopTick.distributionRunAuthorities.blueprintPlan({haulerID})` (env
+   `EVEJS_COOP_BLUEPRINT_SHOP_TRIP=1`, default OFF):
+   - `home = factoryStation()`; reachable systems = hull system + 1 hop + home system;
+   - ask rows: `seed_stock` at those systems where the type is category 9 and price <= cap;
+     recipe via the cached `blueprintRecipe()` (a station quotes thousands);
+   - product bid in the home system + neighbours; `unitCost` = Σ material × local bid;
+     `runs` = how many units the FACTORY hangar can feed; `profit = (bid - unitCost) *
+     min(runs, bidVolume) - ask`; keep the best `profit > 0`;
+   - require a reciprocal gate (`coopNpcGateTravel.connectedGates`) when the seller is remote;
+   - return `{status:"OK", trip:{mode:"blueprint", blueprintTypeID, fromStationID/SystemID =
+     seller, toStationID/SystemID = seller, homeStationID/homeSystemID, gate, typeID:
+     blueprintTypeID, quantity:0, expectedIsk:0, items:[{stationID: seller}]}}`.
+2. `coopDistributionRun` PLAN: after `planImport()` returns nothing, try `planBlueprint()`;
+   the journal write is the same shape (mode, importTypes → [blueprintTypeID]).
+3. `SUPPLY` handler: `state.mode === "blueprint"` → `authorities.buyBlueprint({haulerID,
+   stationID, systemID})` instead of `buyInputs`; `bought.status === "TRADE_SETTLED"` is
+   success, then `RETURN` home.
+4. Home: `stow` already moves category 9 into the hangar at the loading stop, and
+   `adoptHeldBlueprints` turns the held copy into a `SEEDED` receipt at the same station —
+   which is exactly where the Trit is.
+5. Tests: a blueprint trip crosses to the seller, buys once, returns, and stops on refusal;
+   a normal trip and an input trip stay unchanged.
+
+### Guard rails
+
+- Never buy a blueprint whose `profit <= 0` (the margin gate is the whole point).
+- One blueprint trip at a time (same lock idea as inputs).
+- A blueprint must be `ALREADY_OWNED`-free: skip types the corporation already has.
+- The purchase still needs a pilot whose earned balance covers the ask: payroll funds it.
+
+## Known repair case (do not "fix" by guessing)
+
+`coop-pilot-006` has a `RPC_CALLING` journal for 1 959 Pyerite sold into order
+4257714186837032995. `reconcileJournals` answers `MARKET_ORDER_NOT_FILLED`, but the order row
+shows 825 007 units traded since it was issued, so no single fill can be attributed. Hull
+980000000002 stays blocked (`UNRESOLVED_MARKET_JOURNAL`): repeating a possibly completed fill
+would sell the same cargo twice. Needs an operator decision, not code.
