@@ -14,6 +14,9 @@
 services:
   server:
     environment:
+      # A pirate may hunt a real player hull. The code default is OFF (the world fights itself);
+      # this turns it on for the owner's world only.
+      EVEJS_COOP_PIRATE_PREY_PLAYERS: "1"
       # The loop itself: refinery already runs on the play stack; these are the phases that
       # were missing, so ore accumulated with nothing to build or sell.
       EVEJS_COOP_LOOP_DRIVER: "1"
