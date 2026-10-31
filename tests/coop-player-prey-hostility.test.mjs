@@ -31,6 +31,7 @@ const run = ({env = ON, ctl = controller(), target = player, blocks = false, now
   allowsPlayerPrey(source, target, {
     env,
     nowMs,
+    probe: false,
     registry: {getControllerByEntityID: () => ctl},
     safety: {blocksAggression: () => blocks},
   });
@@ -75,4 +76,24 @@ test("only a real player hull is eligible", () => {
     ctl: controller({manualOrder: {type: "attack", targetID: 555}}),
     target: {itemID: 555, kind: "ship", nativeNpc: true, session: {characterID: 140000005}},
   }), false, "a player-flown NPC hull is still an NPC");
+});
+
+test("an ordered pirate may be allowed to engage in high security, but only on request", () => {
+  const ctl = controller({manualOrder: {type: "attack", targetID: player.itemID}});
+  assert.equal(run({ctl, blocks: true}), false, "default: high-sec safety still vetoes");
+  assert.equal(allowsPlayerPrey(source, player, {
+    env: {EVEJS_COOP_PIRATE_PREY_PLAYERS: "1", EVEJS_COOP_PIRATE_PREY_HIGHSEC: "1"},
+    nowMs: NOW,
+    probe: false,
+    registry: {getControllerByEntityID: () => ctl},
+    safety: {blocksAggression: () => true},
+  }), true, "with the switch on, a real order is enough");
+  // the switch never invents an order
+  assert.equal(allowsPlayerPrey(source, player, {
+    env: {EVEJS_COOP_PIRATE_PREY_PLAYERS: "1", EVEJS_COOP_PIRATE_PREY_HIGHSEC: "1"},
+    nowMs: NOW,
+    probe: false,
+    registry: {getControllerByEntityID: () => controller()},
+    safety: {blocksAggression: () => true},
+  }), false, "an unordered pirate still does nothing in high sec");
 });
