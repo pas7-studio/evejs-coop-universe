@@ -3040,3 +3040,9 @@ Why: arm the co-op economy on the owner play stack with a no-rebuild env overrid
 Detail: 500019 was NO_NAVY only because it had no doctrine; with the real parity profiles and real frequency crystals it is CAN_FIELD and war:500001-500019 opened with four fronts.
 Where: .opencode/state.md, integration/coopWarDoctrine.cjs, integration/npcHardwareCatalog.cjs
 Evidence: loop driver OK, freight trip 309999 Pyerite expected 1.53M ISK, margin gate refuses 950
+### 2026-10-31T18:29Z · 34ba93d · OPS · ops(relay): move the friend's endpoint to the new ProtonVPN exit 156.146.50.8:64410
+
+Why: ProtonVPN reconnected with a new public IP and forwarded port; the friend's tunnel endpoint had to move or remote play stops working
+Detail: The Proton session reconnected to Kyiv UA#46 with a new forwarded port, so the old 130.195.241.6:37471 stopped existing. Relay recreated on 0.0.0.0:64410 -> sshd 127.0.0.1:55346 and verified with a real SSH banner; script default and the runbook now carry the new endpoint.
+Where: docs/PUBLIC_ENDPOINT_PROTONVPN.md, scripts/Start-Play-Stack.ps1
+Evidence: relay Up 0.0.0.0:64410->64410, SSH banner OK on 127.0.0.1:64410, host tunnel iface 10.2.0.2
