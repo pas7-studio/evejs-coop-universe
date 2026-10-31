@@ -952,3 +952,14 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - Notice surface: 144 client types, 106 subscribed, 35 published, 72 silent, 0 published-not-in-client.
 - Play stack still runs the 16:23 build: it lacks StartedNotice, CompletedNotice and the title
   notices. One restart window delivers all three.
+
+## Component purchase notice, 2026-10-31
+- DONE (fork `0f3de0f`, live on `evejs-agents`): a real component purchase publishes
+  `cosmetic.market.transaction.api.TransactionSucceededNotice{transaction{uuid}}` to the buyer.
+  Measured on the deployed server: `BUY=200 txBytes=16`, notice id identical to the answer id,
+  target `{character: 140000002}`.
+- Not published: `TransactionFailedNotice`. `coopComponentListings.purchase` mints the transaction id
+  only on a real sale; a refusal (no ISK, no stock, not docked) has no transaction to announce.
+- Notice surface: 144 client types, 106 subscribed, 36 published, 71 silent, 0 published-not-in-client.
+- Play stack still runs the 16:23 build: it misses StartedNotice, CompletedNotice, the title notices
+  and this purchase notice. One restart window delivers all four.
