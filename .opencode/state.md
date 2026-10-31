@@ -886,3 +886,17 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   (tests/coop-component-market 8/8). Play stack still needs one restart window for this + RedeemedNotice.
 - Notice audit added: 107 subscribed notice types, 31 published, 77 silent (most in domains this
   world does not run); the actionable ones are listed in docs/CLIENT_GAPS.md.
+
+## Next notice work (design, not yet built) 2026-10-31
+- `cosmetic.character.title.api.SetNotice/GrantedNotice`: the war rank title is written straight
+  into the character record by `space/coopWarRankTitle.applyToCharacter` (called from
+  `coopWarKillMerit`), i.e. in a SPACE module. The gateway is in `_secondary/express`, so the
+  notice cannot be published from there directly. The pattern that already exists is
+  `localChatGatewayService.bindRuntimeNotices`: the space module emits on a runtime bus and the
+  gateway service subscribes at construction. Doing it the other way (space requires the gateway)
+  would invert the dependency and is the reason this is a design note, not a 20-line edit.
+- Payload shapes read from the client (no guessing):
+  `GrantedNotice{title}`, `RevokedNotice{title}`, `SetNotice{character, title, no_title}`,
+  `SetAllInBubbleNotice{titles[{character,title,no_title}]}`.
+- `component.license.api.GrantedNotice` is deliberately NOT published: this market sells an item,
+  never a licence (`immediately_activate=false`), so "a licence was granted" would be false.
