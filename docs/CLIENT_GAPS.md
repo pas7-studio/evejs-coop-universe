@@ -170,8 +170,8 @@ that and is now published on a real redeem only (fork `7e04f8f`, `tests/coop-dai
 ```
 client notice types       144
 subscribed by client code 106
-published by this server   39
-SUBSCRIBED_NOT_PUBLISHED   68
+published by this server   41
+SUBSCRIBED_NOT_PUBLISHED   66
 PUBLISHED_NOT_IN_CLIENT     0
 ```
 
@@ -189,7 +189,7 @@ ones that matter are the domains we DO run, because there the client is waiting 
 | `cosmetic.ship.skin.thirdparty.sequencing.job.api.CompletedNotice` | a job that came due and minted its copies | **published now** (fork `81af2d9`, 7/7) |
 | `cosmetic.ship.skin.thirdparty.sequencing.job.api.FailedNotice` | a job whose mint failed | not published - its `reason` is an enum this store cannot name, and a made-up reason is worse than none |
 | `cosmetic.character.title.api.Granted/Revoked/SetNotice` | a real title change (Equip/Unequip, admin Grant/Revoke) | **published now** (fork `3a9ac81`, `tests/coop-character-titles.test.mjs`, 6/6) |
-| `dailygoal.api.Completed/ProgressedNotice` | the measured daily-goal progress | not published |
+| `dailygoal.api.Progressed/CompletedNotice` | the measured daily-goal progress | **published now** (fork `5385fed`, 9/9; live on `evejs-agents`: baseline silent, `0 -> 1` announced the same goal id, no repeat) |
 | `corporationgoal.api.RedeemedNotice` | corp goal redeem | not published |
 
 The war rank title is **still announced by no notice**, and that is deliberate: a rank writes plain

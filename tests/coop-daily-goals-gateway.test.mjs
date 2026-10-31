@@ -237,3 +237,56 @@ test("the QA progress knob records through the measured module", () => {
     amount: 3,
   });
 });
+
+test("a goal that really advances is announced, and completing it says so once", () => {
+  let progress = 2;
+  const published = [];
+  const local = createDailyGoalGatewayService({
+    disableDailyGoalTicker: true,
+    dailyGoals: fakeDailyGoals({
+      snapshotFor: () => ({
+        status: "OBSERVED",
+        goals: [{
+          definition: DEFINITION,
+          progress,
+          target: DEFINITION.target,
+          rewardSkillPoints: 42000,
+          completed: progress >= DEFINITION.target,
+          claimedAt: 0,
+          claimable: progress >= DEFINITION.target,
+        }],
+      }),
+    }),
+    publishGatewayNotice(typeName, payload, target) {
+      published.push({typeName, payload, target});
+    },
+  });
+
+  // First sight is a baseline, never an announcement: the card the client has is the truth.
+  local.announceProgress(140000001, Date.UTC(2026, 9, 31, 10, 0, 0));
+  assert.equal(published.length, 0);
+
+  // Nothing moved, so nothing is said.
+  local.announceProgress(140000001, Date.UTC(2026, 9, 31, 10, 0, 1));
+  assert.equal(published.length, 0);
+
+  progress = 4;
+  local.announceProgress(140000001, Date.UTC(2026, 9, 31, 10, 0, 2));
+  assert.equal(published.length, 1, "a real step forward is one notice");
+  assert.equal(published[0].typeName, "eve_public.dailygoal.api.ProgressedNotice");
+  assert.deepEqual(published[0].target, {character: 140000001});
+  const progressed = DAILY_GOAL_PROTO_ROOT.lookupType(published[0].typeName)
+    .decode(published[0].payload);
+  assert.equal(Buffer.from(progressed.goal.uuid).toString("hex"),
+    DEFINITION.goalID.replace(/-/g, ""));
+
+  progress = DEFINITION.target;
+  local.announceProgress(140000001, Date.UTC(2026, 9, 31, 10, 0, 3));
+  assert.deepEqual(published.slice(1).map((row) => row.typeName), [
+    "eve_public.dailygoal.api.ProgressedNotice",
+    "eve_public.dailygoal.api.CompletedNotice",
+  ], "reaching the target announces the step and the completion");
+
+  local.announceProgress(140000001, Date.UTC(2026, 9, 31, 10, 0, 4));
+  assert.equal(published.length, 3, "and a completed goal is not announced again");
+});
