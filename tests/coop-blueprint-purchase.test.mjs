@@ -50,3 +50,32 @@ test("a recipe we cannot run is not a purchase", () => {
   const answer = choose({ asks: [ASKS[1]], owned: [], demand: DEMAND, productOf: {} });
   assert.equal(answer.refusals[0].reason, "NO_KNOWN_RECIPE");
 });
+
+test("a blueprint whose product cannot pay for its materials is refused", () => {
+  // The real Reinforced Bulkheads I blueprint: 6 944 Tritanium per unit, and Tritanium has no
+  // bid in this region at all, so building is profit. Miner I is the opposite case.
+  const bulkheads = choose({ asks: [{ typeID: 1334, stationID: 60003760, price: 175000,
+    quantity: 1, name: "Reinforced Bulkheads I Blueprint" }], owned: [],
+    demand: { 1333: { volume: 242, price: 5122 } }, productOf: { 1334: 1333 },
+    runsAtStation: { 1334: 242 }, unitCostOf: { 1334: 0 } });
+  assert.equal(bulkheads.status, "BUY");
+  assert.equal(bulkheads.blueprint.typeID, 1334);
+  assert.equal(bulkheads.blueprint.buildable, 242);
+  assert.ok(bulkheads.blueprint.profit > 1000000, "the whole bid is worth building for");
+
+  const miner = choose({ asks: [{ typeID: 785, stationID: 60003760, price: 92720,
+    quantity: 1, name: "Miner I Blueprint" }], owned: [],
+    demand: { 483: { volume: 181, price: 6028 } }, productOf: { 785: 483 },
+    runsAtStation: { 785: 181 }, unitCostOf: { 785: 12739 } });
+  assert.equal(miner.status, "NO_BLUEPRINT_WORTH_BUYING");
+  assert.equal(miner.refusals[0].reason, "NO_MARGIN");
+});
+
+test("a blueprint is only credited with the units it can build and sell", () => {
+  const answer = choose({ asks: [{ typeID: 1334, stationID: 60003760, price: 175000,
+    quantity: 1 }], owned: [], demand: { 1333: { volume: 5000, price: 5122 } },
+    productOf: { 1334: 1333 }, runsAtStation: { 1334: 7 }, unitCostOf: { 1334: 0 } });
+  assert.equal(answer.status, "BUY");
+  assert.equal(answer.blueprint.buildable, 7, "seven builds of material is not five thousand");
+  assert.equal(answer.blueprint.profit, 7 * 5122);
+});

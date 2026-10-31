@@ -161,3 +161,14 @@ test("the demand-gap report is read after `ready`, never before it", () => {
   assert.ok(declared >= 0, "ready is declared");
   assert.ok(used > declared, "the gap report reads it only after it exists");
 });
+
+test("a recipe that costs more than its product pays is never started", () => {
+  // Measured 2026-10-31: Miner I needed 481 Pyerite + 119 Mexallon, worth 12 739 ISK at the
+  // regional bids, while the only real bid for the ship was 6 028 - each job burned 7 467 ISK.
+  assert.equal(industry.losesMoney({materialValue: 12739, productValue: 6028}), true);
+  assert.equal(industry.losesMoney({materialValue: 0, productValue: 5122}), false,
+    "a material nobody here bids for is free to consume");
+  assert.equal(industry.losesMoney({materialValue: 100, productValue: 5122}), false);
+  assert.equal(industry.losesMoney({materialValue: 100, productValue: 0}), false,
+    "zero revenue is already refused as no-buyer");
+});
