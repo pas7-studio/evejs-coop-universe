@@ -95,7 +95,12 @@ test("hulls outside the ticked systems are never inspected",()=>{
 test("every authority is required and the system list is bounded",()=>{
  assert.throws(()=>createWarBattleLineRelief({}),/WAR_BATTLE_LINE_RELIEF_AUTHORITIES_REQUIRED/);
  const {api}=fixture();
- assert.equal(api.tick({systemIDs:Array.from({length:21},()=>SYSTEM)}).status,"INVALID_SYSTEMS");
+ // FW-138: the bound only rejects a pathological list. A 20-system cap refused a
+ // frontier that really spans more than 20 systems, so every war phase answered
+ // INVALID_SYSTEMS on every tick (measured 17:14:28Z, ten refusals in five minutes).
+ const ready=fixture({ready:true});
+ assert.equal(ready.api.tick({systemIDs:Array.from({length:21},(_u,i)=>SYSTEM+i)}).status,"NO_DRY_HULL");
+ assert.equal(api.tick({systemIDs:Array.from({length:513},()=>SYSTEM)}).status,"INVALID_SYSTEMS");
  assert.equal(api.tick({systemIDs:[]}).status,"NO_SYSTEMS");
 });
 

@@ -1065,3 +1065,16 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - Notice surface: 144 client types, 106 subscribed, 41 published, 66 silent, 0 published-not-in-client.
 - Play stack still runs the 16:23 build and misses every notice added today (Started, Completed
   sequencing, titles, component purchase, skin licence, daily-goal progress).
+
+## FW-138 (2026-10-31 17:22Z): the frontier outgrew a 20-system sanity cap
+- Fork 2718b93: EIGHT war phases refused their entire tick with INVALID_SYSTEMS because the
+  input system list was longer than 20 - the union of the war's own systems once the frontier grew
+  past twenty. The opener alone answered ten refusals in five minutes (measured 17:14:28Z), so no
+  new front could open at all. The bound now only rejects a pathological list (512).
+- MEASURED after the deploy: INVALID_SYSTEMS is gone, one `war-opened|OPENED` campaign, and a
+  FOURTH capture at 17:21:39Z - system **30000143** (objectives 980300000257/258).
+- War state 17:22Z: 70 campaigns [50 EXPIRED, **8 OCCUPIED**, 4 ASSAULT, 8 PREPARING].
+  OCCUPIED 4 -> 8 in 31 minutes, four real captures (30000142, 30000144, 30000139, 30000143).
+- The remaining opener refusal is the honest one: NO_OPENABLE_FRONT (every border is occupied,
+  contested or still cooling down), not a broken phase.
+- Suites: war 555/555 (the battle-line-relief bound test rewritten to the 512 bound).
