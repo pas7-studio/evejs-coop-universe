@@ -2909,3 +2909,8 @@ Evidence: agents stack: seed frigate -> BPO 9988400017127, build -> job 97000000
 Why: Two structural holes closed: a hold had no way to give cargo back to a hangar, and a purchased blueprint could never become a buildable receipt; plus pilots had no money because sweeps drain them
 Where: compose/compose.agents.yaml, integration/coopDistributionRun.cjs, integration/coopFactionWarOpening.cjs, integration/coopPilotPayroll.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-component-market.test.mjs, tests/coop-pilot-payroll.test.mjs
 Evidence: live 2026-10-31: cargo 980200084340 stowed COMPLETED, blueprint 785 adopted (receipt seed_1000129_60000682_785.json), hangar shows 785@60000682, manufacturer now plans Miner I for Jita (BUYER_ELSEWHERE 483) and refuses MATERIALS_MISSING (Pyerite 0/481, Mexallon 0/119); tests: stow 6/6, adopt 5/5, payroll 6/6
+### 2026-10-31T14:23Z · 9d65a69 · L2 · state: buy, store and adopt are live; materials are the last blocker
+
+Why: The SKIN-component market window had no answer at all; component listings and purchases now work on real component item types with real ISK debits (fork 38bea4d, 3873cf9)
+Where: .opencode/state.md, docs/WORKLOG.md
+Evidence: agents: GetAll 120 listings (type 82340 @250000 ISK); purchase -> 200, wallet -250000, component 9988400017511 in hangar 60003760; no character -> 7, unknown listing -> 5; tests 7/7

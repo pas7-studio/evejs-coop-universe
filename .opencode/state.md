@@ -670,3 +670,22 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   unanswered (not in the compat empty-success list). Implementing them needs a listing stock model
   (seed real component types + ISK price + bundle size, like the SKIN offers) and a purchase path that
   debits ISK and either grants the component item or an infinite licence via coopComponentLicences.
+
+## SKIN component market - PROVEN on evejs-agents 2026-10-31 (fork 38bea4d, 3873cf9)
+- The gap was never the typeIDs (924 component types are already in the item-type table). It was that
+  `cosmetic.market.component.listing.api.GetAll` / `InitiatePurchaseListing` were unanswered.
+- New store `space/coopComponentListings.js`: durable listings of real component types, each with its
+  own stock and price; purchase reserves stock, debits the real wallet, grants the real item to the
+  buyer's station hangar, and refunds + restores stock if delivery fails. Env-gated
+  `EVEJS_COOP_COMPONENT_MARKET=1`, seeds once from real types only.
+- New gateway `componentListingGatewayService.js` with CCP's proto shape; registered in the gateway index.
+- Live: GetAll -> 200, 120 listings (comp:82340 type 82340 @ 250 000 ISK); purchase -> 200,
+  transaction `comp:82340:...`, wallet 999 979 520 -> 999 729 520 (-250 000), component item
+  9988400017511 in hangar 60003760; no character -> gRPC 7, unknown listing -> gRPC 5.
+- Price honesty: this item-type table reports 0 as the component base price, so the world prices a
+  design element at 250 000 ISK itself - stated as a world price, never claimed as CCP's.
+- `immediately_activate` always answers false: activating a component needs a licence mapping this world
+  does not have, so a purchase is "buy the item", never a pretend licence.
+- Tests: tests/coop-component-market.test.mjs -> pass 7 fail 0.
+- NEEDS_OWNER_RESTART_WINDOW: the play stack runs an older image, so it needs a rebuild + restart (and
+  `EVEJS_COOP_COMPONENT_MARKET=1` in compose.yaml) before the owner can see the component window.
