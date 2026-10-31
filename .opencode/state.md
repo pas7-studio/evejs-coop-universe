@@ -41,6 +41,19 @@ None of it is live on the play stack yet: it needs one restart window.
    2026-10-30T22:26 although `enabled()` returns true in a fresh process, so the
    in-server 60 s timer is not emitting. Fixing that gives per-phase timings for free.
 
+## Done (2026-11-01): more 350mm Carbide Railgun I for sale, no restart
+Type `14280` (SDE name "350mm Carbide Railgun I", market group 566). Stock was 1 at
+station `60003760` (Jita IV-4), where the owner is docked.
+**Live seeded-stock path — reusable, needs no server or market restart:**
+`POST http://127.0.0.1:40110/v1/admin/seed-stock/adjust` with
+`{station_id, type_id, delta_quantity|new_quantity, new_price?, reason}`.
+The market daemon (Rust) applies it in a transaction, invalidates the scope caches and
+refreshes the summaries, so it is still real seeded stock — not an invented player order.
+It only UPDATES an existing `seed_stock` row; a new station needs the offline seeder
+(`scripts/Bootstrap-Coop-Market.ps1`, which takes the `.market.lock` and therefore a
+market stop). Verify with `GET /v1/orders/{region_id}/{type_id}`.
+Result: 100 units at 704,900 ISK, `source: seed`, confirmed in the order book.
+
 ## Traps
 - `docker cp` over `/var/lib/evejs/gameStore/gamestore.sqlite` makes the file
   root-owned; the server then logs `sync flush FAILED ... readonly database` and loses
