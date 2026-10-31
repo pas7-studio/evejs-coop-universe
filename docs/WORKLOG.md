@@ -2887,3 +2887,8 @@ Evidence: dry-run repaired=1387 of 1402; --apply WRITTEN offers=1402; live purch
 Why: The blueprint purchase named every one of its refusals in turn (undefined registry, unearned pilot ISK, a hull far from the station) and each is now fixed
 Where: integration/coopDistributionRun.cjs, integration/coopFactionTaxIncome.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarTreasury.cjs, tests/coop-faction-tax-income.test.mjs
 Evidence: events: BUY_THREW registry is not defined -> INSUFFICIENT_EARNED_ISK -> TOO_FAR_FROM_STATION, each fixed; decision proven BUY for Caldari Shuttle Blueprint 42500 ISK with 1227 runs buildable; 32/32 run tests
+### 2026-10-31T13:37Z · d69211b · L2 · state: the purchase names its refusals; timing is what is left
+
+Why: IndustryMonitor.DisconnectJob deleted any monitor id without an owner; monitors now store characterID and only the owner may detach (fork 5955015)
+Where: .opencode/state.md
+Evidence: node --test tests/coop-industry-monitor-ownership.test.mjs -> pass 6 fail 0

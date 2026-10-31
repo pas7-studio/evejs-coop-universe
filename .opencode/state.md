@@ -591,3 +591,26 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - Cleanup: skin cleared from the ship, both test licences expired, PLEX back to 0.
 - Other clients get an applied skin through the gRPC cosmetic.ship.api.GetAllInBubble (answered from the
   live scene, fork ff09ec8); nothing on the slim item carries it, so that gateway is the only path.
+
+## Client surfaces re-checked 2026-10-31 (no code change needed)
+- crateService.ClaimFitting/ClaimLoot/ClaimSkillBundle: implemented (they answer null on the happy path,
+  which is why the register calls them stubs); OpenCrate/ClaimLootFromCrateStack move real items.
+- overviewPresetMgr.StoreLinkAndGetID/GetStoredPreset: implemented (drag-a-link preset sharing).
+- Industry window: blueprintManager.GetBlueprintDataByOwner answers an empty list because the character
+  owns no blueprints; industryManager.GetJobsByOwner empty; GetLimits maxBlueprintResults=500. The window
+  is functional - it has no content. Factory/industry therefore needs CONTENT (BPO items, materials,
+  facility), not more client code.
+
+## Industry monitor ownership - fixed and proven live 2026-10-31 (fork 5955015)
+- Defect: `IndustryMonitor.DisconnectJob` deleted whatever id it was given. The handler never took
+  the session, the persisted row carried no owner, a missing id answered success, and the row was
+  rewritten on every refresh.
+- Fix: row stores characterID; only the owner may detach (MONITOR_NOT_OWNED), a vanished id answers
+  MONITOR_NOT_FOUND, connecting the same (character, activity, blueprint) reuses the row, and
+  un-attributable legacy rows are dropped on load. Pure rules in industryMonitorOwnership.js.
+- Live on evejs-agents (image e9346869): connect x2 -> id 1, reused=true, same id; second character
+  -> id 2; cross-character detach -> false MONITOR_NOT_OWNED; id 999999 -> false MONITOR_NOT_FOUND;
+  owner detach -> true; repeat -> false MONITOR_NOT_FOUND.
+- Test: node --test tests/coop-industry-monitor-ownership.test.mjs -> pass 6 fail 0.
+- docs/CLIENT_GAPS.md refreshed: petitioner.*, structureDeployment.*, charUnboundMgr cancel and the
+  crate/overview claims were stale "unfinished" entries; they are implemented.

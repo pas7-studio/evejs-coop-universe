@@ -51,13 +51,26 @@ Correct by contract, deliberately left alone:
   `eventLog.LogPlayerRequestedDisconnect` - QA/dev surfaces, not gameplay.
 
 Genuinely unfinished (the call does nothing when a player uses it):
-- `structureDeployment.RenameStructure` / `Unanchor` / `CancelUnanchor` - the structure context menu;
-- `industryMonitor.DisconnectJob` - detaching a job from the industry monitor;
-- `petitioner.*` (9 calls) - the support/petition window: no ticket store exists here;
 - `survey.PerformSurveyChecks` / `ClaimSurveyRewards`, `milestoneMgr.ClaimRewards`,
-  `charUnboundMgr.CancelCharacterDeletePrepare`, `operationsManager.process_client_event`,
-  `pvpFilamentMgr.GetLeaderboard` / `LeavePVPQueue` - features whose backing data this world has
-  never produced (surveys, milestones, PVP queues, character-deletion flows).
+  `operationsManager.process_client_event`, `pvpFilamentMgr.GetLeaderboard` / `LeavePVPQueue` -
+  features whose backing data this world has never produced (surveys, milestones, client event
+  telemetry, PVP queues);
+- `bountyProxy.GMReimburseBounties` - GM tooling, not gameplay.
+
+Re-checked 2026-10-31 against the fork - these were listed here as unfinished and now **do** work
+(they answer `null` after doing the work, which is why the placeholder audit keeps flagging them):
+- `petitioner.*` - durable petition store, categories/queue/create/list/message/close/cancel/delete/
+  claim/escalate/rate (fork `6e48b58`, `a61a4fa`; live create/rate/delete measured);
+- `structureDeployment.RenameStructure` / `Unanchor` / `CancelUnanchor` - `sovPlayerDeployment` +
+  `structureState` unanchor and cancel paths;
+- `industryMonitor.DisconnectJob` - fork `5955015`: the monitor row now stores `characterID`, only the
+  owner may detach it (`MONITOR_NOT_OWNED`), a vanished id answers `MONITOR_NOT_FOUND`, and
+  re-connecting the same blueprint reuses the row instead of leaking an id per refresh;
+- `charUnboundMgr.CancelCharacterDeletePrepare` - `characterDeletionRuntime.cancelCharacterDeletePrepare`
+  clears `deletePrepareDateTime` for the owner's offline character;
+- `crateService.ClaimFitting` / `ClaimLoot` / `ClaimSkillBundle`,
+  `overviewPresetMgr.StoreLinkAndGetID` / `GetStoredPreset` - implemented; the industry **window** is
+  functional but empty because the character owns no blueprints (content, not code).
 
 `sessionRegistry.register` now stamps `evejsRegisteredAtMs`, so `userSvc.GetSessionPlaytimeMinutes`
 answers the real minutes of the current session instead of the constant 0 it used to return.
