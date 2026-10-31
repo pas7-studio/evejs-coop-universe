@@ -1051,3 +1051,17 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - Remaining measured tails (not defects of the capture path): NO_REAL_CAMPAIGN_FOR_EVENT for kills
   whose victim was never a mobilised war hull (stock/neutral), and NO_DEFENDER_WRECK where the
   garrison really refilled.
+
+## Daily-goal progress notices, 2026-10-31
+- DONE (fork `5385fed`, live on `evejs-agents`): `dailyGoalGatewayService` runs a 15 s tick that
+  measures every session character with the same `snapshotFor()` the goal window uses, publishes
+  `dailygoal.api.ProgressedNotice` for a goal that really advanced and `CompletedNotice` when it
+  crosses the target. First sight of a character and each new day are recorded silently.
+- Measured live: `BASELINE=0`, real step `0 -> 1` announced the same goal id, the next measurement
+  announced nothing (`REPEAT=true`). Unit drive point is `service.announceProgress(characterID, ms)`,
+  and `disableDailyGoalTicker: true` keeps tests timer-free.
+- The tick reads the session registry lazily: on a machine where that require fails, it measures
+  nobody rather than inventing players.
+- Notice surface: 144 client types, 106 subscribed, 41 published, 66 silent, 0 published-not-in-client.
+- Play stack still runs the 16:23 build and misses every notice added today (Started, Completed
+  sequencing, titles, component purchase, skin licence, daily-goal progress).
