@@ -2946,3 +2946,9 @@ Evidence: reserve computed live: Pyerite 962, Mexallon 238, Tritanium 2650 for t
 Why: Nothing ever imported: the refinery here only sees Veldspar, so the Pyerite and Mexallon the factory needs exist only where they are sold
 Where: integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-distribution-run.test.mjs
 Evidence: SUPPLY phase added to the distribution run with bounded tries, buyInputs authority over the native trader, payroll funding on refusal, one event per intent; run tests 34/34, supply 7/7, payroll 6/6
+### 2026-10-31T15:14Z · 11b643b · L1 · docs: the client's whole consumed gateway surface is answered
+
+Why: Every request type the client's own code sends now has an explicit gateway answer; the audit reads the deployed registry and reports zero gaps
+Detail: The audit now reads the deployed registry, so it sees template-literal type lists; measured on evejs-agents: 297 handled types, CONSUMED_NOT_ANSWERED 0, and every one of the 24 ambiguous (planet/star, pirate, campaign, licence) types answered in both forms. Includes the six newly answered calls and the register refresh (37 stub, 403 ok, ai.assistant + component listing no longer defaulted).
+Where: .opencode/state.md, docs/CLIENT_CONTRACT_STATUS.md, docs/CLIENT_GAPS.md, docs/client-contracts/baseline.json, docs/client-contracts/gateway-coverage.json, scripts/coop-gateway-gap-audit.py, tests/coop-gateway-gap-closure.test.mjs
+Evidence: coop-gateway-gap-audit CONSUMED_NOT_ANSWERED 0 (297 handled, live on evejs-agents), all 24 ambiguous types answered, coop-gateway-gap-closure 7/7, contracts --verify OFFLINE_OK
