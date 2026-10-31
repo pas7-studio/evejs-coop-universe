@@ -13,8 +13,6 @@
     "industryMonitor.DisconnectJob",
     "keeper.GetLevelEditor",
     "localizationServer.UpdateLocalizationQAWrap",
-    "map.GetDeadspaceAgentsMap",
-    "map.GetDeadspaceComplexMap",
     "milestoneMgr.ProcessCharacterLogon",
     "node_graph.process_client_blackboard_request",
     "node_graph.qa_start_node",

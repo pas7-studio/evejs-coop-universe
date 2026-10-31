@@ -13,9 +13,9 @@ actually issues, taken from its own bytecode, with the modules that call it.
 | NULLABLE | the handler can answer `null` on some path |
 | OK | the handler builds a real answer |
 
-Total client calls: 542 · MISSING 0 · STUB 43 · NULLABLE 103 · OK 396
+Total client calls: 542 · MISSING 0 · STUB 41 · NULLABLE 103 · OK 398
 
-## STUB (43)
+## STUB (41)
 
 | call | sites | client module | server file | why it is acceptable today |
 | --- | --- | --- | --- | --- |
@@ -30,8 +30,6 @@ Total client calls: 542 · MISSING 0 · STUB 43 · NULLABLE 103 · OK 396
 | `industryMonitor.DisconnectJob` | 1 | industrySvc.pyj | services\industry\industryMonitorService.js | fire-and-forget |
 | `keeper.GetLevelEditor` | 2 | scenarioMgr.pyj | services\dungeon\keeperService.js | **unreviewed** |
 | `localizationServer.UpdateLocalizationQAWrap` | 2 | localizationClient.pyj | services\support\localizationServerService.js | QA only |
-| `map.GetDeadspaceAgentsMap` | 3 | mapFilterDungeons.pyj | services\map\mapService.js | starModeHandler: `if dungeons is None: return` |
-| `map.GetDeadspaceComplexMap` | 3 | mapFilterDungeons.pyj | services\map\mapService.js | starModeHandler: `if dungeons is None: return` |
 | `milestoneMgr.ProcessCharacterLogon` | 1 | milestoneSvc.pyj | services\character\milestoneMgrService.js | fire-and-forget |
 | `node_graph.process_client_blackboard_request` | 1 | graph.pyj | services\nodegraph\nodeGraphService.js | QA node graph only |
 | `node_graph.qa_start_node` | 1 | log_graph.pyj | services\nodegraph\nodeGraphService.js | QA only |
