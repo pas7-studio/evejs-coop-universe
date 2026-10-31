@@ -696,3 +696,57 @@ test("an empty blocked hull retries into a shopping trip, not into a sale", asyn
   assert.equal(retried.state.phase, "PLAN");
   assert.equal(retried.state.forceImport, true);
 });
+
+test("nothing missing is the moment to buy a profitable blueprint and carry it home", async () => {
+  // Measured 2026-10-31: the factory owned only loss-making styles while Jita sold the
+  // Reinforced Bulkheads I blueprint for 175 000 with 242 units of real demand behind it.
+  const hull = 980000004201;
+  const trip = { mode: "blueprint", blueprintTypeID: 1334, typeID: 1334, quantity: 0,
+    expectedIsk: 0, price: 175000, profit: 1064524, buildable: 242,
+    fromStationID: 60003760, fromSystemID: 30000142, toStationID: 60003760,
+    toSystemID: 30000142, homeStationID: 60000682, homeSystemID: 30000145,
+    gate: null, items: [{ stationID: 60003760, typeID: 1334, quantity: 0 }] };
+  const planned = await run.tick(hull, {
+    planTrip: () => ({ status: "NO_TRIP" }),
+    importPlan: () => ({ status: "NOTHING_TO_BUY" }),
+    blueprintPlan: () => ({ status: "OK", trip }),
+    now: 42000,
+  });
+  assert.equal(planned.status, "PLANNED_IMPORT");
+  assert.equal(planned.state.mode, "blueprint");
+  assert.deepEqual(planned.state.importTypes, [1334]);
+  // Fly the last leg, then buy: a blueprint trip loads nothing and sells nothing.
+  const ready = await run.tick(hull, { distanceTo: () => 900, now: 42050 });
+  assert.equal(ready.status, "TO_DEST");
+  await run.tick(hull, { distanceTo: () => 900, now: 42060 });
+  // At the seller's station the buying phase uses the blueprint authority, not the input one.
+  const bought = await run.tick(hull, { distanceTo: () => 900, now: 42100,
+    buyInputs: async () => { throw new Error("a blueprint trip does not buy ore"); },
+    buyBlueprint: async (args) => {
+      assert.equal(args.stationID, 60003760);
+      return { chosen: { typeID: 1334, price: 175000 }, bought: { status: "TRADE_SETTLED" } };
+    } });
+  assert.equal(bought.status, "RETURN");
+  assert.equal(bought.reason, "BLUEPRINT_BOUGHT:1334");
+  assert.equal(bought.state.importBought, 1, "something is aboard to unload at home");
+  assert.equal(bought.state.returnStationID, 60000682);
+});
+
+test("a blueprint purchase the market refused still goes home instead of spinning", async () => {
+  const hull = 980000004202;
+  const trip = { mode: "blueprint", blueprintTypeID: 1334, typeID: 1334, quantity: 0,
+    expectedIsk: 0, fromStationID: 60003760, fromSystemID: 30000142, toStationID: 60003760,
+    toSystemID: 30000142, homeStationID: 60000682, homeSystemID: 30000145, gate: null,
+    items: [{ stationID: 60003760, typeID: 1334, quantity: 0 }] };
+  await run.tick(hull, { planTrip: () => ({ status: "NO_TRIP" }),
+    importPlan: () => ({ status: "NOTHING_TO_BUY" }),
+    blueprintPlan: () => ({ status: "OK", trip }), now: 43000 });
+  await run.tick(hull, { distanceTo: () => 900, now: 43050 });
+  await run.tick(hull, { distanceTo: () => 900, now: 43060 });
+  const refused = await run.tick(hull, { distanceTo: () => 900, now: 43100,
+    buyBlueprint: async () => ({ chosen: { typeID: 1334 },
+      bought: { status: "INSUFFICIENT_EARNED_ISK" } }) });
+  assert.equal(refused.status, "RETURN");
+  assert.match(refused.reason, /^BLUEPRINT_BUY_FAILED:INSUFFICIENT_EARNED_ISK/);
+  assert.equal(refused.state.importBought, 0);
+});

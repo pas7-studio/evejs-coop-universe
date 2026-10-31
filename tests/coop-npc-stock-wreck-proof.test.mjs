@@ -52,7 +52,12 @@ test("attacker must have exact unique named pirate link; named victim uses other
  const f=fixture();f.links.push({...f.links[0]});
  assert.equal(f.verify().status,"NOT_UNIQUE_NAMED_PIRATE");
  f.links.pop();f.links[0].role="trader";
- assert.equal(f.verify().status,"NOT_UNIQUE_NAMED_PIRATE");
+ // FW-135: a named war hull that killed a stock mining-fleet hull is a real but
+ // unpaid kill, and it must not read like a broken identity merge.
+ const notRaid=f.verify();
+ assert.equal(notRaid.status,"ATTACKER_NOT_A_RAID_PIRATE");
+ assert.equal(notRaid.attackerPilotID,"coop-pilot-001");
+ assert.deepEqual(notRaid.attackerRoles,["trader"]);
  f.links[0].role="pirate";f.links.push({pilotID:"coop-pilot-002",
   entityID:301,systemID:SID,role:"miner"});
  assert.equal(f.verify().status,"NAMED_VICTIM_USE_STANDARD_PROOF");

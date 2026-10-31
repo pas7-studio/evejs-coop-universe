@@ -91,6 +91,9 @@ services:
       # A shopping trip: an empty hull flies to the station that really sells the missing input,
       # buys it through the native trader and carries it home to the factory hangar.
       EVEJS_COOP_INPUT_IMPORT_TRIP: "1"
+      # ...and the same trip buys CAPITAL: a blueprint whose product pays for its own materials
+      # at the station that sells it, carried home where the materials are.
+      EVEJS_COOP_BLUEPRINT_SHOP_TRIP: "1"
       EVEJS_COOP_BLUEPRINT_PRICE_CAP: "500000"
       EVEJS_COOP_BLUEPRINT_BUDGET: "5000000"
       # The economic phases get their own beat: measured 2026-10-29, the stock hook ran at

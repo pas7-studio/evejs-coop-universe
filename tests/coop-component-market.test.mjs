@@ -149,6 +149,62 @@ test("a purchase answers a real 16-byte transaction uuid the client can parse", 
     transactionUUID.replace(/-/g, ""), "and it is the id the store really issued");
 });
 
+test("a completed purchase is announced with the same transaction id", (t) => {
+  if (skipWithoutEngine(t)) return;
+  const {
+    createComponentListingGatewayService,
+    PROTO_ROOT,
+  } = require(path.join(ENGINE_CODE,
+    "server/src/_secondary/express/gatewayServices/componentListingGatewayService.js"));
+  const transactionUUID = "1e0d0abc-0000-4000-8000-0000000000ff";
+  const published = [];
+  const service = createComponentListingGatewayService({
+    componentListings: {
+      purchase: () => ({status: "SOLD", transactionUUID, typeID: 82340, units: 1,
+        costISK: 250000, stationID: 60003760, immediatelyActivate: false}),
+    },
+    publishGatewayNotice(typeName, payload, target) {
+      published.push({typeName, payload, target});
+    },
+  });
+  service.handleRequest(
+    "eve_public.cosmetic.market.component.listing.api.InitiatePurchaseListingRequest",
+    {payload: {value: Buffer.alloc(0)},
+      authoritative_context: {identity: {character: {sequential: 140000005}}}},
+  );
+  assert.equal(published.length, 1, "the client hears that the transaction went through");
+  assert.equal(published[0].typeName,
+    "eve_public.cosmetic.market.transaction.api.TransactionSucceededNotice");
+  assert.deepEqual(published[0].target, {character: 140000005});
+  const notice = PROTO_ROOT.lookupType(published[0].typeName).decode(published[0].payload);
+  assert.equal(Buffer.from(notice.transaction.uuid || []).toString("hex"),
+    transactionUUID.replace(/-/g, ""));
+});
+
+test("a refused purchase announces nothing, because no transaction exists", (t) => {
+  if (skipWithoutEngine(t)) return;
+  const {
+    createComponentListingGatewayService,
+  } = require(path.join(ENGINE_CODE,
+    "server/src/_secondary/express/gatewayServices/componentListingGatewayService.js"));
+  const published = [];
+  const service = createComponentListingGatewayService({
+    componentListings: {
+      purchase: () => ({status: "PAYMENT_FAILED", reason: "NOT_ENOUGH_ISK", costISK: 250000}),
+    },
+    publishGatewayNotice(typeName, payload, target) {
+      published.push({typeName, payload, target});
+    },
+  });
+  const answer = service.handleRequest(
+    "eve_public.cosmetic.market.component.listing.api.InitiatePurchaseListingRequest",
+    {payload: {value: Buffer.alloc(0)},
+      authoritative_context: {identity: {character: {sequential: 140000005}}}},
+  );
+  assert.notEqual(answer.statusCode, 200, "a refusal is not a success");
+  assert.equal(published.length, 0, "and it is not a transaction to announce");
+});
+
 test("the market is off unless it is switched on", (t) => {
   if (skipWithoutEngine(t)) return;
   const {createComponentListings} = require(MODULE);
