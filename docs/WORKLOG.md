@@ -2814,3 +2814,8 @@ Evidence: fork 46efbae/705e0bd; fronts 11/11; live NO_FRONT->NO_FUNDED_FRONT->OP
 Why: The frontier was capped at one live campaign because expansion borders were only a fallback and a faction without parked hulls could never declare
 Where: compose/compose.agents.yaml, integration/coopBlueprintPurchase.cjs, integration/coopDistributionRun.cjs, integration/coopFactionWarOpening.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarMobilizer.cjs, tests/coop-blueprint-purchase.test.mjs, tests/coop-faction-war-fronts.test.mjs
 Evidence: fork f964aad/5af2fe5; fronts 12/12, opening 16/16, mobilizer 18/18; live 1 ASSAULT + 6 PREPARING, 13 territories, 6 wars
+### 2026-10-31T08:06Z · be51d92 · L2 · alife29b: a hull that times out three beats is blocked, not left looking busy
+
+Why: Three different market refusals left hulls looking busy for ever, and the blueprint purchase could never fire because no sale completed
+Where: integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarGarrison.cjs, tests/coop-war-garrison.test.mjs
+Evidence: run tests 32/32; timeouts now bounded; UNRESOLVED_MARKET_JOURNAL self-healed; empty hold ends the trip
