@@ -162,6 +162,36 @@ Notices were checked separately: the client subscribes to notices and a domain t
 one stays stale until the window is reopened. `eve_public.dailygoal.api.RedeemedNotice` was exactly
 that and is now published on a real redeem only (fork `7e04f8f`, `tests/coop-daily-goals-gateway.test.mjs`).
 
+### The notice surface, measured 2026-10-31
+
+`scripts/coop-gateway-notice-audit.py` (same client-derived method as the request audit, plus
+`scripts/coop-published-notices.cjs` for the server side) reports:
+
+```
+client notice types       144
+subscribed by client code 107
+published by this server   31
+SUBSCRIBED_NOT_PUBLISHED   77
+PUBLISHED_NOT_IN_CLIENT     0
+```
+
+77 is the count of *subscribed* types nobody publishes, not 77 defects: most belong to domains this
+world does not run (freelance projects, `goal.api`, `tale`, payment schedules, achievements). The
+ones that matter are the domains we DO run, because there the client is waiting on us:
+
+| notice | where it should come from | state |
+| --- | --- | --- |
+| `cosmetic.market.transaction.api.TransactionSucceeded/FailedNotice` | the SKIN/component purchase path | not published |
+| `cosmetic.ship.skin.thirdparty.component.license.api.GrantedNotice` | a component purchase that grants a licence | not published |
+| `cosmetic.ship.skin.thirdparty.license.api.AddedNotice` | a sequencing job that mints skins | not published |
+| `cosmetic.ship.skin.thirdparty.sequencing.job.api.Started/Completed/FailedNotice` | the sequencing store | not published |
+| `cosmetic.character.title.api.GrantedNotice` | the war rank title applied to a character record | not published |
+| `dailygoal.api.Completed/ProgressedNotice` | the measured daily-goal progress | not published |
+| `corporationgoal.api.RedeemedNotice` | corp goal redeem | not published |
+
+The payload of every one of these is a single identifier plus, at most, the new state, so each is a
+small addition to the service that already owns the state - the same pattern as `RedeemedNotice`.
+
 Answered since 2026-10-31: `cosmetic.market.component.listing.api.GetAll` and
 `InitiatePurchaseListing` (fork `38bea4d`, `3873cf9`). The recorded blocker was wrong - the 924 real
 component item types were already in the item-type table; the market itself was missing. Live on
