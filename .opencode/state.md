@@ -352,3 +352,20 @@ GARRISON_APPLIED, 4 casualties RECORDED.
 living-native-war-bounty-wallet-backed -> reserve BLOCKED:WAR_TREASURY_FUNDS_UNAVAILABLE
 (faction 500001 has 0 ISK; 500004 has 3000). FW-111 instrumentation is what made this visible.
 Next: real income (sell loot to seeded buyers) or a funded side; no minting.
+
+## FW-115 / FW-115b (fork 907104e, 1a5b1fe): garrison spawns are FORMATIONS
+Every garrison spawn passed merit 0, and the doctrine composition reads merit 0 as a recruit's
+single hull - so seven live campaigns fielded seven identical frigates (only typeIDs 14359/14361)
+while the merit ledger held 1380 merit across 30 pilots. FW-115 passes the commander's real merit
+into the sanctioned spawn path; FW-115b fixed the accessor (records() already answers the per-pilot
+map, so every commander read as 0).
+
+LIVE proof (08:17-08:18Z): coop-pilot-002 merit 155 (squad-lead) -> fleet 980000076319..623 (4+
+hulls); coop-pilot-003 merit 25 (pilot) -> 2 hulls. Formation size now follows earned rank:
+recruit 1, pilot 2, wingman 3, squad-lead 5, wing-lead 8, front-commander 14, admiral 25.
+
+Roles the composition already enforces (coopWarFleetComposition): tackle always, EWAR from cap 3,
+logistics from cap 5, heavy from cap 8, plus brawler/sniper fill. NOT yet true: conscripted A-Life
+hulls carry no role, and the combat director does not yet give EWAR/logistics special behaviour -
+tactics today = target selection (WAR_SHIP ranking), engagement posture, battle-line relief, gate
+staging and engagement warp.

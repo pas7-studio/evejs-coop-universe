@@ -2819,3 +2819,8 @@ Evidence: fork f964aad/5af2fe5; fronts 12/12, opening 16/16, mobilizer 18/18; li
 Why: Three different market refusals left hulls looking busy for ever, and the blueprint purchase could never fire because no sale completed
 Where: integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarGarrison.cjs, tests/coop-war-garrison.test.mjs
 Evidence: run tests 32/32; timeouts now bounded; UNRESOLVED_MARKET_JOURNAL self-healed; empty hold ends the trip
+### 2026-10-31T08:06Z · ce0b3c4 · L2 · worklog: alife29a/29b
+
+Why: Garrison spawns always passed merit 0, so every side fielded one identical frigate while the merit ledger held real ranks
+Where: docs/WORKLOG.md
+Evidence: fork 907104e/1a5b1fe; garrison 19/19; live merit 155 -> 4 hulls, merit 25 -> 2 hulls
