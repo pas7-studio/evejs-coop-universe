@@ -280,3 +280,25 @@ LIVE after the third deploy (00:12Z): `living-native-war-custody-stale ... "stat
 for pilot-002 (980000067361 -> 980000067524), registry back to real hulls, and the muster now
 reports `DEFENDER assigned 1 limit 2` (was 0 for both sides). Remaining rejects are honest:
 ORDER_LEASE_ACTIVE and WRONG_FACTION.
+
+## FW-112 / FW-112b (fork 46efbae, 705e0bd): a front must never run out - war keeps rolling
+After the first real capture (30003837 OCCUPIED by 500004) the frontier answered NO_FRONT 137
+times in one hour with an EMPTY skip list: every owned system touched only friends, so the war
+machine had nothing left to fight over and would have stayed silent for ever.
+
+- FW-112: when no border exists between two REGISTERED territories, the planner rebuilds the
+  frontier with the SDE faction owner of an unregistered neighbour; such edges are marked
+  expanded, a registered controller always wins, and the navy-capability gate still decides
+  whether both sides can really shoot. NO_FRONT now reports whether expansion was attempted.
+- FW-112b: the opening proofs no longer demand defender ships already standing in a system
+  nobody contested yet (circular for an expansion). The declaration and territory proofs accept
+  the SDE owner of an unregistered system as the defender authority, only where the territory
+  map is silent; a faction owning neither ground nor ship, and an attacker with no presence in
+  the source, are still refused.
+
+LIVE (verified on the play stack): the refusal reason went NO_FRONT -> NO_FUNDED_FRONT (6 fronts
+derived) -> OPENED. New campaign war:500001-500004:campaign:30045339 is PREPARING,
+30045344 (500004) -> 30045339 (500001); territory 30045339 registered and CONTESTED; garrison
+GARRISON_APPLIED. Campaign states: 20 EXPIRED, 2 OCCUPIED, 1 PREPARING.
+
+Suite: coop-faction-war-fronts 11/11, opening/front suites 17/17.
