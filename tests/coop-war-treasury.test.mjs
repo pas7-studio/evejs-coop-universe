@@ -215,3 +215,31 @@ test('a HELD escrow is reused when its campaign no longer exists', () => {
   assert.equal(again.receipt.reservationID, 'supply-w1-c1');
   assert.equal(again.receipt.amountCents, 12500);
 });
+// FW-123d (measured 2026-10-31): CAPITAL_GRANT and TAX_INCOME have no reservation row, so
+// `purpose` was null and the wallet verify read purpose.factionID inside an empty catch.
+// Every grant was then reported NATIVE_CORPORATION_WALLET_UNVERIFIED although the wallet
+// row was readable in the same transaction. Income must name its own faction.
+test("a starting capital grant credits the real wallet once and replays as DUPLICATE",()=>{
+ const f=fixture({funds:0});
+ const grant={type:"CAPITAL_GRANT",eventID:"capital:11:v1",corporationID:31,
+  factionID:11,amountCents:500000000,proofID:"capital:11:v1"};
+ const r=f.treasury.execute(grant);
+ assert.equal(r.status,"APPLIED",String(r.reason||""));
+ assert.equal(r.receipt.walletBeforeCents,0);
+ assert.equal(r.receipt.walletAfterCents,500000000);
+ assert.equal(f.wallet().balance,5000000);
+ assert.equal(f.wallet().transactions[0].amount,5000000);
+ assert.ok(String(f.wallet().journal[0].description).includes("starting capital grant"));
+ assert.equal(f.treasury.execute(grant).status,"DUPLICATE");
+ assert.equal(f.wallet().balance,5000000);
+ assert.equal(f.wallet().transactions.length,1);
+});
+test("tax income names its own faction and needs no reservation",()=>{
+ const f=fixture({funds:0});
+ const tax={type:"TAX_INCOME",eventID:"tax:sale:1",corporationID:31,factionID:11,
+  amountCents:200,proofID:"sale:1"};
+ assert.equal(f.treasury.execute(tax).status,"APPLIED");
+ assert.equal(f.wallet().balance,2);
+ assert.ok(String(f.wallet().journal[0].description).includes("tax income"));
+ assert.equal(f.treasury.execute(tax).status,"DUPLICATE");
+});

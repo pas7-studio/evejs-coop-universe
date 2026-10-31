@@ -614,3 +614,17 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - Test: node --test tests/coop-industry-monitor-ownership.test.mjs -> pass 6 fail 0.
 - docs/CLIENT_GAPS.md refreshed: petitioner.*, structureDeployment.*, charUnboundMgr cancel and the
   crate/overview claims were stale "unfinished" entries; they are implemented.
+
+## FW-123d/e (2026-10-31): faction war chests are funded
+- Fork 26d7c01: an INCOME command (CAPITAL_GRANT/TAX_INCOME) has no reservation, so
+  `purpose` was null and the wallet verify read purpose.factionID inside an empty catch.
+  Every grant reported NATIVE_CORPORATION_WALLET_UNVERIFIED with the wallet row present.
+- Live play stack, journaled through coopWarTreasury, idempotent (capital:<faction>:v1):
+  500001/1000035 -> 5 000 000 ISK, 500004/1000120 -> 5 000 000, 500011/1000436 -> 5 000 000,
+  500014/1000129 -> 5 000 000, 500019/1000162 -> 5 000 000, 500020/1000135 -> 5 000 000.
+  (wallet cents before -> after: 0->500000000, 300000->500300000, 0->500000000,
+  43275->500043275, 0->500000000, 0->500000000).
+- First verified war wreck of the session: 13:50:10Z, 30045338,
+  campaign war:500001-500004:campaign:30045338:r2, PHYSICAL_NATIVE_WRECK_VERIFIED.
+- Open: bounty.pay is not invoked for that casualty (no bounty event), so the money still
+  has no payer. 500011 Angel doctrine fails NPC_NATIVE_HARDWARE_POLICY_VIOLATION.
