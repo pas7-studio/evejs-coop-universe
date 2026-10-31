@@ -1270,3 +1270,21 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   server; out-of-process it answers NO_VISITED_SYSTEMS by construction) to split SIDE_MUSTERED /
   NO_PATROL_CANDIDATE / released-without-wreck per campaign, and steer virtual-world residents into
   live war source systems.
+
+## Player prey: why the pirates stood still, 2026-10-31 19:0x
+- Measured, not guessed: at 18:49:33 in Jita the combat sample shows pirate 980000095005 at `mode:STOP`,
+  `shieldCharge:1`, `armorDamage:0` next to the player at 207 m, while the gamelog shows the player
+  killing "Cinder Tarin [Pirate]" and taking a 240k ISK bounty. So the attack order was issued and the
+  hull never fired: it was never hostile.
+- Cause: the stock loop answers "is this target friendly?" with `sourceClass === "npc" ?
+  targetClass === "npc" : false` - npc -> player is hard-coded friendly, so an ordered pirate is ordered
+  to shoot something it considers a friend (mode STOP, no lock, no damage).
+- Fix (fork `d3ecf70`): new `space/coopPlayerPreyHostility.allowsPlayerPrey` + one gated hook in
+  `space/npc/npcBehaviorLoop.js` after the high-sec check. Hostile only when the hull holds a real
+  attack order on that exact player, or the player shot it within 5 minutes; high-sec safety keeps the
+  first word. OFF by default; this world runs it on.
+- Security measured for the systems with pirates: 30000142 Jita 0.946, 30000144 0.949, 30000145 0.949,
+  30100032 1.0 (high-sec: retaliation only), 30045344 0.274, 30003837 0.368, 30045338 0.343,
+  30045342 0.445 (low-sec: an ordered pirate may open fire on sight).
+- Play stack recreated with the fix; `grep allowsPlayerPrey` in the running container = 1, flag = 1,
+  healthy. Live proof of a pirate damaging the player still pending the owner's next test.
