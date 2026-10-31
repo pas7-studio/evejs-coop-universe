@@ -1230,3 +1230,20 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - NOTE: the play container was recreated at 18:11:44Z by a compose recreate (exit 0, restarts 0,
   fresh CreatedAt) - not a crash of this code; the Sansha doctrine is present in the running image
   and the world rebuilt its fleets afterwards (13 hulls and climbing).
+
+## Pirates vs players, 2026-10-31 (owner request: "чому НПС не реагують")
+- Measured cause: nothing in the world ever targeted a player hull. `space/coopNativeRaids.tick` built
+  its prey list from `fleetShips` with role miner/hauler only, and `coopNativeRaidEligibility`
+  required an NPC target (`target.nativeNpc === true`). `coopNpcHostility` is NPC-vs-NPC by design.
+- Fork `b0a69b5`: `EVEJS_COOP_PIRATE_PREY_PLAYERS=1` adds the player's live ship to the same prey
+  list (same approach warp, same hull gun range, same warp point); the eligibility gate gained one
+  player branch, checked before the unchanged mining-fleet rule. Default OFF.
+- Fork `df6e164`: `Code/compose.yaml` sets the flag, and the play stack was recreated: `env` shows
+  `EVEJS_COOP_PIRATE_PREY_PLAYERS=1`, container `healthy`, no errors.
+- Deployed self-test inside the play container: `ACTION=attack ROLE=player SENT=attack GATE=true`.
+  Unit suite `tests/coop-pirate-prey-players.test.mjs` 6/6; raid gameplay+eligibility still 33/33.
+- NOT yet evidenced: a real player actually being attacked. That needs the owner in a system with a
+  pirate; the chat raid beacon deliberately ignores player targets (`coopWorldSignals.notifyRaid`
+  keeps miner/hauler), so the only signal will be the actual shooting.
+- Also confirmed on play: `[CoopFactionWar] opening skipped: NO_FUNDED_FRONT` -> no campaign, so no
+  war fleets and no bounty (`NO_REAL_CAMPAIGN_FOR_EVENT`). Separate from this fix.
