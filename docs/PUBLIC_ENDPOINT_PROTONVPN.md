@@ -1,9 +1,17 @@
 # Remote play runbook — ProtonVPN + SSH (owner + friend)
 
-**Status 2026-10-29: host side implemented and verified; the friend has to run
-one SSH tunnel and point his client back at `127.0.0.1`.**
-This file exists so nobody has to rediscover the setup. Read §5 before touching
-anything when the friend reports a problem.
+**Status 2026-10-30: endpoint is `130.195.241.6:37471` (relay verified, SSH
+banner OK). The friend has to run one SSH tunnel and point his client back at
+`127.0.0.1`.** This file exists so nobody has to rediscover the setup. Read §5
+before touching anything when the friend reports a problem.
+
+> **The public IP and forwarded port change on every ProtonVPN reconnect.**
+> Read them fresh before telling the friend anything:
+> `grep -a -o "Port pair [0-9]*->[0-9]*" "%LOCALAPPDATA%\Proton\Proton VPN\Logs\client-logs.txt" | tail -1`
+> and then re-create the relay on that port:
+> `powershell -File scripts/Start-Play-Stack.ps1 -Action Up -PublicPort <port>`
+> (`Start-Relay` now recreates the container when its published port no longer
+> matches). Old value was `159.26.120.49:61730`.
 
 ## 1. Topology
 
@@ -12,12 +20,12 @@ friend PC                              host (owner)                       docker
 ─────────────────────────────────────────────────────────────────────────────────
 client -> 127.0.0.1:26000  ─┐
 client -> 127.0.0.1:5222   ─┤
-client -> 127.0.0.1:443    ─┼─ ssh -p 61730 evefriend@159.26.120.49
+client -> 127.0.0.1:443    ─┼─ ssh -p 37471 evefriend@130.195.241.6
 client -> 127.0.0.1:26001  ─┤        │
 client -> 127.0.0.1:26002  ─┘        │
-                                     │  Proton edge 159.26.120.49:61730
+                                     │  Proton edge 130.195.241.6:37471
                                      ▼
-                          0.0.0.0:61730  evejs-ssh-relay (alpine/socat)
+                          0.0.0.0:37471  evejs-ssh-relay (alpine/socat)
                                      │
                           127.0.0.1:55346  sshd (hardened)
                                      │  PermitOpen 443/5222/26000-26002/40110
@@ -50,8 +58,8 @@ The relay container is:
 
 ```powershell
 docker run -d --name evejs-ssh-relay --restart unless-stopped `
-  -p 0.0.0.0:61730:61730 alpine/socat `
-  tcp-listen:61730,fork,reuseaddr tcp-connect:host.docker.internal:55346
+  -p 0.0.0.0:37471:37471 alpine/socat `
+  tcp-listen:37471,fork,reuseaddr tcp-connect:host.docker.internal:55346
 ```
 
 sshd hardening (already in place) —
@@ -73,16 +81,16 @@ Match User evefriend
   ForceCommand echo Access denied
 ```
 
-Adding `Port 61730` there instead of relaying needs an elevated edit; the relay
+Adding `Port 37471` there instead of relaying needs an elevated edit; the relay
 exists to avoid that. If someone later adds the port to sshd, delete the relay
-container so the two do not fight over 61730.
+container so the two do not fight over 37471.
 
 ## 3. Friend bring-up
 
 1. Tunnel (his existing key, nothing else changes):
 
    ```
-   ssh -N -T -p 61730 evefriend@159.26.120.49 ^
+   ssh -N -T -p 37471 evefriend@130.195.241.6 ^
      -L 443:127.0.0.1:443 -L 5222:127.0.0.1:5222 ^
      -L 26000:127.0.0.1:26000 -L 26001:127.0.0.1:26001 ^
      -L 26002:127.0.0.1:26002
@@ -110,22 +118,22 @@ docker logs --tail 5 evejs-ssh-relay                              # socat bridgi
 
 Proton (read-only):
 
-- NAT-PMP opcode 0 to `10.2.0.1:5351` returns the external IPv4 (`159.26.120.49`).
+- NAT-PMP opcode 0 to `10.2.0.1:5351` returns the external IPv4 (`130.195.241.6`).
 - `%LOCALAPPDATA%\Proton\Proton VPN\Logs\client-logs.txt` contains
-  `Port pair 61730->61730` while the mapping lives (renewed about every minute).
+  `Port pair 37471->37471` while the mapping lives (renewed about every minute).
 
-Friend: `Test-NetConnection 159.26.120.49 -Port 61730` must succeed, then the
+Friend: `Test-NetConnection 130.195.241.6 -Port 37471` must succeed, then the
 `ssh` command must ask for **key** auth only and forward without errors.
 
 ## 5. Symptom → cause → fix
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Client: "Could not connect … on port 26000" while `start.ini` says 61730 (or vice versa) | stale `prefs.ini` overrides `start.ini` | set `port=` in `prefs.ini` for the folder matching `<server>` |
+| Client: "Could not connect … on port 26000" while `prefs.ini` still carries an older number (or vice versa) | stale `prefs.ini` overrides `start.ini` | set `port=` in `prefs.ini` for the folder matching `<server>` |
 | Client: "Error connecting to chat server at localhost:5222" | no SSH tunnel; chat is always loopback | start the tunnel from §3 |
 | Market window empty, portraits missing | tunnel missing → no `443` / `26001` / `26002` | same tunnel |
 | Friend: `SynSent`, `Test-NetConnection` times out | nothing listening on the forwarded port (relay container gone, or the port was bound to the game earlier) | `-Action Status`; `-Action Up` recreates the relay |
-| `Test-NetConnection 159.26.120.49:61730` succeeds from the **host** but friend fails | Proton hairpin is unreliable: the host's own test proves nothing | only trust a test from outside the VPN |
+| `Test-NetConnection 130.195.241.6:37471` succeeds from the **host** but friend fails | Proton hairpin is unreliable: the host's own test proves nothing | only trust a test from outside the VPN |
 | SSH asks for a password | harden config requires key only; his key missing | compare `C:/ProgramData/ssh/evefriend_authorized_keys` |
 | SSH connects but `-L` fails | `PermitOpen` allows only the five game ports | forward exactly those ports |
 | Client window never appears (no error) | client started as `bin64\exefile.exe` without the launcher env | start via `Play.bat`; it exports `EO_REMOTEFILECACHEFOLDER`, proxy and CA |
@@ -133,11 +141,11 @@ Friend: `Test-NetConnection 159.26.120.49 -Port 61730` must succeed, then the
 
 ## 6. Dead ends — do not repeat
 
-- **Publishing the game port on 61730.** One forwarded port then serves only the
+- **Publishing the game port on the forwarded port.** One forwarded port then serves only the
   game; chat, market and images break because the client insists on `localhost`
   for them.
 - **Requesting extra NAT-PMP mappings.** Proton's gateway ignores mapping
-  requests from this host (they time out); only the app's single `61730->61730`
+  requests from this host (they time out); only the app's single `<port>-><port>`
   mapping exists.
 - **Testing the public endpoint from the host.** The Proton client answers the
   TCP handshake itself (hairpin), so a local `Test-NetConnection` "success" means
