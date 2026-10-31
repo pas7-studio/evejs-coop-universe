@@ -900,3 +900,14 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
   `SetAllInBubbleNotice{titles[{character,title,no_title}]}`.
 - `component.license.api.GrantedNotice` is deliberately NOT published: this market sells an item,
   never a licence (`immediately_activate=false`), so "a licence was granted" would be false.
+
+## FW-134 (2026-10-31 16:25Z): attrition costs time
+- Fork 3cedd2c: a defender side was refilled every 180 s, so a system could never stay empty for
+  the 60 s capture sustain window and capture-by-force kept skipping
+  war:500001-500020:campaign:30000139:r5 even though it held a real defender wreck
+  (coop-pilot-024, faction 500001). A side now waits cooldown x (1 + its own losses in that
+  campaign, capped at 7x), read from the casualty ledger.
+- Garrison tests 21/21. State at 16:29Z: 58 campaigns [49 EXPIRED, 4 OCCUPIED, 5 ASSAULT], no new
+  capture yet - the next defender wipe inside an assault is the moment to measure.
+- Bounties already proven: 15:51:39Z coop-pilot-053 and 16:07:46Z coop-pilot-023, 1 000 ISK each,
+  from the faction wallet (journals 8000000000000020/21).
