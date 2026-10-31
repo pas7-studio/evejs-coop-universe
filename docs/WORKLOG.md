@@ -2859,3 +2859,9 @@ Evidence: fork 140f5d9/58e0e55; role-posture 5/5, garrison 21/21; live posture r
 Why: The roster did not know the new anti-tackle role, so every multi-role formation was discarded and only the commander counted as a war hull
 Where: .opencode/state.md
 Evidence: fork 4ab17f2; roster 12/12; live fleetID coop-fleet-500004-0199 ACTIVE with tackle+anti-tackle+ewar, roster 199 fleets
+### 2026-10-31T12:59Z · 16e2f00 · DOCS · docs: regenerate the client contract register from the pinned client
+
+Why: Client contract register regenerated so the stubbed-call list matches the real server
+Detail: The register had gone stale (CONTRACTS_OFFLINE_STALE), so the 44-stub list no longer described the server: structureDeployment.Anchor/Unanchor/Rename and industry jobs are implemented now. After --write: 542 calls, 0 missing, 43 stub, 103 nullable, 396 ok, and --verify prints CONTRACTS_OFFLINE_OK.
+Where: docs/CLIENT_CONTRACT_STATUS.md, docs/client-contracts/baseline.json
+Evidence: REGISTER_WRITTEN calls=542 missing=0 stub=43 nullable=103 ok=396; CONTRACTS_OFFLINE_OK

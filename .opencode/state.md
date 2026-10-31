@@ -528,3 +528,24 @@ LIVE after the fix (12:53-12:54Z): garrison applied rows carry real fleet ids
 (coop-fleet-500001-0198, coop-fleet-500004-0199) and the roster holds 199 fleets; the newest is
 ACTIVE with 3 ships: tackle + anti-tackle + ewar. Campaigns at 12:5xZ: 38 EXPIRED, 4 OCCUPIED,
 2 ASSAULT live.
+
+## FW-121 (fork 4d44722): nearest real market by gate hops + measured money wall
+MEASURED 2026-10-31: 1 576 native cargo rows across 19 types sit in NPC holds and NOT ONE of those
+types has a seeded buyer in any of the six war or mining systems (30000144, 30000145, 30003837,
+30045338, 30045342, 30045339). Money therefore REQUIRES travel; there is no in-system sale to
+unlock.
+
+New pure planner coopDistributionPlan.nearestBuyerForTypes: BFS over the real gate graph, one
+seeded-book query per ring, returns {systemID, stationID, hops, volume, price} or NO_BUYER. Hop
+budget honoured, unreadable book refused, ties broken by station id (6/6 tests). Also fixed the
+sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unloadable.
+
+## The money project (next, in order)
+1. A hull that can CROSS a gate and carries cargo. Today every hauler is a mining-fleet hull and
+   coopNpcGateCrossing refuses operatorKind coop-mining-* by design (HULL_ROLE_CONFLICT:MINING_FLEET).
+   Either adopt such a hull into the distribution run for the trip (and release it back), or let the
+   war looters travel. This is the single unlock.
+2. Then: buyerForCargo -> nearestBuyerForTypes, planCrossingTo -> shortestGateRoute next hop,
+   distribution run CROSS_AGAIN on intermediate arrivals (design already written).
+3. Then bounties can be funded: FW-109 reserves per kill from the faction wallet, and the chest levy
+   (coopWarChestFunding.fund) still has no phase that calls it.
