@@ -1110,3 +1110,21 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - The remaining opener refusal is the honest one: NO_OPENABLE_FRONT (every border is occupied,
   contested or still cooling down), not a broken phase.
 - Suites: war 555/555 (the battle-line-relief bound test rewritten to the 512 bound).
+
+## FW-139 + measured 17:35Z: the owner can now see his war move
+- Fork a918017 (FW-139): a capture that came from capture-by-force was never announced - the only
+  front reports were the objective director's. The force path now emits the same
+  objective-captured report once per campaign+system+wreck. PROVEN LIVE 17:33:55Z:
+  `[Front] System #30000142 captured by #500020.` alongside the CAPTURED receipt.
+- Fork 2718b93 (FW-138) raised the 20-system cap that made EIGHT war phases answer INVALID_SYSTEMS
+  on every tick; after the deploy the opener opens fronts again (war-opened|OPENED).
+- MEASURED 16:50-17:35Z: FIVE capture-by-force applications (30000142, 30000144, 30000139,
+  30000143, then 30000142 again by the other side), OCCUPIED 4 -> **9**, 74 campaigns
+  [50 EXPIRED, 9 OCCUPIED, 4 ASSAULT, 11 PREPARING]. The frontier keeps opening (11 PREPARING).
+- NINE bounties paid since 16:50Z, 9 000 ISK in total, INCLUDING THE FIRST REAL DEATH BENEFIT:
+  17:15:18Z `force-lost` paid to coop-pilot-011 (the FW-135 eventID kind plus FW-137 faction
+  fallback made that path work at all).
+- Territories 22 by controller: 500001 11, 500004 6, 500020 3, 500011 1, 500019 1.
+  Wallets 17:35Z: 1000035 4 972 000, 1000120 4 994 000, 1000135 4 987 000,
+  1000129 **155.83** (that militia is nearly drained - honest, it has almost no income),
+  1000436/1000162 5 000 000 ISK.
