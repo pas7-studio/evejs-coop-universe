@@ -149,6 +149,41 @@ test("CompleteEarly finishes a pending job now", () => {
   assert.equal(sequencing.completeEarly(7, "").status, "UUID_REQUIRED");
 });
 
+test("starting a job publishes StartedNotice to the character that started it", () => {
+  const {sequencing} = world();
+  const published = [];
+  const service = createSkinSequencingGatewayService({
+    skinSequencing: sequencing,
+    publishGatewayNotice(typeName, payload, target) {
+      published.push({typeName, payload, target});
+    },
+  });
+  const encode = (name, value) =>
+    Buffer.from(SEQUENCING_PROTO_ROOT.lookupType(name).encode(value).finish());
+  const payload = Buffer.concat([
+    encode(`${JOB_API}.InitiateRequest`, {
+      name: "Nova",
+      licenses: 1,
+      component_licenses: [{component: {coating: {sequential: 11}}, finite: 1}],
+    }),
+    Buffer.from([0x1a, LAYOUT.length]), LAYOUT,
+  ]);
+  const started = service.handleRequest(`${JOB_API}.InitiateRequest`, {
+    payload: {value: payload},
+    authoritative_context: {identity: {character: {sequential: 7}}},
+  });
+  assert.equal(started.statusCode, 200, started.statusMessage);
+
+  assert.equal(published.length, 1, "the job window learns about the job it just started");
+  assert.equal(published[0].typeName, `${JOB_API}.StartedNotice`);
+  assert.deepEqual(published[0].target, {character: 7});
+  const notice = SEQUENCING_PROTO_ROOT.lookupType(`${JOB_API}.StartedNotice`)
+    .decode(published[0].payload);
+  const body = SEQUENCING_PROTO_ROOT.lookupType(`${JOB_API}.InitiateResponse`)
+    .decode(started.responsePayloadBuffer);
+  assert.deepEqual([...notice.id.uuid], [...body.id.uuid], "the same job id the answer carries");
+});
+
 test("the gateway answers a started job with a real id and honest refusals", () => {
   const {sequencing, componentLicences, clock, skins} = world();
   const service = createSkinSequencingGatewayService({skinSequencing: sequencing});
