@@ -3046,3 +3046,9 @@ Why: ProtonVPN reconnected with a new public IP and forwarded port; the friend's
 Detail: The Proton session reconnected to Kyiv UA#46 with a new forwarded port, so the old 130.195.241.6:37471 stopped existing. Relay recreated on 0.0.0.0:64410 -> sshd 127.0.0.1:55346 and verified with a real SSH banner; script default and the runbook now carry the new endpoint.
 Where: docs/PUBLIC_ENDPOINT_PROTONVPN.md, scripts/Start-Play-Stack.ps1
 Evidence: relay Up 0.0.0.0:64410->64410, SSH banner OK on 127.0.0.1:64410, host tunnel iface 10.2.0.2
+### 2026-10-31T18:31Z · 2654b83 · L2 · raids: prove the opt-in player prey, and switch it on for the play world
+
+Why: Nothing in the world ever targets a player ship, so a player flying into a pirate or war zone was never engaged
+Detail: A player hull is refused by default and allowed only for a physically linked pirate when the flag is on; a docked or warping hull is never prey, and a nearer loaded hauler still wins. Play compose now sets EVEJS_COOP_PIRATE_PREY_PLAYERS=1 (applies on the next play restart).
+Where: compose/compose.play-coop.yaml, tests/coop-pirate-prey-players.test.mjs
+Evidence: coop-pirate-prey-players 6/6; coop-native-raids-gameplay + eligibility still 33/33; deployed on evejs-agents healthy
