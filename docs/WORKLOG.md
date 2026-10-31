@@ -3052,3 +3052,9 @@ Why: Nothing in the world ever targets a player ship, so a player flying into a 
 Detail: A player hull is refused by default and allowed only for a physically linked pirate when the flag is on; a docked or warping hull is never prey, and a nearer loaded hauler still wins. Play compose now sets EVEJS_COOP_PIRATE_PREY_PLAYERS=1 (applies on the next play restart).
 Where: compose/compose.play-coop.yaml, tests/coop-pirate-prey-players.test.mjs
 Evidence: coop-pirate-prey-players 6/6; coop-native-raids-gameplay + eligibility still 33/33; deployed on evejs-agents healthy
+### 2026-10-31T18:38Z · bf06573 · L2 · raids: declare the new flag and keep the player-prey proof
+
+Why: The new player-prey flag must be declared before any module may read it
+Detail: The flag registry test still fails on 16 pre-existing undeclared flags from other modules; this one is no longer among them.
+Where: docs/coop-flags.json
+Evidence: coop-flags --check no longer lists EVEJS_COOP_PIRATE_PREY_PLAYERS; coop-pirate-prey-players 6/6
