@@ -571,3 +571,125 @@ test("a station that sells nothing ends the import instead of spinning", async (
   assert.equal(result.status, "RETURN");
   assert.match(result.reason, /^SUPPLY_STOPPED:NO_SEEDED_COUNTERPARTY/);
 });
+
+test("a hull with nothing to carry shops for the factory's missing input", async () => {
+  // Measured 2026-10-31: nothing in the hold pays, the factory still answers MATERIALS_MISSING,
+  // and the only seller of the missing mineral is one system over. The hull leaves empty, buys
+  // there, and comes home - it never sells on a shopping trip.
+  const hull = 980000004196;
+  const trip = { mode: "import", typeID: 35, quantity: 0, expectedIsk: 0,
+    fromStationID: 60003760, fromSystemID: 30000142, toStationID: 60003760,
+    toSystemID: 30000142, homeStationID: 60000682, homeSystemID: 30000145,
+    gate: null, items: [{ stationID: 60003760, typeID: 35, quantity: 0 }] };
+  const planned = await run.tick(hull, {
+    planTrip: () => ({ status: "NO_TRIP" }),
+    importPlan: () => ({ status: "OK", trip }),
+    now: 30000,
+  });
+  assert.equal(planned.status, "PLANNED_IMPORT");
+  assert.equal(planned.state.mode, "import");
+  assert.deepEqual(planned.state.importTypes, [35]);
+  assert.equal(planned.state.homeStationID, 60000682, "the way home is the factory, not the shop");
+  assert.equal(planned.state.stops[0].stationID, 60003760);
+
+  const flying = await run.tick(hull, { distanceTo: () => 500000, goTo: () => true, now: 31000 });
+  assert.equal(flying.status, "ORDERED");
+  // Arrived at the seller: nothing is loaded and no gate is needed (same system).
+  const ready = await run.tick(hull, { distanceTo: () => 900, now: 32000 });
+  assert.equal(ready.status, "TO_DEST", "a shopping trip crosses empty or not at all");
+  assert.equal(ready.state.quantity, 0);
+  const buying = await run.tick(hull, { distanceTo: () => 900, now: 33000,
+    lift: async () => { throw new Error("a shopping trip lifts nothing"); },
+    sell: async () => { throw new Error("a shopping trip sells nothing"); } });
+  assert.equal(buying.status, "SUPPLY", "the seller's station is where the buying happens");
+  const bought = await run.tick(hull, { distanceTo: () => 900, now: 34000,
+    buyInputs: async () => ({ status: "BOUGHT", typeID: 35, quantity: 20, price: 16.03 }) });
+  assert.equal(bought.status, "SUPPLIED:35x20");
+  const home = await run.tick(hull, { distanceTo: () => 900, now: 35000,
+    buyInputs: async () => ({ status: "NOTHING_TO_BUY" }) });
+  assert.equal(home.status, "RETURN");
+  assert.equal(home.state.returnToSystemID, 30000145);
+  assert.equal(home.state.returnStationID, 60000682);
+  // Home again: the last in-system leg is flown, then the hold is unloaded into the hangar.
+  const arrived = await run.tick(hull, { distanceTo: () => 500000, hullSystemOf: () => 30000145,
+    goTo: () => true, now: 36000 });
+  assert.equal(arrived.status, "IMPORT_HOME", "home in system is not home at the station");
+  let unloaded = null;
+  const back = await run.tick(hull, { distanceTo: () => 900, hullSystemOf: () => 30000145, now: 37000,
+    stow: (args) => { unloaded = args; return { status: "STOWED",
+      stowed: [{ typeID: 35, quantity: 20, status: "STOWED" }] }; } });
+  assert.equal(back.status, "REPLANNING");
+  assert.deepEqual(unloaded.types, [35], "only what this trip bought is unloaded");
+  assert.equal(back.state.lastReason, "UNLOADED_AT_FACTORY");
+});
+
+test("a paying trip is still preferred over a shopping trip", async () => {
+  const hull = 980000004197;
+  let shopped = false;
+  const result = await run.tick(hull, {
+    planTrip: () => ({ status: "OK", trip: { ...TRIP } }),
+    importPlan: () => { shopped = true; return { status: "OK", trip: { mode: "import" } }; },
+    now: 38000,
+  });
+  assert.equal(result.status, "PLANNED");
+  assert.equal(shopped, false);
+});
+
+test("a seller in the next system is crossed before the hull shops", async () => {
+  // The factory is in New Caldari and the only honest seller is Jita 4-4, one gate over: the
+  // empty hull crosses first, then flies the last leg inside the seller's system.
+  const hull = 980000004198;
+  const trip = { mode: "import", typeID: 35, quantity: 0, expectedIsk: 0,
+    fromStationID: 60003760, fromSystemID: 30000142, toStationID: 60003760,
+    toSystemID: 30000142, homeStationID: 60000682, homeSystemID: 30000145,
+    gate: { sourceGateID: 50002198, destinationGateID: 50001250,
+      sourceSystemID: 30000145, destinationSystemID: 30000142 },
+    items: [{ stationID: 60003760, typeID: 35, quantity: 0 }] };
+  const planned = await run.tick(hull, {
+    planTrip: () => ({ status: "NO_TRIP" }),
+    importPlan: () => ({ status: "OK", trip }),
+    planCrossing: ({ gate }) => {
+      assert.equal(gate.destinationSystemID, 30000142);
+      return { status: "PLANNED" };
+    },
+    now: 39000,
+  });
+  assert.equal(planned.status, "PLANNED_IMPORT");
+  assert.equal(planned.state.phase, "CROSS", "an empty hold still has to cross a gate");
+  const arrived = await run.tick(hull, { crossingPhase: () => "ARRIVED", now: 40000 });
+  assert.equal(arrived.status, "TO_DEST");
+});
+
+test("an empty hull that found nothing to load shops instead of blocking", async () => {
+  const hull = 980000004199;
+  await run.tick(hull, { planTrip: () => ({ status: "OK", trip: { ...TRIP } }), now: 41000 });
+  run.write({ ...run.read(hull), phase: "TO_ORIGIN", stopIndex: 0, updatedAt: 41050 });
+  const empty = await run.tick(hull, { distanceTo: () => 900, cargoUnits: () => 0, now: 41100,
+    lift: async () => ({ status: "NO_LOCAL_BID" }),
+    importPlan: () => ({ status: "NOTHING_TO_BUY" }) });
+  assert.equal(empty.status, "REPLANNING");
+  assert.equal(empty.state.forceImport, true);
+  let asked = false;
+  const forced = await run.tick(hull, {
+    planTrip: () => { throw new Error("the stale book must not be asked first"); },
+    importPlan: () => { asked = true; return { status: "OK", trip: {
+      mode: "import", typeID: 35, quantity: 0, expectedIsk: 0,
+      fromStationID: 60003760, fromSystemID: 30000142, toStationID: 60003760,
+      toSystemID: 30000142, homeStationID: 60000682, homeSystemID: 30000145,
+      gate: null, items: [{ stationID: 60003760, typeID: 35, quantity: 0 }] } }; },
+    now: 41200,
+  });
+  assert.equal(asked, true, "the forced plan asks for inputs before the stale book");
+  assert.equal(forced.status, "PLANNED_IMPORT");
+});
+
+test("an empty blocked hull retries into a shopping trip, not into a sale", async () => {
+  const hull = 980000004200;
+  run.write({ version: 1, haulerID: hull, phase: "BLOCKED", lastReason: "NO_CARGO_AT_ANY_STOP",
+    blockedAt: 1000, updatedAt: 1000, trips: 0, isk: 0 });
+  const retried = await run.tick(hull, { cargoUnits: () => 0, now: 1000 + 31 * 60 * 1000,
+    importPlan: () => ({ status: "NOTHING_TO_BUY" }) });
+  assert.equal(retried.status, "RETRYING");
+  assert.equal(retried.state.phase, "PLAN");
+  assert.equal(retried.state.forceImport, true);
+});

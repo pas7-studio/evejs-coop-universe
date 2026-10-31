@@ -88,6 +88,9 @@ services:
       EVEJS_COOP_NPC_MARKET_COOLDOWN_MS: "30000"
       # One run of each demand-backed recipe is what the reserve has to protect.
       EVEJS_COOP_INPUT_RUNS: "1"
+      # A shopping trip: an empty hull flies to the station that really sells the missing input,
+      # buys it through the native trader and carries it home to the factory hangar.
+      EVEJS_COOP_INPUT_IMPORT_TRIP: "1"
       EVEJS_COOP_BLUEPRINT_PRICE_CAP: "500000"
       EVEJS_COOP_BLUEPRINT_BUDGET: "5000000"
       # The economic phases get their own beat: measured 2026-10-29, the stock hook ran at

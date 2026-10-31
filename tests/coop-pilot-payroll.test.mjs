@@ -133,3 +133,60 @@ test('recovery finishes a salary whose wallet was debited but whose pilot was no
   const journal = JSON.parse(fs.readFileSync(journalFile, 'utf8'));
   assert.equal(journal.entries.open.phase, 'COMMITTED');
 });
+
+// The corporation wallet is owned by corporationRuntimeState, not by the `corporations` table:
+// measured 2026-10-31 every salary was blocked because the atomic bridge refuses that table
+// (ATOMIC_TABLE_ALLOWLIST_VIOLATION) while the corporation really held 1.45 billion ISK.
+function runtimeWallet(seedBalance = 1000) {
+  const state = {balance: seedBalance, debits: [], credits: []};
+  return {
+    state,
+    readWallet: () => ({status: "OK", divisions: {"1000": {balance: state.balance}}}),
+    applyDelta: ({delta}) => {
+      const next = Math.round((state.balance + Number(delta)) * 100) / 100;
+      if (next < 0) return {status: "CORP_WALLET_INSUFFICIENT", balance: state.balance};
+      state.balance = next;
+      (Number(delta) < 0 ? state.debits : state.credits).push(Number(delta));
+      return {status: "OK", moved: Math.abs(Number(delta)), balance: next};
+    },
+  };
+}
+
+test('a salary paid through the real corporation wallet debits it once', () => {
+  const wallet = runtimeWallet(150000);
+  const book = ledger();
+  const journalFile = tempJournal();
+  const payroll = createPilotPayroll({gameStore: {}, adjustEarned: book.earned,
+    corpWallet: wallet, journalFile, env: {EVEJS_COOP_NPC_PAYROLL: '1'}});
+  const paid = payroll.pay({pilotID: "coop-pilot-007", cents: 10000000,
+    reason: "purchase 35", eventID: "purchase:coop-pilot-007:35:1"});
+  assert.equal(paid.status, "PAID");
+  assert.equal(wallet.state.balance, 50000, "100 000 ISK really left the corporation");
+  assert.deepEqual(wallet.state.debits, [-100000]);
+  assert.equal(book.balances.get("coop-pilot-007"), 10000000);
+  const again = payroll.pay({pilotID: "coop-pilot-007", cents: 10000000,
+    reason: "purchase 35", eventID: "purchase:coop-pilot-007:35:1"});
+  assert.equal(again.status, "DUPLICATE", "the same hour pays once");
+  assert.equal(wallet.state.balance, 50000);
+});
+
+test('a salary whose debit outcome is unknown is never paid twice', () => {
+  const wallet = runtimeWallet(1000);
+  const book = ledger();
+  const journalFile = tempJournal();
+  const payroll = createPilotPayroll({gameStore: {}, adjustEarned: book.earned,
+    corpWallet: wallet, journalFile, env: {EVEJS_COOP_NPC_PAYROLL: '1'}});
+  // A crash between the debit and the credit leaves PENDING on disk.
+  fs.writeFileSync(journalFile, JSON.stringify({version: 1, entries: {}, nextJournalID: 2}));
+  const raw = JSON.parse(fs.readFileSync(journalFile, "utf8"));
+  raw.entries["purchase:coop-pilot-008:35:2"] = {journalID: "purchase:coop-pilot-008:35:2",
+    phase: "PREPARED", corporationID: CORP, pilotID: "coop-pilot-008", cents: 10000000,
+    reason: "purchase 35", transactionID: 9, at: 1, debit: "PENDING"};
+  fs.writeFileSync(journalFile, JSON.stringify(raw));
+  const answer = payroll.pay({pilotID: "coop-pilot-008", cents: 10000000,
+    reason: "purchase 35", eventID: "purchase:coop-pilot-008:35:2"});
+  assert.equal(answer.status, "NEEDS_OPERATOR_REPAIR");
+  assert.equal(wallet.state.debits.length, 0, "no second debit is attempted");
+  const recovered = payroll.recover();
+  assert.equal(recovered.finished[0].status, "NEEDS_OPERATOR_REPAIR");
+});

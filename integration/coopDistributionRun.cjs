@@ -511,6 +511,7 @@ async function tick(haulerID, authorities = {}, env = process.env) {
     const tries = num(state.supplyTries) + 1;
     if ((status === "BOUGHT" || status === "COOLDOWN") && tries < MAX_SUPPLY_TRIES) {
       const waiting = write({ ...state, phase: PHASE.SUPPLY, supplyTries: tries, updatedAt: now,
+        importBought: num(state.importBought) + (status === "BOUGHT" ? num(answer.quantity) : 0),
         lastReason: status === "BOUGHT"
           ? "SUPPLIED:" + num(answer.typeID) + "x" + num(answer.quantity)
           : "SUPPLY_COOLDOWN" }, env);
@@ -525,7 +526,8 @@ async function tick(haulerID, authorities = {}, env = process.env) {
       returnStationID: pos(state.homeStationID) || pos(state.fromStationID) }, env);
     note(observe, "living-distribution-run", home, { reason });
     return { status: "RETURN", reason, state: home };
-  }  const step = decide(state, facts);
+  }
+  const step = decide(state, facts);
   const finish = (phase, reason, extra = {}) => {
     const stamp = phase === PHASE.BLOCKED ? { blockedAt: now } : {};
     const next = write({ ...state, ...stamp, ...extra, phase, lastReason: reason, updatedAt: now }, env);
@@ -897,6 +899,15 @@ async function tick(haulerID, authorities = {}, env = process.env) {
           lastReason: flying ? "IMPORT_FLYING_HOME" : "IMPORT_HOME_UNREACHABLE" }, env);
         note(observe, "living-distribution-run", next, { reason: next.lastReason });
         return { status: "IMPORT_HOME", state: next };
+      }
+      // Nothing bought is nothing to unload: a shopping trip that was refused for lack of
+      // money must come home and plan again, not report UNLOAD_FAILED five times.
+      if (num(state.importBought) <= 0) {
+        const empty = { version: 1, haulerID: id, phase: PHASE.PLAN, updatedAt: now,
+          trips: num(state.trips), isk: num(state.isk), lastReason: "NO_IMPORT_TO_UNLOAD" };
+        write(empty, env);
+        note(observe, "living-distribution-run", empty, { reason: empty.lastReason });
+        return { status: "REPLANNING", state: empty };
       }
       let unloaded = null;
       try {
