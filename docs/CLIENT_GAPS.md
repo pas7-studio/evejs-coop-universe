@@ -124,6 +124,28 @@ demanding an answer that cannot exist. All 24 `AMBIGUOUS_ATTRIBUTION` types (pla
 corruption/suppression, campaign/objective and the licence namespaces) are answered in both forms,
 so whichever the client means, it gets a real answer.
 
+## What is still not covered, measured 2026-10-31
+
+Two different registers, do not confuse them:
+
+* **gateway request types** (the gRPC `eve_public.*Request` surface): `CONSUMED_NOT_ANSWERED 0`
+  against the deployed registry (297 handled). Nothing here is open.
+* **client service calls** (`docs/CLIENT_CONTRACT_STATUS.md`, re-derived by
+  `node scripts/coop-client-contracts.cjs --verify`): 542 calls, `MISSING 0`, `STUB 37`,
+  `NULLABLE 102`, `OK 403`. A stub is a call that answers a placeholder, not a missing method.
+
+The 37 stubs, by what they can actually reach:
+
+| group | count | what it means |
+| --- | --- | --- |
+| QA / GM / programmer only | 14 | `node_graph.qa_*`, `keeper.GetLevelEditor`, `publicQaToolsServer.*`, `localizationServer.UpdateLocalizationQAWrap`, `clientStatLogger.LogString`, `bountyProxy.GM*`. A normal player can never send these. |
+| logon and housekeeping | 8 | `milestoneMgr.ProcessCharacterLogon`, `eventLog.LogPlayerRequestedDisconnect`, `operationsManager.process_client_event`, `charMgr.GetCohortsForCharacter`, `charUnboundMgr.*`, `browserLockdownSvc.*`, `pingService.Ping`. Fire-and-forget or tolerated by the client. |
+| windows that would look inert | 15 | `petitioner.*` (5, the petition log read side), `structureDeployment.*` (3, unanchor/rename), `survey.*` (2), `pvpFilamentMgr.*` (4), `rewardMgr.GetRewardLPLogs`. These are the real remaining work. |
+
+Notices were checked separately: the client subscribes to notices and a domain that never publishes
+one stays stale until the window is reopened. `eve_public.dailygoal.api.RedeemedNotice` was exactly
+that and is now published on a real redeem only (fork `7e04f8f`, `tests/coop-daily-goals-gateway.test.mjs`).
+
 Answered since 2026-10-31: `cosmetic.market.component.listing.api.GetAll` and
 `InitiatePurchaseListing` (fork `38bea4d`, `3873cf9`). The recorded blocker was wrong - the 924 real
 component item types were already in the item-type table; the market itself was missing. Live on

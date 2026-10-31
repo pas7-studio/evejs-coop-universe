@@ -171,6 +171,46 @@ test("redeem pays once; an incomplete goal and pay-for-completion are refused", 
     "paying ISK to finish a goal would mint money nobody funds");
 });
 
+test("a redeem publishes RedeemedNotice to the client that asked", () => {
+  const published = [];
+  const local = createDailyGoalGatewayService({
+    dailyGoals: fakeDailyGoals(),
+    publishGatewayNotice(typeName, payload, target) {
+      published.push({typeName, payload, target});
+    },
+  });
+  const Request = DAILY_GOAL_PROTO_ROOT.lookupType("eve_public.dailygoal.api.RedeemRequest");
+  const payload = Request.encode(Request.create({
+    goal: {uuid: Buffer.from(DEFINITION.goalID.replace(/-/g, ""), "hex")},
+  })).finish();
+  const result = local.handleRequest("eve_public.dailygoal.api.RedeemRequest",
+    envelope(Buffer.from(payload)));
+  assert.equal(result.statusCode, 200);
+
+  assert.equal(published.length, 1, "the card updates from this notice");
+  assert.equal(published[0].typeName, "eve_public.dailygoal.api.RedeemedNotice");
+  assert.deepEqual(published[0].target, {character: 140000001});
+  const notice = decoded("eve_public.dailygoal.api.RedeemedNotice", published[0].payload);
+  assert.deepEqual([...notice.goal.uuid],
+    [...Buffer.from(DEFINITION.goalID.replace(/-/g, ""), "hex")]);
+});
+
+test("a refused redeem publishes nothing", () => {
+  const published = [];
+  const local = createDailyGoalGatewayService({
+    dailyGoals: fakeDailyGoals({redeem: () => ({status: "NOT_COMPLETED", progress: 1, target: 2})}),
+    publishGatewayNotice(typeName, payload, target) {
+      published.push({typeName, payload, target});
+    },
+  });
+  const Request = DAILY_GOAL_PROTO_ROOT.lookupType("eve_public.dailygoal.api.RedeemRequest");
+  const payload = Request.encode(Request.create({
+    goal: {uuid: Buffer.from(DEFINITION.goalID.replace(/-/g, ""), "hex")},
+  })).finish();
+  local.handleRequest("eve_public.dailygoal.api.RedeemRequest", envelope(Buffer.from(payload)));
+  assert.deepEqual(published, [], "a goal that was not paid must not announce a reward");
+});
+
 test("the QA progress knob records through the measured module", () => {
   let recorded = null;
   const local = createDailyGoalGatewayService({
