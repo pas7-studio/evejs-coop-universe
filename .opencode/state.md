@@ -878,3 +878,11 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - War state: 58 campaigns [49 EXPIRED, 4 OCCUPIED, **5 ASSAULT**] - five live fronts, up from 2.
 - Remaining wrinkles: 3 kills still NOT_UNIQUE_NAMED_PIRATE, 1 WAR_TREASURY_EVENT_CONFLICT
   (same event id, different signature), 2 NATIVE_WRECK_OR_SDE_FACTION_UNVERIFIED.
+
+## Component market transaction id fixed 2026-10-31
+- The client parses the purchase answer with `uuid.UUID(bytes=response.transaction.uuid)`; the old
+  answer packed the order key into 16 UTF-8 bytes (short keys = ValueError in the client).
+- Store now issues crypto.randomUUID() per sale; live on evejs-agents: 200, 16 bytes, valid v4
+  (tests/coop-component-market 8/8). Play stack still needs one restart window for this + RedeemedNotice.
+- Notice audit added: 107 subscribed notice types, 31 published, 77 silent (most in domains this
+  world does not run); the actionable ones are listed in docs/CLIENT_GAPS.md.

@@ -117,6 +117,38 @@ test("a sold-out listing stops selling, and a bad id is not found", (t) => {
   assert.equal(h.store.purchase({uuid: "comp:nope", characterID: 140000005, quantity: 1}).status, "NOT_FOUND");
 });
 
+test("a purchase answers a real 16-byte transaction uuid the client can parse", (t) => {
+  if (skipWithoutEngine(t)) return;
+  // Measured in the client (shipSkinComponentTradingRequestMessenger.pyj): it does
+  // `uuid.UUID(bytes=response.transaction.uuid)`, which raises unless the field holds exactly
+  // 16 bytes. The old answer packed the descriptive order key into 16 UTF-8 bytes, which is
+  // both the wrong length for a short key and a meaningless id even when it happened to fit.
+  const {
+    createComponentListingGatewayService,
+    PROTO_ROOT,
+  } = require(path.join(ENGINE_CODE,
+    "server/src/_secondary/express/gatewayServices/componentListingGatewayService.js"));
+  const transactionUUID = "1e0d0abc-0000-4000-8000-0000000000ff";
+  const service = createComponentListingGatewayService({
+    componentListings: {
+      purchase: () => ({status: "SOLD", transactionUUID, typeID: 82340, units: 1,
+        costISK: 250000, stationID: 60003760, immediatelyActivate: false}),
+    },
+  });
+  const answer = service.handleRequest(
+    "eve_public.cosmetic.market.component.listing.api.InitiatePurchaseListingRequest",
+    {payload: {value: Buffer.alloc(0)},
+      authoritative_context: {identity: {character: {sequential: 140000005}}}},
+  );
+  assert.equal(answer.statusCode, 200);
+  const decoded = PROTO_ROOT.lookupType(answer.responseTypeName)
+    .decode(answer.responsePayloadBuffer);
+  const bytes = Buffer.from(decoded.transaction.uuid || []);
+  assert.equal(bytes.length, 16, "the client parses this as a UUID");
+  assert.equal(bytes.toString("hex"),
+    transactionUUID.replace(/-/g, ""), "and it is the id the store really issued");
+});
+
 test("the market is off unless it is switched on", (t) => {
   if (skipWithoutEngine(t)) return;
   const {createComponentListings} = require(MODULE);
