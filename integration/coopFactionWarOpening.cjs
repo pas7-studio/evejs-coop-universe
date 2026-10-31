@@ -354,19 +354,36 @@ function liveCampaignFor(state, targetSystemID) {
       LIVE_CAMPAIGN_STATES.has(campaign.state)) || null;
 }
 
-function buildProofs({ plan, presence, territories, getStargatesForSystem, getGate, minShips, funding }) {
+function buildProofs({ plan, presence, territories, getStargatesForSystem, getGate, minShips,
+ funding, ownerOfSystem = null }) {
   const pilots = (presence && presence.pilots) || [];
   const countIn = (systemID, factionID) => pilots
     .filter((pilot) => pilot.systemID === Number(systemID) && pilot.factionID === String(factionID)).length;
   const sourceSystemID = plan.campaign.sourceSystemID;
   const targetSystemID = plan.campaign.targetSystemID;
+  // FW-112: who owns a system no campaign has decided yet. The SDE is a real authority,
+  // not a guess, and it is used ONLY where the territory map is silent.
+  const sdeOwner = (systemID) => {
+    if (typeof ownerOfSystem !== "function") return null;
+    try {
+      const raw = Number(ownerOfSystem(Number(systemID)));
+      return Number.isSafeInteger(raw) && raw > 0 ? String(raw) : null;
+    } catch (_error) { return null; }
+  };
   return {
-    // Both sides must really be present on their own side of the border.
+    // Both sides must really be present on their own side of the border - or, for an
+    // EXPANSION border, the defender must really own the target system in the SDE. A
+    // defender that owns the ground but has no hull there yet is exactly the war the
+    // garrison then has to defend.
     declaration: ({ attackerFactionID, defenderFactionID }) =>
       countIn(sourceSystemID, attackerFactionID) >= minShips &&
-      countIn(targetSystemID, defenderFactionID) >= minShips,
-    // The system is owned by this faction in the map the front was derived from.
-    territory: ({ systemID, ownerFactionID }) => territories[String(systemID)] === String(ownerFactionID),
+      (countIn(targetSystemID, defenderFactionID) >= minShips ||
+       sdeOwner(targetSystemID) === String(defenderFactionID)),
+    // The system is owned by this faction in the map the front was derived from, or by
+    // the SDE when no campaign has ever decided it.
+    territory: ({ systemID, ownerFactionID }) =>
+      territories[String(systemID)] === String(ownerFactionID) ||
+      (!territories[String(systemID)] && sdeOwner(systemID) === String(ownerFactionID)),
     // A real reciprocal stargate connects the two systems.
     adjacency: ({ sourceSystemID: from, targetSystemID: to }) =>
       gateBetween(from, to, getStargatesForSystem, getGate) !== null,
@@ -403,7 +420,7 @@ function edgeMarketRank(edge, marketAccess) {
 
 function planWars({
   state, presence, getStargatesForSystem, getGate,
-  nowMs, minShips = 1, balanceISK = 0, maxOpenings = 4,
+  nowMs, minShips = 1, balanceISK = 0, maxOpenings = 4, ownerOfSystem = null,
   navyCapability = null, marketAccess = null,
 } = {}) {
   if (!state || typeof state !== "object") return refuse("NO_WAR_STATE");
@@ -413,9 +430,22 @@ function planWars({
   if (!Object.keys(territories).length)
     return refuse("NO_TERRITORY_FROM_PRESENCE", { territories, observedCount, registeredCount, summary });
   if (typeof getStargatesForSystem !== "function") return refuse("NO_GATE_AUTHORITY", { territories });
-  const built = buildFronts({ territories, getStargatesForSystem, getGate });
+  let built = buildFronts({ territories, getStargatesForSystem, getGate });
+  // FW-112: no border between two REGISTERED territories is not the end of the war.
+  // MEASURED on the play stack 2026-10-30: after the first capture the frontier answered
+  // NO_FRONT 137 times in one hour with an empty skip list, because every owned system now
+  // touched only friends. A faction that holds its whole border pushes into the next system,
+  // and the SDE owner of that system is the defender. The navy gate below still decides
+  // whether both sides can really shoot, so this can never invent a fightable war.
+  let expansion = false;
+  if (!built.length && typeof ownerOfSystem === "function") {
+    built = buildFronts({ territories, getStargatesForSystem, getGate,
+      fallbackOwner: ownerOfSystem });
+    expansion = built.length > 0;
+  }
   if (!built.length)
-    return refuse("NO_FRONT", { territories, observedCount, registeredCount, summary });
+    return refuse("NO_FRONT", { territories, observedCount, registeredCount, summary,
+      expansionAttempted: typeof ownerOfSystem === "function" });
   const fronts = built;
   // FW-092: rank by EDGE, not by front. A single faction pair really holds several
   // borders at once, so ranking the whole front would keep the historical
@@ -567,6 +597,7 @@ function planWars({
       }
       const proofs = buildProofs({
         plan, presence, territories, getStargatesForSystem, getGate, minShips, funding: supply,
+        ownerOfSystem,
       });
       // FW-092: the opening carries the measured market access of the system it
       // contests, so a campaign that cannot ever pay for itself is visible in the
@@ -582,8 +613,8 @@ function planWars({
   if (!openings.length)
     return refuse("NO_OPENABLE_FRONT", { territories, fronts, skipped, observedCount, registeredCount, summary,
       marketAccessible });
-  return { status: "READY", openings, territories, fronts, skipped, summary, observedCount, registeredCount,
-    marketAccessible };
+  return { status: "READY", openings, territories, fronts, skipped, summary, observedCount,
+    registeredCount, marketAccessible, expansion };
 }
 
 // Applies every planned opening through the authoritative core, reusing an
@@ -828,6 +859,9 @@ function createWarOpening({
   navyCapability = null,
   // FW-092: whether a contested system can sell what its kills produce.
   marketAccess = null,
+  // FW-112: the SDE owner of a system no campaign has decided yet, so a war that has
+  // captured its whole border can expand instead of freezing the frontier for ever.
+  ownerOfSystem = null,
   minShips = 1, balanceISK = 0, maxOpenings = 4,
   now = () => Date.now(), maxLinks = MAX_LINKS,
 } = {}) {
@@ -904,6 +938,7 @@ function createWarOpening({
         nowMs: num(now()), minShips, balanceISK, maxOpenings,
         navyCapability: typeof navyCapability === "function" ? navyCapability : null,
         marketAccess: typeof marketAccess === "function" ? marketAccess : null,
+        ownerOfSystem: typeof ownerOfSystem === "function" ? ownerOfSystem : null,
       });
       if (plan.status !== "READY")
         return { status: "NO_OPENING", reason: plan.reason || "PLAN_REFUSED", plan,

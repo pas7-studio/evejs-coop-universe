@@ -1053,6 +1053,15 @@ function advanceNativeWarOpening(){
    getFactionForCorporation:id=>factions.getFactionIDForCorporation(id),
    getStargatesForSystem:id=>worldData.getStargatesForSystem(id),
    getGate:id=>worldData.getStargateByID(id),
+   // FW-112: the SDE faction owner of a system nobody has taken yet. Used ONLY when no
+   // border between two registered territories exists any more, so a faction that holds
+   // its whole frontier pushes into the next system instead of freezing the whole world.
+   ownerOfSystem:systemID=>{
+    try{
+     const row=worldData.getSolarSystemByID(Number(systemID));
+     return Number(row&&row.factionID)||0;
+    }catch(_error){return 0}
+   },
    readWarState,
    writeWarState:state=>store.write(state),
    reserveBounty:warBountyReserve,
@@ -1291,6 +1300,14 @@ function advanceNativeWarMobilization(){
  const mobilizer=warMobilizerInstance(registry,guard);
  if(!mobilizer)return warSkip("mobilization","MOBILIZER_CREATE_FAILED");
  const result=mobilizer.tick({systemIDs:[...visitedSystems].sort((a,b)=>a-b).slice(0,20)});
+ // FW-110: custody of a hull the pilot provably left is released, and the release is
+ // published. MEASURED 2026-10-30: a restart re-materialized the front fleet with new
+ // entity ids while the registry kept the old ones, so every muster answered PILOT_IN_USE
+ // and five campaigns expired with assigned 0. Silent custody changes would hide that.
+ if(Array.isArray(result.released)&&result.released.length)
+  require("./coopRuntimeProbe").observe("living-native-war-custody-stale",null,null,
+   {status:"RELEASED",rows:result.released.slice(0,8),
+    evidence:"REGISTRY_HULL_NO_LONGER_THE_PILOTS_PHYSICAL_SHIP"});
  if(result.mobilized.length)require("./coopRuntimeProbe").observe(
   "living-native-war-mobilization",null,null,
   {status:result.status,ships:result.mobilized,
@@ -2515,7 +2532,7 @@ function start(){
   // through the same persistent-site seeder (rate limited: new system or every 10 minutes).
   if(process.env.EVEJS_COOP_UNIVERSE_SITES!=="0"&&visitedSystems.size)runPhase("universe-sites",()=>{
    const result=require("./coopUniverseSites").reconcile({visitedSystems,nowMs:Date.now()});
-   if(result.status==="RECONCILED")console.log(`[CoopUniverseSites] systems=${result.systemIDs.length} desired=${result.desired} created=${result.created} spawned=${result.materialized} anomalies=${JSON.stringify(result.anomalies)}`);
+   if(result.status==="RECONCILED")console.log(`[CoopUniverseSites] systems=${result.systemIDs.length} desired=${result.desired} created=${result.created} spawned=${result.materialized} anomalies=${JSON.stringify(result.anomalies)} wormholes=${result.wormholes?result.wormholes.openedCount:"-"} ${JSON.stringify(result.wormholes&&result.wormholes.skipped||{})}`);
    else if(result.status==="FAILED")console.warn(`[CoopUniverseSites] ${result.reason}`);
   });
   if(process.env.EVEJS_COOP_ADMIN_BRIDGE==="1")runPhase("admin-bridge",()=>{

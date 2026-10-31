@@ -149,3 +149,15 @@ test("a job built for a distant buyer says whose demand it answers", () => {
   assert.ok(/buyerSystemID: pos\(buyer && buyer\.systemID\)/.test(manufacture),
     "the durable job record keeps the buyer");
 });
+
+test("the demand-gap report is read after `ready`, never before it", () => {
+  // Measured 2026-10-31: the gap block was inserted ABOVE `const ready`, so every tick threw
+  // "Cannot access 'ready' before initialization" and the manufacturer did nothing for hours.
+  // A phase that dies silently is indistinguishable from a phase with no work.
+  const source = require("node:fs").readFileSync(
+    require("node:path").join(process.cwd(), "integration/coopNpcManufactureTick.cjs"), "utf8");
+  const declared = source.indexOf("const ready = candidates.filter");
+  const used = source.indexOf("options.demandGap ===");
+  assert.ok(declared >= 0, "ready is declared");
+  assert.ok(used > declared, "the gap report reads it only after it exists");
+});

@@ -76,3 +76,88 @@ test('territory comes from real presence, never from a coin flip',()=>{
  assert.equal(territoriesFromPresence({pilots,minShips:2})[4],undefined);
  assert.deepEqual(territoriesFromPresence({pilots:[{systemID:0,factionID:'x'},{systemID:1}]}),{});
 });
+
+// FW-112: a front must never run out.
+//
+// MEASURED on the play stack 2026-10-30 after the first real capture: 30003837 became
+// OCCUPIED, every owned system then touched only friends, and the frontier answered NO_FRONT
+// 137 times in one hour with an EMPTY skip list. The war machine had nothing left to fight
+// over. The SDE already says who owns the next system, so a faction that holds its whole
+// border pushes into it - but ONLY when no registered border exists, and the edge is marked
+// expanded so it can never be mistaken for an old one.
+test('no registered border is not the end of the war: the SDE owner is the next defender',()=>{
+ const territories={1:'caldari',2:'caldari'};
+ assert.deepEqual(buildFronts({territories,...world()}),[]);
+ const sde={3:500002};
+ const fronts=buildFronts({territories,...world(),
+  fallbackOwner:(id)=>sde[id]||0});
+ assert.equal(fronts.length,1);
+ const edge=fronts[0].edges[0];
+ assert.equal(edge.fromSystemID,2);
+ assert.equal(edge.toSystemID,3);
+ assert.equal(edge.toOwner,'500002');
+ assert.equal(edge.expanded,true);
+});
+
+test('a registered controller always wins over the SDE fallback',()=>{
+ const territories={1:'caldari',2:'caldari',3:'minmatar'};
+ const fronts=buildFronts({territories,...world(),
+  fallbackOwner:()=> 'gallente'});
+ const edge=fronts[0].edges.find((e)=>e.toSystemID===3||e.fromSystemID===3);
+ assert.equal(edge.expanded,false,'a decided system is not an expansion');
+ assert.deepEqual(fronts[0].factions,['caldari','minmatar']);
+});
+
+test('the fallback never invents an owner for nobody',()=>{
+ const territories={1:'caldari',2:'caldari'};
+ for(const fallback of [()=>0,()=>null,()=>undefined,()=>-5,()=> 'x',
+   ()=>{throw Error('no world')}]){
+  assert.deepEqual(buildFronts({territories,...world(),fallbackOwner:fallback}),[]);
+ }
+ // A neighbour owned by the same faction is still not a front.
+ assert.deepEqual(buildFronts({territories,...world(),fallbackOwner:()=> 'caldari'}),[]);
+});
+
+test('the planner reaches a front instead of NO_FRONT when only expansion is left',()=>{
+ const {planWars}=require('../integration/coopFactionWarOpening.cjs');
+ const pilots=[];
+ for(let n=0;n<3;n+=1)pilots.push({systemID:1,factionID:'500001',pilotID:'p'+n,entityID:100+n});
+ for(let n=0;n<3;n+=1)pilots.push({systemID:2,factionID:'500001',pilotID:'q'+n,entityID:200+n});
+ const state={version:1,territories:{},wars:{},campaigns:{}};
+ const base={state,presence:{pilots},...world(),nowMs:1000,
+  navyCapability:()=>({open:true,reason:'BOTH_SIDES_CAN_FIELD_NAVY'})};
+ const refused=planWars(base);
+ assert.equal(refused.status,'REFUSED');
+ assert.equal(refused.reason,'NO_FRONT');
+ assert.equal(refused.expansionAttempted,false,'without an owner authority there is nothing to expand into');
+ const sde={3:500002};
+ const planned=planWars({...base,ownerOfSystem:(id)=>sde[id]||0});
+ assert.notEqual(planned.reason,'NO_FRONT','the frontier must not answer NO_FRONT when expansion is possible');
+ assert.equal(planned.expansion,true);
+ assert.equal(planned.fronts.length,1);
+ const edge=planned.fronts[0].edges[0];
+ assert.equal(edge.expanded,true);
+ assert.equal(edge.toOwner,'500002');
+});
+
+test('an expansion border is provable from the SDE, not from ships that are not there yet',()=>{
+ const {planWars}=require('../integration/coopFactionWarOpening.cjs');
+ const pilots=[];
+ for(let n=0;n<3;n+=1)pilots.push({systemID:1,factionID:'500001',pilotID:'p'+n,entityID:100+n});
+ for(let n=0;n<3;n+=1)pilots.push({systemID:2,factionID:'500001',pilotID:'q'+n,entityID:200+n});
+ const state={version:1,territories:{},wars:{},campaigns:{}};
+ const sde={3:500002};
+ const planned=planWars({state,presence:{pilots},...world(),nowMs:1000,
+  navyCapability:()=>({open:true,reason:'BOTH_SIDES_CAN_FIELD_NAVY'}),
+  ownerOfSystem:(id)=>sde[id]||0});
+ assert.equal(planned.status,'READY',planned.reason);
+ const proofs=planned.openings[0].proofs;
+ // The defender owns the ground in the SDE but has no hull there yet: that is a real war.
+ assert.equal(proofs.declaration({attackerFactionID:500001,defenderFactionID:500002}),true);
+ assert.equal(proofs.territory({systemID:3,ownerFactionID:500002}),true);
+ // Nothing is invented for a faction that owns neither the ground nor a ship.
+ assert.equal(proofs.declaration({attackerFactionID:500001,defenderFactionID:500003}),false);
+ assert.equal(proofs.territory({systemID:3,ownerFactionID:500003}),false);
+ // And an attacker with no presence in the source is still refused.
+ assert.equal(proofs.declaration({attackerFactionID:500009,defenderFactionID:500002}),false);
+});
