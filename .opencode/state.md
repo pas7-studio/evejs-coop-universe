@@ -1,5 +1,30 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 15:35Z - exact spec for the last missing leg (shopping trip)
+
+Goal: when the factory is short of an input and no cargo trip pays, a hull flies EMPTY to the
+station that really sells it, buys, comes home and stows. Files and anchors:
+
+1. `coopLoopTick.distributionRunAuthorities` - add `importPlan({haulerID})`:
+   - needs = `factorySupply(home).needs` (already cached 120 s, demand-filtered);
+   - pick the first need, take one row from `seed_stock` (`quantity>0`, cheapest) in the hull's
+     system or a 1-hop neighbour (`worldData.getStargatesForSystem`), require a reciprocal gate
+     via `coopNpcGateTravel.connectedGates`;
+   - return `{status:'OK', trip:{mode:'import', fromStationID, fromSystemID, toStationID,
+     toSystemID, gate, typeID, quantity:0, expectedIsk:0}}` or `{status, reason}`.
+   - env gate: `EVEJS_COOP_INPUT_IMPORT_TRIP=1` (default OFF, probe stack only).
+2. `coopDistributionRun` PLAN: after `planTrip`, if it yields no trip and `importPlan` exists,
+   use its trip (it carries `mode:'import'`). The `worthIt` check must be skipped for it.
+3. `coopDistributionRun` LIFT: when `state.mode==='import'`, skip the lift and go straight to
+   `planCrossing` (same code path as LOADED but with `lifted: []`).
+4. `coopDistributionRun` SELL: when `state.mode==='import'`, do not sell - go to `PHASE.SUPPLY`
+   (the handler already exists and buys up to `MAX_SUPPLY_TRIES`, then writes RETURN).
+5. RETURN already flies home; the arrival stow (`authorities.stow`) puts the material into the
+   hangar and `adoptHeldBlueprints`/manufacture pick it up on the next tick.
+
+Tests to add in `tests/coop-distribution-run.test.mjs`: import trip skips LIFT and SELL, reaches
+SUPPLY, buys, returns; a trip without `mode` behaves exactly as today (regression).
+
 ## 2026-10-31 15:20Z - importing inputs exists; it still needs a SHOPPING trip to fire
 
 - `EVEJS_COOP_INPUT_RUNS=1` reserve computed live: Pyerite 481, Mexallon 119 (Miner I only - the
