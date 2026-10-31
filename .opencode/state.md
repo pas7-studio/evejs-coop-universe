@@ -1,5 +1,27 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 14:40Z - the economy can now BUY, STORE and ADOPT (and still cannot get materials)
+
+Proven live on evejs-agents:
+- **Blueprint purchase is complete**: `living-npc-blueprint-bought` type 785 (Miner I Blueprint)
+  TRADE_SETTLED 92 720 ISK at 60000682 - the checkpoint goal is met.
+- **A hold is not a warehouse** (`coopNpcCargoStow`): a bought blueprint now moves from the
+  hauler hold into the corporation hangar, journaled once. Live: cargo 980200084340 COMPLETED,
+  hangar shows 785@60000682.
+- **Purchased blueprints are adopted** (`adoptHeldBlueprints`): the manufacturer used to read
+  only manual seeding receipts, so anything BOUGHT could never be built. Live receipt
+  `seed_1000129_60000682_785.json`; the manufacturer now plans Miner I (483) for Jita
+  (BUYER_ELSEWHERE, 182 units @ 6 028).
+- **Payroll** (`coopPilotPayroll`): the market settles a buy from the PILOT's earned balance and
+  the treasury sweep leaves every pilot at 0 while the corporation wallet holds 1.45 B ISK. The
+  corporation now pays its own pilot from its real wallet (native debit + earned credit, one
+  eventID = one salary). Wired into the purchase path on INSUFFICIENT_EARNED_ISK.
+
+**The one remaining blocker to production**: Miner I needs 1 324 Trit + **481 Pyerite + 119
+Mexallon** per run and the hangar holds 0 of both (Jita sells asks at 16.03 and 48.61).
+Next change: buy input materials at the station that really sells them, carry them home and
+stow them - then the loop mine → refine → build → sell closes on its own.
+
 ## 2026-10-31 13:35Z (UTC) - the blueprint purchase names its refusals one by one, and each is fixed
 
 The decision is proven: with demand read across reachable systems the chooser answers **BUY**

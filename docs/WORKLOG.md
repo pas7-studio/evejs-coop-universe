@@ -2904,3 +2904,8 @@ Why: Industry had no reachable content: /bpauto needs a docked client session, s
 Detail: Pins that the bridge action is whitelisted, refuses without a docked station, and runs the ordinary /bpauto command instead of calling the seeding or job writers itself.
 Where: tests/coop-admin-blueprint-auto.test.mjs
 Evidence: agents stack: seed frigate -> BPO 9988400017127, build -> job 970000000000000 cost 20480 ISK, deliver -> Rifter 9988400017255 in hangar 60003760
+### 2026-10-31T14:22Z · 52fd05c · L2 · alife30b: pilot payroll from the corporation wallet, tested
+
+Why: Two structural holes closed: a hold had no way to give cargo back to a hangar, and a purchased blueprint could never become a buildable receipt; plus pilots had no money because sweeps drain them
+Where: compose/compose.agents.yaml, integration/coopDistributionRun.cjs, integration/coopFactionWarOpening.cjs, integration/coopPilotPayroll.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-component-market.test.mjs, tests/coop-pilot-payroll.test.mjs
+Evidence: live 2026-10-31: cargo 980200084340 stowed COMPLETED, blueprint 785 adopted (receipt seed_1000129_60000682_785.json), hangar shows 785@60000682, manufacturer now plans Miner I for Jita (BUYER_ELSEWHERE 483) and refuses MATERIALS_MISSING (Pyerite 0/481, Mexallon 0/119); tests: stow 6/6, adopt 5/5, payroll 6/6
