@@ -1,5 +1,35 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-31 07:35Z (UTC) - the manufacturer runs again, and has nothing legitimate to build
+
+The stack was down for ~3 hours (containers exited 255, engine gone); it was brought back with
+Start-Agents-Stack.ps1 -Action Up and is healthy.
+
+BUG FIXED (this was the real outage of production): the demand-gap block added in alife26a was
+inserted ABOVE `const ready`, so every manufacture tick threw
+"Cannot access 'ready' before initialization" - `living-npc-manufacture-blocked RUN_THREW`
+every cycle for hours. The block now lives after the declaration, with a regression test that
+reads the file and asserts the order (15/15 manufacture tests).
+
+MEASURED AFTER THE FIX (07:30):
+  - attempts run again (no RUN_THREW); the first ones after a restart report NO_REAL_BUYER
+    because the neighbour lookup needs scenes/gates that are still loading, then recover:
+    living-npc-manufacture-buyer-elsewhere BUYER_ELSEWHERE for 60764 at 07:30:52;
+  - still NOTHING installed, and the newest job in the directory is 444 COMPLETED at 21:18
+    yesterday. The honest reasons, in order:
+      1. 60764 (Laelaps) is a static-data artifact - 1 unit of Tritanium for a ship worth
+         446 800 000 ISK - and the trivial-recipe guard exists to refuse exactly that;
+      2. 444 (Mining Survey Chipset) demand in Jita is 142 units and the hangar plus completed
+         jobs already cover it (BUYER_ALREADY_COVERED);
+      3. 28338 (faction ammo) has no remaining bid volume.
+  So production is idle for a legitimate reason: it already holds what the buyer wants and the
+  only big-demand product is an artifact. This is not a code defect.
+
+NEXT: production cannot grow without blueprints (measured earlier: market_orders has 0 rows,
+nothing can be bought), so the remaining real work is on the logistics side and on watching the
+loop: keep the ledger current, keep the fleet cycling, and let the owner decide how blueprints
+enter the world (seeded sell side or operator grant).
+
 ## 2026-10-31 00:30Z (UTC) - fitting: save works, the window is killed by the VGS offer service
 
 MEASURED LIVE:
