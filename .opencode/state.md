@@ -861,3 +861,20 @@ sibling require suffix (.js deployed / .cjs mirror) that had kept the mirror unl
 - daily-goal RedeemedNotice now published (fork 7e04f8f); play stack redeployed and healthy.
 - next real work if the owner wants it: survey rewards need a real reward source first; everything
   else in the register is either QA-only or honest.
+
+## FW-133 (2026-10-31 16:07Z): THE WAR PAYS
+- Fork e09bd91: every 500020/500011 hull answered NPC_NATIVE_HARDWARE_CHARGE_POLICY_VIOLATION
+  because the charge allowlist held only the NPC-entity ammo while the doctrine loads real SDE
+  charges. Angel now allows EMP S/M/L (185/193/201), Serpentis Antimatter S/M/L + Thorium L
+  (222/230/238/235).
+- MEASURED after the deploy: 500020 FLEET_SPAWNED size 3 in 30000144 and 30000139, and campaign
+  war:500001-500020:campaign:30000139:r5 flipped PREPARING -> ASSAULT (FW-131 proven live).
+- FIRST REAL BOUNTY PAYMENTS, from the faction's own wallet:
+  - 15:51:39Z coop-pilot-053, 500001, campaign 30045338:r2, 100 000 cents (1 000 ISK),
+    escrow journal 8000000000000020
+  - 16:07:46Z coop-pilot-023, 500001, campaign 30045342:r3, 1 000 ISK, journal 8000000000000021,
+    and the killer was PROMOTED (merit rank up)
+- Wallets after: 1000035 4 987 000, 1000120 4 995 000, 1000129 13 956.73, others 5 000 000.
+- War state: 58 campaigns [49 EXPIRED, 4 OCCUPIED, **5 ASSAULT**] - five live fronts, up from 2.
+- Remaining wrinkles: 3 kills still NOT_UNIQUE_NAMED_PIRATE, 1 WAR_TREASURY_EVENT_CONFLICT
+  (same event id, different signature), 2 NATIVE_WRECK_OR_SDE_FACTION_UNVERIFIED.
