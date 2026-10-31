@@ -2844,3 +2844,8 @@ Evidence: chooser prefers recipes buildable at that station; purchase moved to t
 Why: Five different hulls and roles all shot the nearest enemy, so the new roles existed only in the fitting
 Where: .opencode/state.md
 Evidence: fork a1c887e; target-priority 7/7; live attackerRole tackle + targetRole tackle; hull map 14359 tackle/45462 anti-tackle/15320 brawler/15972 logistics/12394 ewar
+### 2026-10-31T09:18Z · a15cf27 · L2 · alife29e: stock-station blueprint purchase from the idle path
+
+Why: Unsellable stock (3.2M Tritanium with no bid) is exactly why a corporation needs a new product, but the purchase only ran during a trip
+Where: integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarEngagementPosture.cjs, tests/coop-war-role-posture.test.mjs
+Evidence: purchase now also runs when no trip is worth taking, at the station holding the most stock; 32/32 run tests; measured Jita Tritanium bid = 0
