@@ -169,9 +169,9 @@ that and is now published on a real redeem only (fork `7e04f8f`, `tests/coop-dai
 
 ```
 client notice types       144
-subscribed by client code 107
-published by this server   31
-SUBSCRIBED_NOT_PUBLISHED   77
+subscribed by client code 106
+published by this server   33
+SUBSCRIBED_NOT_PUBLISHED   74
 PUBLISHED_NOT_IN_CLIENT     0
 ```
 
@@ -184,10 +184,16 @@ ones that matter are the domains we DO run, because there the client is waiting 
 | `cosmetic.market.transaction.api.TransactionSucceeded/FailedNotice` | the SKIN/component purchase path | not published |
 | `cosmetic.ship.skin.thirdparty.component.license.api.GrantedNotice` | a component purchase that grants a licence | not published |
 | `cosmetic.ship.skin.thirdparty.license.api.AddedNotice` | a sequencing job that mints skins | not published |
-| `cosmetic.ship.skin.thirdparty.sequencing.job.api.Started/Completed/FailedNotice` | the sequencing store | not published |
-| `cosmetic.character.title.api.GrantedNotice` | the war rank title applied to a character record | not published |
+| `cosmetic.ship.skin.thirdparty.sequencing.job.api.StartedNotice` | the sequencing store | **published now** (fork `1bb2ff9`) |
+| `cosmetic.character.title.api.Granted/Revoked/SetNotice` | a real title change (Equip/Unequip, admin Grant/Revoke) | **published now** (fork `3a9ac81`, `tests/coop-character-titles.test.mjs`, 6/6) |
 | `dailygoal.api.Completed/ProgressedNotice` | the measured daily-goal progress | not published |
 | `corporationgoal.api.RedeemedNotice` | corp goal redeem | not published |
+
+The war rank title is **still announced by no notice**, and that is deliberate: a rank writes plain
+text into the character record (`space/coopWarRankTitle.applyToCharacter`), while every title notice
+carries a *catalogue* title id (`definition.Identifier{uuid}`). There is no honest uuid to put in
+`SetNotice` for "Fleet Pilot", so the rank would have to become a real catalogue title first - a
+content change, not a notice.
 
 The payload of every one of these is a single identifier plus, at most, the new state, so each is a
 small addition to the service that already owns the state - the same pattern as `RedeemedNotice`.

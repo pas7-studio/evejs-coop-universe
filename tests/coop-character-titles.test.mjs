@@ -135,3 +135,60 @@ test("the feature gate is the only switch, and it is off by default", () => {
   assert.equal(titles.grant(7, TITLE_A).status, "DISABLED");
   assert.deepEqual(titles.list(7), []);
 });
+
+test("equipping and removing a title tells the client the worn title changed", () => {
+  const state = fakeCharacterState({"7": {characterID: 7}});
+  const titles = make(state);
+  const published = [];
+  const service = createCharacterTitleGatewayService({
+    characterTitles: titles,
+    publishGatewayNotice(typeName, payload, targetGroup) {
+      published.push({typeName, payload, targetGroup});
+    },
+  });
+  titles.grant(7, TITLE_A);
+
+  const equipped = service.handleRequest(`${API}.EquipRequest`,
+    envelope(encode(`${API}.EquipRequest`, {title: {uuid: TITLE_A}})));
+  assert.equal(equipped.statusCode, 200, equipped.statusMessage);
+  assert.equal(published.length, 1, "the client hears about the new worn title");
+  assert.equal(published[0].typeName, `${API}.SetNotice`);
+  const notice = decode(`${API}.SetNotice`, published[0].payload);
+  assert.equal(notice.character.sequential, 7);
+  assert.deepEqual([...notice.title.uuid], [...TITLE_A]);
+  assert.equal(notice.no_title, false);
+  assert.deepEqual(published[0].targetGroup, {character: 7},
+    "no session, so only the owner is told - never a guessed system");
+
+  const removed = service.handleRequest(`${API}.UnequipRequest`,
+    envelope(encode(`${API}.UnequipRequest`, {})));
+  assert.equal(removed.statusCode, 200, removed.statusMessage);
+  const bare = decode(`${API}.SetNotice`, published[1].payload);
+  assert.equal(bare.no_title, true, "removing a title says there is no title");
+  assert.equal(bare.title, null);
+});
+
+test("a refused title change announces nothing, and a real grant does", () => {
+  const state = fakeCharacterState({"7": {characterID: 7}});
+  const titles = make(state);
+  const published = [];
+  const service = createCharacterTitleGatewayService({
+    characterTitles: titles,
+    publishGatewayNotice(typeName, payload, targetGroup) {
+      published.push({typeName, payload, targetGroup});
+    },
+  });
+
+  const refused = service.handleRequest(`${API}.EquipRequest`,
+    envelope(encode(`${API}.EquipRequest`, {title: {uuid: TITLE_B}})));
+  assert.notEqual(refused.statusCode, 200, "a title that was never granted is refused");
+  assert.equal(published.length, 0, "and nothing is announced about it");
+
+  const granted = service.handleRequest(`${API}.admin.GrantRequest`,
+    envelope(encode(`${API}.admin.GrantRequest`, {id: {uuid: TITLE_B}})));
+  assert.equal(granted.statusCode, 200, granted.statusMessage);
+  assert.equal(published.length, 1);
+  assert.equal(published[0].typeName, `${API}.GrantedNotice`);
+  assert.deepEqual([...decode(`${API}.GrantedNotice`, published[0].payload).title.uuid],
+    [...TITLE_B]);
+});
