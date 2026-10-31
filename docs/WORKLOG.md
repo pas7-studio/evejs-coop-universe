@@ -2958,3 +2958,9 @@ Why: The owner could not collect a daily-goal reward: the client's completion te
 Detail: The pinned client decides 'completed' with current_progress == target, so the wire value is clamped; the reward still follows the raw haul. Plus the fork-side fix that stops the payment-schedule 404 the client raised as an uncaught exception.
 Where: tests/coop-daily-goals.test.mjs
 Evidence: coop-daily-goals 20/20; client rule read from dailygoals/client/goal.pyj; owner's log shows RequestException(404, no payment schedules exist in this world) at 15:01:43
+### 2026-10-31T15:50Z · 0c1c8c9 · DOCS · docs: the measured uncovered surface is 37 client-call stubs, not gateway types
+
+Why: The owner asked what is still uncovered: separate the answered gateway surface from the 37 client-call stubs and record the notice gap that was fixed
+Detail: Gateway request types are 0 unanswered against the deployed registry; the remaining gaps are 15 player-window stubs (petitioner, structure deployment, survey, PVP filament, reward LP logs), 8 logon/housekeeping and 14 QA-only. Also records the daily-goal RedeemedNotice that was never published.
+Where: docs/CLIENT_GAPS.md, tests/coop-daily-goals-gateway.test.mjs
+Evidence: audit CONSUMED_NOT_ANSWERED 0 on the play stack (297 handled); coop-client-contracts --verify OFFLINE_OK 542 calls, 0 missing, 37 stub, 102 nullable; coop-daily-goals 22/22
