@@ -90,6 +90,28 @@ Every hull verified 8 high / 4 mid / 5 low / 3 rig + drones + ammo:
 Item IDs are `9988400120695..9988400120704`. Ship names are still the default "Talos";
 there is no admin rename action, the owner renames them in the client.
 
+**2026-11-01: rename_item added** (fork `d730d47`): `coopAdminBridgeActions.renameItem`
+uses `itemStore.updateInventoryItem({itemName})` (the primitive behind
+`invBroker.SetLabel`) and pushes `OnCfgDataChanged/evelocations` to the live session.
+Whitelisted as `rename_item`, exposed as MCP `admin_rename_item` (also usable as a
+batch action). Needs one play-stack restart to be live there; proven on `evejs-agents`.
+
+**Also granted 2026-11-01: 5 Algos + 5 Vexor, all fitted and verified.**
+Algos `...120928..120932`: Rail (125mm I, Iron S), Blaster (Light Neutron, Antimatter S),
+Drone (2x DDA I, 5 Hobgoblin), MWD Tackle (5MN MWD, disruptor, web, 5 Warrior),
+Anti-Frigate (150mm I, 2x TE I, 3x Metastasis). Each 5 high / 3 med / 3 low / 3 small rig.
+Vexor `...120933..120937`: Rail (200mm I), Blaster (Heavy Neutron, 800mm plate + MAR),
+Drone (3x DDA I, 5 Hammerhead + 5 Hobgoblin), Shield Kite (250mm I, 50MN MWD, 2x MSE),
+Armor Buffer (Heavy Ion, 800mm plate, 2x multispec, 3x Trimark). Each 4 high / 4 med / 5 low / 3 rig.
+Algos 32872, Vexor 626; drone limits: Algos 60 m3 bay, Vexor 125 m3 / 75 Mbit.
+
+Planned labels for `admin_rename_item`: 695 "T1 Rail Sniper", 696 "T2 Rail Sniper",
+697 "T1 Blaster Brawler", 698 "T2 Blaster Brawler", 699 "Shield Kiter",
+700 "Armor Buffer", 701 "Armor PvE Rep", 702 "Drone Support", 703 "Anti-Tackle",
+704 "Null Kiter"; 928 "Algos Rail", 929 "Algos Blaster", 930 "Algos Drone",
+931 "Algos MWD Tackle", 932 "Algos Anti-Frig"; 933 "Vexor Rail", 934 "Vexor Blaster",
+935 "Vexor Drone", 936 "Vexor Shield Kite", 937 "Vexor Armor".
+
 ## Traps
 - `docker cp` over `/var/lib/evejs/gameStore/gamestore.sqlite` makes the file
   root-owned; the server then logs `sync flush FAILED ... readonly database` and loses
