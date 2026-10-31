@@ -2975,3 +2975,9 @@ Why: The request audit says nothing about notices; the client waits on 107 of th
 Detail: A request is answered or not; a notice is waited for and the window stays frozen if nobody publishes it. The new audit derives the 107 notice types the client really subscribes to from its own archive and compares them with the 31 the server can publish, so the gap is a number instead of a guess: 77 silent, and the ones that matter are listed by owning domain.
 Where: docs/CLIENT_GAPS.md, docs/client-contracts/notice-coverage.json, scripts/coop-gateway-notice-audit.py, scripts/coop-published-notices.cjs
 Evidence: coop-gateway-notice-audit: 144 client notice types, 107 subscribed, 31 published, 77 subscribed-not-published, 0 published-not-in-client
+### 2026-10-31T16:20Z · a0ded1c · L2 · test: a component purchase must answer a parseable 16-byte transaction uuid
+
+Why: The component purchase answer packed a descriptive order key into 16 UTF-8 bytes; the client parses it as a UUID
+Detail: Plus the state note: the play stack needs one more window for the transaction uuid and the daily-goal RedeemedNotice.
+Where: .opencode/state.md, tests/coop-component-market.test.mjs
+Evidence: live on evejs-agents: InitiatePurchaseListing 200, 16-byte v4 uuid 66d8a433166c4e33a405617a006db15f; coop-component-market 8/8
