@@ -2799,3 +2799,8 @@ Why: A mining mission completed itself when the site's NPCs disappeared (restart
 Detail: Regression for the owner's report: a mining mission showed Complete without a single cycle of ore because the destroyed-target path completed it once the site's NPCs were pruned by a restart. The rule lives in declaresMiningObjective and the destroyed-target path now skips sites that declare objectiveQuantity. 5/5 with the existing derivation cases.
 Where: tests/coop-ore-mission-mining-objective.test.mjs
 Evidence: tests/coop-ore-mission-mining-objective.test.mjs 5/5; evejs-agents healthy on image 493e222; fork 1b9d8c3
+### 2026-10-31T07:17Z · 8f5925d · L2 · alife26d: fix the ready-before-init throw in the manufacturer, with a regression test
+
+Why: The demand-gap report read a variable declared below it, so every manufacture tick threw and production stopped for hours
+Where: integration/coopFactionWarFronts.cjs, integration/coopFactionWarOpening.cjs, integration/coopNpcManufactureTick.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarBounty.cjs, tests/coop-faction-war-fronts.test.mjs, tests/coop-npc-manufacture-tick.test.mjs
+Evidence: reason 'Cannot access ready before initialization' in living-npc-manufacture-blocked; code moved after the declaration; 15/15 manufacture tests incl. an order regression
