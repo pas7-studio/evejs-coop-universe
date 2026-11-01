@@ -76,3 +76,11 @@ test("adversarial wave 7: module interaction conserves goods and money", () => {
   assert.equal(result.parsed.failures, 0, JSON.stringify(result.parsed.details));
   assert.ok(result.parsed.checks >= 10, "only " + result.parsed.checks + " checks ran");
 });
+
+test("adversarial wave 8: refine, buy, transfer, compete and resupply", () => {
+  const result = run("coop-economy-adversarial-8.js", []);
+  assert.equal(result.status, 0, JSON.stringify(result.parsed || result.stderr));
+  assert.ok(result.parsed, "no JSON summary");
+  assert.equal(result.parsed.failures, 0, JSON.stringify(result.parsed.details));
+  assert.ok(result.parsed.checks >= 8, "only " + result.parsed.checks + " checks ran");
+});
