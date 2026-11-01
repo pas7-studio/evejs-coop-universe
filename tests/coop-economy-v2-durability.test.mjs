@@ -137,3 +137,19 @@ test("an unproven delivery is blocked, never proven", () => {
   assert.equal(after.proofs.blocked, before.blocked + 1, "a missing physical stack was not blocked");
   assert.equal(after.proofs.proven, before.proven, "a missing physical stack was counted as proven");
 });
+
+test("a batch of receipts is on disk immediately, not after a throttle window", () => {
+  const box = sandbox();
+  const v2 = box.load();
+  box.enable();
+  // two receipts arrive together, as the warehouse writes them (25999 units and the 1-unit remainder)
+  v2.noteWarehouse(record(61, 60000358, 17470, 25999), target(61, 60000358, 17470, 25999), true);
+  v2.noteWarehouse(record(62, 60000358, 17470, 1), target(62, 60000358, 17470, 1), true);
+  // the file must already hold BOTH: the state was throttled to one write per 2 seconds and a
+  // restart inside that window dropped the second receipt (measured live: cargo 980200218463)
+  const onDisk = JSON.parse(fs.readFileSync(box.stateFile, "utf8"));
+  const ids = (onDisk.receipts || []).map((r) => r.cargoID).sort();
+  assert.deepEqual(ids, [61, 62], "the second receipt of a batch was not on disk: " + JSON.stringify(ids));
+  assert.equal(onDisk.deliveries, 2);
+  assert.equal(onDisk.stations["60000358"]["17470"], 26000, "the station total lost the remainder");
+});
