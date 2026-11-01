@@ -116,3 +116,38 @@ test("live shadow: a numeric string is not a cargo id", () => {
   }
   assert.equal(fresh.noteWarehouse(record(77), { itemID: 9077 }, true).code, "OBSERVED");
 });
+
+test("live shadow: a restart keeps the evidence and replay protection", () => {
+  const { mkdtempSync, writeFileSync } = require("node:fs");
+  const { tmpdir } = require("node:os");
+  const dir = mkdtempSync(join(tmpdir(), "coopv2-hyd-"));
+  const statePath = join(dir, "shadow.json");
+  const enablePath = join(dir, "enable");
+  writeFileSync(enablePath, "1");
+  writeFileSync(
+    statePath,
+    JSON.stringify({
+      version: 1,
+      deliveries: 3,
+      replays: 1,
+      proofs: { proven: 3, blocked: 0 },
+      stations: { "60003760": { "34": 300 } },
+      receipts: [{ cargoID: 1 }, { cargoID: 2 }, { cargoID: 3 }],
+    }),
+  );
+  const prevState = process.env.EVEJS_COOP_ECONOMY_V2_FILE;
+  const prevEnable = process.env.EVEJS_COOP_ECONOMY_V2_ENABLE_FILE;
+  process.env.EVEJS_COOP_ECONOMY_V2_FILE = statePath;
+  process.env.EVEJS_COOP_ECONOMY_V2_ENABLE_FILE = enablePath;
+  const freshPath = join(space, "coopEconomyV2.js");
+  delete require.cache[require.resolve(freshPath)];
+  const fresh = require(freshPath);
+  const view = fresh.status();
+  assert.equal(view.deliveries, 3, "a restart must not forget the receipts it already saw");
+  assert.equal(view.stations["60003760"]["34"], 300, "the physical total survives the restart");
+  assert.equal(fresh.noteWarehouse(record(2), { itemID: 9002 }, true).code, "ALREADY_OBSERVED", "replay protection survives the restart");
+  assert.equal(fresh.status().stations["60003760"]["34"], 300, "and cannot inflate the total");
+  process.env.EVEJS_COOP_ECONOMY_V2_FILE = prevState;
+  process.env.EVEJS_COOP_ECONOMY_V2_ENABLE_FILE = prevEnable;
+  delete require.cache[require.resolve(freshPath)];
+});
