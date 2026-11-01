@@ -149,8 +149,10 @@ test("IE-055 split: a disconnected player's share is held, never handed to the o
     work: { p1: { verified: true, receiptID: "r1" }, p2: { verified: true, receiptID: "r2" } },
     disconnected: [],
   });
-  assert.equal(both.paidCents, 1000);
-  assert.ok(both.paidCents <= 1000);
+  // the second call pays only the carrier share; the cumulative position is reported separately
+  assert.equal(both.paidCents, 400);
+  assert.equal(both.totalPaidCents, 1000);
+  assert.ok(both.totalPaidCents <= 1000);
   assert.equal(split.award({ contractID: "ghost", work: {}, disconnected: [] }).code, "UNKNOWN_CONTRACT");
 });
 
