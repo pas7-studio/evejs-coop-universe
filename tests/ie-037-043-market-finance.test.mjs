@@ -72,9 +72,11 @@ test("IE-038 escrow: fleet reserve and market escrow never share a unit", () => 
   assert.equal(e.list({ escrowID: "e2", itemID: "i1", quantity: 1, priceCents: 5 }).code, "ALREADY_LISTED");
   assert.equal(e.fill({ escrowID: "e1", quantity: 2 }).remaining, 4, "a partial fill keeps the exact remainder");
   assert.equal(e.fill({ escrowID: "e1", quantity: 5 }).code, "INSUFFICIENT_ESCROW");
-  assert.equal(e.available("i1"), 2, "4 reserved + 4 still escrowed leaves 2 free");
+  // IE-038: a filled unit is physically sold, so on-hand stock drops with it: 10 - 2 sold - 4 reserved - 4 escrowed = 0
+  assert.equal(e.available("i1"), 0, "a sold unit is not free stock");
   assert.equal(e.cancel({ escrowID: "e1" }).code, "CANCELLED");
-  assert.equal(e.available("i1"), 6, "cancelling returns the escrow to free stock, not to the reserve");
+  // 8 on hand (2 sold) - 4 reserved = 4 free; the cancelled escrow never becomes reserve
+  assert.equal(e.available("i1"), 4, "cancelling returns the unsold escrow to free stock, not to the reserve");
 });
 
 test("IE-039 settlement: one settlement per fill, and an ACK replay cannot credit twice", () => {
@@ -264,4 +266,17 @@ test("IE-043 distress: escrow and reserved stock cannot disappear during liquida
     { itemID: "i2", quantity: 4 },
   ]);
   assert.equal(Distress.liquidate({ surplus: [{ itemID: "", quantity: 1, reservedQuantity: 0, unitValueCents: 1 }], escrowCents: 0 }).code, "INVALID_SURPLUS");
+});
+
+// WAVE2-REGRESSION
+test("IE-042 competition: a duplicated order id makes the book ambiguous and is refused", () => {
+  const orders = [
+    { orderID: "x", ownerID: "player-1", priceCents: 5, quantity: 1 },
+    { orderID: "x", ownerID: "npc-a", priceCents: 6, quantity: 1 },
+  ];
+  const r = Competition.chooseFill({ orders, npc: { corpID: "npc-a", priceCents: 5, lastRepriceTick: 0 }, tick: 10, minDelayTicks: 1, maxStepCents: 10, maxPriceCents: 100, ordersThisTick: 1, maxOrdersPerTick: 2 });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "INVALID_ORDER");
+  const tie = Competition.chooseFill({ orders: [{ orderID: "p", ownerID: "player-1", priceCents: 50, quantity: 1 }, { orderID: "n", ownerID: "npc-a", priceCents: 50, quantity: 1 }], npc: { corpID: "npc-a", priceCents: 50, lastRepriceTick: 0 }, tick: 10, minDelayTicks: 1, maxStepCents: 10, maxPriceCents: 100, ordersThisTick: 1, maxOrdersPerTick: 2 });
+  assert.equal(tie.orderID, "p", "at an equal price the player keeps the fill");
 });

@@ -183,3 +183,14 @@ test("IE-064 client E2E: a simulation cannot substitute for the real pinned clie
   assert.deepEqual(shortChain.missing, ["DELIVERY", "SALE"]);
   assert.equal(E2E.notRun().code, "NOT_RUN");
 });
+
+// WAVE2-REGRESSION
+test("IE-060 conservation: a scope changing from cents to units is not a balanced reading", () => {
+  const r = Coverage.audit({
+    before: { wallet: { cents: 100, sourceReceiptID: "w" }, warehouse: { units: 5, sourceReceiptID: "u" } },
+    after: { wallet: { units: 100, sourceReceiptID: "w" }, warehouse: { units: 5, sourceReceiptID: "u" } },
+    custody: [],
+  });
+  assert.equal(r.code, "UNKNOWN_SOURCE", "100 cents became 100 units without anyone noticing");
+  assert.ok(r.missing.includes("wallet"));
+});

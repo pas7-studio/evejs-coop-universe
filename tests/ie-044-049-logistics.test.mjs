@@ -146,3 +146,21 @@ test("IE-049 carrier: a funded cheaper external option wins and an unpaid contra
   assert.equal(Carrier.chooseCarrier({ internal: { ...internal, available: false }, maxEtaSeconds: 1000 }).code, "NO_CARRIER");
   assert.equal(Carrier.chooseCarrier({ internal, external, maxEtaSeconds: 0 }).code, "INVALID_LIMIT");
 });
+
+// WAVE2-REGRESSION
+test("IE-047 unload: an order line that overflows a safe integer is refused", () => {
+  const r = Unload.unload({
+    cargo: { ownerID: "corp-a", typeID: "35", quantity: 10 },
+    station: { stationID: "s1", dockRangeMeters: 2500, distanceMeters: 10 },
+    orders: [{ priceCents: Number.MAX_SAFE_INTEGER, quantity: 9 }, { priceCents: Number.MAX_SAFE_INTEGER, quantity: 9 }],
+    unloadPort: { deposit: () => ({ receiptID: "dep-1" }) },
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "INVALID_ORDER", "money that does not fit in a safe integer is not money");
+  assert.equal(Unload.unload({
+    cargo: { ownerID: "corp-a", typeID: "35", quantity: 10 },
+    station: { stationID: "s1", dockRangeMeters: 2500, distanceMeters: 10 },
+    orders: [{ priceCents: 5, quantity: 0 }],
+    unloadPort: { deposit: () => ({ receiptID: "dep-1" }) },
+  }).sold.quantity, 0, "a zero-quantity order sells nothing and debits nothing");
+});

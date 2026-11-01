@@ -185,3 +185,13 @@ test("IE-073 final acceptance: a reviewer PASS alone never promotes to PLAY", ()
   assert.equal(approved.approverID, "owner-1");
   assert.equal(approved.reviewerID, "rev-1");
 });
+
+// WAVE2-REGRESSION
+test("IE-072 performance: a zero baseline cannot hide a nonzero candidate", () => {
+  const baseline = { paths: [{ name: "coldPath", p95Ms: 0 }], ticks: { slowestMs: 1 } };
+  const candidate = { paths: [{ name: "coldPath", p95Ms: 500 }], ticks: { slowestMs: 1 } };
+  const budgets = { p95TolerancePct: 20, tickBudgetMs: 10, maxCheckMinutes: 5 };
+  const r = Perf.check({ baseline, candidate, budgets });
+  assert.equal(r.code, "P95_REGRESSION", "0ms to 500ms passed as no change");
+  assert.equal(Perf.check({ baseline, candidate: { paths: [{ name: "coldPath", p95Ms: 0 }], ticks: { slowestMs: 1 } }, budgets }).code, "PASS");
+});

@@ -98,3 +98,21 @@ test("live shadow: the warehouse hook is guarded, lazy and cannot break a deposi
   assert.equal(v2.enabled(), false);
   assert.equal(v2.noteWarehouse(record(44), { itemID: 9044 }, true), null);
 });
+
+// WAVE2-REGRESSION
+test("live shadow: a numeric string is not a cargo id", () => {
+  const { v2: fresh } = (() => {
+    // the module captured its paths at require time; reuse the one already loaded and enable it
+    const fs = require("node:fs");
+    fs.writeFileSync(process.env.EVEJS_COOP_ECONOMY_V2_ENABLE_FILE, "1");
+    return { v2 };
+  })();
+  for (const cargoID of ["9", 1.5, -3, 0]) {
+    assert.equal(
+      fresh.noteWarehouse({ cargoID, stationID: 2, typeID: 3, quantity: 4, corporationID: 5, phase: "COMMITTED", itemID: 6 }, { itemID: 6 }, true),
+      null,
+      "accepted cargoID " + String(cargoID),
+    );
+  }
+  assert.equal(fresh.noteWarehouse(record(77), { itemID: 9077 }, true).code, "OBSERVED");
+});
