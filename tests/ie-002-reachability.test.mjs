@@ -160,3 +160,18 @@ test("review fix: the real graph loads tickProfiler through runtime.js", () => {
   });
   assert.ok(g.reachable.includes("src/space/tickProfiler.js"), "tickProfiler is loaded at run time");
 });
+
+// WAVE4-REGRESSION
+test("IE-002 reachability: an absolute directory prefix matches the relative graph", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ie002-"));
+  const space = path.join(dir, "space");
+  fs.mkdirSync(space, { recursive: true });
+  fs.writeFileSync(path.join(space, "entry.js"), 'require("./a");');
+  fs.writeFileSync(path.join(space, "a.js"), "module.exports = 1;");
+  fs.writeFileSync(path.join(space, "orphan.js"), "module.exports = 2;");
+  const graph = M.buildRequireGraph({ srcRoot: dir, entryFile: path.join(space, "entry.js") });
+  const unreachable = M.unreachableModules(graph, [space]);
+  assert.equal(unreachable.length, 1);
+  assert.ok(unreachable[0].endsWith("orphan.js"), "wrong module: " + unreachable[0]);
+  assert.equal(M.unreachableModules(graph, []).length, 0, "no prefix means no filter, not everything");
+});

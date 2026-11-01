@@ -70,3 +70,11 @@ test("the adapter never invents a source or a zero", () => {
   assert.deepEqual(snap.itemsByType, {});
   assert.deepEqual(snap.blockedReasons, []);
 });
+
+// WAVE4-REGRESSION
+test("IE-009 snapshot: the validator fails closed on null instead of throwing", () => {
+  assert.equal(S.validateSnapshot(null).ok, false);
+  assert.equal(S.validateSnapshot(undefined).ok, false);
+  assert.equal(S.validateSnapshot([]).ok, false);
+  assert.equal(S.validateSnapshot("x").ok, false);
+});

@@ -79,3 +79,17 @@ test("GAP_STATUS exposes the exact status strings", () => {
   assert.equal(M.GAP_STATUS.UNKNOWN, "UNKNOWN");
 });
 
+
+// WAVE4-REGRESSION
+test("IE-007 gap report: a present but unreachable module blocks the stage", () => {
+  const report = M.buildGapReport({
+    chain: [{ id: "supply", modules: ["a", "b"] }],
+    present: ["a", "b"],
+    reachable: ["a"],
+  });
+  assert.equal(report.stages[0].status, "BLOCKED", "a half-reachable stage read ready");
+  assert.deepEqual(report.stages[0].unreachable, ["b"]);
+  assert.equal(report.verdict, "BLOCKED");
+  const ready = M.buildGapReport({ chain: [{ id: "supply", modules: ["a", "b"] }], present: ["a", "b"], reachable: ["a", "b"] });
+  assert.equal(ready.verdict, "READY");
+});

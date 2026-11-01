@@ -293,3 +293,15 @@ test("IE-036 closed loop: a receiptless step and over-consumption both stop the 
   assert.equal(noEvidence.code, "NOT_LIVE_PROOF");
   assert.equal(noEvidence.step, "consume");
 });
+
+// WAVE4-REGRESSION
+test("IE-033 delivery: a completed readback for another job is not this job's readiness", () => {
+  const d = Delivery.createOutputDelivery();
+  const job = { jobID: "job-a", productTypeID: "35", quantity: 1, readyFlag: true };
+  const foreign = d.deliver({ job, readback: { jobID: "job-b", completed: true, readyAt: 5 }, itemStore: { issue: () => ({ itemID: "it" }) } });
+  assert.equal(foreign.ok, false, "another job's readback minted an item");
+  assert.equal(foreign.code, "NOT_READY");
+  const own = d.deliver({ job, readback: { jobID: "job-a", completed: true, readyAt: 5 }, itemStore: { issue: () => ({ itemID: "it" }) } });
+  assert.equal(own.ok, true);
+  assert.equal(d.deliver({ job, readback: { completed: true, readyAt: 5 }, itemStore: { issue: () => ({ itemID: "it2" }) } }).code, "ALREADY_DELIVERED");
+});
