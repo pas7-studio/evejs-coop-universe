@@ -111,6 +111,22 @@ test("memory stays bounded under a flood", () => {
   assert.ok(Object.keys(view.stations).length <= 200, "stations grew to " + Object.keys(view.stations).length);
 });
 
+test("the first view after a restart is never smaller than the file", () => {
+  const box = sandbox();
+  const first = box.load();
+  box.enable();
+  first.noteWarehouse(record(51, 60000358, 17470, 300), target(51, 60000358, 17470, 300), true);
+  assert.equal(first.status().stations[60000358][17470], 300);
+  // A bare snapshot() (what the read-only probe prints) must hydrate by itself: building the view
+  // before enabled() ran the station map empty, and status() then persisted that empty picture.
+  const second = box.load();
+  const raw = second.snapshot();
+  assert.equal(raw.deliveries, 1, "a bare snapshot lost the delivery");
+  assert.equal(raw.stations[60000358][17470], 300, "a bare snapshot lost the station total");
+  const onDisk = JSON.parse(fs.readFileSync(box.stateFile, "utf8"));
+  assert.equal(onDisk.stations[60000358][17470], 300, "the state file was rewritten with a smaller picture");
+});
+
 test("an unproven delivery is blocked, never proven", () => {
   const box = sandbox();
   const v2 = box.load();
