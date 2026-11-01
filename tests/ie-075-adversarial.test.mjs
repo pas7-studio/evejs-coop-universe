@@ -60,3 +60,11 @@ test("adversarial wave 5: phase 5-8 edges and bounded live state", () => {
   assert.equal(result.parsed.failures, 0, JSON.stringify(result.parsed.details));
   assert.ok(result.parsed.checks >= 20, "only " + result.parsed.checks + " checks ran");
 });
+
+test("adversarial wave 6: the eight modules waves 1-5 never touched", () => {
+  const result = run("coop-economy-adversarial-6.js", []);
+  assert.equal(result.status, 0, JSON.stringify(result.parsed || result.stderr));
+  assert.ok(result.parsed, "no JSON summary");
+  assert.equal(result.parsed.failures, 0, JSON.stringify(result.parsed.details));
+  assert.ok(result.parsed.checks >= 9, "only " + result.parsed.checks + " checks ran");
+});
