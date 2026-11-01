@@ -194,3 +194,11 @@ test("IE-060 conservation: a scope changing from cents to units is not a balance
   assert.equal(r.code, "UNKNOWN_SOURCE", "100 cents became 100 units without anyone noticing");
   assert.ok(r.missing.includes("wallet"));
 });
+
+test("IE-062 race: a negative tick is refused and cannot keep a dead lease alive", () => {
+  const leases = Race.createLeases({ ttlTicks: 10 });
+  assert.equal(leases.acquire({ key: "k", ownerID: "a", tick: -1 }).code, "INVALID_REQUEST");
+  leases.acquire({ key: "k", ownerID: "a", tick: 100 });
+  assert.equal(leases.sweep({ tick: -5 }).ok, false, "a negative sweep clock is refused");
+  assert.equal(leases.holderOf("k"), "a", "the live holder survived the bad sweep");
+});

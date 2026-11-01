@@ -36,3 +36,11 @@ test("adversarial wave 2: identity conflicts and replayed payloads stay refused"
   assert.equal(result.parsed.failures, 0, JSON.stringify(result.parsed.details));
   assert.ok(result.parsed.checks >= 25, "only " + result.parsed.checks + " checks ran");
 });
+
+test("adversarial wave 3: lifecycle boundaries and unwritable live paths", () => {
+  const result = run("coop-economy-adversarial-3.js", []);
+  assert.equal(result.status, 0, JSON.stringify(result.parsed || result.stderr));
+  assert.ok(result.parsed, "no JSON summary");
+  assert.equal(result.parsed.failures, 0, JSON.stringify(result.parsed.details));
+  assert.ok(result.parsed.checks >= 15, "only " + result.parsed.checks + " checks ran");
+});
