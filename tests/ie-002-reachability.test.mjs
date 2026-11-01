@@ -118,3 +118,45 @@ test("test 5: negative cases", () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test("review fix: require(path.join(__dirname, ...)) without a leading dot is reachable", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ie002-dirname-"));
+  try {
+    fs.writeFileSync(path.join(tmp, "entry.js"), 'const p = require(path.join(__dirname, "leaf"));');
+    fs.writeFileSync(path.join(tmp, "leaf.js"), "module.exports = 1;");
+    const g = M.buildRequireGraph({ srcRoot: tmp, entryFile: path.join(tmp, "entry.js") });
+    assert.ok(g.reachable.includes("leaf.js"), "bare literal from path.join(__dirname, ...) resolves");
+    assert.deepEqual(g.unreachable, []);
+    // a bare npm specifier must still be ignored
+    fs.writeFileSync(path.join(tmp, "npm.js"), 'const fs = require("fs"); const x = require("express");');
+    const g2 = M.buildRequireGraph({ srcRoot: tmp, entryFile: path.join(tmp, "entry.js") });
+    assert.ok(!g2.reachable.includes("npm.js"));
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("review fix: env-shaped enabled values and unnamed owners are a conflict", () => {
+  const conflicts = M.detectIncompatibleExecutors([
+    { phase: "refinery", owner: "a", enabled: "true" },
+    { phase: "refinery", owner: null, enabled: 1 },
+    { phase: "mining", owner: "a", enabled: false },
+  ]);
+  assert.deepEqual(conflicts, [{ phase: "refinery", owners: ["<unnamed>", "a"] }]);
+  assert.deepEqual(
+    M.detectIncompatibleExecutors([{ phase: "refinery", owner: "a", enabled: 0 }]),
+    []
+  );
+  assert.deepEqual(
+    M.detectIncompatibleExecutors([{ phase: "refinery", owner: "a", enabled: "1" }, { phase: "refinery", owner: "b", enabled: true }]),
+    [{ phase: "refinery", owners: ["a", "b"] }]
+  );
+});
+
+test("review fix: the real graph loads tickProfiler through runtime.js", () => {
+  const g = M.buildRequireGraph({
+    srcRoot: path.join(root, "Code/server"),
+    entryFile: path.join(root, "Code/server/index.js"),
+  });
+  assert.ok(g.reachable.includes("src/space/tickProfiler.js"), "tickProfiler is loaded at run time");
+});

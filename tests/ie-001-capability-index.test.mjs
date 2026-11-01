@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { mkdtempSync, rmSync, writeFileSync, unlinkSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -68,6 +68,21 @@ test("test 5: toMarkdown starts with the exact header and has one row per family
   const lines = toMarkdown(index).split(/\r?\n/);
   assert.equal(lines[0], "| family | title | modules | missing | runtime |");
   assert.equal(lines.length, 2 + index.families.length);
+});
+
+test("test 7: an unreadable module path is missing, not confirmed (review fix)", () => {
+  // A path that exists but is not a readable regular file (here: a directory) must not make a family
+  // CODE_CONFIRMED. Before the fix it was reported exists:true, bytes:0, flags:[], missing:[].
+  const root = mkdtempSync(join(tmpdir(), "ie001-unreadable-"));
+  mkdirSync(join(root, "space"), { recursive: true });
+  mkdirSync(join(root, "space", "coopNativeMiningAtomic.js"));
+  const index = buildCapabilityIndex({ srcRoot: root });
+  const extraction = index.families.find((f) => f.id === "extraction");
+  assert.equal(extraction.modules[0].exists, false);
+  assert.equal(extraction.status, "MISSING_MODULE");
+  assert.ok(extraction.missing.includes("space/coopNativeMiningAtomic"));
+  assert.equal(index.totals.missing, 42);
+  rmSync(root, { recursive: true, force: true });
 });
 
 test("test 6: every module record has path, exists, bytes, and sorted-unique EVEJS_ flags", () => {
