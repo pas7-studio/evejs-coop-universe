@@ -153,3 +153,27 @@ test("a batch of receipts is on disk immediately, not after a throttle window", 
   assert.equal(onDisk.deliveries, 2);
   assert.equal(onDisk.stations["60000358"]["17470"], 26000, "the station total lost the remainder");
 });
+
+test("a second writer is never erased by the next delivery", () => {
+  const box = sandbox();
+  const v2 = box.load();
+  box.enable();
+  v2.noteWarehouse(record(71, 60000358, 17470, 100), target(71, 60000358, 17470, 100), true);
+  // an operator (or the reconcile tool) adds a receipt to the file while the server is running,
+  for (const later of [0]) void later;
+  const onDisk = JSON.parse(fs.readFileSync(box.stateFile, "utf8"));
+  onDisk.receipts.push({
+    cargoID: 72, itemID: 900000000072, stationID: 60000358, corporationID: 1000129,
+    typeID: 17470, quantity: 7, durable: true, phase: "COMMITTED", proof: "STOCK_PROVEN",
+    reconciled: true, source: "receipt-file",
+  });
+  onDisk.stations["60000358"]["17470"] = 107;
+  fs.writeFileSync(box.stateFile, JSON.stringify(onDisk, null, 2));
+  // and the next live delivery must not overwrite it with the in-memory copy
+  v2.noteWarehouse(record(73, 60000358, 17470, 5), target(73, 60000358, 17470, 5), true);
+  const after = JSON.parse(fs.readFileSync(box.stateFile, "utf8"));
+  const ids = after.receipts.map((r) => r.cargoID).sort((a, b) => a - b);
+  assert.ok(ids.includes(72), "the external receipt was erased: " + JSON.stringify(ids));
+  assert.ok(ids.includes(73), "the new delivery was not recorded: " + JSON.stringify(ids));
+  assert.ok(after.stations["60000358"]["17470"] >= 107, "the station total shrank: " + after.stations["60000358"]["17470"]);
+});
