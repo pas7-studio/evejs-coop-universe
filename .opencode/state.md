@@ -136,6 +136,17 @@ aborts before `writeJsonLines` - clear the file to unblock. The remaining hot ph
 (`living-native-durable-slot`, `universe-sites`, `living-native-industry`) are the fix.
 
 ## Traps
+- **Market host port moved to `127.0.0.1:41120`** (fork `e25cfe2`): Windows WinNAT now
+  reserves 40064-40163, so binding 40110 fails with "socket ... forbidden" and
+  `docker compose up` aborts. Container port is still 40110 and the server uses
+  `market:40111` inside the compose network; only the host publish changed.
+- **An orphan `evejs-market-2` container** (image `evejs-local`, started outside this
+  session, up 5 h) held `/var/lib/evejs/market/.market.lock`, so the real market
+  exited with "market database is currently in use". Stopped it; the compose market
+  then came up healthy. Check `docker ps --filter volume=evejs-data` whenever the
+  market refuses to start.
+- **Endpoint moved to `156.146.50.8:35386`** (2026-11-02): relay recreated on 35386,
+  banner OK. `Start-Play-Stack.ps1 -Action Up -PublicPort <new>` does this.
 - `docker cp` over `/var/lib/evejs/gameStore/gamestore.sqlite` makes the file
   root-owned; the server then logs `sync flush FAILED ... readonly database` and loses
   every write. Fix: stop, `chown 1000:1000` on the volume, delete stale `-wal`/`-shm`.

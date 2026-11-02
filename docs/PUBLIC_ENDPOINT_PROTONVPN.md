@@ -1,6 +1,6 @@
 # Remote play runbook — ProtonVPN + SSH (owner + friend)
 
-**Status 2026-10-31: endpoint is `156.146.50.8:64410` (relay verified, SSH
+**Status 2026-11-02: endpoint is `156.146.50.8:35386` (relay verified, SSH
 banner OK). The friend has to run one SSH tunnel and point his client back at
 `127.0.0.1`.** This file exists so nobody has to rediscover the setup. Read §5
 before touching anything when the friend reports a problem.
