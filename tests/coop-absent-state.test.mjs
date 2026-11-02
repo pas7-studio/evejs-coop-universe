@@ -19,8 +19,8 @@ const {
 const service = createAbsentStateGatewayService();
 const call = (typeName) => service.handleRequest(typeName, {payload: {value: Buffer.alloc(0)}});
 
-test("the seven absent-domain types are all handled", () => {
-  assert.equal(HANDLED_REQUEST_TYPES.length, 7);
+test("the eight absent-domain types are all handled", () => {
+  assert.equal(HANDLED_REQUEST_TYPES.length, 8);
   for (const typeName of HANDLED_REQUEST_TYPES) {
     const result = call(typeName);
     assert.ok(result, typeName);
@@ -28,26 +28,30 @@ test("the seven absent-domain types are all handled", () => {
   }
 });
 
-test("a specific asset, entitlement or schedule is NOT_FOUND", () => {
+test("a specific asset or entitlement is NOT_FOUND", () => {
   for (const typeName of [
     "eve_public.assetholding.asset.api.GetRequest",
     "eve_public.assetholding.entitlement.api.GetRequest",
     "eve_public.assetholding.entitlement.api.admin.ExpireRequest",
-    "eve_public.payment.schedule.api.GetRequest",
   ]) {
     const result = call(typeName);
-    assert.equal(result.statusCode, 5, typeName);
+    assert.equal(result.statusCode, 404, typeName);
     assert.ok(result.statusMessage.length > 0, `${typeName} must explain itself`);
   }
 });
 
 test("redeeming something that was never granted is refused, not silently accepted", () => {
   const entitlement = call("eve_public.assetholding.entitlement.api.RedeemRequest");
-  assert.equal(entitlement.statusCode, 9);
+  assert.equal(entitlement.statusCode, 412, "the client reads FAILED_PRECONDITION as 412");
   assert.match(entitlement.statusMessage, /nothing to redeem/);
   const code = call("eve_public.payment.code.api.RedeemRequest");
-  assert.equal(code.statusCode, 9);
+  assert.equal(code.statusCode, 412, "the client reads FAILED_PRECONDITION as 412");
   assert.match(code.statusMessage, /not configured/);
+});
+
+test("a schedule that does not exist is a 200 with the field unset, never a 404", () => {
+  const absent = call("eve_public.payment.schedule.api.GetRequest");
+  assert.equal(absent.statusCode, 200, "a 404 here crashes a background tasklet in the client");
 });
 
 test("no active schedule of a type is an empty shape, not a fake schedule", () => {
