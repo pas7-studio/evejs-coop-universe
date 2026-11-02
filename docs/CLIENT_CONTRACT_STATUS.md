@@ -164,7 +164,7 @@ Total client calls: 542 · MISSING 0 · STUB 37 · NULLABLE 102 · OK 403
 | `wormholeMgr.WormholeJump` | 1 | movementFunctions.pyj | services\exploration\wormholes\wormholeMgrService.js | **unreviewed** |
 | `XmppChatMgr.EnsureResourceWarsChannelExists` | 1 | rwservice.pyj | services\chat\xmppChatMgrService.js | **unreviewed** |
 
-## gRPC gateway types (216 client request types, 254 names known to the gateway, 14 of those client types defaulted)
+## gRPC gateway types (216 client request types, 262 names known to the gateway, 11 of those client types defaulted)
 
 A type no gateway service names is answered with a default-encoded 200
 (`fork f256261`): the client gets a valid empty message instead of a 404 it

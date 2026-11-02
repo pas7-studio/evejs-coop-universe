@@ -568,3 +568,17 @@ module.exports={PIN,names,ORE_PATCH_PATHS,STRUCTURE_PATCH_PATHS,SOCIAL_PATCH_PAT
 names.push(
 "coopBlueprintPurchase", "coopDemandGap", "coopEconomyAutonomyScorecard", "coopEconomyAvailableToPromise", "coopEconomyBackpressure", "coopEconomyBaselineRecorder", "coopEconomyBudgetModel", "coopEconomyCalibration", "coopEconomyCapabilityIndex", "coopEconomyCarrierChoice", "coopEconomyClientE2E", "coopEconomyClosedLoop", "coopEconomyCompatMatrix", "coopEconomyConservationCoverage", "coopEconomyConsumptionFeedback", "coopEconomyContractBoard", "coopEconomyContractSettlement", "coopEconomyCrashWindows", "coopEconomyDecisions", "coopEconomyDeliveryAcceptance", "coopEconomyDemandReceipts", "coopEconomyDistress", "coopEconomyDistributionRun", "coopEconomyExecutionRegistry", "coopEconomyFeasibility", "coopEconomyFinalAcceptance", "coopEconomyFlagAudit", "coopEconomyFleetResupply", "coopEconomyFundsGateway", "coopEconomyGapReport", "coopEconomyHaulerReservation", "coopEconomyHealthReport", "coopEconomyHysteresis", "coopEconomyIdentityMap", "coopEconomyJobAdmission", "coopEconomyJournal", "coopEconomyLiveReadiness", "coopEconomyMiningDispatch", "coopEconomyNativeOutcomes", "coopEconomyOfferSelection", "coopEconomyOperationGraph", "coopEconomyOrderCompetition", "coopEconomyOreCustody", "coopEconomyOutputDelivery", "coopEconomyPathComparator", "coopEconomyPerformanceGuard", "coopEconomyPlayerPurchase", "coopEconomyPnl", "coopEconomyProcurementContract", "coopEconomyQuarantine", "coopEconomyRaceMatrix", "coopEconomyReachability", "coopEconomyRecovery", "coopEconomyRefineryQuote", "coopEconomyReleaseEvidence", "coopEconomyRepairConsole", "coopEconomyReputation", "coopEconomyReservations", "coopEconomyRevalidate", "coopEconomyRiskPolicy", "coopEconomyRolloutManifest", "coopEconomyRouteComparison", "coopEconomyRouteDisruption", "coopEconomySaleSettlement", "coopEconomySellEscrow", "coopEconomySnapshotAdapter", "coopEconomySnapshotSchema", "coopEconomySoak", "coopEconomySplitContract", "coopEconomyStationStockProof", "coopEconomyStrategyState", "coopEconomyUnload", "coopEconomyV2", "coopEconomyWarehouseTransfer", "coopEconomyWorkOrder", "coopEconomyWorldManifest", "coopFactionTaxIncome", "coopGateRoutes", "coopNpcCargoStow", "coopNpcInputSupply", "coopPilotPayroll", "coopWarRetirement", "coopWarTargetPriority"
 );
+
+// Mission 003: the NPC industrial economy package (74 modules plus the journal adapters) and the
+// modules the require graph already referenced without listing. Copy-only: every stage stays
+// behind its own flag and the write stages still need an owner attestation.
+names.push(
+"coopUniverseSites"
+);
+
+// Mission 003: the NPC industrial economy package (74 modules plus the journal adapters) and the
+// modules the require graph already referenced without listing. Copy-only: every stage stays
+// behind its own flag and the write stages still need an owner attestation.
+names.push(
+"coopWormholeEntrances"
+);
