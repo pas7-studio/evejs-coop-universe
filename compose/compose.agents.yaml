@@ -34,6 +34,11 @@ services:
       EVEJS_COOP_NPC_GROUP_AGGRO: "1"
       # Opt-in: a site wave that materializes next to a player is hostile from its first tick.
       EVEJS_COOP_SITE_AGGRO_ON_SPAWN: "1"
+      # Market makers (docs/MARKET_MAKERS.md): five traders with booked ISK keep real bids on the book.
+      # Started with two traders and five minerals so the effect is observable before it is widened.
+      EVEJS_COOP_MARKET_MAKERS: "1"
+      EVEJS_COOP_MARKET_MAKERS_COUNT: "2"
+      EVEJS_COOP_MARKET_MAKER_TYPES: "34,35,36,37,38"
       # x5 time acceleration for AGENT TESTING ONLY. These are knobs the code
       # already reads, so the play stack keeps stock pacing untouched:
       #   travel leg 120 s -> 24 s, clone recovery 30 min -> 6 min,
