@@ -38,12 +38,37 @@ param(
   [string]$Action = 'Status',
   [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
   [string]$Project = 'evejs',
-  [int]$PublicPort = 64410,
+  [int]$PublicPort = 0,
   [int]$SshPort = 55346,
   [string]$RelayName = 'evejs-ssh-relay'
 )
 
 $ErrorActionPreference = 'Stop'
+
+# ProtonVPN hands out a new forwarded port on every reconnect and the relay must
+# listen on THAT port, otherwise the friend reaches nothing. Leaving the old port
+# as a default is how the relay silently drifted to 64410 while Proton forwarded
+# 35386. Detect the live pair unless the operator passes -PublicPort explicitly.
+function Get-ProtonVpnForwardedPort {
+  $log = Join-Path $env:LOCALAPPDATA 'Proton\Proton VPN\Logs\client-logs.txt'
+  if (-not (Test-Path -LiteralPath $log)) { return 0 }
+  $match = Get-Content -LiteralPath $log -Tail 20000 -ErrorAction SilentlyContinue |
+    Select-String -Pattern 'Port pair\s+(\d+)->(\d+)' |
+    Select-Object -Last 1
+  if (-not $match) { return 0 }
+  return [int]$match.Matches[0].Groups[1].Value
+}
+
+if ($PublicPort -le 0) {
+  $detected = Get-ProtonVpnForwardedPort
+  if ($detected -gt 0) {
+    $PublicPort = $detected
+    Write-Host "proton forwarded port : $PublicPort (detected from the VPN log)"
+  } else {
+    $PublicPort = 64410
+    Write-Warning "could not detect the ProtonVPN forwarded port; falling back to 64410. Pass -PublicPort <port> from the ProtonVPN 'Port forwarding' panel."
+  }
+}
 
 if ($Project -eq 'evejs-agents') {
   throw 'This script only manages the owner play stack. Use Start-Agents-Stack.ps1 for evejs-agents.'
