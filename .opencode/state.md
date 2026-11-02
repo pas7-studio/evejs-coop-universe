@@ -147,6 +147,14 @@ aborts before `writeJsonLines` - clear the file to unblock. The remaining hot ph
   market refuses to start.
 - **Endpoint moved to `156.146.50.8:35386`** (2026-11-02): relay recreated on 35386,
   banner OK. `Start-Play-Stack.ps1 -Action Up -PublicPort <new>` does this.
+- **Relay drifted back to 64410 while Proton forwarded 35386** (2026-11-03 01:0x): a
+  plain `-Action Up` used the hardcoded default, so the friend reached nothing. The
+  script now detects the live port from the Proton log (`Port pair N->N`) and only
+  falls back to 64410 with a warning (commit `05ecf374`). `-Action Status` prints the
+  detected port and checks the banner on it.
+- Client-side ports did NOT change: game `127.0.0.1:26000`, proxy `26002`, gateway
+  `443` (container 26003), XMPP `5222`, market host publish `41120`. `start.ini`
+  still `server = 127.0.0.1 / port = 26000 / cryptoPack = Placebo`.
 - `docker cp` over `/var/lib/evejs/gameStore/gamestore.sqlite` makes the file
   root-owned; the server then logs `sync flush FAILED ... readonly database` and loses
   every write. Fix: stop, `chown 1000:1000` on the volume, delete stale `-wal`/`-shm`.
