@@ -50,10 +50,14 @@ test("a corrupt journal file is set aside, not silently treated as empty", () =>
   const creditLog = path.join(dir, "credits.log");
   fs.writeFileSync(journalFile, "{ not json");
 
+  // Contract change 2026-11-02 (independent review): the old expectation was that a corrupt journal
+  // is set aside and the settlement proceeds with an empty map. That is how a settled fill is paid a
+  // second time after a crash, so the journal now fails closed: the corrupt file is preserved, the
+  // settlement is refused, and no money moves.
   const first = run("fill-bad", journalFile, creditLog);
-  assert.equal(first.code, "SETTLED", "a corrupt journal blocked a legitimate settlement");
+  assert.equal(first.code, "JOURNAL_UNREADABLE", "a corrupt journal did not fail closed");
   assert.equal(fs.existsSync(journalFile + ".corrupt"), true, "the corrupt journal was not preserved");
-  assert.equal(credits(creditLog), 1);
+  assert.equal(credits(creditLog), 0, "money moved with no readable journal");
 });
 
 test("the file journal never leaves a half-written file", () => {
