@@ -27,6 +27,9 @@ services:
     environment:
       # Marks every event line as produced by the agent stack, never the owner's.
       EVEJS_COOP_STACK: agents
+      # Diagnostic only (agent stack): print every wreck that lands >5 km from the killer, with both
+      # positions and the hull mode, so the client/server position gap is measured instead of guessed.
+      EVEJS_WRECK_DISTANCE_DEBUG: "1"
       # x5 time acceleration for AGENT TESTING ONLY. These are knobs the code
       # already reads, so the play stack keeps stock pacing untouched:
       #   travel leg 120 s -> 24 s, clone recovery 30 min -> 6 min,
