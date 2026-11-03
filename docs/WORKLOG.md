@@ -3140,3 +3140,8 @@ Evidence: forks c30fcbb,7916bf1,9c9d2ed,e34b605; live: reconcileInstancesMs 690-
 Why: The war garrison phase threw on every tick (frozen registry + Object.create wrapper), so garrisons were never refilled; fixed via wrapSnapshot and spaced the now-real formation work to every second tick.
 Where: docs/PERF_BASELINE_20261103.md, tests/coop-memo-snapshot.test.mjs
 Evidence: fork 6c921d7+7ba0dcd; live: 'Cannot assign to read only property snapshot' 63x -> 0, phase now runs with GARRISON_APPLIED spawning 3 hulls/side, 3 wrapper tests pass; typical tick 0.27-0.58s.
+### 2026-11-03T15:14Z · 426646d · L2 · docs(perf): the cache rebuilds were the last big CPU items
+
+Why: CPU was dominated by read-cache rebuilds: entity rows were deep-cloned up to 5x/s, the cargo preimage was deep-cloned per turret cycle, and the cache had no invalidation so its TTL had to be 200ms.
+Where: docs/PERF_BASELINE_20261103.md
+Evidence: forks 04d8637,be9b229,e16f110,a010685; live: idle 58%->85% of a 140s window, GC 13s->1.5s, heapUsed 4829MB->1784MB, steady lag 0.34-0.76s, worst stall 1.27s; tests 98 war + 20 cache pass.
