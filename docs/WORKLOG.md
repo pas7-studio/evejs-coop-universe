@@ -3231,3 +3231,9 @@ Evidence: fork 176e0fd; the handler now returns a wstring (the client text path)
 Why: The typed DBRowDescriptor from 35e9380 could only be tested by importing the whole onlineStatus service, which pulls the character store and a database.
 Where: fork Code/server/src/services/online/onlineStatusService.js and new onlineStatusPayload.js.
 Evidence: fork 98f1cdf; onlineStatusPayload.js loads standalone and produces tuple columns [["contactID",3],["online",11]]; node --check clean. Not deployed.
+
+### 2026-11-04T01:10Z · e78711b · L1 · feat(sites): denser, harder combat anomalies and wider system coverage
+
+Why: The owner was flying 5-9 jumps to find a difficulty-4 combat anomaly and the ones that spawned were too easy. Density and the eligible difficulty pool live in the dungeon authority spawn profile, so getSpawnProfile now applies a pure combat-only transform: slotsPerSystem x2, targetSystems/targetSystemRatio x1.5, difficultyRange shifted up one tier; coopUniverseSites seeds up to 24 visited systems per pass and a 24-system band sample.
+Where: fork Code/server/src/space/coopSiteTuning.js (new), services/dungeon/dungeonAuthority.js getSpawnProfile, space/coopUniverseSites.js limits.
+Evidence: fork e78711b; tests/coop-site-tuning.test.mjs 3/3 pass (density, combat-only restriction, env knobs + kill switch); mining/gas profiles untouched; node --check clean. Not deployed.
