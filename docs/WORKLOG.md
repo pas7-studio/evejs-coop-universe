@@ -3125,3 +3125,8 @@ Evidence: fork cc7d17b+fad546a; live play stack image evejs-local recreated 12:2
 Why: The universe-site pass froze the event loop for 16-23 s; a CPU profile showed 87% of it was deep clones (sovereignty table on a freshness check, full instance clones per family/band), and the rest was sliced into 3-system chunks.
 Where: docs/PERF_BASELINE_20261103.md
 Evidence: fork daefd29+0bf4a8c; live play stack: definitions 16.2s -> 8.3s -> sliced; log '[CoopUniverseSites] systems=36 desired=302 created=1 spawned=5'; universe-sites gone from top-14 phases (worst phase now native-faction-war-opening 666ms); loop lag after warm-up 0.3-1.5s vs 2.4s before; steady 60s profile names haul-cargo plan 4.6s and native cargo clones 3.8s as next.
+### 2026-11-03T13:31Z · 704da6a · L2 · docs(perf): record what the remaining stalls were and the per-system floor
+
+Why: Steady-state event-loop freezes of 2-3 s: the haul-cargo planner scanned every cargo row on every mining scene tick, the cargo table was deep-cloned five times a second, and one system's site reconcile cloned all 6471 instance summaries per family. Cargo reads are indexed, the site pass is sliced to one system and capped at eight.
+Where: docs/PERF_BASELINE_20261103.md
+Evidence: forks a9dcdff,0a177aa,857d8e7,81d3a06,40a9abc; live play stack: one-system reconcile 3.34s -> 1.06s; lag after recreate 0.25-0.9s steady with occasional 1.5s vs continuous 2.2-3.8s before; pass log 'systems=8 desired=46 created=0 spawned=5'; floor is the engine cloning its 44MB dungeon state per mutation (mutateState 180ms).
