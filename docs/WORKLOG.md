@@ -3170,3 +3170,8 @@ Evidence: fork 005207c; live repair dungeon_mission_repair instanceID 6 -> lifec
 Why: Mission details and the agent dialog printed raw CCP mutables like [location]dungeonLocationID.name; 1862 of 2878 shipped missions carry such tokens (20 distinct, five kinds).
 Where: tests/coop-mission-message-tokens.test.mjs
 Evidence: fork bd63d51; resolver unit test 5/5 pass; container rebuilt and healthy with missionMessageTokens.js; proof on live mission 875 briefing: 1 raw token in, 0 tokens out.
+### 2026-11-03T18:06Z · 06c5f32 · L2 · test(mission): waves passed by a completed wave are settled, the live wave is not
+
+Why: After the 2026-11-03 deploy, 'The Blockade' instance 59114 kept wave_01 with no state, so wave_02/03 never armed and the mission could never complete; a plain restart also respawns a wave whose entities vanished.
+Where: tests/coop-mission-stale-instance.test.mjs
+Evidence: fork 65bcb43; heal unit tests 10/10 pass; live instance 59114 after redeploy shows wave_01 respawned (39 spawned, 4 remaining) and the heal correctly does not touch the active wave.
