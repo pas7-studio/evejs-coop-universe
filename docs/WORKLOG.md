@@ -3175,3 +3175,8 @@ Evidence: fork bd63d51; resolver unit test 5/5 pass; container rebuilt and healt
 Why: After the 2026-11-03 deploy, 'The Blockade' instance 59114 kept wave_01 with no state, so wave_02/03 never armed and the mission could never complete; a plain restart also respawns a wave whose entities vanished.
 Where: tests/coop-mission-stale-instance.test.mjs
 Evidence: fork 65bcb43; heal unit tests 10/10 pass; live instance 59114 after redeploy shows wave_01 respawned (39 spawned, 4 remaining) and the heal correctly does not touch the active wave.
+### 2026-11-03T18:06Z · 5153a0b · L2 · docs(worklog): log the mission wave-chain heal
+
+Why: Event flood: haul-custody-blocked wrote 89327 lines (22 duplicates per 5 s) for one blocked fleet and prey-decision wrote 3718 of 8342 sampled events because its dedupe map was re-created per call; the attestation verdict never named the failing clause.
+Where: docs/WORKLOG.md
+Evidence: fork 852c840; image evejs-local rebuilt with both markers; live event counts before the fix measured from coop-events.jsonl.
