@@ -3160,3 +3160,8 @@ Evidence: forks 84f2a0b,f3b21e4; live boot burst 10-16s -> 6s single sample, boo
 Why: F10 map never finished: the militia map filter coloured a star from occupierID, and pirate controllers 500019/500020 are absent from the client FACTION_ID_TO_COLOR, so a native double curve got None and the whole map scene construction aborted with TypeError.
 Where: tests/coop-war-client-view-colourable.test.mjs
 Evidence: fork 7284e92; live payload had 10 of 37 territories with controller 500019/500020; new tests coop-war-client-view-colourable 3/3 pass, existing coop-war-client-view 12/12 pass.
+### 2026-11-03T17:38Z · 1db145d · L2 · test(mission): zombie agent-mission dungeons are closed, never credited
+
+Why: Gone Berserk (dungeon 875) instance 6 was created 2026-10-27 and still required 7 waves while only wave_01/06/07 existed; the objective could never be satisfied, so the player stood in a cleared pocket forever.
+Where: tests/coop-mission-stale-instance.test.mjs
+Evidence: fork 005207c; live repair dungeon_mission_repair instanceID 6 -> lifecycleState completed, mission 55099 objectiveCompleted=true; 6 new tests pass; sweep runs per site-pass slice with a 12h stale window.
