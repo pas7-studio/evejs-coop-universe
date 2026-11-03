@@ -141,3 +141,31 @@ State after that deploy: typical ticks 0.27-0.58 s, with 1.8-4.7 s hits on a boo
 site pass and the garrison tick. Remaining known costs: garrison formation ~1.4 s (real spawn work that
 never ran before), boot warm-up ~10-13 s, GC ~5 s per 180 s at a 4.7-5.9 GB RSS, and a 44 MB dungeon
 table serialization whenever a site really changes.
+
+## 2026-11-03 15:1xZ: the last big CPU items were cache rebuilds, not logic
+
+A 150 s profile after the entity fix still put 24 s of CPU in `cloneValue` under
+`listNativeEntities`: the read cache deep-cloned all ~8500 entity rows up to five
+times a second just so war combat could read a few fields per pair. Same story as
+cargo. Fixes (forks `04d8637`, `be9b229`, `e16f110`, `a010685`):
+
+- `peekNativeEntities()` + shallow copies in the cache: entity index rebuild is now
+  a copy, not a JSON round-trip of the table.
+- the store invalidates the read cache on every successful write, so the cache window
+  is a backstop (2 s) instead of the only freshness mechanism (200 ms). That alone
+  removed most of the rebuilds.
+- `capture()` in the transient-cargo isolation compared a full deep clone of the
+  live cargo root against SQLite on every turret cycle (6.7 s / 150 s); the preimage
+  is now shallow, which is structurally identical for that comparison.
+- the garrison phase (which only started working today) spawns up to two formations
+  per tick at ~0.7 s each; a 600 ms per-tick budget defers the second to the next tick.
+
+Live after the last deploy: **85 % of a 140 s window is idle** (it was 58 % before
+these fixes and pegged earlier), GC fell 13 s -> 1.5 s per window, `heapUsed` is
+1784 MB with RSS 4.4-5.5 GB, and steady ticks are 0.34-0.76 s with one ~1.7 s sample
+at the first garrison tick after boot.
+
+What is left is small and spread: CONCORD startup rules rebuilt per scene tick
+(`structuredClone`, 3.1 s / 140 s - stock), `getSceneActivityState` (2 s / 140 s -
+stock), boot warm-up ~10 s, and the 44 MB dungeon table serialization when a site
+really changes.
