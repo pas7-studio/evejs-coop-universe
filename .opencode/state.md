@@ -52,6 +52,39 @@ All are committed but **NOT deployed** — the play stack has not been restarted
   `WARP_EXIT_VARIANCE_RADIUS_METERS = 2500` and a random 1..2500 stop distance. The
   reported ~10 km landing is not explained by these constants yet.
 
+## Career portal does not open (root cause found 2026-11-04)
+Client trace (server log, 23:10:23-24, character 140000005) after
+`eve_public.career.goal.api.GetDefinitionsRequest` and `GetAllRequest` both
+answered 200:
+`careerPortalWnd.load_data_async → on_data_load_success → construct_career_portal
+→ circleView → activityView.LoadActivities → activityNode.ApplyAttributes →
+circleNode.PrepareUI → ConstructFrame → UpdateDashedCircle` and then
+`EXCEPTION #107 ... ZeroDivisionError: float division by zero`.
+
+Cause: `activityNode.UpdateDashedCircle` does
+`len(completedGoals) / float(len(goals))`. `activities` come from the client's
+static `careerGoalsConst.CAREER_PATH_GROUPS` (10 explorer, 9 industrialist,
+10 enforcer, 10 soldier-of-fortune activity IDs), and each node asks
+`get_goals_in_group(career, group_id)`. Our `CAREER_GOAL_DEFINITION_STUBS`
+send no `ui_annotations`, so `GoalDefinition.from_proto` gets
+`group_id = None`; the four definitions become only `career_path_goal_definition`
+and every static activity group has zero goals → division by zero.
+
+Fix: `coopCareerGoals` must emit one definition per static activity annotation
+(key `'group'`, values `CareerAgentMissions`, `Scanning`, `Hacking`,
+`AdvancedHacking`, `Wormholes`, `GasSites`, `CombatSites`, `Navigation`,
+`AdvancedNavigation`, `ProjectDiscovery`; `IndustrialistCareerAgentsMissions`,
+`Market`, `Salvage`, `ResourceHarvesting`, `Refining`, `Manufacturing`,
+`DistributionAgent`, `MiningAgent`, `Research`; `CareerAgentMissions`,
+`SecurityAgent`, `AbyssalDeadspace`, `Combat`, `Bounties`, `CombatSites`,
+`EpicArc`, `Market`, `Standings`, `LoyaltyPoints`; `CareerAgentMissions`,
+`Social`, `ElectronicWarfare`, `Combat`, `PvP`, `CapacitorWarfare`,
+`FactionWarfare`, `Support`, `Destruction`, `Duels`) plus one career-path goal
+per career, with `career` 1/2/3/4, `target` 1, `threat` 1, `career_points` > 0,
+`order`, and `subtype`. `GetAll` must return a progress row for every emitted
+goal. Other annotation keys: `'subtype'`, `'order'`, `'duration'`,
+`'auraTextID'`, `'agencyLinkTextID'`, `'agencyScreen'`, `'videoID'`.
+
 ## Still open
 1. Loot: confirm a real wreck/can drag now logs a reason; if the source is still
    unresolvable, materialize scene loot as real items (needs the new warn line live).
