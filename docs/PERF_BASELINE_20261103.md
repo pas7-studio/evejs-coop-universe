@@ -194,3 +194,26 @@ lag on the same container: 0.32-0.69 s samples, one 1.4 s at the first site pass
 The remaining burst is the one-time world init (a 10-16 s block ~1 minute after
 start): the log shows it split across the stargate preload, scene creation and
 materialization, not one hot function. That is the next real project.
+
+## 2026-11-03 15:5xZ: the boot burst, measured from process start
+
+The profiler cannot be attached before boot, so a `--cpu-prof` run captured the
+whole process from start (`NODE_OPTIONS` in the probe compose file, removed right
+after). A 139 s window from process start put the boot cost in three places:
+
+| frame | self | what it was |
+| --- | --- | --- |
+| `cloneValue` under `listNativeControllers` | 5.2 s | `listNativeControllersForSystem` and `getNativeController` cloned all ~8400 controllers, and every controller write invalidates that cache, so each spawn re-cloned the table |
+| `clone` in `dungeonAuthority.listTemplatesByFamily` | 2.9 s | building the template candidates once per spawn family (cached per process afterwards) |
+| `getInstanceSnapshot` under `auditGeneratedIceAuthority` | 1.4 s | full snapshots of all 6499 instances to find the ice ones |
+| GC | 7.9 s | garbage from the copies above |
+
+Fixes: filter/read the raw controller collection and clone only the returned rows
+(fork `84f2a0b`), and pick ice rows from summaries, taking a full snapshot only
+for those (fork `f3b21e4`). The template build still costs 2.9 s once per process;
+it is cached after the first pass.
+
+Live after the deploys: the boot burst fell from **10-16 s to one 6 s sample**, RSS
+during boot from **6.2 GB to 2.5-3.7 GB**, `heapUsed` ~2.0 GB, and steady samples
+are 0.5-1.5 s (one 1.5 s at the first site pass). Compared with the start of the day
+(continuous 2-3.8 s freezes, 4.5-6.4 GB RSS, 15+ s boot), that is the state now.
