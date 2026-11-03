@@ -106,3 +106,74 @@ test("the sweep closes only the zombie instances", () => {
     { instanceID: 6, state: "failed", reason: "STALE_MISSION_WAVE_CHAIN_BROKEN" },
   ]);
 });
+
+// Live 2026-11-03: "The Blockade" (client-dungeon:1940, instance 59114) after a
+// restart - wave_01 carried no state at all (its on_load spawn was never recorded),
+// wave_02/03 never armed because they wait on wave_01's wave_cleared, wave_04 was
+// skipped by the coop cap and wave_05 had really spawned and been cleared. The
+// mission sat at current_wave 2 with completion keys that could never settle.
+const BLOCKADE_PLANS = [1, 2, 3, 4, 5].map((index) => ({
+  key: `wave_0${index}`,
+  waveIndex: index,
+}));
+
+function blockadInstance() {
+  return {
+    instanceID: 59114,
+    templateID: "client-dungeon:1940",
+    siteKey: "mission:140000005:3",
+    siteKind: "mission",
+    siteOrigin: "agentmission",
+    lifecycleState: "active",
+    timers: { createdAtMs: NOW - 3600000 },
+    objectiveState: {
+      state: "in_progress",
+      counters: { total_waves: 5, current_wave: 2 },
+      metadata: { completionEncounterKeys: ["wave_01", "wave_02", "wave_03", "wave_04", "wave_05"] },
+    },
+    spawnState: {
+      encounterStatesByKey: {
+        wave_04: { key: "wave_04", spawnedAtMs: NOW - 600000, completedAtMs: NOW - 600000, spawnCount: 0, skippedByCap: true },
+        wave_05: { key: "wave_05", spawnedAtMs: NOW - 500000, completedAtMs: NOW - 400000, spawnCount: 5, remainingEntityIDs: [] },
+      },
+    },
+  };
+}
+
+test("waves passed by an already completed wave are settled, not left blocking", () => {
+  const healed = pacing.settleWavesPassedByCompletedWaves(blockadInstance(), BLOCKADE_PLANS, { nowMs: NOW });
+  assert.deepEqual(healed.map((entry) => entry.key), ["wave_01", "wave_02", "wave_03"]);
+  for (const entry of healed) {
+    assert.equal(entry.patch.completedAtMs, NOW);
+    assert.equal(entry.patch.spawnCount, 0);
+    assert.equal(entry.patch.trigger, "coop_mission_chain_heal");
+  }
+});
+
+test("the wave being fought is never settled", () => {
+  const instance = blockadInstance();
+  instance.spawnState.encounterStatesByKey.wave_02 = {
+    key: "wave_02", spawnedAtMs: NOW - 300000, spawnCount: 4, remainingEntityIDs: [11, 12, 13, 14],
+  };
+  const healed = pacing.settleWavesPassedByCompletedWaves(instance, BLOCKADE_PLANS, { nowMs: NOW });
+  assert.deepEqual(healed.map((entry) => entry.key), ["wave_01"]);
+});
+
+test("nothing is settled when no wave was completed yet", () => {
+  const instance = blockadInstance();
+  instance.spawnState.encounterStatesByKey = {};
+  assert.deepEqual(
+    pacing.settleWavesPassedByCompletedWaves(instance, BLOCKADE_PLANS, { nowMs: NOW }),
+    [],
+  );
+});
+
+test("the heal never touches a non-mission instance", () => {
+  const instance = blockadInstance();
+  instance.siteKind = "anomaly";
+  instance.siteOrigin = "generated";
+  assert.deepEqual(
+    pacing.settleWavesPassedByCompletedWaves(instance, BLOCKADE_PLANS, { nowMs: NOW }),
+    [],
+  );
+});
