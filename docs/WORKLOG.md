@@ -3145,3 +3145,8 @@ Evidence: fork 6c921d7+7ba0dcd; live: 'Cannot assign to read only property snaps
 Why: CPU was dominated by read-cache rebuilds: entity rows were deep-cloned up to 5x/s, the cargo preimage was deep-cloned per turret cycle, and the cache had no invalidation so its TTL had to be 200ms.
 Where: docs/PERF_BASELINE_20261103.md
 Evidence: forks 04d8637,be9b229,e16f110,a010685; live: idle 58%->85% of a 140s window, GC 13s->1.5s, heapUsed 4829MB->1784MB, steady lag 0.34-0.76s, worst stall 1.27s; tests 98 war + 20 cache pass.
+### 2026-11-03T15:32Z · 7492607 · L2 · docs(perf): one system with real site work costs ~0.33 s
+
+Why: A real site change still cost 1.7 s because buildCache re-normalized and re-summarized all 6499 dungeon records, and every scene tick rebuilt 1246 CONCORD startup rules.
+Where: docs/PERF_BASELINE_20261103.md
+Evidence: forks a2aefea+ef21b3f; live: one system creating 2 sites = definitions 130ms + reconcile 173ms (was 690ms) + flush 24ms; startup-rule build 3.2ms/call removed from the scene tick; steady lag 0.32-0.69s with one 1.4s at the first pass.
