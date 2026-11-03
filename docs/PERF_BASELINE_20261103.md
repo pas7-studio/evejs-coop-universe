@@ -89,3 +89,32 @@ pass instead of a 36-system one.
 `dungeonRuntimeState` on every mutation (a single `mutateState` alone costs 180 ms + normalize ~200 ms).
 Slicing cannot make that invisible; the next real step is row-level mutation there, not more coop-side
 work. That is an engine change with real blast radius and needs its own plan.
+
+## 2026-11-03 13:5xZ: sub-second slices, and what is left
+
+Measured chain for one system's site reconcile (the unit a pass pays for): definitions 149 ms +
+`reconcileUniverseSeededInstances` 690 ms + misc. The 690 ms was pure copying, not work:
+
+- `mutateState` deep-cloned the whole 44.9 MB state (~180 ms) and `normalizeState` re-normalized
+  all 6499 instance records (~200 ms) even when the diff was empty;
+- the mutator itself normalized every instance before it could tell most were out of scope (~200 ms).
+
+Fix (fork `c30fcbb`): `mutateState(mutator, {shallow:true})` - used only by the seed reconcile,
+whose mutator replaces whole records and never mutates one in place - plus scope-first reads so only
+the targeted systems' instances are normalized. **690 ms -> 131 ms**; a system that really creates
+sites now takes 561 ms end to end (verified: Jita went from 0 to 3 seeded sites with a proper
+siteKey/template/hash/position).
+
+Then the pass itself: `setTimeout(0)` between slices kept its own chain at the front of the timer
+queue, so eight 350 ms slices still arrived as one 3.8 s block. A real 300 ms gap (fork `7916bf1`)
+makes the worst block one slice. And the NPC sweep reconciled every visited system in one tick
+(2.1-3.8 s): occupied systems always run, three others rotate (fork `9c9d2ed`), and war opening -
+the worst single phase at 658 ms - now runs every fourth tick (fork `e34b605`).
+
+Live after the last recreate: `universe-sites` 53 ms, `npc-reconcile` 2 systems x ~100 ms, and the
+lag monitor reported nothing above 250 ms for 111 s straight; the remaining hits are one ~1.6 s sample
+after boot and a 12.8 s boot warm-up (cache preload + world init), plus GC on a 4.7 GB RSS.
+
+Remaining known costs, in order: boot warm-up (12 s once), GC (5 s per 180 s of CPU), `npc-recognition`
+(342 ms max), and the per-system dungeon state write path, which still serializes a 44 MB table when a
+mutation really happens.
