@@ -169,3 +169,28 @@ What is left is small and spread: CONCORD startup rules rebuilt per scene tick
 (`structuredClone`, 3.1 s / 140 s - stock), `getSceneActivityState` (2 s / 140 s -
 stock), boot warm-up ~10 s, and the 44 MB dungeon table serialization when a site
 really changes.
+
+## 2026-11-03 15:3xZ: one system with real site creation now costs ~0.33 s
+
+After the summary/clone work the last 1.7 s spike came from `buildCache` inside
+`mutateState`: it normalized all 6499 instance records again and rebuilt every
+summary (~1 s) after a mutation that had already built the changed records
+normalized. `buildCache` now takes `alreadyNormalized` (only the shallow seed
+mutation sets it) and reuses the previous summary when the record object is
+literally the same instance, so a small change rebuilds only what it changed
+(fork `a2aefea`).
+
+Also: `listNpcStartupRules()` rebuilt 1246 generated CONCORD rules and
+structuredCloned them on every call (~3.2 ms measured; a scene tick asks often).
+The authored rows are 11, so they are compared directly and the built list is
+reused until they change, while every caller still receives its own array (fork
+`ef21b3f`).
+
+Live measurement of one system that really creates sites: definitions 130 ms +
+`reconcileUniverseSeededInstances` 173 ms (was 690, and 3.34 s at the start of
+this work) + a 24 ms table flush = ~325 ms, with `createdCount: 2`. Steady loop
+lag on the same container: 0.32-0.69 s samples, one 1.4 s at the first site pass.
+
+The remaining burst is the one-time world init (a 10-16 s block ~1 minute after
+start): the log shows it split across the stargate preload, scene creation and
+materialization, not one hot function. That is the next real project.
