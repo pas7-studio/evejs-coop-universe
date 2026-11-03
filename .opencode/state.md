@@ -22,6 +22,13 @@ All are committed but **NOT deployed** — the play stack has not been restarted
 - `98f1cdf` onlineStatus payload moved to `onlineStatusPayload.js` (no store
   dependency); `tests/coop-onlinestatus-rowset.test.mjs` 2/2 asserts the typed
   tuple columns and the rowset shape.
+- `e78711b` **combat anomaly tuning** (`space/coopSiteTuning.js`): for combat
+  families `getSpawnProfile` multiplies `slotsPerSystem` x2, `targetSystems` /
+  `targetSystemRatio` x1.5, and shifts `difficultyRange` up one tier, so harder
+  templates (more waves, tougher hulls) are eligible. `coopUniverseSites` seeds up
+  to 24 visited systems per pass and samples 24 systems per band. Kill switch
+  `EVEJS_COOP_SITE_TUNING=0`; knobs `EVEJS_COOP_SITE_DENSITY/COVERAGE/DIFFICULTY_SHIFT`.
+  Tests `tests/coop-site-tuning.test.mjs` 3/3. Mining/gas untouched.
 
 ## Confirmed evidence worth keeping
 - Owner 140000005, corp 98000001, faction 500001, Megathron Navy Issue
