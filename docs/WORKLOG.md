@@ -3155,3 +3155,8 @@ Evidence: forks a2aefea+ef21b3f; live: one system creating 2 sites = definitions
 Why: Boot warm-up was 10-16 s: the boot CPU profile showed cloning all 8400 controllers per lookup (5.2 s), all 6499 instance snapshots for the ice audit (1.4 s) and template building (2.9 s).
 Where: docs/PERF_BASELINE_20261103.md
 Evidence: forks 84f2a0b,f3b21e4; live boot burst 10-16s -> 6s single sample, boot RSS 6.2GB -> 2.5-3.7GB, heapUsed ~2GB, steady lag 0.5-1.5s.
+### 2026-11-03T17:13Z · 6802419 · L2 · test(war): the map must never receive a faction it cannot colour
+
+Why: F10 map never finished: the militia map filter coloured a star from occupierID, and pirate controllers 500019/500020 are absent from the client FACTION_ID_TO_COLOR, so a native double curve got None and the whole map scene construction aborted with TypeError.
+Where: tests/coop-war-client-view-colourable.test.mjs
+Evidence: fork 7284e92; live payload had 10 of 37 territories with controller 500019/500020; new tests coop-war-client-view-colourable 3/3 pass, existing coop-war-client-view 12/12 pass.
