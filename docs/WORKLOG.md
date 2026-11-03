@@ -3064,3 +3064,59 @@ Why: Pirates with real attack orders stood still and never fired at the player: 
 Detail: The stock loop hard-codes npc->player as friendly; the rule answers only that question, for a real order or a fresh retaliation, and never overrides high-sec safety.
 Where: tests/coop-player-prey-hostility.test.mjs
 Evidence: measured 18:49:33 in 30000142 sample: pirate mode STOP, shield 1, zero damage at 207 m while the player killed it; coop-player-prey-hostility 5/5, pirate-prey 12/12
+### 2026-11-02T21:30Z · 4e2ab87 · L1 · agents: start two market makers on five minerals
+
+Why: a failed loot drag could not be diagnosed: every wrapped exception logged the generic text only
+Where: compose/compose.agents.yaml
+Evidence: fork a267fe7 + tests/coop-macho-error-detail.test.mjs (3 pass)
+### 2026-11-02T23:03Z · 33391c4 · L1 · test: partial loot move fills the hold instead of refusing the stack
+
+Why: partial wreck loot moved nothing: a stack that did not fit was refused wholesale (live LootProbe measured NotEnoughCargoSpace); dungeon reconcile cloned 41 MB of dungeon state once per spawn family and froze the loop ~20 s per undock
+Where: tests/coop-partial-loot-move.test.mjs
+Evidence: fork 2aafd8e, tests/coop-partial-loot-move.test.mjs 5/5 pass, image sha256:a39e604, live markers 2/3 verified, profile: 5709 instances/41 MB, defs 8.5 s, instances-empty 1.3 s
+### 2026-11-02T23:15Z · a932747 · L1 · test: pirate prey envelope, site cadence and partial loot moves
+
+Why: pirates warped onto the player from anywhere in the system (434 hostiles at a gate 4.4e11 m away), cleared anomalies respawned instantly, duplicate site instances doubled NPC groups, and the 36-system site pass blocked the loop 20-28 s four times a minute
+Where: tests/coop-macho-error-detail.test.mjs, tests/coop-pirate-prey-envelope.test.mjs, tests/coop-universe-sites-cadence.test.mjs
+Evidence: fork dd14612 (bcec121+623f8f0+fix), tests 14/14 pass (coop-pirate-prey-envelope, coop-pirate-prey-players, coop-universe-sites-cadence), perf sample: universe-sites p95 22.3s/20 per min, image sha256:46f566b, live markers verified
+### 2026-11-03T00:28Z · 3770c08 · L1 · test: an attack order does not reach across the system
+
+Why: three pirates with real attack orders warped onto the player from 5.95e12 m at every login/undock; the engagement range now gates the hostility verdict itself, the one choke point every order source passes
+Where: tests/coop-player-prey-engagement-range.test.mjs
+Evidence: fork da3ec3c, tests 13/13 (coop-player-prey-engagement-range, coop-player-prey-hostility, coop-pirate-prey-envelope), image sha256:95fcd5e, live markers 1/1/1 verified, telemetry: player:warp-to-hauler at 5 955 040 483 037 m then player:attack at 8306 m
+### 2026-11-03T08:16Z · c4a8e17 · L1 · test: reinforcements warp to the ally, never onto the player
+
+Why: NPCs appeared at exactly 0 km inside the player because both the raid director and the site reinforcement director issued warpToEntity(helper, playerShip), and a native warp to an entity lands at that entity's position
+Where: tests/coop-pirate-prey-envelope.test.mjs, tests/coop-pve-wave-reinforcements.test.mjs
+Evidence: fork 8472426, tests 10/10 coop-pve-wave-reinforcements + 42/42 prey suites, image sha256:fa58378, live markers 1/1/1 verified
+### 2026-11-03T08:44Z · 22bd1e2 · L1 · test: proximity aggro within the pirate's own engagement range
+
+Why: rats needed a director order to fight, the world kept exactly three pirates in every system, Jita got a high-sec gate camp without a belt, and a cleared anomaly returned in 15 minutes
+Where: tests/coop-player-prey-engagement-range.test.mjs
+Evidence: fork 75370e0, tests 12/12 prey suites + 27/27 wave/prey, image sha256:1156886, live markers 2/2/1 verified
+### 2026-11-03T10:10Z · 2fdc251 · OPS · tools: report and prune leftover hostiles and duplicate sites; test memory metrics
+
+Why: no way to attribute memory growth, high-sec gate camp leftovers in Jita, garrison phase 1-2.3 s per tick, universe-sites pass every minute
+Where: scripts/coop-prune-leftovers.cjs, tests/coop-memory-metrics.test.mjs
+Evidence: fork e88efdf, 208 leftover hostiles removed in Jita (373->165 site defenders), coop-memory-sample live: observed-native-mining retains 143.5MB/32 calls, npc-reconcile 94MB/call, heap 2.2GB after boot, only 1 site pass in 6 min, tests 4/4
+### 2026-11-03T10:20Z · 724492c · OPS · docs: a refused maker order must say why, and the read-back sends an integer id
+
+Why: observed-native-mining retained 143.5 MB per minute (largest allocator of the world tick) and the market maker refused orders silently, leaving orders: 0 with no reason
+Where: docs/MARKET_MAKERS.md
+Evidence: fork 352daf0, image sha256:28e0b98, live coop-memory-sample: observed-native-mining out of the top allocators, heap 1.9 GB (was 4.5), tests 5/5 market runtime
+### 2026-11-03T11:49Z · b7db63f · OPS · docs: measured perf baseline for the world tick after the 2026-11-03 fixes
+
+Why: native-ammo-observe cost 1.1 s on every world tick because the native store scanned whole collections per hull and the phase created a scene per visited system
+Where: docs/PERF_BASELINE_20261103.md
+Evidence: fork 3421242, image e4276924, live coop-perf-sample: ammo out of top 7 (was 1074-1181ms), npc-reconcile 590-820ms -> 92-161ms, garrison out of top six, heap 4.5GB -> ~2GB
+### 2026-11-03T12:04Z · cec94b2 · OPS · docs: record where the remaining universe-sites cost really sits
+
+Why: the universe-sites pass still blocked ~22 s; measured that its cost is per-family (~1.1 s x 23), not per-system, and fixed two caches that never hit
+Where: docs/PERF_BASELINE_20261103.md
+Evidence: fork cb275cc, image b301193, live probe: 1 system 8.1s vs 36 systems 15.3s, combat_anomaly 1.1s per call three times in a row; ammo phase now below 130ms, npc-reconcile 92-177ms
+### 2026-11-03T12:30Z · 305d51a · L2 · test: pin the four JSON->SQLite co-op ledger migrations (fork cc7d17b)
+
+Why: Move four co-op ledgers out of JSON files into gameStore tables (coopWarMirror, coopWreckClaims, coopWreckCustody, coopNpcLife, coopNpcLinks); the identity registry is now one row per pilot, which removes the stale-copy/multi-writer loss measured 2026-10-30.
+Detail: The war mirror, wreck kill-proof claims, wreck->cargo custody journals, NPC life ledger and pilot->hull links moved from files under /var/lib/evejs into their own gameStore tables. These tests pin the guarantees that make that safe: the legacy file is a migration source and never a second writer, a refused store write falls back to the file, a damaged stored journal is fatal, and the identity regi
+Where: docs/JSON_TO_SQLITE_MIGRATION.md, tests/coop-identity-store.test.mjs, tests/coop-war-mirror.test.mjs, tests/coop-wreck-journal-store.test.mjs
+Evidence: fork cc7d17b+fad546a; live play stack image evejs-local recreated 12:27Z: coopWreckClaims 3 rows/19.5KB, coopNpcLife 3/70KB, coopNpcLinks 100/17KB imported from files, coop-npc-links.json rewritten as projection, mirror file untouched; 70 targeted tests pass; coop-engine-audit stockChars back under budget (only pre-existing integration drift + module size remain).
