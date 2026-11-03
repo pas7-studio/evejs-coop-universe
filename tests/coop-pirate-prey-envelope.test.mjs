@@ -74,7 +74,9 @@ test("a player inside the engagement envelope is still fought", () => {
   assert.equal(calls[0].targetID, PLAYER_SHIP);
 });
 
-test("the envelope is configurable for the owner's own testing", () => {
+test("a wider envelope still never warps onto a player hull", () => {
+  // warpToEntity lands the hull at the target's own position (the owner saw exactly that: "0 km, inside me"),
+  // so the warp onto a player is refused outright, whatever the envelope is.
   const { raids, scene, calls } = build({ x: 4.4e11, y: 0, z: 0 });
   const wide = createRaids({
     env: { ...ENV, EVEJS_COOP_PIRATE_PREY_RANGE_METERS: "5e11" },
@@ -87,9 +89,12 @@ test("the envelope is configurable for the owner's own testing", () => {
       calls.push({ kind: "attack", pirateID, targetID });
       return { success: true };
     },
+    release: () => ({ success: true }),
     gunRange: () => ({ meters: 9000 }),
   });
-  wide.tick({ systemID: SYSTEM, scene, pirates: [PIRATE], fleetShips: [] });
-  assert.equal(calls.length, 1, "an operator can widen the envelope explicitly");
+  const result = wide.tick({ systemID: SYSTEM, scene, pirates: [PIRATE], fleetShips: [] });
+  assert.deepEqual(calls.filter((call) => call.kind === "warp"), [], "no warp onto a player, ever");
+  assert.equal(result.actions.length, 1);
+  assert.equal(result.actions[0].action, "player-warp-refused");
   assert.equal(raids.tick({ systemID: SYSTEM, scene, pirates: [PIRATE], fleetShips: [] }).actions.length, 0);
 });

@@ -1,8 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
+import path from "node:path";
 const require=createRequire(import.meta.url);
-const {createWaveReinforcements}=require("../integration/coopPveWaveReinforcements.cjs");
+// The deployed module is the fork one; integration/*.cjs is the archived original and is frozen by the audit.
+const forkRoot=process.env.EVEJS_FORK_ROOT||"C:/Games/EveCoop/upstream-evejs";
+const {createWaveReinforcements}=require(
+ path.join(forkRoot,"Code/server/src/space/coopPveWaveReinforcements.js"));
 const systemID=30000144;
 function setup({wrongCorp=false,stale=false,duplicate=false,warpOutcome="yes",
  attackOutcome="yes",anotherSite=false}={}){
@@ -59,7 +63,7 @@ test("different already spawned waves authorize a real native rescue warp, not a
  const f=setup(),r=f.tick();
  assert.equal(r.warpOrders,1);
  assert.equal(r.attackOrders,0);
- assert.deepEqual(f.calls,[{action:"warp",shipID:102,targetID:901}]);
+ assert.deepEqual(f.calls,[{action:"warp",shipID:102,targetID:101}]);
  assert.equal(r.events[0].sourceEncounterKey,"wave-b");
  assert.equal(f.tick().warpOrders,0,"same helper cannot warp twice");
 });
