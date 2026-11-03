@@ -19,6 +19,9 @@ All are committed but **NOT deployed** — the play stack has not been restarted
 - `176e0fd` `overviewPresetMgr.GetStoredPreset` returns the profile as a `wstring`
   (the client parses text), fixing `TypeError: must be unicode, not str` in
   `OverviewWindow.OnOverviewPresetLoaded` / `_DoBallsAdded`.
+- `98f1cdf` onlineStatus payload moved to `onlineStatusPayload.js` (no store
+  dependency); `tests/coop-onlinestatus-rowset.test.mjs` 2/2 asserts the typed
+  tuple columns and the rowset shape.
 
 ## Confirmed evidence worth keeping
 - Owner 140000005, corp 98000001, faction 500001, Megathron Navy Issue
