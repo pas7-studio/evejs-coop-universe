@@ -63,3 +63,29 @@ Loop lag since the last restart: **boot warm-up 19.4 s**, then 0.3-1.5 s occasio
 Next step is therefore not another pass-level fix: it is one cached cargo read per tick and one
 CONCORD rule build per tick, then re-profile. Anything claimed here must be re-measured the same
 way, because a cheaper RSS alone is not evidence.
+
+## 2026-11-03 13:2xZ: what the remaining stalls actually were, and the floor we hit
+
+After the slice, loop lag was still 2.2-3.8 s every ~3 s for a whole minute after boot. Measured
+cause, in order:
+
+1. `coopHaulCargoAdoption.plan` ran on every mining scene tick (10 Hz x loaded scenes) and scanned
+   every cargo row: **10.6 s of CPU per 180 s**, plus 6.2 s reading the table through the read cache.
+   The cache now keeps a (system, fleet) index and a cargoID count, so the planner visits only its own
+   tagged rows; a non-pinned store still takes the full scan (fork `0a177aa`).
+2. The cargo table was deep-cloned up to five times a second (200 ms cache window). The store now
+   exposes `peekNativeCargo()` and the cache shallow-copies each row (fork `a9dcdff`): 3.8 s -> 1.2 s.
+3. One system's site reconcile measured **3.34 s**: `filterSummaryList` deep-cloned all 6471 instance
+   summaries on every band x family call. `rawRows` now hands out the cache's own summaries for that
+   one read-only call site (fork `857d8e7`): **3.34 s -> 1.06 s per system**.
+4. Slicing by 3 systems still froze, so a pass is now one system per slice and seeds at most 8 systems,
+   player-occupied first (forks `81d3a06`, `40a9abc`).
+
+Live effect on the play stack (same instrument, 3 minutes after recreate): no more continuous 2-3 s
+freezes; steady state is mostly **0.25-0.9 s** with an occasional 1.5 s, and the boot burst is the 8-system
+pass instead of a 36-system one.
+
+**The floor:** one system still costs ~1 s because the engine deep-clones its whole 44 MB
+`dungeonRuntimeState` on every mutation (a single `mutateState` alone costs 180 ms + normalize ~200 ms).
+Slicing cannot make that invisible; the next real step is row-level mutation there, not more coop-side
+work. That is an engine change with real blast radius and needs its own plan.
