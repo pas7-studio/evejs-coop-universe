@@ -3180,3 +3180,48 @@ Evidence: fork 65bcb43; heal unit tests 10/10 pass; live instance 59114 after re
 Why: Event flood: haul-custody-blocked wrote 89327 lines (22 duplicates per 5 s) for one blocked fleet and prey-decision wrote 3718 of 8342 sampled events because its dedupe map was re-created per call; the attestation verdict never named the failing clause.
 Where: docs/WORKLOG.md
 Evidence: fork 852c840; image evejs-local rebuilt with both markers; live event counts before the fix measured from coop-events.jsonl.
+### 2026-11-03T22:14Z · d9d424a · L2 · test(facwar): the military campaigns page answers with the live warzone state
+
+Why: The client's Military Campaigns page (Vozmozhnosti -> Voennye kampanii) always reported no campaigns: campaignGatewayService answered every eve_public.campaign.api request with a zero-length payload.
+Where: tests/coop-fw-campaign-page.test.mjs
+Evidence: fork b229dc3; new space/coopFactionWarCampaignView measures one campaign per militia faction from the live war state (Caldari 283/309 systems held, Gallente 178/178, 0 active enlistments) and keeps deterministic UUIDv5 ids; campaignGatewayService now encodes GetAll/Get/GetStats/GetParticipantStats/GetAllUnredeemedRewards/GetLimits, objective Commit/Resign/GetStats/GetParticipantStats and contribution-method definitions. Every payload decoded with the CLIENT's own descriptors (descriptor pool built from the client's *_pb2 modules). tests/coop-fw-campaign-page.test.mjs 8/8 pass. No ISK/LP/standing minted; only FSD-verified text ids are sent.
+### 2026-11-03T22:34:31Z · 3544a1b · L1 · fix(mtu): scooping a tractor unit returns its haul to cargo, not only to a space can
+
+Why: Scoop moved every collected item into a freshly ejected cargo container and nothing else. That container is a space item, so when the scene ended (logout, crash, teardown) the container and the loot were deleted with it - measured 2026-11-03 22:19:17: movedItems=41 into container 9988400124829, which no longer exists in the store.
+Where: fork Code/server/src/services/ship/mobileTractorUnitRuntime.js (moveScoopedContentsToShipCargo, scoopMobileTractorUnitToCargo, ejectMobileTractorUnitContentsToContainer).
+Evidence: fork 3544a1b; scoop now moves the haul into the ship cargo hold while the ship real free volume allows it and only ejects the remainder; log/result report movedToCargo; node --check clean. Not deployed: the play stack stays up while the owner looks for the ejected can.
+### 2026-11-03T22:38:05Z · fc630f1 · L1 · fix(fleet): dissolve a solo leftover fleet instead of refusing every invite
+
+Why: After the boss left, the remaining pilot was a one-man fleet; inviting him threw a bare FleetError, which the client renders as a fleet connection error, so the pair could not regroup after a relog (server log 22:33:56 Invite() 163/164/165 with no OnFleetInvite to char 140000107, whose session still carried fleetid 654500010000).
+Where: fork Code/server/src/services/fleets/fleetRuntime.js inviteCharacter.
+Evidence: fork fc630f1; a fleet whose only member is the invitee is destroyed (sessions and characterToFleet cleared) and the invite continues; real multi-member fleets still refuse; node --check clean. Not deployed yet.
+
+### 2026-11-04T00:10Z · 5a6db18 · L1 · fix(militia): declining the agent briefing can never end militia service
+
+Why: Action 9 is what the client sends for the briefing Decline button, but it ran LEAVE_MILITIA and silently unenlisted the pilot into a 24h cooldown. Decline now changes nothing; leave stays on the militia card only.
+Where: fork Code/server/src/space/coopFactionWarAgent.js doAction/briefing.
+Evidence: fork 5a6db18; node --check clean. Not deployed.
+
+### 2026-11-04T00:12Z · 43fe233 · L1 · feat(militia): one admin action to clear the re-enlistment cooldown
+
+Why: There was no way back into a militia inside a session after an accidental leave; militia_restore clears cooldownUntil on the real faction-war atomic row and leaves the enlist transition to the normal path.
+Where: fork Code/server/src/space/coopAdminBridge.js and coopAdminBridgeActions.js.
+Evidence: fork 43fe233; node --check clean; ALLOWED_ACTIONS includes militia_restore. Not deployed.
+
+### 2026-11-04T00:20Z · ad5e96f · L1 · fix(loot,mtu): never answer a transfer with silence; push MTU activation to the client
+
+Why: Handle_Add/MultiAdd dropped unresolved transfers without a log, which reads as drag-does-nothing; the MTU countdown sat at 0 s because component_activate never flipped in a broadcast.
+Where: fork Code/server/src/services/inventory/invBrokerService.js and Code/server/src/services/ship/mobileTractorUnitRuntime.js.
+Evidence: fork ad5e96f; node --check clean on both files. Not deployed: play stack untouched.
+
+### 2026-11-04T00:35Z · 35e9380 · L1 · fix(onlineStatus): build a real typed DBRowDescriptor for GetInitialState
+
+Why: The client runs blue.DBRow(header, [charID, True]) per contact, but the header was a DBRowDescriptor built from plain column strings. Its C constructor parses each column with PyArg_ParseTuple, so every GetInitialState raised UnmarshalError: new style getargs format but argument is not a tuple.
+Where: fork Code/server/src/services/online/onlineStatusService.js.
+Evidence: fork 35e9380; each column is now an explicit marshal tuple with its DBType (contactID I4, online BOOL); node --check clean. Not deployed.
+
+### 2026-11-04T00:40Z · 176e0fd · L1 · fix(overview): send stored overview profiles as unicode, not bytes
+
+Why: presetservice.LoadSharedOverviewProfile runs yaml.safe_load on GetStoredPreset and the profile labels live in OverviewWindow as text; a plain marshal string decodes as a Python 2 str, which raised TypeError: must be unicode, not str in OnOverviewPresetLoaded and _DoBallsAdded for both pilots.
+Where: fork Code/server/src/services/overview/overviewPresetMgrService.js Handle_GetStoredPreset.
+Evidence: fork 176e0fd; the handler now returns a wstring (the client text path); node --check clean. Root-cause fix at handler level - the tab contents still need one live load to confirm.

@@ -1,163 +1,59 @@
-# Handoff — server performance (2026-11-01)
+# Co-op FW / client-visibility handoff (2026-11-03→04)
 
-## Goal
-Stop the owner's world from feeling laggy: the tick must stay near 30 s, and the
-HTTP/gRPC surface (26002/26003) must keep answering while a player is in space.
+## Committed in the fork (`pas7-studio/EveJS`, branch `coop/pas7std`, tip)
+All are committed but **NOT deployed** — the play stack has not been restarted.
+- `b229dc3` Military Campaigns page served from the live war state (tests 8/8).
+- `3544a1b` MTU scoop returns the haul to ship cargo (overflow to a can).
+- `fc630f1` Fleet invite dissolves a solo leftover fleet instead of refusing.
+- `5a6db18` Militia briefing "Decline" (action 9) no longer leaves the militia.
+- `43fe233` Admin action `militia_restore` clears the re-enlistment cooldown on the
+  real faction-war atomic row (only `cooldownUntil`), enlist stays the normal path.
+- `ad5e96f` `Handle_Add`/`Handle_MultiAdd` warn with an exact reason
+  (NO_BOUND_CONTEXT / SOURCE_ITEM_NOT_FOUND / SOURCE_ITEM_UNRESOLVED) instead of
+  dropping a transfer silently; MTU activation sets `component_activate=[true,null]`
+  on the live deployable and broadcasts the slim item immediately.
+- `35e9380` `onlineStatus.GetInitialState` returns a DBRowDescriptor whose columns
+  are real `(name, DBType)` marshal tuples (contactID I4, online BOOL). The old plain
+  column strings made the C constructor raise
+  `UnmarshalError: new style getargs format but argument is not a tuple`.
+- `176e0fd` `overviewPresetMgr.GetStoredPreset` returns the profile as a `wstring`
+  (the client parses text), fixing `TypeError: must be unicode, not str` in
+  `OverviewWindow.OnOverviewPresetLoaded` / `_DoBallsAdded`.
 
-## Measured facts (play stack, 2026-10-31 ~20:50 UTC)
-- Tick period 6–218 s instead of 30 s; process ~480% CPU on 11 threads.
-- `/health`, `/`, `/status` on 26002 and 26003 never answer; 11+ healthcheck curls
-  stuck inside the container. Game ports 26000/443 work.
-- Hot phases (measured by gaps between consecutive event lines):
-  `living-native-materialization-attempt` 39–43 s,
-  `living-native-durable-slot` up to 75 s,
-  `coop-player-prey-eligibility` 48 s,
-  `universe-sites` p95 45 s (not dominant in the last window).
+## Confirmed evidence worth keeping
+- Owner 140000005, corp 98000001, faction 500001, Megathron Navy Issue
+  `9988400124002`, system 30001390 (Pakkonen). Friend 140000107.
+- Enlistment record: status LEFT, `leftAt 1793735429495`, `cooldownUntil 1793821829495`,
+  rank 0 — caused by the briefing-decline bug. Friend has no enlistment record.
+- Loot drag failure: `[InvBroker] Add itemID=… source=…` with no store record for the
+  container/items; `Handle_Add` used to return null with no log.
+- Overview/onlineStatus errors are in the client log: `must be unicode, not str` and
+  `new style getargs format but argument is not a tuple`.
+- Drone counter: server emits one `OnDroneStateChange` per launched drone; the client
+  `michelle.OnDroneStateChange(itemID, ownerID, controllerID, activityState, typeID,
+  controllerOwnerID, targetID)` drops a drone when `charid != ownerID AND shipid !=
+  controllerID`; `SetState` builds `stateByDroneID` from `bag.droneState` (filtered by
+  `controllerID > 0`). Not yet pinned why only 1 of 5 shows.
+- Logout: in space the client calls `GetMenuService().SafeLogoff()`; the server answers
+  `[]` and `_completeInstantSafeLogoff` sends `OnSafeLogoffTimerStarted(now + 1 s)` then
+  `OnSafeLogoffActivated`. The client timer is `logoffTime - blue.os.GetSimTime() + SEC`.
+  The 10 s the owner sees is not yet explained by the server constant alone.
+- Warp: gate target uses `resolveStargateWarpTarget` with
+  `WARP_EXIT_VARIANCE_RADIUS_METERS = 2500` and a random 1..2500 stop distance. The
+  reported ~10 km landing is not explained by these constants yet.
 
-## Fixed already (fork, image `6d15d4b`)
-1. `546936f` — existence checks called `runtime.ensureScene(system)`, which BUILDS a
-   whole solar system (belts, gates, 40k asteroid records) just to answer "does this
-   ship exist". Called once per stored identity link, every tick. Replaced with
-   `findNativeShip()` in `space/coopVirtualWorldRuntime.js` (loaded scene answers
-   directly, unloaded one from `npc/nativeNpcStore`). Three call sites.
-2. `a2ec062` — `allowsPlayerPrey()` emitted a `coop-player-prey-decision` event with a
-   synchronous `appendFileSync` for every attacker × player pair, every tick. Now one
-   event per (attacker, target, verdict, reason).
-3. `5345aca` — `EVEJS_COOP_PLAYER_PREY_DEBUG` was pinned to `1` in `Code/compose.yaml`
-   (per-pair JSON dump into the container log). Now `0`.
+## Still open
+1. Loot: confirm a real wreck/can drag now logs a reason; if the source is still
+   unresolvable, materialize scene loot as real items (needs the new warn line live).
+2. Overview: load a profile in the client to confirm the unicode error is gone.
+3. Drone counter 1/5: trace `bag.droneState` vs `OnDroneStateChange` on the client.
+4. Logout 10 s: pin the server call behind `CmdLogOff` and compare sim vs wallclock.
+5. 77 km pilot-distance desync; death loot scattered (`npcWreckService`).
+6. Second "Изменения принадлежности" card (never identified).
+7. Warp landing for heavy hulls (~4 km): measure the real client value first.
+8. After deploy: `militia_restore` for 140000005, then enlist both pilots into Caldari.
 
-None of it is live on the play stack yet: it needs one restart window.
-
-## Next steps (in order)
-1. Restart the play stack with the owner's consent, then re-measure with the two
-   probes kept in `%TEMP%\opencode`: `stall-probe.cjs` (event-loop stalls) and
-   `log-gaps.mjs` (stalls named by the log line before them).
-2. If `living-native-durable-slot` is still huge: `space/coopNativeMiningFleetDurable.js`
-   restores slots (entities, modules, cargo) — make it incremental (one slot per tick)
-   and cache the per-slot signature instead of re-reading store rows.
-3. `space/coopUniverseSites.js` `reconcile()` — split per system across ticks; it is
-   called with the whole `visitedSystems` set.
-4. Re-enable `EVEJS_COOP_PERF_METRICS` samples: `coop-perf-sample` events stopped on
-   2026-10-30T22:26 although `enabled()` returns true in a fresh process, so the
-   in-server 60 s timer is not emitting. Fixing that gives per-phase timings for free.
-
-## Done (2026-11-01): more 350mm Carbide Railgun I for sale, no restart
-Type `14280` (SDE name "350mm Carbide Railgun I", market group 566). Stock was 1 at
-station `60003760` (Jita IV-4), where the owner is docked.
-**Live seeded-stock path — reusable, needs no server or market restart:**
-`POST http://127.0.0.1:40110/v1/admin/seed-stock/adjust` with
-`{station_id, type_id, delta_quantity|new_quantity, new_price?, reason}`.
-The market daemon (Rust) applies it in a transaction, invalidates the scope caches and
-refreshes the summaries, so it is still real seeded stock — not an invented player order.
-It only UPDATES an existing `seed_stock` row; a new station needs the offline seeder
-(`scripts/Bootstrap-Coop-Market.ps1`, which takes the `.market.lock` and therefore a
-market stop). Verify with `GET /v1/orders/{region_id}/{type_id}`.
-Result: 100 units at 704,900 ISK, `source: seed`, confirmed in the order book.
-Whole 350mm hybrid line then stocked the same way at 60003760 (region 10000002):
-14280 Carbide 100, 14282 Scout 50, 14284 Compressed Coil 50, 14286 Prototype
-Gauss 50, 12354 Railgun I 50, 12356 Railgun II 50.
-
-**Why the client can still show the old quantity** (`eve/client/script/ui/services/
-marketsvc.pyj`, `RefreshOrderCache`): the client keeps `orderCache[typeID]` and after
-calling `GetOrders` it compares `GetCachedMethodCallVersion` with its stored version;
-if the version matches it DISCARDS the fresh payload. The server only rebuilds that
-version inside `buildCachedMethodCallResult` (i.e. when GetOrders is actually served),
-so a market window opened before an out-of-band change keeps its copy until that type
-is re-selected. `CACHE_INTERVAL = 300` is defined but unused — there is no timer.
-The client's Quantity column is `volRemaining` (`market/quote.pyj GetQuantity`).
-
-**Known cosmetic defect of the live adjust path:** `adjust_seed_stock` updates
-`seed_stock.quantity` but not `initial_quantity`, and the seed sell row maps
-`vol_entered = initial_quantity` (`state.rs query_order_book_rows_with_connection`),
-so an adjusted row reads "remaining 100 / entered 1". Harmless for quantity display,
-wrong for anything showing `volEntered`; a reseed sets it correctly.
-
-## Owner's Talos: 10 ready fits (2026-11-01, Jita IV-4 60003760)
-Granted 10 Talos hulls (4308) via `admin_batch` (10x `give_item`) and fitted each in
-one `admin_batch` of 10x `give_fit` with an explicit `itemID` (omitting `itemID` makes
-`giveFit` reuse the OLDEST docked hull of that type — never do that for a batch).
-Every hull verified 8 high / 4 mid / 5 low / 3 rig + drones + ammo:
-695 Rail Sniper T1 (350mm I, Iron/Lead, 4x Tracking Computer, 3x Locus)
-696 Rail Sniper T2 (350mm II, Spike, MFS II, DC II, 3x TC II/Sensor)
-697 Blaster Brawler T1 (Neutron I, Antimatter, scram/web/cap booster, 1600 plate)
-698 Blaster Brawler T2 (Neutron II, Void, MFS II, 1600 plate)
-699 Shield Kiter (350mm Prototype Gauss, 50MN MWD, disruptor, 2x LSE, 3x extender rig)
-700 Armor Buffer (350mm Compressed Coil, 1600 plate, 2x multispec membrane, 3x Trimark)
-701 Active Armor PvE (350mm Scout, MAR II, cap rechargers, 2x aux nano pump)
-702 Drone Support (Electron I, 2x DDA I, 2 Hammerhead + 1 Hobgoblin)
-703 Anti-Tackle (350mm I, Lead, 2x TE I, 3x Metastasis, 5x Warrior)
-704 Null Blaster Kite (Ion II, Null, 50MN MWD, disruptor, web)
-Item IDs are `9988400120695..9988400120704`. Ship names are still the default "Talos";
-there is no admin rename action, the owner renames them in the client.
-
-**2026-11-01: rename_item added** (fork `d730d47`): `coopAdminBridgeActions.renameItem`
-uses `itemStore.updateInventoryItem({itemName})` (the primitive behind
-`invBroker.SetLabel`) and pushes `OnCfgDataChanged/evelocations` to the live session.
-Whitelisted as `rename_item`, exposed as MCP `admin_rename_item` (also usable as a
-batch action). Proven on `evejs-agents` (image `1ac99b2`): renamed item
-`9988400020455` "Talos" -> "Rename Proof Hull", persisted to `items` in both
-`itemName` and `shipName`. The play stack still runs the older image, so there the
-tool answers `refused` until one restart window; the client's own right-click Rename
-(`invBroker.SetLabel`, stock code) works there today.
-
-Trap found the same day: the earlier PowerShell edit of `Code/compose.yaml` left the
-prey-debug comment/value at one leading space instead of six, so `docker compose
-config` failed with "did not find expected key" and NO recreate was possible (the
-running containers were unaffected). Fixed in `ce91a4b`; always run
-`docker compose -f compose.yaml config -q` after editing that file.
-
-**Also granted 2026-11-01: 5 Algos + 5 Vexor, all fitted and verified.**
-Algos `...120928..120932`: Rail (125mm I, Iron S), Blaster (Light Neutron, Antimatter S),
-Drone (2x DDA I, 5 Hobgoblin), MWD Tackle (5MN MWD, disruptor, web, 5 Warrior),
-Anti-Frigate (150mm I, 2x TE I, 3x Metastasis). Each 5 high / 3 med / 3 low / 3 small rig.
-Vexor `...120933..120937`: Rail (200mm I), Blaster (Heavy Neutron, 800mm plate + MAR),
-Drone (3x DDA I, 5 Hammerhead + 5 Hobgoblin), Shield Kite (250mm I, 50MN MWD, 2x MSE),
-Armor Buffer (Heavy Ion, 800mm plate, 2x multispec, 3x Trimark). Each 4 high / 4 med / 5 low / 3 rig.
-Algos 32872, Vexor 626; drone limits: Algos 60 m3 bay, Vexor 125 m3 / 75 Mbit.
-
-Planned labels for `admin_rename_item`: 695 "T1 Rail Sniper", 696 "T2 Rail Sniper",
-697 "T1 Blaster Brawler", 698 "T2 Blaster Brawler", 699 "Shield Kiter",
-700 "Armor Buffer", 701 "Armor PvE Rep", 702 "Drone Support", 703 "Anti-Tackle",
-704 "Null Kiter"; 928 "Algos Rail", 929 "Algos Blaster", 930 "Algos Drone",
-931 "Algos MWD Tackle", 932 "Algos Anti-Frig"; 933 "Vexor Rail", 934 "Vexor Blaster",
-935 "Vexor Drone", 936 "Vexor Shield Kite", 937 "Vexor Armor".
-
-**DONE on the play stack 2026-11-01 22:37** (image `8f4a4d1`, one owner-approved restart):
-all 20 hulls renamed and all 20 saved fittings created (ids 1633-1652, plus his three
-older ones 1620/1621/1631). Verified in the gameStore: `savedFittings` owner row
-`owners140000005` = 23 fittings, item names persisted.
-
-**Bridge starvation, still the open lag:** with the loop blocked in a long world phase
-the fast drain timer cannot fire, so an admin call answers only when a FULL tick
-completes (measured after the restart: 12 s, then >2 min twice). Requests are queued in
-`coop-admin-requests.jsonl` and execute later, so a timeout from a tool does NOT mean
-the action was lost. Also: a throwing action blocks the whole queue, because `drain()`
-aborts before `writeJsonLines` - clear the file to unblock. The remaining hot phases
-(`living-native-durable-slot`, `universe-sites`, `living-native-industry`) are the fix.
-
-## Traps
-- **Market host port moved to `127.0.0.1:41120`** (fork `e25cfe2`): Windows WinNAT now
-  reserves 40064-40163, so binding 40110 fails with "socket ... forbidden" and
-  `docker compose up` aborts. Container port is still 40110 and the server uses
-  `market:40111` inside the compose network; only the host publish changed.
-- **An orphan `evejs-market-2` container** (image `evejs-local`, started outside this
-  session, up 5 h) held `/var/lib/evejs/market/.market.lock`, so the real market
-  exited with "market database is currently in use". Stopped it; the compose market
-  then came up healthy. Check `docker ps --filter volume=evejs-data` whenever the
-  market refuses to start.
-- **Endpoint moved to `156.146.50.8:35386`** (2026-11-02): relay recreated on 35386,
-  banner OK. `Start-Play-Stack.ps1 -Action Up -PublicPort <new>` does this.
-- **Relay drifted back to 64410 while Proton forwarded 35386** (2026-11-03 01:0x): a
-  plain `-Action Up` used the hardcoded default, so the friend reached nothing. The
-  script now detects the live port from the Proton log (`Port pair N->N`) and only
-  falls back to 64410 with a warning (commit `05ecf374`). `-Action Status` prints the
-  detected port and checks the banner on it.
-- Client-side ports did NOT change: game `127.0.0.1:26000`, proxy `26002`, gateway
-  `443` (container 26003), XMPP `5222`, market host publish `41120`. `start.ini`
-  still `server = 127.0.0.1 / port = 26000 / cryptoPack = Placebo`.
-- `docker cp` over `/var/lib/evejs/gameStore/gamestore.sqlite` makes the file
-  root-owned; the server then logs `sync flush FAILED ... readonly database` and loses
-  every write. Fix: stop, `chown 1000:1000` on the volume, delete stale `-wal`/`-shm`.
-- The play stack is being recreated by something outside this session (19:58, 20:07,
-  21:54, 20:44) — check that before blaming a measurement.
-- Never measure during boot: 50 s stalls in the first 2 minutes are startup, not lag.
+## Deploy procedure (only with the owner's explicit window)
+`cd C:\Games\EveCoop\upstream-evejs\Code; docker build -t evejs-local .` then
+`docker compose -f compose.yaml -f compose.coop-probe.yaml -p evejs up -d --force-recreate server`.
+Play stack only. Never restart it unasked.
