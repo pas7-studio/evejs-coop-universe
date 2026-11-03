@@ -80,12 +80,42 @@ test("the haul planner uses the index when the pinned store provides it", () => 
     "the fast path must still refuse a duplicated original cargoID");
 });
 
-test("the live cache is wired to the store's non-cloning enumeration", () => {  const source = fs.readFileSync(
+test("entity rows are shallow copies too, so war combat cannot mutate the store", () => {
+  const source = [{ entityID: 42, corporationID: 1000035, hp: 100 }];
+  const cache = createCache({
+    listNativeEntities: () => source,
+    listNativeCargo: () => [],
+    ttlMs: 10000,
+    now: () => 1000,
+  });
+  const row = cache.entityByID(42);
+  assert.notEqual(row, source[0]);
+  row.hp = 0;
+  assert.equal(source[0].hp, 100);
+});
+
+test("the store tells the read cache about every write, so the TTL is a backstop", () => {
+  const store = fs.readFileSync(
+    path.join(forkRoot, "Code/server/src/space/npc/nativeNpcStore.js"), "utf8");
+  assert.match(store, /invalidateCoopReadCache\(\)/,
+    "a store write must drop the read cache, otherwise freshness depends on the TTL alone");
+  const writes = store.match(/success !== false\) invalidateCoopReadCache\(\);/g) || [];
+  assert.equal(writes.length, 2, "both writeCollectionRow and removeCollectionRow must invalidate");
+  const cache = fs.readFileSync(
+    path.join(forkRoot, "Code/server/src/space/coopNativeReadCache.js"), "utf8");
+  assert.match(cache, /\|\| 2000\)/, "with invalidation in place the cache window is 2 s, not 200 ms");
+});
+
+test("the live cache is wired to the store's non-cloning enumerations", () => {  const source = fs.readFileSync(
     path.join(forkRoot, "Code/server/src/space/coopNativeReadCache.js"), "utf8");
   assert.match(source, /peekNativeCargo/,
     "nativeCache() must prefer peekNativeCargo, or every cache window deep-clones the cargo table");
+  assert.match(source, /peekNativeEntities/,
+    "nativeCache() must prefer peekNativeEntities, or every cache window deep-clones every NPC entity");
   const store = fs.readFileSync(
     path.join(forkRoot, "Code/server/src/space/npc/nativeNpcStore.js"), "utf8");
   assert.match(store, /function peekNativeCargo\(/);
+  assert.match(store, /function peekNativeEntities\(/);
   assert.match(store, /^ {2}peekNativeCargo,$/m, "peekNativeCargo must be exported");
+  assert.match(store, /^ {2}peekNativeEntities,$/m, "peekNativeEntities must be exported");
 });
