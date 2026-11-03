@@ -3237,3 +3237,9 @@ Evidence: fork 98f1cdf; onlineStatusPayload.js loads standalone and produces tup
 Why: The owner was flying 5-9 jumps to find a difficulty-4 combat anomaly and the ones that spawned were too easy. Density and the eligible difficulty pool live in the dungeon authority spawn profile, so getSpawnProfile now applies a pure combat-only transform: slotsPerSystem x2, targetSystems/targetSystemRatio x1.5, difficultyRange shifted up one tier; coopUniverseSites seeds up to 24 visited systems per pass and a 24-system band sample.
 Where: fork Code/server/src/space/coopSiteTuning.js (new), services/dungeon/dungeonAuthority.js getSpawnProfile, space/coopUniverseSites.js limits.
 Evidence: fork e78711b; tests/coop-site-tuning.test.mjs 3/3 pass (density, combat-only restriction, env knobs + kill switch); mining/gas profiles untouched; node --check clean. Not deployed.
+
+### 2026-11-04T01:25Z · e21dd06 · L1 · fix(career): give every career activity a real goal so the portal can open
+
+Why: The career portal died on open with ZeroDivisionError: UpdateDashedCircle divides by len(goals), every activity node comes from the client's static CAREER_PATH_GROUPS, and our definitions sent no ui_annotations, so all four goals landed in the career-path bucket and every activity group stayed empty (client trace in server log at 23:10:24).
+Where: fork Code/server/src/space/coopCareerGoals.js (full catalogue), gatewayServices/compatibilityGatewayService.js (annotations), _secondary/express/publicGatewayLocal.js (Attributes name/description/ui_annotations + ui.Annotation).
+Evidence: fork e21dd06; 43 definitions (4 career-path + 39 activities), all ids unique; encoded with the real local proto root: 2944 bytes, 43 goals decoded, group annotations present; tests/coop-career-goal-catalogue.test.mjs 3/3 pass. Not deployed.
