@@ -61,3 +61,51 @@ test("an operator can widen the envelope explicitly", () => {
 test("without positions the old verdict is preserved", () => {
   assert.equal(verdict({ sourceAt: undefined, targetAt: undefined }), true);
 });
+
+test("a pirate opens fire on whoever comes into its own engagement range", () => {
+  // Real EVE rats do not wait for a director script: they aggro the hull that enters their site.
+  const source = { itemID: 980000142453, kind: "ship", nativeNpc: true, position: { x: 0, y: 0, z: 0 } };
+  const target = {
+    itemID: 9988400120641,
+    kind: "ship",
+    position: { x: 40000, y: 0, z: 0 },
+    session: { characterID: 140000005 },
+  };
+  assert.equal(
+    allowsPlayerPrey(source, target, {
+      env: ENV,
+      nowMs: NOW,
+      probe: false,
+      registry: {
+        getControllerByEntityID: () => ({
+          entityID: source.itemID,
+          manualOrder: null,
+          lastAggressorID: 0,
+          lastAggressedAtMs: 0,
+        }),
+      },
+      safety: { blocksAggression: () => false },
+    }),
+    true,
+  );
+});
+
+test("proximity aggro can be switched off explicitly", () => {
+  const source = { itemID: 980000142453, kind: "ship", nativeNpc: true, position: { x: 0, y: 0, z: 0 } };
+  const target = {
+    itemID: 9988400120641,
+    kind: "ship",
+    position: { x: 40000, y: 0, z: 0 },
+    session: { characterID: 140000005 },
+  };
+  assert.equal(
+    allowsPlayerPrey(source, target, {
+      env: { ...ENV, EVEJS_COOP_NPC_PROXIMITY_AGGRO: "0" },
+      nowMs: NOW,
+      probe: false,
+      registry: { getControllerByEntityID: () => ({ entityID: source.itemID, manualOrder: null, lastAggressorID: 0, lastAggressedAtMs: 0 }) },
+      safety: { blocksAggression: () => false },
+    }),
+    false,
+  );
+});
