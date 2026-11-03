@@ -3135,3 +3135,8 @@ Evidence: forks a9dcdff,0a177aa,857d8e7,81d3a06,40a9abc; live play stack: one-sy
 Why: Sub-second stalls: one system's site reconcile cost 690 ms of pure copying (whole-state deep clone + re-normalizing 6499 records per pass) and the pass chain starved the loop; NPC reconcile ran every visited system per tick and war opening every tick.
 Where: docs/PERF_BASELINE_20261103.md
 Evidence: forks c30fcbb,7916bf1,9c9d2ed,e34b605; live: reconcileInstancesMs 690->131ms, creating system 561ms total (Jita 0->3 seeded sites verified with siteKey/template/hash/position), universe-sites phase 53ms, npc-reconcile 2 systems/cycle, 111s with no lag sample above 250ms; remaining: 12.8s boot warm-up, GC 5s/180s, npc-recognition 342ms.
+### 2026-11-03T14:36Z · e4d34a0 · L2 · docs(test): record the garrison phase bug and pin the memo wrapper
+
+Why: The war garrison phase threw on every tick (frozen registry + Object.create wrapper), so garrisons were never refilled; fixed via wrapSnapshot and spaced the now-real formation work to every second tick.
+Where: docs/PERF_BASELINE_20261103.md, tests/coop-memo-snapshot.test.mjs
+Evidence: fork 6c921d7+7ba0dcd; live: 'Cannot assign to read only property snapshot' 63x -> 0, phase now runs with GARRISON_APPLIED spawning 3 hulls/side, 3 wrapper tests pass; typical tick 0.27-0.58s.
