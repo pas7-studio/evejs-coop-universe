@@ -3165,3 +3165,8 @@ Evidence: fork 7284e92; live payload had 10 of 37 territories with controller 50
 Why: Gone Berserk (dungeon 875) instance 6 was created 2026-10-27 and still required 7 waves while only wave_01/06/07 existed; the objective could never be satisfied, so the player stood in a cleared pocket forever.
 Where: tests/coop-mission-stale-instance.test.mjs
 Evidence: fork 005207c; live repair dungeon_mission_repair instanceID 6 -> lifecycleState completed, mission 55099 objectiveCompleted=true; 6 new tests pass; sweep runs per site-pass slice with a 12h stale window.
+### 2026-11-03T17:54Z · cb4982a · L2 · test(mission): no mission text may render a raw [kind]contextKey token
+
+Why: Mission details and the agent dialog printed raw CCP mutables like [location]dungeonLocationID.name; 1862 of 2878 shipped missions carry such tokens (20 distinct, five kinds).
+Where: tests/coop-mission-message-tokens.test.mjs
+Evidence: fork bd63d51; resolver unit test 5/5 pass; container rebuilt and healthy with missionMessageTokens.js; proof on live mission 875 briefing: 1 raw token in, 0 tokens out.
