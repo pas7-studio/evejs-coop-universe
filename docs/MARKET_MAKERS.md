@@ -62,3 +62,18 @@ trader phase that uses it.
 - It will not invent ISK, items or orders: every order is backed by a booked balance and real stock.
 - It will not touch the play stack until it is proven on `evejs-agents`.
 - It will not silently "fix" prices: the ranges above are the owner's, and every step is logged.
+
+## A refused order must say why (2026-11-03)
+
+Trader records sat at `orders: 0` while the log said nothing, because `placeBuy` returned
+`ok: false` without naming which check failed. Both refusal paths now print one throttled line
+(`[MarketMaker] NO_ORDER_ACK` / `READBACK_MISMATCH`) with the exact request and the exact reply,
+at most once per reason per minute.
+
+One real defect was found on the way: the `GetOrder` read-back sent the order id as a **string**,
+while the daemon decodes that field as an integer, so a correct order could look like a mismatch.
+The read-back now sends the integer form when the id is a safe integer.
+
+There is no `EVEJS_COOP_MARKET_MAKER*` flag on the play stack, so these diagnostics only appear
+where the feature is switched on (`evejs-agents`).
+
