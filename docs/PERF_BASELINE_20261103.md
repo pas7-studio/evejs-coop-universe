@@ -118,3 +118,26 @@ after boot and a 12.8 s boot warm-up (cache preload + world init), plus GC on a 
 Remaining known costs, in order: boot warm-up (12 s once), GC (5 s per 180 s of CPU), `npc-recognition`
 (342 ms max), and the per-system dungeon state write path, which still serializes a 44 MB table when a
 mutation really happens.
+
+## 2026-11-03 14:3xZ: a real gameplay bug behind one of the "phases"
+
+While measuring the remaining phases, the log carried 63 identical errors in one container:
+
+    [CoopLivingWorld] native-faction-war-garrison Cannot assign to read only property 'snapshot'
+
+`memoFor` built its cached wrapper with `Object.create(frozenRegistry)` and then assigned
+`snapshot`. With the inherited property read-only that is a strict-mode TypeError, and the war fleet
+registry returns `Object.freeze({snapshot,claim,execute})`. The consequence was not a missing cache:
+the garrison phase **threw on every tick**, so no garrison was ever refilled and PREPARING/ASSAULT
+campaigns never got their hulls. `wrapSnapshot()` (space/coopMemoSnapshot.js) copies the registry
+into a writable object that keeps its prototype; a failing source returns an empty snapshot instead of
+killing the phase (fork `6c921d7`, 3 tests).
+
+With the phase fixed it now really spawns formations (verified events: `GARRISON_APPLIED` with three
+native hulls per side), and that costs ~1.4 s per formation, so it runs on every second tick, offset
+from war opening so the two heaviest war phases never land together (fork `7ba0dcd`).
+
+State after that deploy: typical ticks 0.27-0.58 s, with 1.8-4.7 s hits on a boot warm-up, the first
+site pass and the garrison tick. Remaining known costs: garrison formation ~1.4 s (real spawn work that
+never ran before), boot warm-up ~10-13 s, GC ~5 s per 180 s at a 4.7-5.9 GB RSS, and a 44 MB dungeon
+table serialization whenever a site really changes.
