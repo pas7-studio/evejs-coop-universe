@@ -3225,3 +3225,9 @@ Evidence: fork 35e9380; each column is now an explicit marshal tuple with its DB
 Why: presetservice.LoadSharedOverviewProfile runs yaml.safe_load on GetStoredPreset and the profile labels live in OverviewWindow as text; a plain marshal string decodes as a Python 2 str, which raised TypeError: must be unicode, not str in OnOverviewPresetLoaded and _DoBallsAdded for both pilots.
 Where: fork Code/server/src/services/overview/overviewPresetMgrService.js Handle_GetStoredPreset.
 Evidence: fork 176e0fd; the handler now returns a wstring (the client text path); node --check clean. Root-cause fix at handler level - the tab contents still need one live load to confirm.
+
+### 2026-11-04T00:55Z · 98f1cdf · L1 · refactor(onlineStatus): move the rowset payload into its own module
+
+Why: The typed DBRowDescriptor from 35e9380 could only be tested by importing the whole onlineStatus service, which pulls the character store and a database.
+Where: fork Code/server/src/services/online/onlineStatusService.js and new onlineStatusPayload.js.
+Evidence: fork 98f1cdf; onlineStatusPayload.js loads standalone and produces tuple columns [["contactID",3],["online",11]]; node --check clean. Not deployed.
