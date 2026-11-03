@@ -60,7 +60,11 @@ After `docker compose -f compose.yaml -f compose.coop-probe.yaml -p evejs up -d
 - `coop-npc-links.json` mtime moved to the recreate minute: the projection is
   being written by the store owner;
 - `coop-faction-war-mirror.json` still at its pre-deploy mtime: it is no longer
-  written, because the mirror row is only written on a real war write;
+  written, because the mirror row is only written on a real war write. The heal
+  path was proved live instead: reading through `coopWarMirror.read()` validated
+  the 1 066 440-byte legacy file with `coopFactionWarCore.validateState` and
+  wrote row `state-v1` of exactly 1 066 440 bytes (10 wars / 866 campaigns /
+  37 territories, identical to the authoritative record, which was unchanged);
 - `coopWreckCustody` is empty because native wreck transfer is off on the play
   stack, so its module was never constructed (nothing to import yet).
 
