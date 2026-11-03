@@ -3130,3 +3130,8 @@ Evidence: fork daefd29+0bf4a8c; live play stack: definitions 16.2s -> 8.3s -> sl
 Why: Steady-state event-loop freezes of 2-3 s: the haul-cargo planner scanned every cargo row on every mining scene tick, the cargo table was deep-cloned five times a second, and one system's site reconcile cloned all 6471 instance summaries per family. Cargo reads are indexed, the site pass is sliced to one system and capped at eight.
 Where: docs/PERF_BASELINE_20261103.md
 Evidence: forks a9dcdff,0a177aa,857d8e7,81d3a06,40a9abc; live play stack: one-system reconcile 3.34s -> 1.06s; lag after recreate 0.25-0.9s steady with occasional 1.5s vs continuous 2.2-3.8s before; pass log 'systems=8 desired=46 created=0 spawned=5'; floor is the engine cloning its 44MB dungeon state per mutation (mutateState 180ms).
+### 2026-11-03T13:55Z · 3081ec3 · L2 · docs(perf): sub-second site slices and what is left
+
+Why: Sub-second stalls: one system's site reconcile cost 690 ms of pure copying (whole-state deep clone + re-normalizing 6499 records per pass) and the pass chain starved the loop; NPC reconcile ran every visited system per tick and war opening every tick.
+Where: docs/PERF_BASELINE_20261103.md
+Evidence: forks c30fcbb,7916bf1,9c9d2ed,e34b605; live: reconcileInstancesMs 690->131ms, creating system 561ms total (Jita 0->3 seeded sites verified with siteKey/template/hash/position), universe-sites phase 53ms, npc-reconcile 2 systems/cycle, 111s with no lag sample above 250ms; remaining: 12.8s boot warm-up, GC 5s/180s, npc-recognition 342ms.
