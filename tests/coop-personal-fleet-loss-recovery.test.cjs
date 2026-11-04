@@ -150,3 +150,20 @@ test('recovered phase requires available pilot status in native life registry',(
  pilotID:'coop-pilot-001',status:'AVAILABLE'}})).status,
  'ORIGINAL_SHIP_CONFIRMED_LOST');
 });
+
+
+test('PF-14: destroyed hull phase with no original wreck is corrupt',()=>{
+ assert.equal(l.assessRestart({...start(),phase:'LOSS_CONFIRMED'},{}).reason,
+ 'PF_LOSS_RECORD_CORRUPT');
+});
+test('PF-14: mismatched durable loss revision is corrupt',()=>{
+ assert.equal(l.replay({...start(),revision:1},{
+ operationID:'pf-loss-001',generation:7}).reason,
+ 'PF_LOSS_RECORD_CORRUPT');
+});
+test('PF-14: unknown native receipt type cannot confirm original loss',()=>{
+ assert.equal(l.replay({...start(),phase:'LOSS_PENDING',revision:1,
+ wreckID:700,proofs:[{id:'fake-01',type:'FAKE_WRECK'}]},{
+ operationID:'pf-loss-001',generation:7}).reason,
+ 'PF_LOSS_RECORD_CORRUPT');
+});
