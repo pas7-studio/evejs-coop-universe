@@ -22,7 +22,7 @@ let warFleetRegistry=null,bridge=null,identityRegistry=null,
 // Declared here because the extraction left them behind: every phase that
 // touched one threw ReferenceError, which froze that part of the world.
 let lossBridge=null,factionDirector=null,raidDirector=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,warpPointDirector=null,nativeGunRange=null,warGateHandoff=null,warRecoverySocket=null,nativeOrderBridge=null,lootCommerce=null,nativeAmmoSupply=null,warTreasuryInstance=null,
- siteSentrySpawner=null,siteSentryFireDirector=null;
+ siteSentrySpawner=null,siteSentryFireDirector=null,siteLootStructureFiller=null;
 function bindWarRuntime(state){
  if(!state||typeof state!=="object")return false;
  if(state.bridge!==undefined)bridge=state.bridge||null;
@@ -1188,6 +1188,44 @@ function advanceSiteSentryFire(){
  }
 }
 
+function advanceSiteLootStructures(){
+ // A site warehouse/depot/cache is scenery: measured 2026-11-05, it has no inventory row at
+ // all, so "open cargo" is always empty. The site templates do carry lootProfiles, and the
+ // site service already turns those into real items for data/relic containers - this phase
+ // gives a lootable structure the same treatment, inside the structure's own itemID, once.
+ if(process.env.EVEJS_COOP_SITE_LOOT_STRUCTURES!=="1"||!visitedSystems.size)return;
+ const runtime=require("./runtime"),dungeon=require("../services/dungeon/dungeonRuntime"),
+  authority=require("../services/dungeon/dungeonAuthority"),
+  siteService=require("../services/dungeon/dungeonUniverseSiteService"),
+  itemStore=require("../services/inventory/itemStore");
+ if(!(runtime.scenes instanceof Map))return;
+ const testing=siteService&&siteService._testing;
+ if(!testing||typeof testing.buildLootGrantEntriesForContainer!=="function"||
+  typeof testing.resolvePopulationHints!=="function")return;
+ if(!siteLootStructureFiller){
+  siteLootStructureFiller=require("./coopSiteLootStructures").createLootStructureFiller({
+   listInstances:systemID=>dungeon.listActiveInstancesBySystem(systemID,{full:true}),
+   getTemplate:templateID=>{try{return authority.getTemplateByID(templateID)||null}catch(_error){return null}},
+   resolvePopulationHints:(instance,template)=>testing.resolvePopulationHints(instance,template),
+   buildLootEntries:(container,hints,context)=>
+    testing.buildLootGrantEntriesForContainer(container,hints,context),
+   listContents:(ownerID,containerID,flagID)=>itemStore.listContainerItems(ownerID,containerID,flagID),
+   grantItems:(ownerID,locationID,flagID,entries)=>
+    itemStore.grantItemsToOwnerLocation(ownerID,locationID,flagID,entries),
+   observe:(name,context,_session,payload)=>require("./coopObserve").observe(
+    require("./coopRuntimeProbe"),name,context,payload)
+  });
+ }
+ for(const systemID of [...visitedSystems].slice(0,12)){
+  const scene=runtime.scenes.get(systemID);
+  if(!scene||Number(scene.systemID)!==Number(systemID))continue;
+  const instances=dungeon.listActiveInstancesBySystem(systemID,{full:true});
+  const result=siteLootStructureFiller.tick({systemID,scene,instances});
+  if(result.filled.length)console.log(`[CoopLivingWorld] site loot structures in ${systemID}: `+
+   result.filled.map(entry=>`#${entry.itemID} ${entry.name} ${entry.items} item(s) from ${entry.profile}`).join(", "));
+ }
+}
+
 function advanceNpcRecognition(){
  if(process.env.EVEJS_COOP_NPC_MEMORY!=="1"||!identityRegistry||!visitedSystems.size)return;
  const runtime=require("./runtime");
@@ -1286,4 +1324,4 @@ function releaseSpawnedIdentity({pilotID,entityID=0,reason=""}={}){
  return {...released,reason:String(reason||"IDENTITY_REASSIGNED")};
 }
 
-module.exports = {projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceSiteSentries, advanceSiteSentryFire, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};
+module.exports = {projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceSiteSentries, advanceSiteSentryFire, advanceSiteLootStructures, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};

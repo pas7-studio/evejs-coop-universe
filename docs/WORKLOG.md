@@ -3470,3 +3470,9 @@ Why: explicit client-launch runbook plus a read-only launch verifier
 Detail: Three sessions lost hours to 'the client runs but a window is missing'. The cause was always the launch: without Play.bat the client gets neither the proxy/CA variables (so no gRPC ever reaches the gateway) nor 'noconsole' (so logmodule re-raises IOError [Errno 9] Bad file descriptor, which aborts window creation - measured 2026-11-05: the overview window absent at login until a second pilot joine
 Where: AGENTS.md, docs/CLIENT_LAUNCH.md, docs/WORKLOG.md, scripts/Test-ClientLaunch.ps1
 Evidence: docs/CLIENT_LAUNCH.md; scripts/Test-ClientLaunch.ps1 (run against the live session: FAIL noconsole, FAIL launcher-parent, FAIL fresh stdout log, PASS gateway H2); traceback measured 21:13:37 in /var/lib/evejs/logs/server.log
+### 2026-11-04T21:26Z · 5736742 · L1 · test(warp): pin the gate warp default range behaviour
+
+Why: autopilot gate warps land 10 km out: the client's 10 km default was treated as an explicit surface offset
+Detail: Two cases with the live numbers behind them: a gate warp stop distance is 2000 m for a 0 m and for a 10 km request and still honours 20 km, and the gate envelope/scatter thresholds are the new 10 km constant instead of the 2 500 m jump range.
+Where: docs/WORKLOG.md, tests/coop-gate-warp-default-range.test.mjs
+Evidence: fork 445f390; 2/2 tests; measured distToTargetEdge 11009 / 11315 vs jump range 2500
