@@ -3297,3 +3297,9 @@ Evidence: fork 17e3c78; marshal encode shows the name now uses opcode 0x2e (PyWS
 Why: Client traceback EXCEPTION #23 (live 2026-11-03 22:36:05): invLootAllBtn -> MultiAdd -> UserError NotEnoughCargoSpace {'available': 0.8175, 'volume': 388}. One item that did not fit threw and aborted the whole batch, so a hold with 0.8 m3 free looted nothing.
 Where: fork services/inventory/invBrokerService.js Handle_MultiAdd capacity branch (skip the unfitting item for multi-item batches, keep the error for a single-item request).
 Evidence: fork ddf6bbb; node --check clean; tests/coop-loot-all-partial-move.test.mjs 3/3 (clamp arithmetic via invMoveCapacity, 0.8 m3 free cannot take 388 m3, MultiAdd branch must continue instead of throwing).
+
+### 2026-11-04T04:20Z · 55a60cf · L1 · fix(war): only publish warzone systems the client's frontlines map can render
+
+Why: Client traceback EXCEPTION #33 (live 2026-11-03 22:38:41): KeyError 30000132 in the theaters-of-war landing page - it sorts every occupation state by dateTaken, takes the newest system and indexes its own frontlines map with it (systems[focus_system_id]). Our payload was built from every static system of a belligerent faction, so a front outside the warzone map (Ansila, The Forge) could win that sort and kill the window.
+Where: fork space/coopWarClientView.js: occupationPairs builds states from warzoneSystems() (belligerent systems inside the war regions) instead of staticWarzoneSystems(), and warzoneOccupationStates drops live fronts outside the supplied system set; no systems set keeps the old behaviour. integration/coopWarClientView.cjs refreshed (drift 30 -> 29).
+Evidence: fork 55a60cf; node --check clean; tests/coop-war-occupation-renderable.test.mjs 2/2 plus the existing coop-war-client-view suites 15/15. Not deployed.

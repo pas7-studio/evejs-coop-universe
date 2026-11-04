@@ -22,6 +22,25 @@ const DEFAULT_EXPIRY_MS = 6 * 3600000;
 const num = (value) => Number(value) || 0;
 const pos = (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0;
 
+// The client colours a warzone system from fwwarzone/client/dashboard/const
+// FACTION_ID_TO_COLOR and indexes other faction-keyed tables with the occupier.
+// Our wars are also fought by pirate factions (500019, 500020), which are not in
+// that table: the militia map filter then passes None into a native double curve
+// (GetValueAt), raising "TypeError: Could not match argument 0 to expected type:
+// double" inside mapView._ConstructScene_thread, so the F10 map scene never
+// finished building - it loaded for minutes and often never opened at all.
+// Emit only ids the client can colour, falling back to the system owner.
+const CLIENT_COLORABLE_FACTION_IDS = new Set([500001, 500002, 500003, 500004, 500006, 500011, 500012]);
+// The warzone pairs: Caldari <-> Gallente, Minmatar <-> Amarr.
+const OPPOSING_FACTION = Object.freeze({ 500001: 500004, 500004: 500001, 500002: 500003, 500003: 500002 });
+function clientFactionID(...candidates) {
+  for (const candidate of candidates) {
+    const value = num(candidate);
+    if (CLIENT_COLORABLE_FACTION_IDS.has(value)) return value;
+  }
+  return 0;
+}
+
 // The client snapshot carries a numeric campaign id, so a stable hash is used
 // instead of a random number: the same campaign always maps to the same id.
 function numericID(text) {
@@ -38,6 +57,23 @@ function numericID(text) {
 function filetime(ms) {
   const ticks = BigInt(Math.trunc(num(ms))) * 10000n + 116444736000000000n;
   return String(ticks);
+}
+
+// The client formats dateTaken as an int64 filetime; a JS number cannot hold it (the
+// ticks exceed 2^53), and a plain string printed as "undefined" in the ownership-change
+// card, so marshal it as a real long.
+let filetimeLongBuilder = null;
+function dateTakenValue(ms) {
+  const numericMs = num(ms);
+  if (!(numericMs > 0)) return null;
+  try {
+    if (!filetimeLongBuilder) {
+      filetimeLongBuilder = require("../services/_shared/serviceHelpers").buildFiletimeLong;
+    }
+    return filetimeLongBuilder(filetime(numericMs));
+  } catch (_error) {
+    return null;
+  }
 }
 
 function liveCampaigns(state) {
@@ -118,6 +154,12 @@ function occupationStates(state) {
       contested: contestedBy.has(systemID) || (record && record.state === "CONTESTED") === true ||
         (pos(controllerID) && controllerID !== ownerID),
       militaryState: String((record && record.state) || "SECURE"),
+      // The client builds its "most recent ownership change" tiles from
+      // occupation_state.dateTaken (fwwarzone/client/dashboard/mapData.py
+      // GetSolarsystemWithMostRecentOccupancyChange) and raises AttributeError when the
+      // attribute is missing, which left both cards empty. It is a filetime, and the
+      // territory record already carries the real change time.
+      dateTakenMs: num(record && record.changedAt),
     };
   }
   // A live campaign is a front even before the system's territory record flips:
@@ -140,6 +182,7 @@ function occupationStates(state) {
         occupierID: attacker,
         contested: true,
         militaryState: "CONTESTED",
+        dateTakenMs: num(campaign && campaign.startedAt),
       };
     }
   }
@@ -164,6 +207,9 @@ function occupationStates(state) {
 function warzoneOccupationStates(state, { factionIDs = [], systems = [] } = {}) {
   const allowed = new Set((factionIDs || []).map(Number).filter((id) => id > 0));
   const live = occupationStates(state);
+  const knownSystemIDs = new Set(
+    (systems || []).map((system) => num(system && system.solarSystemID)).filter(pos),
+  );
   const out = {};
   for (const system of systems || []) {
     const systemID = num(system && system.solarSystemID);
@@ -176,10 +222,16 @@ function warzoneOccupationStates(state, { factionIDs = [], systems = [] } = {}) 
       contested: Boolean(current && current.contested),
     };
   }
-  // A front we really have but the static table does not flag still counts.
+  // A front we really have but the static table does not flag still counts - but only when
+  // the client can render that system. The landing page picks the newest dateTaken across
+  // every entry and then indexes its own warzone map with it
+  // (fwwarzone/client/dashboard/landingPagePanel._load_fw_maps -> systems[focus_system_id]),
+  // which raised "KeyError: 30000132" (Ansila, outside the frontlines map) and left the
+  // warzone map window dead.
   for (const [key, current] of Object.entries(live)) {
     const systemID = num(key);
     if (!pos(systemID) || out[systemID]) continue;
+    if (knownSystemIDs.size > 0 && !knownSystemIDs.has(systemID)) continue;
     if (!allowed.has(num(current.ownerID)) && !allowed.has(num(current.occupierID))) continue;
     out[systemID] = {
       ownerID: num(current.ownerID),
@@ -425,7 +477,10 @@ function occupationPairs(buildKeyVal, warzones, { state = null, getStargatesForS
   const states = allSystems
     ? warzoneOccupationStates(state, {
         factionIDs: Array.from(allowed),
-        systems: staticWarzoneSystems(),
+        // Region-scoped, not every static system: the client's frontlines map only carries
+        // the war regions, so publishing a belligerent-owned system from elsewhere (Ansila
+        // in The Forge) made landingPagePanel index systems[focus_system_id] -> KeyError.
+        systems: warzoneSystems(state, Array.from(allowed)),
       })
     : occupationStates(state);
   const occupiers = {};
@@ -440,15 +495,25 @@ function occupationPairs(buildKeyVal, warzones, { state = null, getStargatesForS
   } catch (_error) { adjacency = {}; }
   const attackers = attackerIDs(state, occupiers, Array.from(allowed));
   const entries = Object.entries(states).map(([systemID, entry]) => {
-    const ownerID = num(entry && entry.ownerID);
-    const occupierID = num(entry && entry.occupierID);
+    // Only client-colourable ids leave this process (see CLIENT_COLORABLE_FACTION_IDS).
+    const ownerID = clientFactionID(entry && entry.ownerID);
+    const occupierID = clientFactionID(entry && entry.occupierID, ownerID);
     if (!allSystems && !allowed.has(ownerID) && !allowed.has(occupierID)) return null;
     return [Number(systemID), buildKeyVal([
       ["ownerID", ownerID],
       ["occupierID", occupierID],
-      ["attackerID", num(attackers[systemID])],
+      ["attackerID", clientFactionID(attackers[systemID], ownerID)],
       ["contested", Boolean(entry && entry.contested)],
       ["adjacencyState", adjacency[Number(systemID)] || "BL"],
+      // Always present, even when unknown: the client reads .dateTaken on every state.
+      ["dateTaken", dateTakenValue(entry && entry.dateTakenMs)],
+      // The undock path passes this state to factionwarfare/dockableChecks
+      // IsDockableStructureUsageRestrictedByOccupationState, which reads .isFrontline
+      // before anything else; without it every undock from a militia station raised
+      // "AttributeError: KeyVal instance has no attribute 'isFrontline'" and the
+      // client simply stayed docked (measured 2026-11-03).
+      ["isFrontline", String(adjacency[Number(systemID)] || "BL") === "FL"],
+      ["isSecondline", String(adjacency[Number(systemID)] || "BL") === "SL"],
     ])];
   }).filter(Boolean);
   return { warzoneID, entries };
@@ -469,7 +534,26 @@ function localOccupationResponse(buildKeyVal, warzones, args, session, options =
     ? args[0]
     : (session && (session.solarsystemid2 || session.solarsystemid))) || 0;
   const hit = entries.find(([systemID]) => systemID === wanted);
-  return hit ? [wanted, hit[1]] : null;
+  if (hit) return [wanted, hit[1]];
+  // The client raises RuntimeError("failed to get state from server despite retrying")
+  // when the current system has no state, and that exception aborts the undock check,
+  // so a docked pilot in a non-warzone system could not undock at all. Answer with the
+  // system's static owner instead of null.
+  if (!(wanted > 0)) return null;
+  const staticRow = staticWarzoneSystems().find((row) => Number(row && row.solarSystemID) === wanted) || null;
+  const ownerID = clientFactionID(staticRow && staticRow.factionID);
+  if (!ownerID) return null;
+  const attackerID = OPPOSING_FACTION[ownerID] || ownerID;
+  return [wanted, buildKeyVal([
+    ["ownerID", ownerID],
+    ["occupierID", ownerID],
+    ["attackerID", attackerID],
+    ["contested", false],
+    ["adjacencyState", "BL"],
+    ["dateTaken", null],
+    ["isFrontline", false],
+    ["isSecondline", false],
+  ])];
 }
 
 module.exports = {
