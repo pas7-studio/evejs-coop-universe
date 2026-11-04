@@ -45,8 +45,12 @@ function createTraders({ file, clock = () => Date.now(), writeFile = null } = {}
     return instancesByPath.get(filePath);
   }
   const staleMs = Math.max(60_000, int(process.env.EVEJS_COOP_MARKET_MAKER_STALE_MS) || 3_600_000);
-  const retentionMs = Math.max(staleMs, int(process.env.EVEJS_COOP_MARKET_MAKER_RETENTION_MS) || 7 * DAY_MS);
-  const operationCap = Math.max(64, int(process.env.EVEJS_COOP_MARKET_MAKER_OP_CAP) || 5_000);
+  // Retention and cap are deliberately small: a settled reservation is only useful for a short
+  // audit window, and the whole document is serialised on every write. Measured 2026-11-05: a
+  // 12 MB document (33 184 rows) cost 20 s of CPU in writes alone; 1 000 rows keeps a write at
+  // a few hundred KB.
+  const retentionMs = Math.max(staleMs, int(process.env.EVEJS_COOP_MARKET_MAKER_RETENTION_MS) || 2 * DAY_MS);
+  const operationCap = Math.max(64, int(process.env.EVEJS_COOP_MARKET_MAKER_OP_CAP) || 1_000);
   const reconcileEveryMs = Math.max(1_000, int(process.env.EVEJS_COOP_MARKET_MAKER_RECONCILE_MS) || 60_000);
   let lastReconcileAt = 0;
   const persist = writeFile || ((target, text) => {
