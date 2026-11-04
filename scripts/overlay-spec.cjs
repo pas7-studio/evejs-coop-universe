@@ -572,7 +572,8 @@ for(const name of ["coopMemoryMetrics","coopMemoSnapshot","coopWarMirror","coopE
  "coopNpcInputSupply","coopPilotPayroll","coopUniverseSites","coopWarRetirement",
  "coopEconomyLiveReadiness","coopEconomyShadowLock","coopEconomyStationStockProof",
  "coopUniverseSitesCadence","coopWormholeEntrances","coopFwFrontlineMapSystems",
- "coopWarTargetPriority"])
+ "coopWarTargetPriority","coopAdminFitPlan","coopFactionActivityAdmin","coopMarketMaker",
+ "coopMarketMakerRuntime","coopMarketMakerTraders"])
  if(!names.includes(name))names.push(name);
 
 module.exports={PIN,names,ORE_PATCH_PATHS,STRUCTURE_PATCH_PATHS,SOCIAL_PATCH_PATHS,specs,oldLines,lootOld,lootNew,slimBroadcastOld,slimBroadcastNew};

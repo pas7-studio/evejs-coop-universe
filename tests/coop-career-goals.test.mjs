@@ -55,13 +55,15 @@ test("the portal starts every career goal incomplete and unclaimable", () => {
   const state = fakeCharacterState({"7": {characterID: 7}});
   const {goals} = makeGoals(state);
   const snapshot = goals.snapshotFor(7);
-  assert.equal(snapshot.length, 4);
+  assert.equal(snapshot.length, DEFINITIONS.length,
+    "every authored career goal must appear once");
   for (const entry of snapshot) {
     assert.equal(entry.progress, 0);
     assert.equal(entry.completed, false);
     assert.equal(entry.claimable, false);
   }
-  assert.deepEqual(snapshot.map((entry) => entry.definition.career), [1, 2, 3, 4]);
+  const careers = [...new Set(snapshot.map((entry) => entry.definition.career))].sort();
+  assert.deepEqual(careers, [1, 2, 3, 4], "the four career paths are covered");
 });
 
 test("an admin completion makes exactly that goal claimable", () => {

@@ -83,12 +83,16 @@ test("the faction-warfare manager keeps every getter the dashboard calls", () =>
 
 test("onlineStatus.Prime sends a real rowset descriptor, not a column list",()=>{
  // eve/client/script/ui/shared/comtool/onlineStatus.py:
+ //   self.onlineStatus = GetInitialState().Index('contactID')
  //   self.onlineStatus[charID] = blue.DBRow(self.onlineStatus.header, [charID, True])
- // With a list header the client raises "TypeError: expected DBRow or DBRowDescriptor as
- // first argument" every time a contact logs in or out (measured on 140000107's client).
- const file = source("services/online/onlineStatusService.js");
+ // The plain eve Rowset answered Index with header.index(name), which a DBRowDescriptor
+ // does not have ('AttributeError: ... has no attribute index', measured twice on
+ // 2026-11-04), so the answer is a dbutil.CRowset whose header is a real descriptor.
+ const file = source("services/online/onlineStatusPayload.js");
  assert.match(file, /buildPackedRowDescriptor\(ONLINE_STATUS_COLUMNS\)/,
   "the header must be a blue.DBRowDescriptor");
+ assert.match(file, /carbon\.common\.script\.sys\.crowset\.CRowset/,
+  "the client calls .Index('contactID') on it, which only CRowset has");
  assert.doesNotMatch(file, /buildRowset\(ONLINE_STATUS_COLUMNS/,
   "a list header cannot be handed to blue.DBRow");
 });
