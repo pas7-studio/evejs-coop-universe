@@ -136,4 +136,43 @@ if(process.argv[2]==='--worker'){
    }
   }finally{fs.rmSync(dir,{recursive:true,force:true})}
  });
+
+ test('real EveJS GameStore poisons writer on ambiguous underlying commit',()=>{
+  const {createGameStoreAdapter}=require(native);
+  let atomicCalls=0,fatalCalls=0;
+  const unknown=Error('INJECTED_COMMIT_UNKNOWN');
+  unknown.coopCommitOutcomeUnknown=true;
+  const sql={
+   coopAtomicNativeRows:{claimTransactor(){return {transact(){
+    atomicCalls++;throw unknown;
+   }}}},
+   loadTableObject(){return {};}
+  };
+  const adapter=createGameStoreAdapter({
+   sqliteStore:sql,ensureSqliteReady(){},ensureCached(){return true;},
+   flushTableSync(){return {success:true};},
+   cache:{corporationRuntime:{}},dirty:new Set(),flushTimers:{},
+   inFlightFlushes:new Set(),transientPaths:{},dirtyRowKeys:{},
+   fullDirty:new Set(),rebuildFlushBaselineFromDisk(){},
+   advanceFlushBaseline(){},
+   invalidateNativeItems(){return true;},
+   invalidateNativeAccounts(){return true;},
+   fatal(){fatalCalls++;}
+  });
+  const prior=process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS;
+  process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS='1';
+  try{
+   assert.throws(()=>adapter.transact(['corporationRuntime'],()=>null),
+    /NATIVE_GAMESTORE_COMMITTED_BUT_CACHE_UNSAFE/);
+   assert.equal(adapter.isPoisoned(),true);
+   assert.equal(fatalCalls,1);
+   assert.throws(()=>adapter.transact(['corporationRuntime'],()=>null),
+    /NATIVE_GAMESTORE_POISONED/);
+   assert.equal(atomicCalls,1,'no second wallet/native dispatch after uncertain commit');
+  }finally{
+   if(prior===undefined)delete process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS;
+   else process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS=prior;
+  }
+ });
+
 }
