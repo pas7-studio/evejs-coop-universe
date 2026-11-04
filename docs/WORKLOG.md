@@ -3397,3 +3397,9 @@ Why: open difficulty 7-10 combat anomalies in lowsec
 Detail: The pool holds difficulty 7-10 templates (Port/Hub anomalies, faction sites) but every band capped at 6, so none of it could be seeded. The combat lowsec band now admits up to EVEJS_COOP_SITE_LOWSEC_TOP (default 10, 0 disables). The test pins the opening, the knob and the bands that must not move: highsec, nullsec and every non-combat family. Proven live on evejs-agents with the rebuilt image: com
 Where: docs/FORK_PATCH_AUDIT_20261028.md, docs/WORKLOG.md, scripts/coop-engine-audit.cjs, tests/coop-site-tuning.test.mjs
 Evidence: fork a295e6f; 5/5 site-tuning tests; evejs-agents rebuilt image shows combat lowsec [3,10], Serpentis Port d7 seeded in Akidagi 30045342 (0.44)
+### 2026-11-04T18:10Z · a721d22 · L1 · test(sites): pin wave scaling and the nullsec/ore ceilings (fork a9a0395)
+
+Why: scale hard-site waves (d4 x2, d5 x2.5, d6 x3) and open nullsec/ore ceilings
+Detail: coop-site-wave-scaling: difficulty 3 unchanged, 4/5/6 at x2/x2.5/x3, idempotent baseAmount, cap, off switch, non-combat families untouched. coop-site-tuning: nullsec now opens its ceiling (floor unchanged) and the ore family opens to 5; highsec keeps its own ceiling. Proven live on evejs-agents with the rebuilt image through the real population-hints funnel: d3 [5,6,7,8] unchanged, d4 [6,7,8,9]->[
+Where: tests/coop-site-tuning.test.mjs, tests/coop-site-wave-scaling.test.mjs
+Evidence: fork a9a0395; 10/10 site tests; evejs-agents shows combat lowsec[3,10] nullsec[4,10] ore lowsec[1,5], funnel scales d4/d5/d6 as designed
