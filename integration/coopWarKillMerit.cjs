@@ -23,6 +23,30 @@ let bountyPayer = null;
 function setBountyPayer(payer) {
   bountyPayer = typeof payer === "function" ? payer : null;
 }
+// FW-142: LP and standing for a proven contribution. Built lazily, and a host without the
+// wallet authorities simply pays nothing instead of breaking the merit path.
+let warRewards = null;
+let warRewardsTried = false;
+function rewardsFor() {
+  if (warRewardsTried) return warRewards;
+  warRewardsTried = true;
+  try {
+    warRewards = require("./coopWarRewards" + (__filename.endsWith(".js") ? "" : ".cjs"))
+      .createWarRewards({ gameStore: require("../gameStore") });
+  } catch (_error) {
+    warRewards = null;
+  }
+  return warRewards;
+}
+function characterOf(pilotID) {
+  try {
+    return require("./coopWarRewards" + (__filename.endsWith(".js") ? "" : ".cjs"))
+      .characterIDFromPilotID(pilotID);
+  } catch (_error) {
+    return 0;
+  }
+}
+
 function ledgerInstance() {
   if (!ledger) {
     ledger = require("./coopWarMeritLedger" + (__filename.endsWith(".js") ? "" : ".cjs"))
@@ -88,6 +112,33 @@ function note({ proof, victim, emit, ledger: injected } = {}) {
     evidence,
   });
   awards.push(loss);
+  // Owner ask (2026-11-05): a proven contribution must pay the pilot, not only the rank.
+  // LP and standing follow the SAME evidence key as the merit award, so a replay cannot pay
+  // twice; a negative award (force-lost) pays nothing, the ledger's demotion is its cost.
+  const reward = rewardsFor();
+  if (reward && typeof reward.payContribution === "function") {
+    for (const award of awards) {
+      const delta = Number(award && award.meritDelta) || 0;
+      const characterID = characterOf(award && award.pilotID);
+      if (!(delta > 0) || !(characterID > 0)) continue;
+      try {
+        const paid = reward.payContribution({
+          characterID,
+          factionID: Number(p.attackerFactionID) || 0,
+          meritDelta: delta,
+          evidenceKey: String(award.kind || "kill") + ":" + String(award.pilotID || ""),
+          meta: { wreckID, kind: String(award.kind || "") },
+        });
+        if (paid && paid.status === "PAID") {
+          award.reward = { lp: paid.lp, standing: paid.standing, iskStatus: paid.iskStatus };
+        } else if (paid) {
+          award.reward = { status: paid.status, reason: paid.reason || paid.iskStatus || "" };
+        }
+      } catch (error) {
+        award.reward = { status: "UNAVAILABLE", reason: String(error && error.message || error) };
+      }
+    }
+  }
   const record = (emit && typeof emit === "function") ? emit : null;
   if (record) {
     for (const award of awards) {

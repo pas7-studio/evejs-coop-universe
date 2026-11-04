@@ -3524,3 +3524,9 @@ Why: clear the five regression checks from the state bundle
 Detail: The published state listed five REGRESSION files; all five were either a stale expectation or an undeclared artefact of this week's changes, and every safety property they protect still holds. (1) coop-corp-market-wallet: the P2P env guards moved out of the market service, so the require now resolves to two co-op modules - the test pins both instead of one. (2) coop-flag-registry: nine new flags (
 Where: docs/coop-flags.json, scripts/overlay-spec.cjs, tests/coop-corp-market-wallet.test.mjs, tests/coop-native-mining-fleet-durable.test.mjs, tests/coop-npc-store-read-cost.test.mjs
 Evidence: 48/48 across the five files; flag baseline 504; overlay spec updated
+### 2026-11-04T22:33Z · f4e9012 · DOCS · state: hand off this round of fixes with exact expectations and gates
+
+Why: refresh the session handoff after the 2026-11-05 fix round
+Detail: The handoff now names the deployed-vs-pending line for every change of 2026-11-05 (warehouse loot, gate warps, sentries, the five lag fixes, the deployable sweep, the client-launch runbook), the two log lines and two event names that prove the site features in game, and the rule to run the launch verifier before reporting a client-side symptom. The jobs window question stays open as the only block
+Where: .opencode/state.md, docs/WORKLOG.md
+Evidence: state.md rewritten; five red gates cleared (48/48)

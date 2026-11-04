@@ -158,10 +158,10 @@ test("Get describes the campaign in the set the client actually renders", () => 
   // UI/Campaigns/RewardsPerNumberContributions placeholders. So the arm exists, and it
   // truthfully pays nothing.
   assert.equal(objective.attributes.rewards.no_lp_reward, undefined);
-  assert.equal(objective.attributes.rewards.lp_reward.amount_per_interval.amount, 0,
-    "the war mints no LP");
+  assert.equal(objective.attributes.rewards.lp_reward.amount_per_interval.amount, 5,
+    "FW-142: the card advertises the real LP one contribution pays (5 LP per merit point)");
   assert.equal(objective.attributes.rewards.lp_reward.progress_interval, 1,
-    "a real interval, so the client renders '0 LP per contribution'");
+    "a real interval, so the client renders '<n> LP per contribution' instead of raw placeholders");
   assert.ok(objective.attributes.rewards.lp_reward.amount_per_interval
     .associated_corporation.sequential > 0, "a real militia corporation issues it");
   assert.equal(objective.attributes.rewards.no_standing_reward, true);
