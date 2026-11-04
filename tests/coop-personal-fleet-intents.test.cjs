@@ -141,3 +141,8 @@ test('malformed durable row fails closed',()=>{
  const row={...start(),nativeEntityID:0};
  assert.equal(replay(row,cmd()).reason,'PF_INTENT_RECORD_CORRUPT');
 });
+
+test('initial fleet revision zero is a valid authoritative snapshot',()=>{
+ const r=issue(cmd({fleetRevision:0}),authorized());
+ assert.equal(r.status,'QUEUED');assert.equal(r.intent.fleetRevision,0);
+});
