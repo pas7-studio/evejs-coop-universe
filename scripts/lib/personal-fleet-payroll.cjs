@@ -172,5 +172,24 @@ function updateInvoice(ledger,{invoiceID,expectedLedgerRevision,to,
  return {status:'UPDATED',ledger:next,receipt:{
   invoiceID,phase:changed.invoice.phase,settlementID:changed.invoice.settlementID}};
 }
+
+function reconcileLedgerInvoice(ledger,{invoiceID,expectedLedgerRevision,
+ expectedInvoiceRevision,proof}={}){
+ if(!validLedger(ledger))return deny('PF_PAYROLL_LEDGER_CORRUPT');
+ if(ledger.revision!==expectedLedgerRevision)return deny('PF_PAYROLL_LEDGER_REVISION_STALE');
+ const current=ledger.invoices[invoiceID];
+ if(!current)return deny('PF_PAYROLL_INVOICE_NOT_FOUND');
+ if(current.revision!==expectedInvoiceRevision)return deny('PF_PAYROLL_REVISION_STALE');
+ const changed=reconcile(current,{proof});
+ if(!changed.status?.startsWith('RECONCILED_'))return changed;
+ if(changed.invoice.settlementID&&Object.values(ledger.invoices).some(x=>
+  x.invoiceID!==invoiceID&&x.settlementID===changed.invoice.settlementID))
+  return deny('PF_PAYROLL_SETTLEMENT_ID_ALREADY_USED');
+ if(ledger.revision===Number.MAX_SAFE_INTEGER)return deny('PF_PAYROLL_LEDGER_CAP_REACHED');
+ const next=structuredClone(ledger);next.revision++;
+ next.invoices[invoiceID]=changed.invoice;
+ return {status:changed.status,ledger:next,receipt:{
+  invoiceID,phase:changed.invoice.phase,settlementID:changed.invoice.settlementID}};
+}
 module.exports={PHASES,valid,accrue,transition,replay,reconcile,
- LEDGER_KEY,emptyLedger,validLedger,insertInvoice,updateInvoice};
+ LEDGER_KEY,emptyLedger,validLedger,insertInvoice,updateInvoice,reconcileLedgerInvoice};
