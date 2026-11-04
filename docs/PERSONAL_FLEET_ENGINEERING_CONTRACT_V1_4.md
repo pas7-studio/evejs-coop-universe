@@ -403,3 +403,16 @@ node --test tests/coop-personal-fleet-*.test.*
 **Must not relax:** an `auditClaims() === READY` return means only that supplied snapshots are self-consistent; it is NOT an authorization to issue a native command, since the real adapter must prove snapshots were read from the SAME serialized native transaction and the caller is authenticated. In particular, after a confirmed wreck, do not permit clone recovery to re-assign any physical ship until the prior global claim has been formally released via verified native custody and all pending native order/transfer intents are fenced.
 
 **Release gates remain:** fork permission; production original ItemStore adoption and reverse docking; reciprocal WAR/Mining claims in original writers; PERSONAL_FLEET support in native arbiter/bridge; real combat/wallet settlement; native SQLite SIGKILL and restart; authentic two-client PLAY-untouched WORK E2E. Keep default OFF and PR Draft.
+
+## PF-11 (2026-11-05): payroll liability and contract-dismissal P0 hardening
+
+Two correctness/security gaps found through review and patched in this PR:
+
+1. **Unverified arrears injection:** PF-08 `accrue()` previously compared salary with `activeContract.salaryISK` but did not prove `input.arrearsISK` came from the original native liability source. The reducer now additionally requires `activeContract.verifiedArrearsISK === input.arrearsISK`, including explicit confirmation of zero arrears. This is a server adapter assertion only, never a client-supplied amount. Only the canonical native settlement ledger can supply it.
+2. **Dismissal orphaned liabilities:** PF-02 `DISMISS` formerly accepted `verifiedTermination:true` without checking actual pending payroll. Now `liabilityEvidence` is mandatory and must identify the exact original pilot, contract, employer, canonical payroll ledger revision, `outstandingISK===0`, `pendingInvoices===0`, `uncertainSettlements===0`, and native contract termination. This blocks dropping salary liabilities when removing the pilot from roster.
+
+**Trust boundary:** both `verifiedTermination` and `liabilityEvidence` remain injected inputs to a pure reducer. No production code should accept them from the client. They must come from the same authorized native `coopAtomicNativeRows.transact` snapshot used for contract termination and wallet/ledger reconciliation; otherwise this policy is not a true safety guarantee. Ledger revision alone does not prove a serialized read. If actual native wallet reconciliation disagrees, fail closed and keep the pilot/contract liability.
+
+**Evidence:** Added 2 PF payroll tests and 3 PF roster tests; updated fixtures to include explicit native arrears attestation. The exact source and tests fetched from GitHub were executed through an isolated synchronous V8 harness: **24/24 roster, 38/38 payroll, 12/12 cross-module PASS (74 checks)**. Not native Node/GitHub Actions/WORK SQLite. Other Personal Fleet test modules were not re-run after these changes. Total authored tests: **243 across 11 test files**, not a full green CI assertion.
+
+**Workflow status:** `.github/workflows/personal-fleet-contracts.yml` has been committed but no successful GitHub Actions run was observed yet. The earlier attempt to write the authoritative `pas7-studio/EveJS` fork was blocked by HTTP 403. No PLAY changes or merge.
