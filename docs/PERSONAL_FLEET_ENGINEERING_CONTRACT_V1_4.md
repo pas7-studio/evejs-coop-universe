@@ -241,3 +241,17 @@ New non-deployed reference:
 ### Evidence status
 
 All PF-01/PF-02 code is only in the orchestration-side Draft PR, not in the engine fork. The current session's GitHub connector is permitted to write `evejs-coop-universe` but fork branch creation returned 403. Node tests and native WORK stack tests have **NOT been executed** in this session. Do not claim a green test count from authored tests. Treat the source as implementation material for a permitted local fork agent.
+
+## PF-03 native original-item custody reference (added 2026-11-05)
+
+Source files added to this Draft PR:
+- `scripts/lib/personal-fleet-custody.cjs` — PF-03 pure `prepare`, `advance`, `observe` contract.
+- `tests/coop-personal-fleet-custody.test.cjs` — 16 negative/positive cases for unique original identity, immutable fitting/cargo hashes, dispatch intent, fenced transitions, real docking, wreck-confirmed loss, unknown/duplicate physical locations, and never-spawn-on-missing.
+
+**Evidence:** A matching locally authored source/test fixture executed under Node.js v22.16.0: 16 tests passed, zero failed (`node --check`, `node --test`). The files were also created and verified in the GitHub branch; full PR tests and a WORK native SQLite/GameStore E2E remain **NOT RUN**. The portable module does not mutate or lock real ship items, acquire native controller, or deploy a ship by itself.
+
+**Source-verified fork behavior:** `coopNpcMaterializer.js` is a bounded identity-to-native SPAWN adapter, not a proven adopter of existing player-owned hangar items. `coopNativeRestore.js` restores a persisted native entity/controller and refuses a missing durable identity; `coopNativeGateTransfer.js` journals actual native transfer with original modules and cargo. None alone establish safe original Player ItemStore → NPC controller conversion. PF-03's `ORIGINAL_HANGAR_ITEM_VERIFIED` receipt must come from an actual **trusted ItemStore custody adapter**, and `exclusiveUnavailable` must mean a committed reservation that makes the original hull unavailable for normal player undock/sale/transfer. It cannot be supplied as a boolean by the EVE client or as an uncommitted read.
+
+**Canonical state flow:** PREPARED → NATIVE_REQUESTED → ACTIVE → RETURN_REQUESTED → DOCKING → COMMITTED_DOCKED, or confirmed original wreck → CONFIRMED_LOST. An unknown outcome is a durable quarantine, never permission to re-spawn. Physical observations return read-only `OBSERVED_*` statuses; a state transition additionally requires independently sourced durable evidence. Docking requires original hangar item custody and absence of the native actor; mere station approach does not satisfy it.
+
+**Native implementation prerequisites:** (1) player-inventory native row and fitting/cargo provenance discovery; (2) original item ownership and exclusivity locks in native GameStore; (3) creation/attachment of exact native NPC entity/controller without a second item; (4) crash journal and idempotent restoration; (5) station sessionless reverse custody transaction. Until proven, activation and docking remain default OFF and no production behavior must use this pure reference.
