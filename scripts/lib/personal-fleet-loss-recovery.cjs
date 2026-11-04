@@ -26,7 +26,18 @@ function valid(s){
  (s.recoveryReadyAt===null||POS(s.recoveryReadyAt))&&
  Array.isArray(s.proofs)&&s.proofs.length<=12&&
  s.proofs.every(p=>obj(p)&&str(p.id)&&str(p.type))&&
- new Set(s.proofs.map(p=>p.id)).size===s.proofs.length;
+ new Set(s.proofs.map(p=>p.id)).size===s.proofs.length&&
+ s.proofs.every(x=>[
+  'ORIGINAL_NATIVE_WRECK_INTENT','ORIGINAL_NATIVE_WRECK_CONFIRMED',
+  'ORIGINAL_NATIVE_LOSS_OUTCOME_UNCERTAIN',
+  'DURABLE_CLONE_RECOVERY_STARTED',
+  'ORIGINAL_CLONE_RECOVERY_CONFIRMED'].includes(x.type))&&
+ s.revision===s.proofs.length&&
+ (s.phase!=='ACTIVE'||s.revision===0)&&
+ (s.phase==='ACTIVE'||s.revision>0)&&
+ (['ACTIVE'].includes(s.phase)?s.wreckID===null:s.wreckID!==null)&&
+ (['CLONE_RECOVERING','PILOT_AVAILABLE'].includes(s.phase)?
+  POS(s.recoveryReadyAt):s.recoveryReadyAt===null);
 }
 function begin({operationID,pilotID,assignmentID,ownerCharacterID,
  originalShipItemID,nativeEntityID,systemID,generation,fittingHash,cargoHash,
