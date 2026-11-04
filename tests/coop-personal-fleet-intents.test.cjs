@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {issue,step,replay,dispatchPreflight,valid}=
+const {issue,step,replay,dispatchPreflight,reconcile,valid}=
  require('../scripts/lib/personal-fleet-intents.cjs');
 const cmd=(changes={})=>({operationID:'pf-order-001',fleetID:'pf-fleet-001',
  pilotID:'coop-pilot-001',nativeEntityID:500,systemID:30000144,
@@ -10,7 +10,7 @@ const cmd=(changes={})=>({operationID:'pf-order-001',fleetID:'pf-fleet-001',
  payloadHash:'a'.repeat(64),...changes});
 const actor=(changes={})=>({pilotID:'coop-pilot-001',nativeEntityID:500,
  systemID:30000144,ownerCharacterID:90,assignmentGeneration:7,
- custodyActive:true,...changes});
+ fleetRevision:1,custodyActive:true,...changes});
 const authorized=(changes={})=>({now:1100,authenticatedIssuer:90,
  actorProof:actor(),targetPermitted:true,...changes});
 const start=(c=cmd(),authority=authorized())=>{
@@ -143,6 +143,61 @@ test('malformed durable row fails closed',()=>{
 });
 
 test('initial fleet revision zero is a valid authoritative snapshot',()=>{
- const r=issue(cmd({fleetRevision:0}),authorized());
+ const r=issue(cmd({fleetRevision:0}),authorized({actorProof:actor({fleetRevision:0})}));
  assert.equal(r.status,'QUEUED');assert.equal(r.intent.fleetRevision,0);
+});
+
+test('stale fleet roster revision cannot issue or dispatch',()=>{
+ assert.equal(issue(cmd(),authorized({actorProof:actor({fleetRevision:2})})).reason,
+  'PF_ACTOR_CUSTODY_UNVERIFIED');
+ const row=start();
+ assert.equal(dispatchPreflight(row,{...authorized({
+  actorProof:actor({fleetRevision:2})}),leaseAvailable:true}).reason,
+  'PF_ACTOR_CUSTODY_UNVERIFIED');
+});
+const unknown=()=>{
+ let row=move(start(),'ISSUING','DURABLE_DISPATCH_FENCE').intent;
+ return move(row,'OUTCOME_UNKNOWN','NATIVE_OUTCOME_UNCERTAIN').intent;
+};
+const reconciliation=(row,to,rest={})=>({
+ type:'INDEPENDENT_NATIVE_RECONCILIATION',id:'reconcile-001',
+ operationID:row.operationID,nativeEntityID:row.nativeEntityID,
+ assignmentGeneration:row.assignmentGeneration,payloadHash:row.payloadHash,
+ resolvedPhase:to,...rest
+});
+test('unknown outcome cannot reconcile from an untrusted receipt',()=>{
+ const row=unknown();
+ assert.equal(reconcile(row,{to:'NATIVE_REQUESTED',expectedRevision:row.revision,
+  proof:{type:'INDEPENDENT_NATIVE_RECONCILIATION'}}).reason,
+  'PF_INTENT_RECONCILIATION_PROOF_REQUIRED');
+});
+test('unknown outcome cannot be marked definitive rejection without no-issue proof',()=>{
+ const row=unknown();
+ assert.equal(reconcile(row,{to:'NATIVE_REJECTED',expectedRevision:row.revision,
+  proof:reconciliation(row,'NATIVE_REJECTED')}).reason,
+  'PF_INTENT_NATIVE_RECONCILIATION_INCOMPLETE');
+});
+test('independent native in-flight proof can resolve unknown without redispatch',()=>{
+ const row=unknown();
+ const r=reconcile(row,{to:'NATIVE_REQUESTED',expectedRevision:row.revision,
+  proof:reconciliation(row,'NATIVE_REQUESTED',{originalNativeInFlight:true})});
+ assert.equal(r.status,'RECONCILED');assert.equal(r.intent.phase,'NATIVE_REQUESTED');
+ assert.equal(dispatchPreflight(r.intent,{...authorized(),leaseAvailable:true}).reason,
+  'PF_INTENT_ALREADY_DISPATCHED');
+});
+test('verified original physical completion can resolve unknown',()=>{
+ const row=unknown();
+ const r=reconcile(row,{to:'COMPLETED',expectedRevision:row.revision,
+  proof:reconciliation(row,'COMPLETED',{originalEffectComplete:true,
+   effectType:'FOLLOW',systemID:30000144})});
+ assert.equal(r.status,'RECONCILED');assert.equal(r.intent.phase,'COMPLETED');
+});
+test('unknown reconciliation cannot replace a newer revision or be replayed',()=>{
+ const row=unknown();const proof=reconciliation(row,'COMPLETED',
+  {originalEffectComplete:true,effectType:'FOLLOW',systemID:30000144});
+ assert.equal(reconcile(row,{to:'COMPLETED',expectedRevision:0,proof}).reason,
+  'PF_INTENT_STALE_REVISION');
+ const r=reconcile(row,{to:'COMPLETED',expectedRevision:row.revision,proof});
+ assert.equal(reconcile(r.intent,{to:'COMPLETED',expectedRevision:r.intent.revision,proof}).reason,
+  'PF_INTENT_NOT_UNKNOWN');
 });
