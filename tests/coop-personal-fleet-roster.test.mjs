@@ -100,7 +100,11 @@ test('dismiss requires independently verified contract termination',()=>{
   expectedRevision:1,pilotID:'coop-pilot-001',expectedPilotRevision:0
  });
  assert.equal(apply(h.state,cmd).reason,'PF_DISMISS_REQUIRES_RELEASED_CONTRACT');
- const done=apply(h.state,cmd,{verifiedTermination:true});
+ const done=apply(h.state,cmd,{verifiedTermination:true,
+  liabilityEvidence:{source:'ORIGINAL_NATIVE_CONTRACT_AND_PAYROLL',
+    pilotID:'coop-pilot-001',contractID:'contract-001',
+    employerCharacterID:90,ledgerRevision:1,outstandingISK:0,
+    pendingInvoices:0,uncertainSettlements:0,nativeTerminationVerified:true}});
  assert.equal(done.status,'APPLIED');
  assert.equal(Object.keys(done.state.pilots).length,0);
 });
@@ -159,4 +163,41 @@ test('duplicate ship across two pilots is corrupt',()=>{
  s.pilots['coop-pilot-002']={...p,pilotID:'coop-pilot-002',contractID:'contract-002',
   hireReceipt:'c'.repeat(64)};
  assert.throws(()=>validate(s),/PF_PILOT_CORRUPT/);
+});
+
+test('PF-11: zero-payroll witness required, not just termination callback',()=>{
+ const h=hire(),cmd=command('DISMISS','dismiss-002',{
+  expectedRevision:1,pilotID:'coop-pilot-001',expectedPilotRevision:0
+ });
+ assert.equal(apply(h.state,cmd,{verifiedTermination:true}).reason,
+  'PF_DISMISS_LIABILITIES_UNVERIFIED');
+});
+test('PF-11: outstanding ISK prevents dropping hired pilot',()=>{
+ const h=hire(),cmd=command('DISMISS','dismiss-002',{
+  expectedRevision:1,pilotID:'coop-pilot-001',expectedPilotRevision:0
+ });
+ const valid={source:'ORIGINAL_NATIVE_CONTRACT_AND_PAYROLL',pilotID:'coop-pilot-001',
+  contractID:'contract-001',employerCharacterID:90,ledgerRevision:1,
+  outstandingISK:0,pendingInvoices:0,uncertainSettlements:0,
+  nativeTerminationVerified:true};
+ assert.equal(apply(h.state,cmd,{verifiedTermination:true,
+  liabilityEvidence:{...valid,outstandingISK:700}}).reason,
+  'PF_DISMISS_LIABILITIES_UNVERIFIED');
+ assert.equal(apply(h.state,cmd,{verifiedTermination:true,
+  liabilityEvidence:{...valid,uncertainSettlements:1}}).reason,
+  'PF_DISMISS_LIABILITIES_UNVERIFIED');
+ assert.equal(apply(h.state,cmd,{verifiedTermination:true,
+  liabilityEvidence:{...valid,pendingInvoices:1}}).reason,
+  'PF_DISMISS_LIABILITIES_UNVERIFIED');
+});
+test('PF-11: payroll witness must match original pilot and contract',()=>{
+ const h=hire(),cmd=command('DISMISS','dismiss-002',{
+  expectedRevision:1,pilotID:'coop-pilot-001',expectedPilotRevision:0
+ });
+ const evidence={source:'ORIGINAL_NATIVE_CONTRACT_AND_PAYROLL',
+  pilotID:'coop-pilot-002',contractID:'contract-001',
+  employerCharacterID:90,ledgerRevision:1,outstandingISK:0,
+  pendingInvoices:0,uncertainSettlements:0,nativeTerminationVerified:true};
+ assert.equal(apply(h.state,cmd,{verifiedTermination:true,
+  liabilityEvidence:evidence}).reason,'PF_DISMISS_LIABILITIES_UNVERIFIED');
 });
