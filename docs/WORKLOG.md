@@ -3464,3 +3464,9 @@ Why: overview window missing at login: durable preset store + content-hash fallb
 Detail: Two cases: _persistState flushes overviewSharedPresets (the in-memory-only write is why the store reset on every restart), and Handle_GetStoredPreset answers an unknown sequence number from the same content hash while still returning null for an unknown hash and keeping the wstring payload.
 Where: docs/WORKLOG.md, tests/coop-overview-preset-durability.test.mjs
 Evidence: measured: overviewSharedPresets data.json {} from 2026-10-24 while the service served an entry; 2/2 tests; AUDIT_OK
+### 2026-11-04T21:21Z · 1093ce2 · DOCS · docs(launch): one runbook for launching the client, with a read-only verifier
+
+Why: explicit client-launch runbook plus a read-only launch verifier
+Detail: Three sessions lost hours to 'the client runs but a window is missing'. The cause was always the launch: without Play.bat the client gets neither the proxy/CA variables (so no gRPC ever reaches the gateway) nor 'noconsole' (so logmodule re-raises IOError [Errno 9] Bad file descriptor, which aborts window creation - measured 2026-11-05: the overview window absent at login until a second pilot joine
+Where: AGENTS.md, docs/CLIENT_LAUNCH.md, docs/WORKLOG.md, scripts/Test-ClientLaunch.ps1
+Evidence: docs/CLIENT_LAUNCH.md; scripts/Test-ClientLaunch.ps1 (run against the live session: FAIL noconsole, FAIL launcher-parent, FAIL fresh stdout log, PASS gateway H2); traceback measured 21:13:37 in /var/lib/evejs/logs/server.log
