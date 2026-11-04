@@ -128,9 +128,10 @@ const patchScripts = fs.existsSync(scriptsDir)
 // (the ceiling is lowered when it is split, never raised to make room).
 const GIGA_COOP_LINES = 2000;
 const GIGA_COOP_KNOWN = {
-  // Split once already (5 349 -> 4 379); the rest is state-coupled. ~10% headroom
-  // for other sessions' telemetry work; lower this whenever the file shrinks.
-  'server/src/space/coopVirtualWorldRuntime.js': 4800,
+  // Split twice: 5 349 -> 4 379 (pure helpers) -> 4 048 (the faction-war subsystem
+  // is space/coopVirtualWorldRuntime.war.js since 2026-11-04). The ceiling follows
+  // the file down; it is never raised to make room.
+  'server/src/space/coopVirtualWorldRuntime.js': 4100,
 };
 const gigaCoop = jsFiles
   .filter(isCoopModule)

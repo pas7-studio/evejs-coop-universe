@@ -3385,3 +3385,9 @@ Evidence: fork 4d3c8899; node --check clean; tests/coop-fw-campaign-page.test.mj
 
 Side findings from the same screenshots, NOT our payload: the trailing '*' on names is CCP's important-localization marker (localization/localizationBase.pyj FormatImportantString adds '%s*' for non-primary languages), and the '{rewards} за {numeric}numContributions, useG' line is the RU translation of UI/Campaigns/RewardsPerNumberContributions rendered because the client shows a 0-LP reward row (FmtLP(0) is truthy) - hiding it needs a real LP reward/payout design.
 
+### 2026-11-04T17:22Z · 05a44dc · L1 · refactor(war): follow the faction-war extraction in the fork (48385c3)
+
+Why: the faction-war subsystem moved out of the giga runtime into coopVirtualWorldRuntime.war.js behind a factory
+Detail: integration/coopVirtualWorldRuntime.cjs is the archived copy of the engine file, so it is re-synced, and the new sibling arrives as coopVirtualWorldRuntime.war.cjs behind the usual .cjs shim. Three structural tests read the war code in the runtime text; the code moved, so they read the module that now owns it (combat diagnostic, mobiliser diagnostic, native row path). The headless-startup sandbox 
+Where: integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.war.cjs, integration/coopVirtualWorldRuntime.war.js, scripts/overlay-spec.cjs, tests/_support/coopSourceText.mjs, tests/coop-headless-startup-evidence.test.mjs, tests/coop-native-row-path.test.mjs, tests/coop-war-combat-diagnose.test.mjs, tests/coop-war-mobilizer-diagnose.test.mjs, tests/coop-war-runtime-split.test.mjs
+Evidence: fork 48385c3, repo 05a44dc3; AUDIT_OK (runtime 4048 <= 4100); 316 runtime tests + 19 gate tests pass; evejs-agents stack healthy, war phases publish sovereignty-projection/gate-staging/skip after boot, zero ReferenceError

@@ -104,7 +104,8 @@ Current state of the giant modules:
 
 | File | Lines | Split |
 |---|---|---|
-| `space/coopVirtualWorldRuntime.js` | 4 379 | **unsafe as done** — 56 declarations moved to `coopVirtualWorldRuntime.pure.js`, but 23 state names ended up declared in both modules; repair in progress in the engine |
+| `space/coopVirtualWorldRuntime.js` | 4 048 | **done (two splits)** - 56 pure declarations in `coopVirtualWorldRuntime.pure.js`, and the whole faction-war subsystem (1 969 lines) in `coopVirtualWorldRuntime.war.js` behind `createWarRuntime(...)`; the war singletons are declared in exactly one file |
+| `space/coopVirtualWorldRuntime.war.js` | 1 969 | **not a candidate** - one subsystem behind a factory, under the 2 000-line line by design: it is the war half of the runtime, not a second runtime |
 | `space/coopAdminBridge.js` | 451 | **done** — the whitelisted actions in `coopAdminBridgeActions.js` (1 067 lines) |
 | `space/coopNativeStationArrival.js` | 1 451 | not started |
 | `space/coopCourierRuntime.js` | 975 | **not a split** — 956 of its 975 lines are already one closure factory; moving them would be a rename, not a separation |
@@ -127,9 +128,11 @@ moved, and on the live stack each phase that used one threw
 `ReferenceError: warpPointDirector is not defined` the moment it ran - no crash at
 load, no `node --check` complaint, no failing test. The faction war stopped
 advancing, and an attempted recovery (restoring the pre-split single file) then
-reset a live war state row. Repair is still in progress in the engine: 23 names are
-declared in both modules and kept equal by a `bindWarRuntime()` call, which is two
-copies of one state, not a clean split.
+reset a live war state row. The repair took two steps: the mechanical extraction was
+never repeated by hand, and on 2026-11-04 the state-coupled remainder was moved as a
+deliberate factory split (see the giga-gate note at the end of this document). No state
+name is declared twice any more; `bindWarRuntime()` still exists as the pure layer's
+read-only mirror, and the war module hands it its live handoff instance.
 
 Two tools now make that class impossible:
 
@@ -311,10 +314,19 @@ pcHardwareCatalog, both really in space/npc/) moved to
   integration/npc/ instead of pretending to be space/ siblings.
 - **stockChars: under budget** (was 67641 > 67500). The corporate-market rules and the
   two broken ../../integration/... requires are out of marketProxyService.js.
-- **remaining gate: space/coopVirtualWorldRuntime.js is 5966 lines > 4800.** It is
-  already split once (coopVirtualWorldRuntime.pure.js); coop-split-module.cjs now
-  finds only one movable declaration, because the rest of the file closes over ~110
-  mutable singletons. Getting under 4800 therefore needs a deliberate staged refactor
-  (state + its functions moved together behind a factory), not a mechanical split.
-  Do not raise gigaCoopMax to hide it.
+- **giga gate: closed 2026-11-04.** `space/coopVirtualWorldRuntime.js` was 5 966 lines
+  > 4 800. A mechanical split could not help (`coop-split-module.cjs` found one movable
+  declaration; the rest closed over ~110 mutable singletons), so the faction-war half
+  moved deliberately: state and functions together, behind `createWarRuntime(...)`, in
+  `space/coopVirtualWorldRuntime.war.js` (fork commit `48385c3`). The runtime is now
+  4 048 lines and the audit ceiling follows it down to 4 100 - the number was lowered,
+  never raised. What the slice needs from the parent (world handle, identity registry,
+  tactics director, ammo supply, casualty ledger, territory bootstrap, NPC order bridge,
+  market trader) is passed as an explicit dependency; `warGateHandoff` is handed back to
+  `syncWarRuntime` through `currentWarGateHandoff()`. `tests/coop-war-runtime-split.test.mjs`
+  is the net the 2026-10-28 split lacked: one owner per singleton, no free reads, and
+  every export called with stubs to prove no moved line sees an undefined name.
+  Proven live on the `evejs-agents` stack: the war phases publish
+  `living-native-war-sovereignty-projection` / `-gate-staging` / `-skip` after boot with
+  zero `ReferenceError` in the durable log.
 

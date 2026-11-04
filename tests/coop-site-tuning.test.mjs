@@ -48,3 +48,30 @@ test("env knobs tune the transform and EVEJS_COOP_SITE_TUNING=0 disables it", ()
   assert.equal(tuning.enabled({EVEJS_COOP_SITE_TUNING: "0"}), false);
   assert.equal(tuning.enabled({}), true);
 });
+
+// The pool above difficulty 6 is real template data (Sansha/Guristas/Serpentis Port and
+// Hub anomalies at 7-8, faction sites at 9-10) but every band capped at 6, so none of it
+// could ever be seeded. Lowsec now admits the top tiers; the other bands keep their range.
+test("lowsec opens the top difficulty tiers and nothing else moves", () => {
+  const input = {
+    bands: {
+      highsec: {slotsPerSystem: 2, difficultyRange: [1, 3]},
+      lowsec: {slotsPerSystem: 2, difficultyRange: [2, 5]},
+      nullsec: {slotsPerSystem: 3, difficultyRange: [3, 5]},
+    },
+  };
+  const result = tuning.applySpawnProfileTuning(input, tuning.readTuning({}), "combat");
+  assert.deepEqual(result.bands.lowsec.difficultyRange, [3, 10], "lowsec is shifted AND opened");
+  assert.deepEqual(result.bands.highsec.difficultyRange, [2, 4], "highsec keeps its own ceiling");
+  assert.deepEqual(result.bands.nullsec.difficultyRange, [4, 6], "nullsec is untouched");
+});
+
+test("the lowsec ceiling is a knob: 0 leaves the band alone, a lower value caps it", () => {
+  const bands = () => ({bands: {lowsec: {slotsPerSystem: 2, difficultyRange: [2, 5]}}});
+  const off = tuning.applySpawnProfileTuning(bands(), tuning.readTuning({EVEJS_COOP_SITE_LOWSEC_TOP: "0"}), "combat");
+  assert.deepEqual(off.bands.lowsec.difficultyRange, [3, 6], "0 disables the opening");
+  const capped = tuning.applySpawnProfileTuning(bands(), tuning.readTuning({EVEJS_COOP_SITE_LOWSEC_TOP: "7"}), "combat");
+  assert.deepEqual(capped.bands.lowsec.difficultyRange, [3, 7]);
+  const mining = tuning.applySpawnProfileTuning(bands(), tuning.readTuning({}), "ore");
+  assert.deepEqual(mining.bands.lowsec.difficultyRange, [2, 5], "non-combat families stay as balanced");
+});
