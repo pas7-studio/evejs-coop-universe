@@ -11,6 +11,18 @@ const nonneg=x=>Number.isSafeInteger(x)&&x>=0;
 const obj=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
 const deny=reason=>({status:'BLOCKED',reason});
 const PHASES=new Set(['DUE','SETTLING','PAID','INSUFFICIENT_FUNDS','OUTCOME_UNKNOWN']);
+const finalReceiptValid=row=>{
+ const last=row.proofs.at(-1)?.type;
+ return ({
+  DUE:row.proofs.length===0,
+  SETTLING:last==='NATIVE_WALLET_SETTLEMENT_INTENT_DURABLE',
+  PAID:['ORIGINAL_NATIVE_WALLET_ATOMIC_RECEIPT',
+   'INDEPENDENT_ORIGINAL_WALLET_RECONCILIATION'].includes(last),
+  INSUFFICIENT_FUNDS:['NATIVE_WALLET_DEFINITE_NO_DEBIT',
+   'INDEPENDENT_ORIGINAL_WALLET_RECONCILIATION'].includes(last),
+  OUTCOME_UNKNOWN:last==='NATIVE_WALLET_COMMIT_OUTCOME_UNKNOWN'
+ })[row.phase]===true;
+};
 function valid(row){
  return obj(row)&&row.version===1&&token(row.invoiceID)&&token(row.contractID)&&
  PILOT.test(row.pilotID)&&positive(row.employerCharacterID)&&
@@ -35,7 +47,8 @@ function valid(row){
  row.revision===row.proofs.length&&
  (row.phase!=='DUE'||row.revision===0)&&
  (row.phase==='DUE'||row.revision>0)&&
- (row.phase==='PAID' ? token(row.settlementID) : row.settlementID===null);
+ (row.phase==='PAID' ? token(row.settlementID) : row.settlementID===null)&&
+ finalReceiptValid(row);
 }
 function accrue(input,{authenticatedEmployer,activeContract,periodUnbilled}={}){
  if(!obj(input)||!token(input.invoiceID)||!token(input.contractID)||
