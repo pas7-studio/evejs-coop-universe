@@ -3536,3 +3536,9 @@ Why: militia enlistment truth from the enlistment record (re-enlist was blocked 
 Detail: Five cases: ACTIVE advertises its faction, LEFT advertises none (the exact bug that hid the enlist flow) while keeping leave and cooldown on record, no record is 'never enlisted', a broken store means unknown rather than a wrong faction, and the FW window asks the enlistment record first and corrects the session before answering.
 Where: tests/coop-militia-session-truth.test.mjs
 Evidence: fork 99f4698, ce39307; 11 new tests; AUDIT_OK 65473/65500; live: enlistment LEFT + standing 1.921 + cooldown 0
+### 2026-11-04T23:04Z · 7144f04 · L1 · test(buyer): pin the small-lot demand rules
+
+Why: NPC buyer demand policy: small lots, cash reserve, dynamic types, capped premium
+Detail: Eight cases: no fixed allowlist (an ore and a manufactured type are both eligible), never the whole stack (fraction and unit cap, 95 % left on the book), the cash reserve is held (a big lot is refused, a small one fits), one lot per type per tick with open types skipped, cheapest first under the per-tick budget, a capped 3 % premium that never exceeds the unit price cap, only attested/open/player 
+Where: scripts/overlay-spec.cjs, tests/coop-npc-buyer-lots.test.mjs
+Evidence: 9 new tests; AUDIT_OK; fork 99f4698+; measured: goods 86 993 unsold in New Caldari, buyer flags off

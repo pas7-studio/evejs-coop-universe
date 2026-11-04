@@ -98,3 +98,17 @@ test("bad money or a bad clock refuses instead of guessing", () => {
   assert.equal(buyer.planLotPurchases({cashCents: 1000, now: 0, asks: [ask(34, 1, 1)]}).status,
     "INVALID_BUYER_LEDGER");
 });
+
+test("with a whole-stack-only executor, only offers that are already small lots are eligible", () => {
+  // space/coopNpcCorporateBuyerAtomic.js claims ONE whole verified player ask - there is no
+  // atomic splitter, so a big stack cannot be sliced. The buyer then skips it (never buys it
+  // all) and takes the small offers, which is what keeps 95 % of a big stack on the book.
+  const plan = buyer.planLotPurchases({cashCents: 10_000_000, minCashReserveCents: 1_000_000,
+    maxLotUnits: 50, wholeStackOnly: true,
+    asks: [ask(34, 5000, 100), ask(35, 40, 900), ask(36, 20, 1200)]});
+  assert.equal(plan.status, "PLANNED");
+  assert.deepEqual(plan.lots.map((lot) => lot.typeID).sort((a, b) => a - b), [35, 36],
+    "the 5 000-unit stack is left alone; the two small offers are bought whole");
+  assert.ok(plan.lots.every((lot) => lot.quantity === lot.offerQuantity),
+    "a whole-stack claim buys exactly what the player offered");
+});
