@@ -17,7 +17,8 @@ const object=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
 const deny=reason=>({status:'BLOCKED',reason});
 const actor=(a,r)=>a?.pilotID===r.pilotID&&a?.nativeEntityID===r.nativeEntityID&&
  a?.systemID===r.systemID&&a?.assignmentGeneration===r.assignmentGeneration&&
- a?.ownerCharacterID===r.issuerCharacterID&&a?.custodyActive===true;
+ a?.ownerCharacterID===r.issuerCharacterID&&
+ a?.fleetRevision===r.fleetRevision&&a?.custodyActive===true;
 function valid(row){
  return object(row)&&row.version===1&&token(row.operationID)&&
  token(row.fleetID)&&PILOT.test(row.pilotID)&&pos(row.nativeEntityID)&&
@@ -106,4 +107,32 @@ function dispatchPreflight(row,{now,authenticatedIssuer,actorProof,
  if(leaseAvailable!==true)return deny('PF_NATIVE_ARBITER_BLOCKED');
  return {status:'READY_TO_FENCE',nativeAction:row.type.toLowerCase().replaceAll('_','-')};
 }
-module.exports={TYPES,PHASES,valid,issue,step,replay,dispatchPreflight};
+
+// A crash after a native call cannot be resolved by reissuing that call.
+// Only a trusted independent original-native witness can resolve uncertainty.
+function reconcile(row,{to,expectedRevision,proof}={}){
+ if(!valid(row))return deny('PF_INTENT_RECORD_CORRUPT');
+ if(row.phase!=='OUTCOME_UNKNOWN')return deny('PF_INTENT_NOT_UNKNOWN');
+ if(row.revision!==expectedRevision)return deny('PF_INTENT_STALE_REVISION');
+ if(!['NATIVE_REQUESTED','COMPLETED','NATIVE_REJECTED'].includes(to))
+  return deny('PF_INTENT_RECONCILIATION_TARGET_INVALID');
+ if(proof?.type!=='INDEPENDENT_NATIVE_RECONCILIATION'||
+  !token(proof.id)||proof.operationID!==row.operationID||
+  proof.nativeEntityID!==row.nativeEntityID||
+  proof.assignmentGeneration!==row.assignmentGeneration||
+  proof.payloadHash!==row.payloadHash||proof.resolvedPhase!==to||
+  row.receipts.some(x=>x.id===proof.id))
+  return deny('PF_INTENT_RECONCILIATION_PROOF_REQUIRED');
+ if(to==='NATIVE_REQUESTED'&&proof.originalNativeInFlight!==true)
+  return deny('PF_INTENT_NATIVE_RECONCILIATION_INCOMPLETE');
+ if(to==='COMPLETED'&&(proof.originalEffectComplete!==true||
+  proof.effectType!==row.type||proof.systemID!==row.systemID))
+  return deny('PF_INTENT_NATIVE_RECONCILIATION_INCOMPLETE');
+ if(to==='NATIVE_REJECTED'&&proof.provenNeverIssued!==true)
+  return deny('PF_INTENT_NATIVE_RECONCILIATION_INCOMPLETE');
+ if(row.receipts.length>=12)return deny('PF_INTENT_RECEIPT_CAP_REACHED');
+ return {status:'RECONCILED',intent:Object.freeze({...row,phase:to,
+  revision:row.revision+1,receipts:[...row.receipts,{
+   id:proof.id,type:'INDEPENDENT_NATIVE_RECONCILIATION'}]})};
+}
+module.exports={TYPES,PHASES,valid,issue,step,replay,dispatchPreflight,reconcile};
