@@ -246,3 +246,19 @@ Full per-commit checklist: [`docs/PENDING_VERIFICATION_20261104.md`](../docs/PEN
 `cd C:\Games\EveCoop\upstream-evejs\Code; docker build -t evejs-local .` then
 `docker compose -f compose.yaml -f compose.coop-probe.yaml -p evejs up -d --force-recreate server`.
 Play stack only. Never restart it unasked.
+
+## Owner fittings (2026-11-05): 15 Typhoon Fleet Issue builds, no restart
+Hull `32311` (PG 13000, CPU 660, 8 high / 5 med / 7 low, 3 large rigs, cal 400,
+drone bay 200 m3 / 125 Mbit). All 15 validated before creation with a local script
+(sum of dogma attrs 30/50/1153 per fit vs the hull) — every fit is legal.
+Saved fittings ids `1665..1679`, names `TFI ...` (AC Brawler Armor, AC Armor Buffer,
+Arty + HML Sniper, Dual AC Shield Kite, Hail Brawler T2, Cruise Sniper, Torpedo
+Brawler, Rapid Heavy Shield, Heavy Missile Kite, Torpedo Armor Fleet, Active Armor
+Rep, Drone Boat, Nano Kite, Shield Buffer Fleet, Max Gyro T2).
+**Recipe for "builds I can simulate" without a new admin action:** grant N hulls
+(`give_item` with an explicit `stationID` — the bridge refuses while the character is
+UNDOCKED), `give_fit` each with `stationID`, `save_fitting` each, then `remove_item`
+each hull. `remove_item` does NOT delete the fitted children: 328 orphan items stayed
+with `locationID` = the removed hull and had to be deleted in batches of 60
+(`admin_batch` caps at 64 actions). Verify with a read-only sqlite script before
+calling it done.
