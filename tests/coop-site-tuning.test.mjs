@@ -23,7 +23,8 @@ test("combat density is doubled and the difficulty pool moves up one tier", () =
   assert.equal(result.bands.highsec.slotsPerSystem, 4);
   assert.equal(result.bands.nullsec.slotsPerSystem, 6);
   assert.deepEqual(result.bands.highsec.difficultyRange, [2, 4]);
-  assert.deepEqual(result.bands.nullsec.difficultyRange, [3, 5]);
+  // nullsec keeps its shifted floor but its ceiling is opened too (hardest content).
+  assert.deepEqual(result.bands.nullsec.difficultyRange, [3, 10]);
   assert.equal(result.bands.highsec.targetSystems, 6);
   assert.equal(result.bands.highsec.targetSystemRatio, 0.6);
 });
@@ -51,8 +52,8 @@ test("env knobs tune the transform and EVEJS_COOP_SITE_TUNING=0 disables it", ()
 
 // The pool above difficulty 6 is real template data (Sansha/Guristas/Serpentis Port and
 // Hub anomalies at 7-8, faction sites at 9-10) but every band capped at 6, so none of it
-// could ever be seeded. Lowsec now admits the top tiers; the other bands keep their range.
-test("lowsec opens the top difficulty tiers and nothing else moves", () => {
+// could ever be seeded. Lowsec and nullsec now admit the top tiers; highsec keeps its own.
+test("lowsec and nullsec open the top difficulty tiers, highsec does not", () => {
   const input = {
     bands: {
       highsec: {slotsPerSystem: 2, difficultyRange: [1, 3]},
@@ -63,7 +64,7 @@ test("lowsec opens the top difficulty tiers and nothing else moves", () => {
   const result = tuning.applySpawnProfileTuning(input, tuning.readTuning({}), "combat");
   assert.deepEqual(result.bands.lowsec.difficultyRange, [3, 10], "lowsec is shifted AND opened");
   assert.deepEqual(result.bands.highsec.difficultyRange, [2, 4], "highsec keeps its own ceiling");
-  assert.deepEqual(result.bands.nullsec.difficultyRange, [4, 6], "nullsec is untouched");
+  assert.deepEqual(result.bands.nullsec.difficultyRange, [4, 10], "nullsec opens its ceiling, not its floor");
 });
 
 test("the lowsec ceiling is a knob: 0 leaves the band alone, a lower value caps it", () => {
