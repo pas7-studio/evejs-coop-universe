@@ -216,3 +216,21 @@ test('PF-13: same operation ID/hash cannot reuse a new assignment generation',()
  assert.equal(replay(row,cmd({assignmentGeneration:8})).reason,
  'PF_INTENT_REPLAY_CONFLICT');
 });
+
+
+test('PF-14: duplicated persisted proof IDs fail closed',()=>{
+ const r=start(),receipt={id:'reused-proof',type:'DURABLE_DISPATCH_FENCE'};
+ assert.equal(replay({...r,phase:'ISSUING',revision:2,receipts:[receipt,receipt]},cmd()).reason,
+ 'PF_INTENT_RECORD_CORRUPT');
+});
+test('PF-14: mismatched revision and receipt count are corrupt',()=>{
+ const r=start();
+ assert.equal(dispatchPreflight({...r,revision:1},{
+ ...authorized(),leaseAvailable:true}).reason,'PF_INTENT_RECORD_CORRUPT');
+});
+test('PF-14: forged durable receipt type is rejected',()=>{
+ const r=start();
+ assert.equal(replay({...r,phase:'ISSUING',revision:1,
+ receipts:[{id:'fake-01',type:'SYNTHETIC_SUCCESS'}]},cmd()).reason,
+ 'PF_INTENT_RECORD_CORRUPT');
+});
