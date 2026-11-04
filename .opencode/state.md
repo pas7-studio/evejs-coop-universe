@@ -106,8 +106,14 @@ The launcher keeps the client's own console output under
 `evejs-client-crash-<id>.txt` (launch/exit metadata). Grep the stdout log for `EXCEPTION #`,
 `Traceback`, `Exception:`. Three bugs were root-caused from it on 2026-11-04:
 `util.Rowset` (contractProxy state, 0e890d2), byte-str owner names in cfg.eveowners
-(overview PrimeDisplayName, 17e3c78) and Loot All aborting on one item that did not fit
+(overview PrimeDisplayName, 17e3c78 + faaefa4 for pilots outside our corp, proven by
+'IS 'SaSaNyah' = a [RAIH] pilot) and Loot All aborting on one item that did not fit
 (MultiAdd NotEnoughCargoSpace available 0.8175 volume 388, ddf6bbb).
+Related, same client path: 14 more overview failures were
+`'NoneType' object is not iterable` in the same `ExtractLocalizedTags`, i.e. the slim item
+yielded NO name at all (ownerID not yet in cfg.eveowners). If that survives the name fixes,
+the next step is to prime owner rows for every pilot in the bubble instead of waiting for the
+client to ask.
 
 ## Still open
 1. Loot: confirm a real wreck/can drag now logs a reason; if the source is still
