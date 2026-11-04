@@ -139,7 +139,7 @@ test('invalid registry shape rejects silently duplicated pilots',()=>{
 
 test('undefined claim-row read never initializes empty state',()=>{
  const rows=new Map();
- const atomic={isPoisoned:()=>false,transact(_tables,fn)=>fn({
+ const atomic={isPoisoned:()=>false,transact:(_tables,fn)=>fn({
   get(_table,key){return key===KEY?undefined:null;},
   put(){throw Error('WRITE_SHOULD_NOT_RUN');}
  })};
@@ -151,7 +151,7 @@ test('undefined claim-row read never initializes empty state',()=>{
  assert.equal(rows.size,0);
 });
 test('undefined WAR registry read blocks new claims',()=>{
- const atomic={isPoisoned:()=>false,transact(_tables,fn)=>fn({
+ const atomic={isPoisoned:()=>false,transact:(_tables,fn)=>fn({
   get(_table,key){return key===WAR_KEY?undefined:null;},
   put(){throw Error('WRITE_SHOULD_NOT_RUN');}
  })};
