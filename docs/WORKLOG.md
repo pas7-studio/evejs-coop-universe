@@ -3363,3 +3363,16 @@ Why: server/logs/server.log lives inside the image, so every 'docker compose up 
 Where: fork utils/logger/index.js appends the same rotating line to /var/lib/evejs/logs/server.log (override EVEJS_LOG_DIR) when that volume is writable; the image-local server.log is unchanged for docker logs parity; hourly archives older than 72h are pruned.
 Evidence: fork c4af327; node --check clean; tests/coop-server-log-persistence.test.mjs 3/3. Deployed and verified live: /var/lib/evejs/logs/server.log exists and grew 404 -> 754 lines across a '--force-recreate', still containing the previous boot's MiningInit lines; no EXCEPTION/EBADF/KeyError lines in the durable log for the current client sessions.
 
+
+### 2026-11-04T15:55Z · c8b63870 · DOCS · state: publish session state after the 2026-11-04 client/logging round
+
+Why: coop-state --verify reported STATE_STALE by 95 commits, so the hand-off bundle did not describe the branch anyone would pick up (AGENTS.md makes state/NOW.md the single source of truth).
+Where: scripts/Publish-SessionState.ps1 regenerated state/NOW.md, state/status.json, state/manifest.json, state/changelog.jsonl and a digest; NEXT records the client retest list and the one remaining audit gate.
+Evidence: node scripts/coop-state.cjs --verify -> STATE_OK.
+
+### 2026-11-04T16:10Z · 0dc99509 · TEST · chore(flags): declare the 29 EVEJS flags the imported economy WIP reads
+
+Why: tests/coop-flag-registry.test.mjs failed with 29 undeclared EVEJS_ keys: the economy/payroll/blueprint/pirate switches imported with 1b39fbb plus EVEJS_DATA_DIR and EVEJS_ENGINE were read by deployed modules but absent from docs/coop-flags.json, so nobody could audit what the world runs on.
+Where: docs/coop-flags.json re-baselined with node scripts/coop-flags.cjs --baseline (483 flags).
+Evidence: repo 0dc99509; tests/coop-flag-registry.test.mjs 4/4 green (was 3/4). Still red and pre-existing, NOT from today's fixes: coop-absent-state (3), coop-client-contracts gaps count 262 (1), coop-hook-requires/coop-installer-module-coverage (2 - coopMemoryMetrics, coopEconomyV2, coopMemoSnapshot, coopWarMirror are not in the overlay manifest).
+
