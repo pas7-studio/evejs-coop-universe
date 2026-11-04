@@ -136,3 +136,37 @@ test('invalid registry shape rejects silently duplicated pilots',()=>{
   generations:{500:1,501:1},processed:{}};
  assert.throws(()=>validate(v),/PF_CLAIM_CORRUPT/);
 });
+
+test('undefined claim-row read never initializes empty state',()=>{
+ const rows=new Map();
+ const atomic={isPoisoned:()=>false,transact(_tables,fn)=>fn({
+  get(_table,key){return key===KEY?undefined:null;},
+  put(){throw Error('WRITE_SHOULD_NOT_RUN');}
+ })};
+ const service=createPersonalFleetClaims({gameStore:{coopAtomicNativeRows:atomic},
+  enabled:()=>true,writersIntegrated:()=>true,
+  verifyMiningFree:()=>true,verifyOtherClaimsFree:()=>true,
+  verifyNativeActor:()=>true,verifyRelease:()=>true});
+ assert.equal(service.execute(claim()).reason,'PF_CLAIM_ROW_READ_UNCERTAIN');
+ assert.equal(rows.size,0);
+});
+test('undefined WAR registry read blocks new claims',()=>{
+ const atomic={isPoisoned:()=>false,transact(_tables,fn)=>fn({
+  get(_table,key){return key===WAR_KEY?undefined:null;},
+  put(){throw Error('WRITE_SHOULD_NOT_RUN');}
+ })};
+ const service=createPersonalFleetClaims({gameStore:{coopAtomicNativeRows:atomic},
+  enabled:()=>true,writersIntegrated:()=>true,
+  verifyMiningFree:()=>true,verifyOtherClaimsFree:()=>true,
+  verifyNativeActor:()=>true,verifyRelease:()=>true});
+ assert.equal(service.execute(claim()).reason,'WAR_REGISTRY_READ_UNCERTAIN');
+});
+test('malformed unrelated WAR ship blocks new claim rather than being ignored',()=>{
+ const x=fixture({war:{version:1,ships:{999:{entityID:42,pilotID:'coop-pilot-999'}}}});
+ assert.equal(x.service.execute(claim()).reason,'WAR_REGISTRY_UNVERIFIED');
+});
+test('malformed unrelated WAR transfer blocks new claim',()=>{
+ const x=fixture({war:{version:1,ships:{},transfers:{
+  999:{entityID:999,pilotID:'bad',phase:'PREPARED'}}}});
+ assert.equal(x.service.execute(claim()).reason,'WAR_REGISTRY_UNVERIFIED');
+});
