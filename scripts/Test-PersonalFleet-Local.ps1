@@ -19,7 +19,6 @@ param(
 $ErrorActionPreference='Stop'
 $branch='docs/personal-fleet-contract-freeze-v1-4-20261104'
 $repoRoot=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$records=@()
 function Run-Command([string]$label,[string]$workdir,[string]$exe,[string[]]$commandArgs){
   Write-Host "=== $label ==="
   Push-Location -LiteralPath $workdir
@@ -93,7 +92,7 @@ foreach($src in @($all)+@($tests)){
 Run-Command 'Real native Node unit + reference SQLite tests' $repoRoot 'node' (@('--test')+@($tests | ForEach-Object {$_.FullName}))
 Write-Host 'PF_REFERENCE_TESTS_PASS'
 if($WithNative){
-  if(-not $IsWindows -and -not $env:OS -eq 'Windows_NT'){
+  if([System.Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT){
     throw 'Native SIGKILL gate requires Linux/WSL; run from Windows with WSL2 installed'
   }
   if(-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)){
