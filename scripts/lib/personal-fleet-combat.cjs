@@ -73,7 +73,15 @@ function valid(r){
   Number.isSafeInteger(r.revision)&&r.revision>=0&&
   Array.isArray(r.receipts)&&r.receipts.length<=16&&
   r.receipts.every(x=>object(x)&&token(x.id)&&token(x.type))&&
-  new Set(r.receipts.map(x=>x.id)).size===r.receipts.length;
+  new Set(r.receipts.map(x=>x.id)).size===r.receipts.length&&
+  r.receipts.every(x=>[
+   'DURABLE_COMBAT_DISPATCH_FENCE','PRE_DISPATCH_NATIVE_REJECTION',
+   'ORIGINAL_NATIVE_ATTACK_ACK','DEFINITE_NATIVE_NO_EFFECT',
+   'NATIVE_COMBAT_OUTCOME_UNCERTAIN','ORIGINAL_NATIVE_DAMAGE_OR_ACTIVATION',
+   'ORIGINAL_NATIVE_COMBAT_RESOLVED'].includes(x.type))&&
+  r.revision===r.receipts.length&&
+  (r.phase!=='PROPOSED'||r.revision===0)&&
+  (r.phase==='PROPOSED'||r.revision>0);
 }
 const MOVES={PROPOSED:{ISSUING:'DURABLE_COMBAT_DISPATCH_FENCE',
  REJECTED:'PRE_DISPATCH_NATIVE_REJECTION'},
@@ -102,6 +110,7 @@ function transition(row,{to,expectedRevision,proof,now}={}){
   return block('PF_COMBAT_PHYSICAL_EFFECT_UNVERIFIED');
  if(to==='RESOLVED'&&(proof.targetID!==row.targetID||
   proof.nativeCombatFinished!==true))return block('PF_COMBAT_COMPLETION_UNVERIFIED');
+ if(row.receipts.length>=16)return block('PF_COMBAT_RECEIPT_CAP_REACHED');
  const next={...row,phase:to,revision:row.revision+1,
   receipts:[...row.receipts,{id:proof.id,type:kind}]};
  return {status:'APPLIED',record:next};
