@@ -45,6 +45,15 @@ and every gateway surface (advantage, campaigns, licences, corp goals, insurgenc
 `ServerException(500, "invalid character on request")` instead. Symptoms, the exact variables,
 and how to prove a launch was correct: [`docs/CLIENT_LAUNCH.md`](docs/CLIENT_LAUNCH.md).
 
+**Before blaming the server for a client-side symptom, run
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-ClientLaunch.ps1`.**
+It is read-only and prints `RESULT: PASS` only for a real launcher launch. A launch without
+the launcher's `noconsole`/stdout redirect makes client log writes raise
+`IOError: [Errno 9] Bad file descriptor`, which silently aborts window creation - measured
+2026-11-05: the overview window did not appear at login until a second pilot joined the
+fleet, and the whole cause was a client started outside `Play.bat`. A client that restarts
+itself also loses `noconsole`; relaunch through `Play.bat` and re-run the check.
+
 For gameplay validation, **read `docs/GAMEPLAY_TESTING.md` first**; it supersedes old setup and backend runbooks for an existing world. For the mining →
 hauler → station → sale loop use [`docs/COOP_LOOP_ACCEPTANCE.md`](docs/COOP_LOOP_ACCEPTANCE.md):
 its gates, the exact events each stage must emit, and the acceptance command. For code changes, consult `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`,

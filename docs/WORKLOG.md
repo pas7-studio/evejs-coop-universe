@@ -3458,3 +3458,9 @@ Why: stop the haul event storm and the deployable despawn; name the failing haul
 Detail: Three cases: the suppression map is declared at module scope before strictTransferCargo (declaring it inside the function is the bug that emitted 13 440 events in one hour), the conflict verdict names the failing clause and no full cargo scan runs inside the per-item loop, and the empty-container sweep checks for a deployable (category 22) before the removal that deleted the owner's Mobile Tractor
 Where: .opencode/state.md, docs/WORKLOG.md, integration/coopNativeHaulCargo.cjs, state/NOW.md, state/changelog.jsonl, state/digests/20261031-175251.md, state/digests/20261104-203846.md, state/manifest.json, state/status.json, tests/coop-haul-storm-and-deployable-sweep.test.mjs
 Evidence: fork 8fe1892; 3/3 new tests, AUDIT_OK; measured: 2349 of the last 3000 events were living-haul-custody-blocked, 15 310 cargo rows scanned per ore stack, jettison log 'Container 9988400124749 is now empty — despawning early'
+### 2026-11-04T21:12Z · 669f1c3 · L1 · test(overview): pin preset durability and the content-hash fallback
+
+Why: overview window missing at login: durable preset store + content-hash fallback for stale keys
+Detail: Two cases: _persistState flushes overviewSharedPresets (the in-memory-only write is why the store reset on every restart), and Handle_GetStoredPreset answers an unknown sequence number from the same content hash while still returning null for an unknown hash and keeping the wstring payload.
+Where: docs/WORKLOG.md, tests/coop-overview-preset-durability.test.mjs
+Evidence: measured: overviewSharedPresets data.json {} from 2026-10-24 while the service served an entry; 2/2 tests; AUDIT_OK
