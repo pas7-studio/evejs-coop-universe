@@ -81,6 +81,8 @@ if ($Sync) {
 }
 $revision=Git-Output $repoRoot @('rev-parse','HEAD')
 Write-Host "PF_TEST_REVISION=$revision"
+$forkRevision=Git-Output $ForkRoot @('rev-parse','HEAD')
+Write-Host "PF_ENGINE_REVISION=$forkRevision"
 $all=@(Get-ChildItem (Join-Path $repoRoot 'scripts\lib') -Filter 'personal-fleet-*.cjs' -File)
 $tests=@(Get-ChildItem (Join-Path $repoRoot 'tests') -Filter 'coop-personal-fleet-*.test.*' -File)
 if ($all.Count -lt 10 -or $tests.Count -lt 11){
@@ -114,6 +116,22 @@ if($WithNative){
   if($LASTEXITCODE -ne 0 -or -not $linuxRepo){throw 'WSL cannot access orchestration checkout'}
   $linuxFork=(& wsl.exe -- wslpath -a $winFork | Out-String).Trim()
   if($LASTEXITCODE -ne 0 -or -not $linuxFork){throw 'WSL cannot access native fork'}
+  $wslMajor=(& wsl.exe -- node -p 'process.versions.node.split(".")[0]' | Out-String).Trim()
+  if($LASTEXITCODE -ne 0 -or $wslMajor -notmatch '^[0-9]+
+  & wsl.exe -- env NODE_NO_WARNINGS=1 node --test $linuxCrash
+  if($LASTEXITCODE -ne 0){throw "PF15_SQLITE_SIGKILL_FAILED exit $LASTEXITCODE"}
+  Write-Host 'PF15_SQLITE_SIGKILL_PASS'
+  $linuxTest="$linuxRepo/tests/native/coop-personal-fleet-gamestore.native.test.cjs"
+  & wsl.exe -- env "EVEJS_NATIVE_FORK_ROOT=$linuxFork" NODE_NO_WARNINGS=1 node --test $linuxTest
+  if($LASTEXITCODE -ne 0){throw "PF_NATIVE_SQLITE_GATE_FAILED exit $LASTEXITCODE"}
+  Write-Host 'PF_NATIVE_SQLITE_GATE_PASS'
+}else{
+  Write-Warning 'Native fork SIGKILL gate NOT RUN. Re-run with -WithNative and WSL2 Node 22+.'
+}
+Write-Host 'PF_CHECKS_COMPLETE; this is NOT proof of in-game NPC fleet functionality'
+ -or [int]$wslMajor -lt 22){
+    throw 'Linux WSL must have Node.js 22+ installed'
+  }
   $linuxCrash="$linuxRepo/tests/coop-personal-fleet-sqlite-crash.test.cjs"
   & wsl.exe -- env NODE_NO_WARNINGS=1 node --test $linuxCrash
   if($LASTEXITCODE -ne 0){throw "PF15_SQLITE_SIGKILL_FAILED exit $LASTEXITCODE"}
