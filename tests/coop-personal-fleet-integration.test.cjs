@@ -126,7 +126,7 @@ test('same contracted pilot salary period cannot be billed twice after loss',()=
  const authority={authenticatedEmployer:90,periodUnbilled:true,
  activeContract:{contractID:'contract-1',pilotID,employerCharacterID:90,
  payerWalletID:100,payeeWalletID:200,revisionHash:H,
- salaryISK:250,activeThroughoutPeriod:true}};
+ salaryISK:250,verifiedArrearsISK:0,activeThroughoutPeriod:true}};
  const invoice=payroll.accrue(input,authority);assert.equal(invoice.status,'DUE');
  const ledger=payroll.insertInvoice(payroll.emptyLedger(),invoice.invoice,
   {expectedRevision:0});
