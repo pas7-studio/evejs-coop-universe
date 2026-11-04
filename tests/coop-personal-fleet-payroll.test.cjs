@@ -9,7 +9,7 @@ const input=(x={})=>({invoiceID:'pf-pay-001',contractID:'pf-contract-001',
 const authority=(x={})=>({authenticatedEmployer:90,periodUnbilled:true,
  activeContract:{contractID:'pf-contract-001',pilotID:'coop-pilot-001',
  employerCharacterID:90,payerWalletID:100,payeeWalletID:200,
- revisionHash:H,salaryISK:1500,activeThroughoutPeriod:true},...x});
+ revisionHash:H,salaryISK:1500,verifiedArrearsISK:0,activeThroughoutPeriod:true},...x});
 const start=()=>{const r=p.accrue(input(),authority());assert.equal(r.status,'DUE');return r.invoice};
 const proof=(r,type,extra={})=>({type,id:'proof-'+type,invoiceID:r.invoiceID,
  contractID:r.contractID,payerWalletID:r.payerWalletID,
@@ -226,4 +226,16 @@ test('ambiguous invoice cannot be marked paid without original reconciliation',(
     settlementID:'native-transaction-001'})});
  assert.equal(x.status,'RECONCILED_PAID');
  assert.equal(x.ledger.invoices['pf-pay-001'].phase,'PAID');
+});
+
+test('PF-11: unverified arrears cannot inflate native salary',()=>{
+ const r=p.accrue(input({arrearsISK:900}),authority());
+ assert.equal(r.reason,'PF_PAYROLL_CONTRACT_OR_PERIOD_UNVERIFIED');
+});
+test('PF-11: verified arrears must match the native contract exactly',()=>{
+ const a=authority();
+ const x=p.accrue(input({arrearsISK:200}),{
+  ...a,activeContract:{...a.activeContract,verifiedArrearsISK:200}
+ });
+ assert.equal(x.status,'DUE');assert.equal(x.invoice.totalISK,1700);
 });
