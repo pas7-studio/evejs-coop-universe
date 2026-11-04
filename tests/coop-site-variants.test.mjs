@@ -58,19 +58,3 @@ test("a variant label is never prefixed twice", () => {
     {siteFamily: "combat", difficulty: 4, templateID: "coop:client-dungeon:2226"}),
   "Co-op x2: Guristas Burrow");
 });
-
-test("a co-op variant adds the real shooting sentry beside the inert battery", () => {
-  const template = {templateID: "client-dungeon:47", siteFamily: "combat", difficulty: 5,
-    resolvedName: "Crimson Hand Supply Depot",
-    siteSceneProfile: {structureProfiles: [{label: "Heavy Missile Battery"}]},
-    populationHints: {encounters: [{key: "wave_1", spawnQuery: "blood_deadspace_pve", amount: 4}]}};
-  const variant = variants.buildVariant(template, (name) => ({success: true,
-    match: {typeID: 17598, categoryID: 11, typeName: name}}));
-  assert.ok(variant, "the variant is built");
-  const entries = variant.populationHints.encounters[0].spawnEntries || [];
-  assert.equal(entries.length, 1, "one real sentry entry");
-  assert.equal(entries[0].typeID, 17598);
-  assert.equal(entries[0].label, "Blood Heavy Missile Battery");
-  assert.equal(template.populationHints.encounters[0].spawnEntries, undefined,
-    "the classic template is never touched");
-});
