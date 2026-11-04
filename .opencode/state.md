@@ -85,15 +85,33 @@ per career, with `career` 1/2/3/4, `target` 1, `threat` 1, `career_points` > 0,
 goal. Other annotation keys: `'subtype'`, `'order'`, `'duration'`,
 `'auraTextID'`, `'agencyLinkTextID'`, `'agencyScreen'`, `'videoID'`.
 
+## Drones: done in code, needs one live launch (fork 60296b9 + 762aaf7)
+The drone window reads 1/5 because the client counts
+`michelle.stateByDroneID` minus the drone bay, and it rebuilds that dictionary
+wholesale from `SetState(bag.droneState)`. Two server-side holes are now closed:
+- `launchDronesForSession` was completely silent (no log, no event) and only wrote
+  errors into the RPC response; it now logs `[Drone] Launch char/ship/requested/
+  launched/active/bandwidth/ids`, warns with the exact reason for every refusal, and
+  re-emits `OnDroneStateChange` for every controlled drone after a successful burst.
+- `movementSceneRefresh.sendStateRefresh` (STATE_RESET) sent a visible-entity snapshot
+  that could predate the launch and wipe the newer notifications; it now re-syncs the
+  authoritative drone state right after the reset (`set-state.drone-resync`).
+The wire shape lives in the pure module `space/coopDroneStateView.js`
+(`tests/coop-drone-state-sync.test.mjs` 3/3).
+
 ## Still open
 1. Loot: confirm a real wreck/can drag now logs a reason; if the source is still
    unresolvable, materialize scene loot as real items (needs the new warn line live).
 2. Overview: load a profile in the client to confirm the unicode error is gone.
-3. Drone counter 1/5: trace `bag.droneState` vs `OnDroneStateChange` on the client.
-4. Logout 10 s: pin the server call behind `CmdLogOff` and compare sim vs wallclock.
-5. 77 km pilot-distance desync; death loot scattered (`npcWreckService`).
-6. Second "Изменения принадлежности" card (never identified).
-7. Warp landing for heavy hulls (~4 km): measure the real client value first.
+3. Drone counter: after deploy, launch five and read `[Drone] Launch ... launched=5
+   active=5/5` plus a 5/5 window; if it still shows 1/5 the loss is client-side and the
+   movement trace shows whether a SetState arrived after the resync.
+4. Logout: shipped in 7d99164, needs one live logoff to confirm no countdown.
+5. 77 km pilot-distance desync; death loot scattered (`npcWreckService`) - both need the
+   owner to say what he measured (distance between what, and where the loot appeared).
+6. Second "Изменения принадлежности" card (never identified; need the window/panel name).
+7. Warp landing for heavy hulls (~4 km): `WARP_COMPLETION_DISTANCE_MAX_METERS = 1` in
+   runtime.js, so the server lands on the target; measure the real client value first.
 8. After deploy: `militia_restore` for 140000005, then enlist both pilots into Caldari.
 
 ## Deploy procedure (only with the owner's explicit window)
