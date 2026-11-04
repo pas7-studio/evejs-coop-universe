@@ -35,8 +35,7 @@ test('hire requires server-verified payment/contract',()=>{
  assert.equal(x.reason,'PF_HIRE_AUTHORITY_OR_CAP');
 });
 test('duplicate hire cannot create two contracts for one pilot',()=>{
- const h=hire();const r=hire(h.state,{operationID:'hire-002',expectedRevision:1});
- assert.equal(r.reason,'PF_ROSTER_REVISION_STALE'); // helper uses fixed revision
+ const h=hire();
  const duplicate=apply(h.state,command('HIRE','hire-002',{
   expectedRevision:1,pilotID:'coop-pilot-001',
   contractID:'contract-002',hireReceipt:'c'.repeat(64)
