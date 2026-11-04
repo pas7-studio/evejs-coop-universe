@@ -88,7 +88,11 @@ $tests=@(Get-ChildItem (Join-Path $repoRoot 'tests') -Filter 'coop-personal-flee
 if ($all.Count -lt 10 -or $tests.Count -lt 11){
   throw "Incomplete branch: $($all.Count) modules / $($tests.Count) tests; refusing partial PASS"
 }
-foreach($src in @($all)+@($tests)){
+$nativeTest=Join-Path $repoRoot 'tests\native\coop-personal-fleet-gamestore.native.test.cjs'
+if(-not (Test-Path -LiteralPath $nativeTest -PathType Leaf)){
+  throw 'PF16 native fork adapter gate missing; refusing incomplete branch'
+}
+foreach($src in @($all)+@($tests)+@((Get-Item -LiteralPath $nativeTest))){
   Run-Command "Syntax: $($src.Name)" $repoRoot 'node' @('--check',$src.FullName)
 }
 $isWindows=[System.Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
