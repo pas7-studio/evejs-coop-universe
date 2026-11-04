@@ -106,9 +106,17 @@ function transition(row,{to,expectedRevision,proof,now}={}){
   receipts:[...row.receipts,{id:proof.id,type:kind}]};
  return {status:'APPLIED',record:next};
 }
-function replay(row,{operationID,payloadHash}={}){
+function replay(row,command={}){
  if(!valid(row))return block('PF_COMBAT_RECORD_CORRUPT');
- if(row.operationID!==operationID||row.payloadHash!==payloadHash)
+ if(!object(command)||row.operationID!==command.operationID||
+  row.payloadHash!==command.payloadHash||
+  row.assignmentID!==command.assignmentID||row.pilotID!==command.pilotID||
+  row.nativeEntityID!==command.nativeEntityID||
+  row.systemID!==command.systemID||row.targetID!==command.targetID||
+  row.issuerCharacterID!==command.issuerCharacterID||
+  row.generation!==command.generation||
+  row.fleetRevision!==command.fleetRevision||
+  row.expiresAt!==command.expiresAt)
   return block('PF_COMBAT_REPLAY_CONFLICT');
  return {status:'DUPLICATE',phase:row.phase,dispatchAllowed:false};
 }
