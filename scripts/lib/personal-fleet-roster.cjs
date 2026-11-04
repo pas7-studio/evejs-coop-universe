@@ -12,6 +12,16 @@ const isObj=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
 const validID=x=>typeof x==='string'&&KEY.test(x);
 const own=(x,k)=>Object.prototype.hasOwnProperty.call(x,k);
 const blocked=reason=>({status:'BLOCKED',reason});
+// The payload hash is supplied by the caller, and is NOT an operation
+// identity by itself. Bind the replay receipt to the actual canonical
+// command fields so a reused operation ID cannot impersonate another action.
+const commandSignature=cmd=>JSON.stringify([
+ cmd.type,cmd.operationID,cmd.expectedRevision,
+ cmd.pilotID??null,cmd.expectedPilotRevision??null,cmd.shipItemID??null,
+ cmd.contractID??null,cmd.hireReceipt??null,cmd.doctrine??null,
+ cmd.wreckID??null,cmd.assignmentID??null,cmd.expectedGeneration??null,
+ cmd.lostShipItemID??null
+]);
 const empty=(characterID,fleetID)=>({version:1,ownerCharacterID:characterID,
  fleetID,revision:0,doctrine:'DEFENSIVE',pilots:{},processed:{}});
 function validate(state){
@@ -37,7 +47,7 @@ function validate(state){
  }
  for(const [k,r] of Object.entries(state.processed)){
   if(!validID(k)||!isObj(r)||!RECEIPT.test(r.signature)||
-    !isObj(r.receipt)||!['HIRED','ASSIGNED','UNASSIGNED','DOCTRINE_CHANGED','SUSPENDED','DISMISSED','LOSS_RECORDED','PILOT_RECOVERED'].includes(r.receipt.type))
+    !isObj(r.receipt)||typeof r.commandSignature!=='string'||\n    r.commandSignature.length>1024||!['HIRED','ASSIGNED','UNASSIGNED','DOCTRINE_CHANGED','SUSPENDED','DISMISSED','LOSS_RECORDED','PILOT_RECOVERED'].includes(r.receipt.type))
    throw Error('PF_ROSTER_RECEIPT_CORRUPT');
  }
  return state;
@@ -50,8 +60,7 @@ function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelea
    !Number.isSafeInteger(cmd.expectedRevision)||cmd.expectedRevision<0||
    !['HIRE','ASSIGN','UNASSIGN','SET_DOCTRINE','SUSPEND','DISMISS','RECORD_LOSS','RECOVER_PILOT'].includes(cmd.type))
   return blocked('PF_COMMAND_INVALID');
- const prior=state.processed[cmd.operationID];
- if(prior)return prior.signature===cmd.payloadHash?
+ const signature=commandSignature(cmd);\n const prior=state.processed[cmd.operationID];\n if(prior)return prior.signature===cmd.payloadHash&&\n  prior.commandSignature===signature?
   {status:'DUPLICATE',receipt:structuredClone(prior.receipt),state}:
   blocked('PF_OPERATION_REPLAY_CONFLICT');
  if(cmd.expectedRevision!==state.revision)return blocked('PF_ROSTER_REVISION_STALE');
@@ -150,7 +159,7 @@ function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelea
   if(cmd.type!=='DISMISS')p.revision++;
  }
  next.revision++;
- next.processed[cmd.operationID]={signature:cmd.payloadHash,receipt};
+ next.processed[cmd.operationID]={signature:cmd.payloadHash,\n  commandSignature:signature,receipt};
  try{validate(next);}catch{return blocked('PF_NEXT_ROSTER_INVALID');}
  return {status:'APPLIED',receipt,state:next};
 }
