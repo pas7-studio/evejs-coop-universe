@@ -3376,3 +3376,12 @@ Why: tests/coop-flag-registry.test.mjs failed with 29 undeclared EVEJS_ keys: th
 Where: docs/coop-flags.json re-baselined with node scripts/coop-flags.cjs --baseline (483 flags).
 Evidence: repo 0dc99509; tests/coop-flag-registry.test.mjs 4/4 green (was 3/4). Still red and pre-existing, NOT from today's fixes: coop-absent-state (3), coop-client-contracts gaps count 262 (1), coop-hook-requires/coop-installer-module-coverage (2 - coopMemoryMetrics, coopEconomyV2, coopMemoSnapshot, coopWarMirror are not in the overlay manifest).
 
+
+### 2026-11-04T16:45Z · 4d3c8899 · L1 · fix(campaigns): present the war campaign through a real militia officer
+
+Why: The owner's 2026-11-04 screenshots of the Campaigns page show 'Выдано: Item 0' with a placeholder portrait. jobboard/client/features/campaigns/page.py _construct_objective_issuer draws CharacterPortrait(presenting_character_id) and character_link(same id); our objective payload omitted presenting_character, so the client used id 0 and printed the client's zero-owner label ('Item 0').
+Where: fork space/coopFactionWarCampaignView.js resolves an officer of the faction's militia corporation (first agent id, memoised; 64 State Protectorate agents exist) and gatewayServices/campaignGatewayService.js sends it as presenting_character. Live payload after deploy: Caldari 3019069 (Kasuki Inchi), Gallente 3019133.
+Evidence: fork 4d3c8899; node --check clean; tests/coop-fw-campaign-page.test.mjs 10/10 (new assertion that the objective carries presenting_character 3019069). Deployed; the page still needs the owner's visual PASS.
+
+Side findings from the same screenshots, NOT our payload: the trailing '*' on names is CCP's important-localization marker (localization/localizationBase.pyj FormatImportantString adds '%s*' for non-primary languages), and the '{rewards} за {numeric}numContributions, useG' line is the RU translation of UI/Campaigns/RewardsPerNumberContributions rendered because the client shows a 0-LP reward row (FmtLP(0) is truthy) - hiding it needs a real LP reward/payout design.
+
