@@ -65,8 +65,8 @@ test("the cap and the off switch are real knobs", () => {  const capped = scalin
 
 test("a scaled site is recognisable in the scanner by its own name", () => {
   assert.equal(scaling.markSiteLabel("Sansha Port", {siteFamily: "combat", difficulty: 5}),
-    "Sansha Port [CO-OP x2.5]");
+    "Co-op x2.5: Sansha Port");
   assert.equal(scaling.markSiteLabel("Sansha Port", {siteFamily: "combat", difficulty: 3}), "Sansha Port");
   assert.equal(scaling.markSiteLabel("Veldspar Field", {siteFamily: "ore", difficulty: 5}), "Veldspar Field");
-  assert.equal(scaling.markerFor(6), " [CO-OP x3]");
+  assert.equal(scaling.markerFor(6), "Co-op x3: ");
 });
