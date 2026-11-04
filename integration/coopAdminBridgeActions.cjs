@@ -317,12 +317,42 @@ function removeItem(request) {
   if (character && Number(character.shipID) === itemID) {
     return { ok: false, error: "item " + itemID + " is the active hull; board another ship first" };
   }
-  if (typeof store.remove !== "function") return { ok: false, error: "gameStore has no remove()" };
-  store.remove("items", String(itemID));
-  if (typeof store.flushTableSync === "function") store.flushTableSync("items");
+  // itemStore keeps its own copy of the whole items table (itemsTableCache) and
+  // an index; deleting straight from the gameStore left both stale, so the item
+  // kept being served to the client and the next write resurrected the row.
+  // removeInventoryItem also deletes the fitted children and returns the exact
+  // change list the client needs.
+  const itemStore = require("../services/inventory/itemStore");
+  if (typeof itemStore.removeInventoryItem !== "function") {
+    if (typeof store.remove !== "function") return { ok: false, error: "gameStore has no remove()" };
+    store.remove("items", String(itemID));
+    if (typeof store.flushTableSync === "function") store.flushTableSync("items");
+    return { ok: true, removed: [itemID], removedCount: 1, item: { itemID, typeID: item.typeID, name: item.itemName || item.shipName || null } };
+  }
+  const result = itemStore.removeInventoryItem(itemID, { removeContents: request.removeContents !== false });
+  if (!result || result.success === false) {
+    return { ok: false, error: String(result && result.errorMsg || "remove refused") };
+  }
+  const changes = (result.data && result.data.changes) || [];
+  const removedItems = (result.data && result.data.removedItems) || [];
+  let notified = false;
+  const session = liveSessionFor(characterID);
+  if (session && changes.length) {
+    try {
+      const characterState = require("../services/character/characterState");
+      if (typeof characterState.emitItemsChangedBatchForSession === "function") {
+        characterState.emitItemsChangedBatchForSession(session, changes, { locationContext: null });
+        notified = true;
+      }
+    } catch (_error) {
+      notified = false;
+    }
+  }
   return {
     ok: true,
     removed: [itemID],
+    removedCount: removedItems.length,
+    notified,
     item: { itemID, typeID: item.typeID, name: item.itemName || item.shipName || null },
   };
 }
