@@ -21,6 +21,18 @@ record + the overview-distance trick in `docs/TELEPORT_DELIVERY.md` §4/§5. One
 running server container was OOM-killed and took `evejs-server-1` down; it came back healthy by
 itself and the client had to relog. Never recursive-grep `/var/lib/evejs` inside that container.
 
+**Anomaly rats now answer a sniper** (`5ff9f9a`): the owner's friend cleared one of our x2.5
+anomalies from 150 km and felt nothing. Two causes: the site-defence director was gated by
+`EVEJS_COOP_PVE_SITE_DEFENSE`, which was **absent** from `Code/compose.coop-probe.yaml` (so anomaly
+defenders had no response at all — retaliation flag only covers named NPCs), and even with it on the
+far rule was a fixed 250 km, so a 150 km sniper got a plain attack order (burn at subwarp speed,
+never fire). "Far" is now the hull's own lock range: a defender that cannot lock the attacker gets a
+**real native warp to him** and the attack order only after the same physical hull is out of warp and
+inside reach; a hull that really shoots 150 km stays put. Same rule in `coopNpcTactics`. The director
+also falls back to the verified damage witness when the controller recorded no aggressor. Events:
+`NATIVE_SITE_DEFENSE_WARP_ISSUED` → `NATIVE_SITE_DEFENSE_ORDER_ACCEPTED`; how to verify:
+`docs/PVE_SITE_DEFENSE.md`.
+
 Committed on the branch but **not deployed to the play stack** (one restart ships
 all of it):
 
