@@ -138,6 +138,8 @@ The launcher keeps the client's own console output under
 8. After deploy: `militia_restore` for 140000005, then enlist both pilots into Caldari.
 
 ## Deploy procedure (only with the owner's explicit window)
+Full per-commit checklist: [`docs/PENDING_VERIFICATION_20261104.md`](../docs/PENDING_VERIFICATION_20261104.md)
+(21 commits, each with the exact observation that makes it PASS).
 `cd C:\Games\EveCoop\upstream-evejs\Code; docker build -t evejs-local .` then
 `docker compose -f compose.yaml -f compose.coop-probe.yaml -p evejs up -d --force-recreate server`.
 Play stack only. Never restart it unasked.
