@@ -3488,3 +3488,9 @@ Why: document lootable site structures
 Detail: docs/SITE_LOOT_STRUCTURES.md carries the measurements (ambient structureProfile, no inventory row, item rows named warehouse: 0), what the phase does (site's own loot profile, items inside the structure's own item id, seeded once), the live agents-stack proof with the four real items and their flags, and the one thing still unmeasured: the in-client cargo view after the next restart.
 Where: docs/SITE_LOOT_STRUCTURES.md, docs/SITE_SENTRIES.md, docs/WORKLOG.md
 Evidence: docs/SITE_LOOT_STRUCTURES.md; live agents-stack probe 2026-11-05
+### 2026-11-04T21:40Z · 4fe6cc8 · L1 · chore(audit): sync the market-maker copy after the caching change
+
+Why: market-maker trading document read once per process instead of per call
+Detail: The integration/*.cjs archive must equal the deployed module byte for byte; the audit gate caught the drift, as designed.
+Where: integration/coopMarketMakerTraders.cjs
+Evidence: fork fcae8c0; profile 2219s: 58s self time in coopMarketMakerTraders read/write; 13/13 maker tests; AUDIT_OK

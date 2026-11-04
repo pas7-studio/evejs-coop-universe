@@ -12,6 +12,29 @@ function createWorld({file,route,population=16,clock=()=>Date.now(),travelMs=120
  if(!Number.isInteger(population)||population<1||population>100)throw Error("population cap 1..100");
  if(!Number.isInteger(travelMs)||travelMs<10000)throw Error("travelMs must be >= 10000");
  const persist=s=>{fs.mkdirSync(path.dirname(file),{recursive:true});const t=file+".tmp-"+process.pid;fs.writeFileSync(t,JSON.stringify(s));fs.renameSync(t,file);};
+ // MEASURED 2026-11-05 (live V8 profile, 2 219 s): synchronous JSON writes + fsync were ~28%
+ // of all non-idle CPU, and this world file was written on EVERY cycle - advance() persists
+ // whenever any pilot has a physical location, which is almost always. Virtual pilot
+ // positions are regenerated from the clock, so a coalesced write is safe: at most
+ // EVEJS_COOP_WORLD_SAVE_MS (default 2000) of positions can be lost on a hard crash, and
+ // nothing that other systems depend on (ships, cargo, money) lives in this file.
+ const saveMs=Math.max(250,Number(process.env.EVEJS_COOP_WORLD_SAVE_MS)||2000);
+ let lastSavedAt=0,pending=null,timer=null;
+ const flushPending=()=>{
+  if(timer){clearTimeout(timer);timer=null;}
+  if(!pending)return false;
+  const next=pending;pending=null;lastSavedAt=Date.now();
+  try{persist(next);return true;}catch(_error){return false;}
+ };
+ const persistThrottled=state=>{
+  pending=state;
+  const wait=saveMs-(Date.now()-lastSavedAt);
+  if(wait<=0){flushPending();return;}
+  if(timer)return;
+  timer=setTimeout(()=>{timer=null;flushPending();},wait);
+  if(timer&&typeof timer.unref==="function")timer.unref();
+ };
+ process.once("beforeExit",()=>{try{flushPending();}catch(_error){}});
  const makePilot=(i,now)=>({
    id:"coop-pilot-"+String(i+1).padStart(3,"0"),
    name:pilotName(i),
@@ -85,10 +108,10 @@ function createWorld({file,route,population=16,clock=()=>Date.now(),travelMs=120
      }
    }
    state.lastAdvancedAt=now;
-   if(moves||Object.keys(physicalLocations).length)persist(state);
+   if(moves||Object.keys(physicalLocations).length)persistThrottled(state);
    return {status:"OK",moves};
  }
  function residents(systemID){return state.pilots.filter(p=>p.systemID===integer(systemID)).map(p=>({...p}));}
- return {advance,residents,snapshot:()=>structuredClone(state)};
+ return {advance,residents,snapshot:()=>structuredClone(state),flush:()=>flushPending()};
 }
 module.exports={createWorld};
