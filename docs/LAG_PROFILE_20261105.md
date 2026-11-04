@@ -72,3 +72,21 @@ one of those is a blocking call on the event loop, which is exactly what a playe
 2. A change that cannot be shown in a profile or in a log line is not a performance fix.
 3. Never trade durability for speed silently: money paths write synchronously, world/state
    bookkeeping may coalesce, and every coalescing writer must expose `flush()`.
+## The biggest single find: a 12 MB money document
+
+The profile's `write` hotspot in `coopMarketMakerTraders` was not a small leak. Measured on
+the work stack: `coop-market-makers.json` had grown to **12 MB with 33 184 operations, every
+one of them still phase RESERVED and zero live order rows**. The tick retries a placement whose
+outcome never resolved (by design the money stays "reserved for reconciliation"), and every
+retry reserved again - so the file had to be serialised in full on every operation and the
+makers were silently losing ISK.
+
+Fixed in two commits (`2d1b27d`, `5eabcdd`): one open reservation per trader and type
+(`RESERVATION_PENDING` reuses it instead of spending again), a `reconcile()` pass that
+refunds reservations older than an hour that no live order points at and prunes settled rows
+(retention two days, cap 1 000 rows), and the runtime calls reconcile at the top of each tick.
+Live result on the work stack: the document went **12 MB -> 2 MB -> 566 KB**, with 3 368
+reservations refunded automatically the first time reconcile ran.
+
+Do not raise the cap casually: the whole document is serialised on every write, so the row
+count IS the write cost.

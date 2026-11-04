@@ -3512,3 +3512,9 @@ Why: memoise the per-scene activity/deadline computation per sim stamp
 Detail: Three cases on the extracted helper (no game store needed): the same stamp reuses the very same answer and a new stamp recomputes, a pilot arriving at the same stamp is not hidden, systems never share an answer and the map stays bounded.
 Where: docs/WORKLOG.md, tests/coop-scene-activity-memo.test.mjs
 Evidence: profile: getSceneActivityState 22.86s of 2219s; 3/3 memo tests; AUDIT_OK
+### 2026-11-04T21:52Z · b9ae4ff · L1 · chore(audit): sync the market-maker copy after the cap change
+
+Why: market makers: 33k leaked reservations (12MB doc) -> one open reservation per type, reconcile, prune, cap 1000
+Detail: Byte-for-byte archive copy, as the audit requires.
+Where: integration/coopMarketMakerTraders.cjs
+Evidence: fork 2d1b27d+; live: 33184 -> 5000 -> automatic reconcile refunded 3368; 19 maker tests; AUDIT_OK
