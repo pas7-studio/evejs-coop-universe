@@ -1,4 +1,4 @@
-# Co-op handoff (2026-11-05, fork tip `63ccce4`)
+# Co-op handoff (2026-11-05, fork tip `e2d259a`)
 
 ## Current state
 
@@ -9,6 +9,15 @@ work detached here again.
 Committed on the branch but **not deployed to the play stack** (one restart ships
 all of it):
 
+- **Site warehouses/depots/caches hold real loot** (`10ebb37`): they were ambient
+  scenery with NO inventory row at all, so "open cargo" was always empty. Filled once
+  from the site's own `lootProfiles` into the structure's own itemID. Live proof on the
+  work stack: a Sleeper Warehouse gained 4 real items. Switch
+  `EVEJS_COOP_SITE_LOOT_STRUCTURES=1`. Details: `docs/SITE_LOOT_STRUCTURES.md`.
+- **Gate warps land inside jump range** (`445f390`): the client's 10 km default for a
+  gate was treated as an explicit surface offset, so the ship landed ~11 km from the
+  gate edge (measured `distToTargetEdge=11009/11315`). Only a request above 10 km is an
+  explicit "warp to within X" now.
 - Site batteries really shoot: `space/coopSiteSentries.js` (decision),
   `coopSiteSentrySpawn.js` (one native sentry per battery), `coopSiteSentryFire.js`
   (the type's own damage vector through the native damage path). Measured over 4
@@ -17,6 +26,16 @@ all of it):
   damage path proven live: ship shield 725 -> 706.679975. Switch
   `EVEJS_COOP_SITE_SENTRIES=1`, set in both compose files. Details:
   `docs/SITE_SENTRIES.md`.
+- **Lags (measured, not guessed)**: CPU profile in `docs/LAG_PROFILE_20261105.md`.
+  The haul-block storm is suppressed (`8fe1892`, 13 440 events/hour -> 1/min) and its
+  O(n^2) cargo scan is gone; a stale miner cargo copy is now repaired instead of
+  blocking the ore loop for ever (`e2d259a`, clause `cached_quantity_differs`);
+  market-maker state is one process-owned document (`fcae8c0`) with a reconcile that
+  refunded 3 368 leaked reservations and took the document 12 MB -> 566 KB
+  (`2d1b27d`, `5eabcdd`); the virtual-world save is coalesced (`0cec93c`); the
+  per-scene deadline scan is memoised per sim stamp (`8114ec8`).
+- **A deployable is never swept away as an empty can** (`8fe1892`): the owner's Mobile
+  Tractor Unit was deleted right after "collect all" moved its loot out.
 - Campaign LP row is truthful now (`progress_interval 1`, amount 0, real militia
   issuer) instead of the raw `UI/Campaigns/RewardsPerNumberContributions`
   placeholders.
@@ -25,6 +44,11 @@ all of it):
   budget ratcheted 67 500 -> 65 500 (measured 65 315).
 - A war side fields four hulls by default (was three), raised by
   `EVEJS_COOP_WAR_SIDE_SIZE` (1..8), per tick by `EVEJS_COOP_WAR_SIDE_TICK` (1..6).
+- **Client launch is documented and verifiable**: `docs/CLIENT_LAUNCH.md` plus
+  `scripts/Test-ClientLaunch.ps1` (read-only; `RESULT: PASS` only for a real `Play.bat`
+  launch). The owner's "overview window does not appear at login" was a client started
+  outside `Play.bat`: without `noconsole` a log write during window creation raises
+  `IOError: [Errno 9] Bad file descriptor` and aborts it.
 
 ## NEXT (owner actions)
 
@@ -32,9 +56,13 @@ all of it):
    then `scripts/Start-Play-Stack.ps1 -Action Up`.
 2. **Stand in a site afterwards**: expect
    `[CoopLivingWorld] site sentries in <system>: battery <id> -> <type> #<id>`,
-   `coop-site-sentry-fired` in `coop-events.jsonl`, then damage on the client.
-   Until that exists the sentries are NOT verified in game.
-3. **Name the jobs window** (Agency -> Careers, a career agent in station, or
+   `[CoopLivingWorld] site loot structures in <system>: #<id> <name> N item(s) from
+   <profile>`, `coop-site-sentry-fired` and `coop-site-loot-structure-filled` in
+   `coop-events.jsonl`, then damage and loot on the client. Until that exists the
+   sentries and the warehouse loot are NOT verified in game.
+3. **Launch the client through `Play.bat` and run the verifier** before reporting any
+   client-side symptom.
+4. **Name the jobs window** (Agency -> Careers, a career agent in station, or
    Agency -> Job Board) before any Explorer/Soldier-of-Fortune/industry job
    content is written; the three windows take different payloads.
 

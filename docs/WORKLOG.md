@@ -3518,3 +3518,9 @@ Why: market makers: 33k leaked reservations (12MB doc) -> one open reservation p
 Detail: Byte-for-byte archive copy, as the audit requires.
 Where: integration/coopMarketMakerTraders.cjs
 Evidence: fork 2d1b27d+; live: 33184 -> 5000 -> automatic reconcile refunded 3368; 19 maker tests; AUDIT_OK
+### 2026-11-04T22:32Z · 6893a6a · TEST · test(gates): clear the five red checks the state bundle flagged
+
+Why: clear the five regression checks from the state bundle
+Detail: The published state listed five REGRESSION files; all five were either a stale expectation or an undeclared artefact of this week's changes, and every safety property they protect still holds. (1) coop-corp-market-wallet: the P2P env guards moved out of the market service, so the require now resolves to two co-op modules - the test pins both instead of one. (2) coop-flag-registry: nine new flags (
+Where: docs/coop-flags.json, scripts/overlay-spec.cjs, tests/coop-corp-market-wallet.test.mjs, tests/coop-native-mining-fleet-durable.test.mjs, tests/coop-npc-store-read-cost.test.mjs
+Evidence: 48/48 across the five files; flag baseline 504; overlay spec updated
