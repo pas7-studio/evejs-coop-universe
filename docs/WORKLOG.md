@@ -3356,3 +3356,10 @@ Why: Both corporate-stock branches required ../../integration/coopPlayerMiningCo
 Where: fork services/market/marketProxyService.js requires ../space/coopPlayerMiningCorporateMarketRuntime once and calls it; space/coopPlayerMiningCorporateMarketRuntime.js gains sellAndConfirm, buyAndConfirm, isCorporateSellOrder and skipCorporateFill (same status/quantity/gross verification and the same user-facing refusals). integration/coopPlayerMiningCorporateMarketRuntime.cjs refreshed, drift 0.
 Evidence: fork b4c04b6; node --check clean; audit now reports stockChars under budget and integration drift 0 (only the 5966-line coopVirtualWorldRuntime size gate remains); tests/coop-corp-market-wallet.test.mjs 5/5 plus 1435 co-op tests pass (4 stale tests updated to the deployed militia/map contracts: coop-faction-war-agent 7/7, coop-war-client-view-colourable 3/3 using frontlines-map systems).
 
+
+### 2026-11-04T15:35Z · c4af327 · L1 · feat(logging): mirror the server log into the persistent data volume
+
+Why: server/logs/server.log lives inside the image, so every 'docker compose up --force-recreate' destroyed the evidence for the run before it. Measured today: three restarts in one afternoon removed the client tracebacks we were chasing (the KeyError 30002803 payload only survived because it had been quoted into the chat), which directly undermines the evidence-first doctrine.
+Where: fork utils/logger/index.js appends the same rotating line to /var/lib/evejs/logs/server.log (override EVEJS_LOG_DIR) when that volume is writable; the image-local server.log is unchanged for docker logs parity; hourly archives older than 72h are pruned.
+Evidence: fork c4af327; node --check clean; tests/coop-server-log-persistence.test.mjs 3/3. Deployed and verified live: /var/lib/evejs/logs/server.log exists and grew 404 -> 754 lines across a '--force-recreate', still containing the previous boot's MiningInit lines; no EXCEPTION/EBADF/KeyError lines in the durable log for the current client sessions.
+
