@@ -3403,3 +3403,8 @@ Why: scale hard-site waves (d4 x2, d5 x2.5, d6 x3) and open nullsec/ore ceilings
 Detail: coop-site-wave-scaling: difficulty 3 unchanged, 4/5/6 at x2/x2.5/x3, idempotent baseAmount, cap, off switch, non-combat families untouched. coop-site-tuning: nullsec now opens its ceiling (floor unchanged) and the ore family opens to 5; highsec keeps its own ceiling. Proven live on evejs-agents with the rebuilt image through the real population-hints funnel: d3 [5,6,7,8] unchanged, d4 [6,7,8,9]->[
 Where: tests/coop-site-tuning.test.mjs, tests/coop-site-wave-scaling.test.mjs
 Evidence: fork a9a0395; 10/10 site tests; evejs-agents shows combat lowsec[3,10] nullsec[4,10] ore lowsec[1,5], funnel scales d4/d5/d6 as designed
+### 2026-11-04T18:10Z · 40457be · L1 · docs(worklog): record wave scaling and the opened ceilings
+
+Why: keep the wave-scaling hook inside the stock-file budget (scaleForSite one-liner)
+Where: docs/WORKLOG.md
+Evidence: fork 6e64ae8; coop-engine-audit AUDIT_OK (stockChars under 67500); funnel proof d3 unchanged, d4 x2, d5 x2.5, d6 x3 on evejs-agents
