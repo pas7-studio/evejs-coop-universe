@@ -16,6 +16,17 @@ const TRANSITIONS={
  CLONE_RECOVERING:{PILOT_AVAILABLE:'ORIGINAL_CLONE_RECOVERY_CONFIRMED'},
  PILOT_AVAILABLE:{},OUTCOME_UNKNOWN:{}
 };
+const finalReceiptValid=s=>{
+ const last=s.proofs.at(-1)?.type;
+ return ({
+  ACTIVE:s.proofs.length===0,
+  LOSS_PENDING:last==='ORIGINAL_NATIVE_WRECK_INTENT',
+  LOSS_CONFIRMED:last==='ORIGINAL_NATIVE_WRECK_CONFIRMED',
+  CLONE_RECOVERING:last==='DURABLE_CLONE_RECOVERY_STARTED',
+  PILOT_AVAILABLE:last==='ORIGINAL_CLONE_RECOVERY_CONFIRMED',
+  OUTCOME_UNKNOWN:last==='ORIGINAL_NATIVE_LOSS_OUTCOME_UNCERTAIN'
+ })[s.phase]===true;
+};
 function valid(s){
  return obj(s)&&s.version===1&&str(s.operationID)&&PILOT.test(s.pilotID)&&
  str(s.assignmentID)&&POS(s.ownerCharacterID)&&POS(s.originalShipItemID)&&
@@ -37,7 +48,7 @@ function valid(s){
  (s.phase==='ACTIVE'||s.revision>0)&&
  (['ACTIVE'].includes(s.phase)?s.wreckID===null:s.wreckID!==null)&&
  (['CLONE_RECOVERING','PILOT_AVAILABLE'].includes(s.phase)?
-  POS(s.recoveryReadyAt):s.recoveryReadyAt===null);
+  POS(s.recoveryReadyAt):s.recoveryReadyAt===null)&&finalReceiptValid(s);
 }
 function begin({operationID,pilotID,assignmentID,ownerCharacterID,
  originalShipItemID,nativeEntityID,systemID,generation,fittingHash,cargoHash,
