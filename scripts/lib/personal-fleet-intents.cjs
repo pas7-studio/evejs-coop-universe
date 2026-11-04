@@ -19,6 +19,18 @@ const actor=(a,r)=>a?.pilotID===r.pilotID&&a?.nativeEntityID===r.nativeEntityID&
  a?.systemID===r.systemID&&a?.assignmentGeneration===r.assignmentGeneration&&
  a?.ownerCharacterID===r.issuerCharacterID&&
  a?.fleetRevision===r.fleetRevision&&a?.custodyActive===true;
+const finalReceiptValid=row=>{
+ const last=row.receipts.at(-1)?.type;
+ return ({
+  QUEUED:row.receipts.length===0,
+  ISSUING:last==='DURABLE_DISPATCH_FENCE',
+  NATIVE_REQUESTED:['NATIVE_ORDER_ACK','INDEPENDENT_NATIVE_RECONCILIATION'].includes(last),
+  COMPLETED:['ORIGINAL_NATIVE_EFFECT_VERIFIED','INDEPENDENT_NATIVE_RECONCILIATION'].includes(last),
+  NATIVE_REJECTED:['PRE_DISPATCH_REJECTION','NATIVE_DEFINITE_NO_EFFECT',
+   'INDEPENDENT_NATIVE_RECONCILIATION'].includes(last),
+  OUTCOME_UNKNOWN:last==='NATIVE_OUTCOME_UNCERTAIN'
+ })[row.phase]===true;
+};
 function valid(row){
  return object(row)&&row.version===1&&token(row.operationID)&&
  token(row.fleetID)&&PILOT.test(row.pilotID)&&pos(row.nativeEntityID)&&
@@ -36,7 +48,7 @@ function valid(row){
  new Set(row.receipts.map(x=>x.id)).size===row.receipts.length&&
  row.revision===row.receipts.length&&
  (row.phase!=='QUEUED'||row.revision===0)&&
- (row.phase==='QUEUED'||row.revision>0);
+ (row.phase==='QUEUED'||row.revision>0)&&finalReceiptValid(row);
 }
 function issue(command,{now,authenticatedIssuer,actorProof,targetPermitted}={}){
  if(!object(command)||!token(command.operationID)||!token(command.fleetID)||
