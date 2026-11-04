@@ -416,3 +416,13 @@ Two correctness/security gaps found through review and patched in this PR:
 **Evidence:** Added 2 PF payroll tests and 3 PF roster tests; updated fixtures to include explicit native arrears attestation. The exact source and tests fetched from GitHub were executed through an isolated synchronous V8 harness: **24/24 roster, 38/38 payroll, 12/12 cross-module PASS (74 checks)**. Not native Node/GitHub Actions/WORK SQLite. Other Personal Fleet test modules were not re-run after these changes. Total authored tests: **243 across 11 test files**, not a full green CI assertion.
 
 **Workflow status:** `.github/workflows/personal-fleet-contracts.yml` has been committed but no successful GitHub Actions run was observed yet. The earlier attempt to write the authoritative `pas7-studio/EveJS` fork was blocked by HTTP 403. No PLAY changes or merge.
+
+## PF-12 — P0 roster replay-command binding (2026-11-05)
+
+**Reproduced design defect:** the PF-02 `apply()` deduplication compared a caller-provided `payloadHash` and `operationID` but did not bind that receipt to the actual operation parameters. Consequently a stale or malicious client/server adapter could reuse the identical ID/hash with a **different original ship, hire receipt, or command type** and still receive a false `DUPLICATE` acknowledgment.
+
+**Fix:** every processed roster entry now stores `commandSignature`, a canonical ordered serialization of the relevant operation fields: type, operation ID, fleet expected revision, pilot ID/revision, original shipItemID, contract/hireReceipt, doctrine, wreck, original assignment/generation and recovered ship. A replay is accepted as `DUPLICATE` only if both original hash AND actual canonical command fields match. Any mismatch fails as `PF_OPERATION_REPLAY_CONFLICT`. The existing idempotent hire case was updated to supply its complete original request.
+
+**Evidence:** 3 new negative tests check same ID/hash with changed shipItemID, changed operation type and changed native hire receipt. Current GitHub source/test files executed in isolated synchronous V8 test harness: **27/27 roster, 38/38 payroll, 12/12 integration PASS**; not Node CI nor native SQLite. Total Personal Fleet authored cases now **246**. Full suite was not re-run after PF-12.
+
+**Versioning:** this changes the shape of `processed` records by adding `commandSignature`. This reference has never been deployed, so no migration was applied. Any future runtime adapter must explicitly version/migrate stored receipts before enabling writes; treating old unbound receipts as safe duplicates is forbidden.
