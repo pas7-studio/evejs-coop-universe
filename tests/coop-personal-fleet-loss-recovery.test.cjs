@@ -167,3 +167,11 @@ test('PF-14: unknown native receipt type cannot confirm original loss',()=>{
  operationID:'pf-loss-001',generation:7}).reason,
  'PF_LOSS_RECORD_CORRUPT');
 });
+
+
+test('PF-14: recovered clone state without final clone receipt is corrupt',()=>{
+ const r=confirmed();
+ assert.equal(l.replay({...r,phase:'PILOT_AVAILABLE',recoveryReadyAt:50000},{
+ operationID:'pf-loss-001',generation:7}).reason,
+ 'PF_LOSS_RECORD_CORRUPT');
+});
