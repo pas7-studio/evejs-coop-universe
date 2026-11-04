@@ -440,3 +440,17 @@ A P0-class design error remained after PF-12: the `replay()` paths for PF-04 ord
 **Release note:** These modules are not deployed, and replay equality is only an idempotency *consistency* check. It does not authenticate a caller or permit native dispatch/wallet mutation. A trusted server adapter must bind original authenticated identity, real inventory, native target legality and committed SQLite receipt. The prior payloadHash itself is NOT treated as trustworthy security proof.
 
 All Personal Fleet test files now contain **255 authored test cases** (246 before PF-13, nine new). The full 255-test suite and GitHub Actions CI have **not** been confirmed green. Continue to keep draft/default OFF, no engine fork or PLAY mutation.
+
+## PF-14: durable receipt structural and terminal-state hardening (2026-11-05)
+
+P0 findings fixed in four **non-deployed reference** modules: `personal-fleet-intents.cjs`, `personal-fleet-combat.cjs`, `personal-fleet-payroll.cjs`, `personal-fleet-loss-recovery.cjs`.
+
+- Reject receipt journals with duplicate proof IDs (PF-04 previously lacked this validation), unknown proof types, or receipt count inconsistent with durable `revision`.
+- Reject impossible empty/nonempty phase history: initial state must have no receipts; all later phases require evidence.
+- Reject a terminal phase not supported by its **last persisted receipt**, e.g. order `COMPLETED` after only a dispatch fence, combat `RESOLVED` after only an ACK, payroll `PAID` after only a settlement intent, clone `PILOT_AVAILABLE` after wreck confirmation alone.
+- Check maximum receipt capacity before adding proof to PF-04 or PF-06 (payroll/loss already had transition caps); fail closed rather than writing a record the validator would subsequently reject.
+- PF-08 `PAID` records require a nonempty original settlement ID; other payment phases cannot impersonate settled state by storing a settlement ID. PF-07 recovery phases require an original wreck ID and recovery-ready timestamp.
+
+**Evidence:** 16 new negative `node:test` scenarios across the four modules, with exact checked-in files independently fetched from GitHub and executed in a synchronous isolated V8 harness: **39/39 PF-04, 33/33 PF-06, 45/45 PF-08 and 27/27 PF-07 = 144/144 PASS**. These are V8 harness checks, NOT a genuine Node 22 runner, real SQLite failpoint/SIGKILL, or native game stack. Overall 271 authored Personal Fleet tests; full suite not re-run as one Node job. The GitHub Actions Node workflow has not been proven green.
+
+**Remaining trust boundary:** even correctly typed receipts are not cryptographic witnesses. Only an authenticated native adapter observing original ItemStore / GameStore / actual wallet, wreck and actor events can supply the proof objects. Before deployment, enforce a serialized native authority for receipts and explicit migration/repair strategy for any future schema change. The engine fork write access previously returned HTTP 403; runtime remains unchanged. No PLAY deployment, main merge or original ISK/item mutations.
