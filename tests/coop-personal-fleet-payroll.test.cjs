@@ -272,3 +272,12 @@ test('PF-14: fabricated payroll receipt authority fails closed',()=>{
  proofs:[{id:'faked',type:'FREE_ISK'}]},input()).reason,
  'PF_PAYROLL_RECORD_CORRUPT');
 });
+
+
+test('PF-14: PAID with only durable intent proof is corrupt',()=>{
+ const r=start();
+ assert.equal(p.replay({...r,phase:'PAID',settlementID:'native-payment-1',
+ revision:1,proofs:[{id:'intent-only',
+ type:'NATIVE_WALLET_SETTLEMENT_INTENT_DURABLE'}]},input()).reason,
+ 'PF_PAYROLL_RECORD_CORRUPT');
+});
