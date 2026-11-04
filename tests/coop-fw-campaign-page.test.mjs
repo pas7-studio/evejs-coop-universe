@@ -32,6 +32,7 @@ const snapshot = {
   race: "caldari",
   warzoneID: 2,
   titleMessageID: 1042792,
+  presentingCharacterID: 3019069,
   icon: "eveicon.caldari_logo",
   uiIndex: 1,
   textures: {
@@ -195,6 +196,15 @@ test("every served objective content tag exists in the client's ContentTags enum
   for (const tag of tags) {
     assert.ok(CLIENT_CONTENT_TAGS.has(tag), `unknown content tag ${tag}`);
   }
+});
+
+test("the objective carries a real presenting character, not id 0", () => {
+  const result = service.handleRequest(
+    "eve_public.campaign.api.GetRequest", envelope(getRequest(CAMPAIGN_UUID)));
+  const body = decode(result.responseTypeName, result.responsePayloadBuffer);
+  // Without presenting_character the page prints "Item 0" and a placeholder portrait
+  // (measured 2026-11-04); the war view supplies an officer of the militia corporation.
+  assert.equal(body.available_objectives[0].attributes.presenting_character.sequential, 3019069);
 });
 
 test("stats report the measured warzone progress, not a fabricated number", () => {
