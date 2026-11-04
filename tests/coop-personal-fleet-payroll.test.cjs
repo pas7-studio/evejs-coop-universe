@@ -121,3 +121,109 @@ test('reusing original proof ID denies second settlement transition',()=>{
  ...receipt,id:'proof-NATIVE_WALLET_SETTLEMENT_INTENT_DURABLE'}).reason,
  'PF_PAYROLL_NATIVE_PROOF_REQUIRED');
 });
+
+const makeInvoice=(changes={})=>{
+ const result=p.accrue(input(changes),authority({
+  activeContract:{...authority().activeContract,
+   salaryISK:changes.salaryISK??1500,
+   revisionHash:changes.contractRevisionHash??H}
+ }));
+ assert.equal(result.status,'DUE');
+ return result.invoice;
+};
+test('canonical payroll ledger permits first invoice and increments revision',()=>{
+ const r=p.insertInvoice(p.emptyLedger(),makeInvoice(),{expectedRevision:0});
+ assert.equal(r.status,'INSERTED');assert.equal(r.ledger.revision,1);
+ assert.equal(r.ledger.invoices['pf-pay-001'].phase,'DUE');
+});
+test('second invoice ID cannot pay overlapping period in same contract',()=>{
+ const a=p.insertInvoice(p.emptyLedger(),makeInvoice(),{expectedRevision:0}).ledger;
+ const b=p.insertInvoice(a,makeInvoice({invoiceID:'pf-pay-002',
+  periodStart:1500,periodEnd:2500}),{expectedRevision:1});
+ assert.equal(b.reason,'PF_PAYROLL_PERIOD_OVERLAP');
+});
+test('period boundary adjacency is allowed, not overlap',()=>{
+ const a=p.insertInvoice(p.emptyLedger(),makeInvoice(),{expectedRevision:0}).ledger;
+ const b=p.insertInvoice(a,makeInvoice({invoiceID:'pf-pay-002',
+  periodStart:2000,periodEnd:3000}),{expectedRevision:1});
+ assert.equal(b.status,'INSERTED');
+});
+test('same invoice ID cannot be inserted twice even after restart',()=>{
+ const a=p.insertInvoice(p.emptyLedger(),makeInvoice(),{expectedRevision:0}).ledger;
+ assert.equal(p.insertInvoice(structuredClone(a),makeInvoice(),
+  {expectedRevision:1}).reason,'PF_PAYROLL_INVOICE_ALREADY_EXISTS');
+});
+test('different pilot contracts can use same payroll period',()=>{
+ const first=p.insertInvoice(p.emptyLedger(),makeInvoice(),{expectedRevision:0}).ledger;
+ const second=p.accrue(input({invoiceID:'pf-pay-002',contractID:'pf-contract-002',
+  pilotID:'coop-pilot-002'}),authority({activeContract:{...authority().activeContract,
+  contractID:'pf-contract-002',pilotID:'coop-pilot-002'}})).invoice;
+ assert.equal(p.insertInvoice(first,second,{expectedRevision:1}).status,'INSERTED');
+});
+test('stale ledger revision cannot create a new salary period',()=>{
+ const r=p.insertInvoice(p.emptyLedger(),makeInvoice(),{expectedRevision:0}).ledger;
+ assert.equal(p.insertInvoice(r,makeInvoice({invoiceID:'pf-pay-002',
+  periodStart:2000,periodEnd:3000}),{expectedRevision:0}).reason,
+  'PF_PAYROLL_LEDGER_REVISION_STALE');
+});
+test('settlement transitions inside canonical ledger require original receipt',()=>{
+ const r=p.insertInvoice(p.emptyLedger(),makeInvoice(),{expectedRevision:0}).ledger;
+ const a=p.updateInvoice(r,{invoiceID:'pf-pay-001',expectedLedgerRevision:1,
+  to:'SETTLING',expectedInvoiceRevision:0,
+  proof:proof(r.invoices['pf-pay-001'],'NATIVE_WALLET_SETTLEMENT_INTENT_DURABLE')});
+ assert.equal(a.status,'UPDATED');
+ const b=p.updateInvoice(a.ledger,{invoiceID:'pf-pay-001',expectedLedgerRevision:2,
+  to:'PAID',expectedInvoiceRevision:1,
+  proof:proof(a.ledger.invoices['pf-pay-001'],
+   'ORIGINAL_NATIVE_WALLET_ATOMIC_RECEIPT',receipt)});
+ assert.equal(b.status,'UPDATED');
+ assert.equal(b.ledger.invoices['pf-pay-001'].settlementID,'native-transaction-001');
+});
+test('same native settlement ID cannot pay two independent invoices',()=>{
+ let r=p.emptyLedger();
+ r=p.insertInvoice(r,makeInvoice(),{expectedRevision:0}).ledger;
+ r=p.insertInvoice(r,makeInvoice({invoiceID:'pf-pay-002',
+  periodStart:2000,periodEnd:3000}),{expectedRevision:1}).ledger;
+ for(const id of ['pf-pay-001','pf-pay-002']){
+  const next=p.updateInvoice(r,{invoiceID:id,expectedLedgerRevision:r.revision,
+   to:'SETTLING',expectedInvoiceRevision:0,
+   proof:proof(r.invoices[id],'NATIVE_WALLET_SETTLEMENT_INTENT_DURABLE')});
+  assert.equal(next.status,'UPDATED');r=next.ledger;
+ }
+ const first=p.updateInvoice(r,{invoiceID:'pf-pay-001',
+  expectedLedgerRevision:r.revision,to:'PAID',expectedInvoiceRevision:1,
+  proof:proof(r.invoices['pf-pay-001'],
+   'ORIGINAL_NATIVE_WALLET_ATOMIC_RECEIPT',receipt)});
+ assert.equal(first.status,'UPDATED');
+ const second=p.updateInvoice(first.ledger,{invoiceID:'pf-pay-002',
+  expectedLedgerRevision:first.ledger.revision,to:'PAID',expectedInvoiceRevision:1,
+  proof:proof(first.ledger.invoices['pf-pay-002'],
+   'ORIGINAL_NATIVE_WALLET_ATOMIC_RECEIPT',receipt)});
+ assert.equal(second.reason,'PF_PAYROLL_SETTLEMENT_ID_ALREADY_USED');
+});
+test('corrupt ledger with overlapping contracts cannot pass validation',()=>{
+ const x=p.emptyLedger();x.invoices['pf-pay-001']=makeInvoice();
+ x.invoices['pf-pay-002']=makeInvoice({invoiceID:'pf-pay-002',
+  periodStart:1500,periodEnd:2500});
+ assert.equal(p.validLedger(x),false);
+});
+test('ambiguous invoice cannot be marked paid without original reconciliation',()=>{
+ let r=p.insertInvoice(p.emptyLedger(),makeInvoice(),{expectedRevision:0}).ledger;
+ r=p.updateInvoice(r,{invoiceID:'pf-pay-001',expectedLedgerRevision:1,
+  to:'SETTLING',expectedInvoiceRevision:0,
+  proof:proof(r.invoices['pf-pay-001'],
+   'NATIVE_WALLET_SETTLEMENT_INTENT_DURABLE')}).ledger;
+ r=p.updateInvoice(r,{invoiceID:'pf-pay-001',expectedLedgerRevision:2,
+  to:'OUTCOME_UNKNOWN',expectedInvoiceRevision:1,
+  proof:proof(r.invoices['pf-pay-001'],
+   'NATIVE_WALLET_COMMIT_OUTCOME_UNKNOWN')}).ledger;
+ const x=p.reconcileLedgerInvoice(r,{invoiceID:'pf-pay-001',
+  expectedLedgerRevision:3,expectedInvoiceRevision:2,
+  proof:proof(r.invoices['pf-pay-001'],
+   'INDEPENDENT_ORIGINAL_WALLET_RECONCILIATION',{
+    id:'independent-receipt-001',debited:true,credited:true,
+    singleNativeTransaction:true,nativeDurableCommit:true,
+    settlementID:'native-transaction-001'})});
+ assert.equal(x.status,'RECONCILED_PAID');
+ assert.equal(x.ledger.invoices['pf-pay-001'].phase,'PAID');
+});
