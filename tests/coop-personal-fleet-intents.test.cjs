@@ -201,3 +201,18 @@ test('unknown reconciliation cannot replace a newer revision or be replayed',()=
  assert.equal(reconcile(r.intent,{to:'COMPLETED',expectedRevision:r.intent.revision,proof}).reason,
   'PF_INTENT_NOT_UNKNOWN');
 });
+
+
+test('PF-13: same operation ID/hash but different target cannot replay',()=>{
+ const row=start();
+ assert.equal(replay(row,cmd({targetID:701})).reason,'PF_INTENT_REPLAY_CONFLICT');
+});
+test('PF-13: same operation ID/hash cannot swap command type',()=>{
+ const row=start();
+ assert.equal(replay(row,cmd({type:'ATTACK'})).reason,'PF_INTENT_REPLAY_CONFLICT');
+});
+test('PF-13: same operation ID/hash cannot reuse a new assignment generation',()=>{
+ const row=start();
+ assert.equal(replay(row,cmd({assignmentGeneration:8})).reason,
+ 'PF_INTENT_REPLAY_CONFLICT');
+});
