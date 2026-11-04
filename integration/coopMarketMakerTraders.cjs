@@ -33,22 +33,36 @@ function normalize(raw) {
   };
 }
 
+const instancesByPath = new Map();
+
 function createTraders({ file, clock = () => Date.now(), writeFile = null } = {}) {
   const filePath = String(file || process.env.EVEJS_COOP_MARKET_MAKER_FILE ||
     "/var/lib/evejs/coop-market-makers.json");
+  // An injected writer means a test that expects its own writes: never share such an
+  // instance. Otherwise one trading document is one object for the whole process, so a
+  // per-tick createTraders() call cannot re-read and re-parse the file every tick.
+  if (writeFile === null && instancesByPath.has(filePath)) {
+    return instancesByPath.get(filePath);
+  }
   const persist = writeFile || ((target, text) => {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, text, "utf8");
   });
 
+  // The document is loaded once and then lives here; read() never touches the disk again.
+  // Callers mutate the returned object and then call write(state), exactly as before.
+  let cached = null;
   function read() {
+    if (cached) return cached;
     try {
-      return normalize(JSON.parse(fs.readFileSync(filePath, "utf8")));
+      cached = normalize(JSON.parse(fs.readFileSync(filePath, "utf8")));
     } catch (_error) {
-      return emptyState();
+      cached = emptyState();
     }
+    return cached;
   }
   function write(state) {
+    cached = state;
     persist(filePath, JSON.stringify(state, null, 2) + "\n");
     return state;
   }
@@ -142,11 +156,20 @@ function createTraders({ file, clock = () => Date.now(), writeFile = null } = {}
     return { status: "REFUNDED", amountISK: operation.amountISK };
   }
 
+  // A value, not the live document: callers compare two snapshots (tests do) and a caller
+  // must never be able to change the store by mutating what it was handed. The expensive part
+  // was the per-call file read + JSON.parse, and that is gone - copying five trader records is
+  // cheap next to re-parsing the whole document from disk.
   function snapshot() {
-    return read();
+    const state = read();
+    return typeof structuredClone === "function"
+      ? structuredClone(state)
+      : JSON.parse(JSON.stringify(state));
   }
 
-  return Object.freeze({ reserve, bind, refund, snapshot, filePath });
+  const api = Object.freeze({ reserve, bind, refund, snapshot, filePath });
+  if (writeFile === null) instancesByPath.set(filePath, api);
+  return api;
 }
 
 module.exports = { createTraders, enabled, emptyState, normalize, dayKey, TRADERS, DEFAULTS };
