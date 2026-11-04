@@ -2,6 +2,9 @@
 // PF-04 NON-DEPLOYED pure durable intent policy. No native dispatch, no
 // GameStore writes, and no default enablement. The engine fork must persist
 // every returned transition before invoking its existing coopNpcOrderBridge.
+// All authority arguments (authenticatedIssuer, actorProof, targetPermitted,
+// leaseAvailable, and native evidence) MUST be constructed by trusted server
+// adapters, never forwarded directly from client payloads.
 const TYPES=new Set(['FOLLOW','ATTACK','DEFEND','WARP','RETREAT','RETURN_TO_BASE']);
 const PHASES=new Set(['QUEUED','ISSUING','NATIVE_REQUESTED','COMPLETED',
   'NATIVE_REJECTED','OUTCOME_UNKNOWN']);
@@ -19,7 +22,7 @@ function valid(row){
  return object(row)&&row.version===1&&token(row.operationID)&&
  token(row.fleetID)&&PILOT.test(row.pilotID)&&pos(row.nativeEntityID)&&
  pos(row.systemID)&&pos(row.issuerCharacterID)&&pos(row.assignmentGeneration)&&
- pos(row.fleetRevision)&&TYPES.has(row.type)&&PHASES.has(row.phase)&&
+ Number.isSafeInteger(row.fleetRevision)&&row.fleetRevision>=0&&TYPES.has(row.type)&&PHASES.has(row.phase)&&
  HASH.test(row.payloadHash)&&pos(row.createdAt)&&pos(row.expiresAt)&&
  row.expiresAt>row.createdAt&&Number.isSafeInteger(row.revision)&&row.revision>=0&&
  (row.targetID===null||pos(row.targetID))&&
@@ -31,7 +34,8 @@ function issue(command,{now,authenticatedIssuer,actorProof,targetPermitted}={}){
  if(!object(command)||!token(command.operationID)||!token(command.fleetID)||
   !PILOT.test(command.pilotID)||!pos(command.nativeEntityID)||
   !pos(command.systemID)||!pos(command.issuerCharacterID)||
-  !pos(command.assignmentGeneration)||!pos(command.fleetRevision)||
+  !pos(command.assignmentGeneration)||!Number.isSafeInteger(command.fleetRevision)||
+  command.fleetRevision<0||
   !TYPES.has(command.type)||!HASH.test(command.payloadHash)||
   !pos(command.createdAt)||!pos(command.expiresAt)||command.expiresAt<=command.createdAt||
   command.expiresAt-command.createdAt>300000||
