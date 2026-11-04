@@ -288,3 +288,17 @@ node --test tests/coop-personal-fleet-intents.test.cjs
 - 32 authored PF-04 cases now exist; the six Personal Fleet test files contain 124 authored `node:test` cases in total, **not a claim of 124 passing tests**. All server fork runtime, native SQLite and WORK two-client gates remain unverified.
 
 Cross-module critical point: a real PF order cannot be enabled merely by writing a good durable intent. The authoritative fork arbiter must explicitly recognize owner `PERSONAL_FLEET`, and the order bridge must verify the Personal Fleet claim and preserve the existing native WAR exclusion, native busy state and TACTICS emergency arbitration. These fork patches were not committed due to a previous GitHub 403.
+
+## PF-05: per-ship cross-system navigation and native formation (2026-11-05)
+
+**Reference source (NOT DEPLOYED):**
+- `scripts/lib/personal-fleet-navigation.cjs`: per-ship `PLANNED -> APPROACHING -> AT_GATE -> TRANSFER_PENDING -> TRANSFERRED -> ARRIVED` with `BLOCKED/OUTCOME_UNKNOWN` quarantine, immutable route revision/member revision fencing, original ship and native entity uniqueness, and read-only snapshot of partial arrival.
+- `tests/coop-personal-fleet-navigation.test.cjs`: 17 deterministic Node test cases. Locally executed matching source under Node.js 22.16.0: **17/17 PASS**; full PR tests / WORK native SQLite and client gameplay NOT executed. The exact GitHub files were verified through the GitHub connector after upload.
+
+**Native integration contract:** `formation()` generates `NATIVE_FOLLOW_REQUEST` descriptors, **not coordinates or teleportation**. A trusted adapter must recheck native scene/controller, authenticated owner and matching assignment generation, then dispatch through the real `coopNpcOrderBridge` (requiring `PERSONAL_FLEET` support in the fork arbiter). Formation ranges are advisory only, not a new kinematics engine.
+
+**Cross-system:** reuse the existing `coopNativeGateTransfer.js` journal and same original entity/controller/module/cargo authorities. Each ship transfers independently. `TRANSFER_PENDING` must be durable before invoking native transfer; `TRANSFERRED` requires verified original item preservation; `ARRIVED` requires destination scene and original controller proof. Partial squad arrival is a first-class outcome; never mark the squad arrived from the leader's position. An unknown transfer must remain fenced until independent source/destination original-native reconciliation.
+
+**Blocking dependencies:** the authoritative `pas7-studio/EveJS` fork cannot currently be written with this integration's GitHub credentials (previous `403`); initial player-owned native ship adoption/docking are still unverified; no real movement was issued. The new route reducer is therefore an **isolated source-tested reference**, not evidence of gameplay readiness.
+
+Test command (co-op repository): `node --check scripts/lib/personal-fleet-navigation.cjs && node --test tests/coop-personal-fleet-navigation.test.cjs`.
