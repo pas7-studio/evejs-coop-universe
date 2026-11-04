@@ -37,17 +37,17 @@ function validate(state){
  }
  for(const [k,r] of Object.entries(state.processed)){
   if(!validID(k)||!isObj(r)||!RECEIPT.test(r.signature)||
-    !isObj(r.receipt)||!['HIRED','ASSIGNED','UNASSIGNED','DOCTRINE_CHANGED','SUSPENDED','DISMISSED'].includes(r.receipt.type))
+    !isObj(r.receipt)||!['HIRED','ASSIGNED','UNASSIGNED','DOCTRINE_CHANGED','SUSPENDED','DISMISSED','LOSS_RECORDED','PILOT_RECOVERED'].includes(r.receipt.type))
    throw Error('PF_ROSTER_RECEIPT_CORRUPT');
  }
  return state;
 }
 function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelease=false,
- verifiedTermination=false}={}){
+ verifiedTermination=false,verifiedLoss=false,verifiedRecovery=false}={}){
  try{validate(state);}catch{return blocked('PF_ROSTER_CORRUPT');}
  if(!isObj(cmd)||!validID(cmd.operationID)||!RECEIPT.test(cmd.payloadHash)||
    !Number.isSafeInteger(cmd.expectedRevision)||cmd.expectedRevision<0||
-   !['HIRE','ASSIGN','UNASSIGN','SET_DOCTRINE','SUSPEND','DISMISS'].includes(cmd.type))
+   !['HIRE','ASSIGN','UNASSIGN','SET_DOCTRINE','SUSPEND','DISMISS','RECORD_LOSS','RECOVER_PILOT'].includes(cmd.type))
   return blocked('PF_COMMAND_INVALID');
  const prior=state.processed[cmd.operationID];
  if(prior)return prior.signature===cmd.payloadHash?
@@ -92,6 +92,21 @@ function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelea
     return blocked('PF_RELEASE_NOT_VERIFIED');
    const shipItemID=p.shipItemID;p.shipItemID=null;p.status='CONTRACTED';
    receipt={type:'UNASSIGNED',pilotID:p.pilotID,shipItemID};
+  }else if(cmd.type==='RECORD_LOSS'){
+   // Trusted adapter MUST have confirmed this exact original hull/wreck via
+   // PF-07 and native ledger in one authorized committed reconciliation.
+   if(p.status!=='ASSIGNED'||!pos(p.shipItemID)||!pos(cmd.wreckID)||
+      cmd.shipItemID!==p.shipItemID||verifiedLoss!==true)
+    return blocked('PF_ORIGINAL_SHIP_LOSS_UNVERIFIED');
+   const shipItemID=p.shipItemID;
+   p.shipItemID=null;p.status='RECOVERING';
+   receipt={type:'LOSS_RECORDED',pilotID:p.pilotID,shipItemID,wreckID:cmd.wreckID};
+  }else if(cmd.type==='RECOVER_PILOT'){
+   // Returning pilot has NO restored original ship; assigning a new hull
+   // later requires a fresh PF actor claim and actual ItemStore custody.
+   if(p.status!=='RECOVERING'||p.shipItemID!==null||verifiedRecovery!==true)
+    return blocked('PF_CLONE_RECOVERY_UNVERIFIED');
+   p.status='CONTRACTED';receipt={type:'PILOT_RECOVERED',pilotID:p.pilotID};
   }else if(cmd.type==='SUSPEND'){
    if(p.status!=='CONTRACTED'||p.shipItemID!==null)
     return blocked('PF_SUSPEND_REQUIRES_IDLE_PILOT');
