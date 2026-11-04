@@ -13,6 +13,10 @@
 // Source .cjs modules become .js siblings in the deployed EveJS overlay.
 const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js") ? "" : ".cjs";
 const core = require("./coopFactionWarCore" + siblingSuffix);
+// Systems the client's own frontlines map can place. Publishing a state for any
+// other system kills the whole "Occupancy changes" panel with a KeyError, so every
+// warzone payload is restricted to this verified set.
+const frontlineMap = require("./coopFwFrontlineMapSystems" + siblingSuffix);
 
 const CAMPAIGN_STATE_ACTIVE = 3;
 const LIVE_CAMPAIGN_STATES = new Set(["PREPARING", "ASSAULT"]);
@@ -299,7 +303,11 @@ function warzoneSystems(state, factionIDs = []) {
     addRegion(campaign.sourceSystemID);
   }
   if (!regions.size) return [];
-  return systems.filter((s) => regions.has(s.regionID) && allowed.has(s.factionID));
+  return systems.filter((s) =>
+    regions.has(s.regionID) &&
+    allowed.has(s.factionID) &&
+    frontlineMap.isFrontlineMapSystem(s.solarSystemID),
+  );
 }
 
 // Chat report from the front. Text is built only from real state, so a report can
@@ -515,7 +523,10 @@ function occupationPairs(buildKeyVal, warzones, { state = null, getStargatesForS
       ["isFrontline", String(adjacency[Number(systemID)] || "BL") === "FL"],
       ["isSecondline", String(adjacency[Number(systemID)] || "BL") === "SL"],
     ])];
-  }).filter(Boolean);
+  }).filter(Boolean)
+    // Only systems the client's frontlines map can draw: the map picks the newest
+    // dateTaken of this dict as its focus and indexes its own system table with it.
+    .filter(([systemID]) => frontlineMap.isFrontlineMapSystem(systemID));
   return { warzoneID, entries };
 }
 
