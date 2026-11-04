@@ -20,7 +20,20 @@ const service = createAbsentStateGatewayService();
 const call = (typeName) => service.handleRequest(typeName, {payload: {value: Buffer.alloc(0)}});
 
 test("the seven absent-domain types are all handled", () => {
-  assert.equal(HANDLED_REQUEST_TYPES.length, 7);
+  // The service also answers eve_public.user.license.api.GetRequest (the client reads a
+  // 404 there as "no licence"), so the count may only grow; each listed type must answer.
+  assert.ok(HANDLED_REQUEST_TYPES.length >= 7, String(HANDLED_REQUEST_TYPES.length));
+  for (const typeName of [
+    "eve_public.assetholding.asset.api.GetRequest",
+    "eve_public.assetholding.entitlement.api.GetRequest",
+    "eve_public.assetholding.entitlement.api.RedeemRequest",
+    "eve_public.assetholding.entitlement.api.admin.ExpireRequest",
+    "eve_public.payment.schedule.api.GetRequest",
+    "eve_public.payment.schedule.api.GetActiveByTypeRequest",
+    "eve_public.payment.code.api.RedeemRequest",
+  ]) {
+    assert.ok(HANDLED_REQUEST_TYPES.includes(typeName), typeName);
+  }
   for (const typeName of HANDLED_REQUEST_TYPES) {
     const result = call(typeName);
     assert.ok(result, typeName);
@@ -33,20 +46,22 @@ test("a specific asset, entitlement or schedule is NOT_FOUND", () => {
     "eve_public.assetholding.asset.api.GetRequest",
     "eve_public.assetholding.entitlement.api.GetRequest",
     "eve_public.assetholding.entitlement.api.admin.ExpireRequest",
-    "eve_public.payment.schedule.api.GetRequest",
   ]) {
     const result = call(typeName);
-    assert.equal(result.statusCode, 5, typeName);
+    assert.equal(result.statusCode, 404, typeName);
     assert.ok(result.statusMessage.length > 0, `${typeName} must explain itself`);
   }
+  // The payment schedule type grew a real surface (the client now asks for its active
+  // schedule and gets an honest empty shape), so it is no longer a NOT_FOUND domain.
+  assert.equal(call("eve_public.payment.schedule.api.GetRequest").statusCode, 200);
 });
 
 test("redeeming something that was never granted is refused, not silently accepted", () => {
   const entitlement = call("eve_public.assetholding.entitlement.api.RedeemRequest");
-  assert.equal(entitlement.statusCode, 9);
+  assert.equal(entitlement.statusCode, 412);
   assert.match(entitlement.statusMessage, /nothing to redeem/);
   const code = call("eve_public.payment.code.api.RedeemRequest");
-  assert.equal(code.statusCode, 9);
+  assert.equal(code.statusCode, 412);
   assert.match(code.statusMessage, /not configured/);
 });
 

@@ -560,4 +560,19 @@ const lootNew='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckReco
 const slimBroadcastOld='    scene.sendSlimItemChangesToAllSessions([entity]);';
 const slimBroadcastNew='    scene.broadcastSlimItemChanges([entity]);';
 
+// Modules that installed co-op modules require but that no earlier block declared:
+// coopPerfMetrics/coopVirtualWorldRuntime read ./coopMemoryMetrics and
+// ./coopMemoSnapshot, coopVirtualWorldRuntime reads ./coopWarMirror, and
+// coopNativeWarehouse reads ./coopEconomyV2. A missing name here means the installed
+// stock file requires a module the overlay never copied, which aborts that native tick
+// with "Cannot find module" (measured by tests/coop-hook-requires.test.mjs).
+for(const name of ["coopMemoryMetrics","coopMemoSnapshot","coopWarMirror","coopEconomyV2",
+ "coopBlueprintPurchase","coopDemandGap","coopEventLoopMonitor","coopFactionTaxIncome",
+ "coopGateRoutes","coopHighSecNpcSafety","coopMarketMakerMarket","coopNpcCargoStow",
+ "coopNpcInputSupply","coopPilotPayroll","coopUniverseSites","coopWarRetirement",
+ "coopEconomyLiveReadiness","coopEconomyShadowLock","coopEconomyStationStockProof",
+ "coopUniverseSitesCadence","coopWormholeEntrances","coopFwFrontlineMapSystems",
+ "coopWarTargetPriority"])
+ if(!names.includes(name))names.push(name);
+
 module.exports={PIN,names,ORE_PATCH_PATHS,STRUCTURE_PATCH_PATHS,SOCIAL_PATCH_PATHS,specs,oldLines,lootOld,lootNew,slimBroadcastOld,slimBroadcastNew};

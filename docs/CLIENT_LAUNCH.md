@@ -48,10 +48,32 @@ Get-CimInstance Win32_Process -Filter "Name='exefile.exe'" |
   ForEach-Object { '{0} parent={1}' -f $_.ProcessId, $_.ParentProcessId }
 # expect the parent to be a cmd.exe running Play.bat
 
-# 2. the gateway actually receives the client
+# 2. `noconsole` really reached the process (see below - without it every log write
+#    inside a UI tasklet replaces the real error with IOError EBADF)
+Get-CimInstance Win32_Process -Filter "Name='exefile.exe'" |
+  Select-Object ProcessId, CommandLine
+
+# 3. the gateway actually receives the client
 docker logs --since 3m evejs-server-1 2>&1 |
   Select-String "H2 .*tls established|eve_public.gateway.Requests/Send"
 ```
+
+### Why the client must be started with `noconsole`
+
+`packages/logmodule/__init__.py` (`Multiplex.flush`) re-raises a Windows `EBADF` on
+`sys.__stdout__`/`sys.__stderr__` **unless** `blue.os.HasStartupArg('noconsole')` is set.
+Without it, any log write made while a console handle is invalid becomes
+`IOError: [Errno 9] Bad file descriptor` and unwinds the caller, which is how a Neocom
+strip or an overview/selected-item panel can silently fail to build (measured 2026-11-04
+in `parklife/tactical.Open -> selectedItemWnd.ApplyAttributes` and in
+`shipTreeUISvc.OnSkillsChanged`). `Play.bat` therefore starts
+`exefile.exe noconsole 1>>stdio.log 2>&1`.
+
+**Caveat:** the client can restart itself (graphics/settings change, launcher "restart"),
+and that child process is started **without** the argument - `Get-CimInstance` then shows a
+bare `exefile.exe` command line and the EBADF class is back. If those tracebacks reappear,
+relaunch through `Play.bat`; that is the only way to get the flag back.
+
 
 Expect `H2 tls established … ALPN=h2` followed by
 `POST /eve_public.gateway.Requests/Send host=dev-public-gateway.evetech.net type=application/grpc`.

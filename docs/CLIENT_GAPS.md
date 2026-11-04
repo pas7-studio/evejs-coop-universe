@@ -2,8 +2,8 @@
 
 Generated from the pinned client's own bytecode, not from guesswork: `docs/client-contracts/gateway-types.json`
 holds every `eve_public.*Request` string the client (V24.01, compiled 2026-06-16) can send —
-**216** of them. The local gateway names **254** types (gateway services plus the inline handlers,
-including `user.license.api.Get` and `plex.vault.api.Balance`), and **14** of the client's own types
+**216** of them. The local gateway names **262** types (gateway services plus the inline handlers,
+including `user.license.api.Get` and `plex.vault.api.Balance`), and **11** of the client's own types
 still get only the default empty answer.
 
 They are not fatal any more: since fork `f256261` an unknown `eve_public.*Request` is answered with
@@ -28,6 +28,11 @@ The fix is a seeding scope, not new plumbing: include the systems this world use
 its desired-definition count is zero and its scene wakes), then
 `dungeonUniverseSiteService.handleSceneCreated` materialises the instances and the existing providers
 deliver them.
+
+**Measured again 2026-11-04 (after the seeding scope landed):** 7159 active instances in total
+(3376 anomalies, 3782 signatures, 1 static), and the owner's systems are no longer empty -
+Jita 30000142 **10**, Perimeter 30000144 **10**, New Caldari 30000145 **11** active instances.
+The note above is kept as the historical measurement; the empty-scanner symptom it describes is gone.
 
 ## The 44 RemoteSvc placeholders, classified
 
