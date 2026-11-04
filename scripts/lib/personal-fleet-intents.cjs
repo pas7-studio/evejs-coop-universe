@@ -29,7 +29,14 @@ function valid(row){
  (row.targetID===null||pos(row.targetID))&&
  (['FOLLOW','ATTACK','DEFEND','WARP'].includes(row.type)?pos(row.targetID):row.targetID===null)&&
  Array.isArray(row.receipts)&&row.receipts.length<=12&&
- row.receipts.every(x=>object(x)&&token(x.id)&&token(x.type));
+ row.receipts.every(x=>object(x)&&token(x.id)&&token(x.type)&&
+  ['DURABLE_DISPATCH_FENCE','NATIVE_ORDER_ACK','PRE_DISPATCH_REJECTION',
+   'NATIVE_DEFINITE_NO_EFFECT','ORIGINAL_NATIVE_EFFECT_VERIFIED',
+   'NATIVE_OUTCOME_UNCERTAIN','INDEPENDENT_NATIVE_RECONCILIATION'].includes(x.type))&&
+ new Set(row.receipts.map(x=>x.id)).size===row.receipts.length&&
+ row.revision===row.receipts.length&&
+ (row.phase!=='QUEUED'||row.revision===0)&&
+ (row.phase==='QUEUED'||row.revision>0);
 }
 function issue(command,{now,authenticatedIssuer,actorProof,targetPermitted}={}){
  if(!object(command)||!token(command.operationID)||!token(command.fleetID)||
@@ -83,6 +90,7 @@ function step(row,{to,expectedRevision,now,proof}={}){
   proof.systemID!==row.systemID||proof.physicalComplete!==true))
   return deny('PF_INTENT_NATIVE_COMPLETION_UNVERIFIED');
  if(row.receipts.some(x=>x.id===proof.id))return deny('PF_INTENT_PROOF_REPLAY');
+ if(row.receipts.length>=12)return deny('PF_INTENT_RECEIPT_CAP_REACHED');
  return {status:'APPLIED',intent:Object.freeze({...row,phase:to,revision:row.revision+1,
   receipts:[...row.receipts,{id:proof.id,type:evidence}]})};
 }
