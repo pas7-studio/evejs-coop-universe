@@ -99,6 +99,7 @@ function reconcile(row,{proof}={}){
  if(!valid(row))return deny('PF_PAYROLL_RECORD_CORRUPT');
  if(row.phase!=='OUTCOME_UNKNOWN'&&row.phase!=='SETTLING')
   return deny('PF_PAYROLL_NOT_UNCERTAIN');
+ if(row.proofs.length>=8)return deny('PF_PAYROLL_PROOF_CAP_REACHED');
  if(proof?.type!=='INDEPENDENT_ORIGINAL_WALLET_RECONCILIATION'||
  !token(proof.id)||proof.invoiceID!==row.invoiceID||
  proof.contractID!==row.contractID||proof.amountISK!==row.totalISK||
@@ -118,4 +119,58 @@ function reconcile(row,{proof}={}){
    proofs:[...row.proofs,{id:proof.id,type:proof.type}]}};
  return deny('PF_PAYROLL_OUTCOME_STILL_UNKNOWN');
 }
-module.exports={PHASES,valid,accrue,transition,replay,reconcile};
+
+const LEDGER_KEY='coop-personal-fleet\u001fpayroll-ledger-v1';
+const emptyLedger=()=>({version:1,revision:0,invoices:{}});
+function validLedger(s){
+ if(!obj(s)||s.version!==1||!Number.isSafeInteger(s.revision)||
+  s.revision<0||!obj(s.invoices)||Object.keys(s.invoices).length>512)
+  return false;
+ const all=Object.values(s.invoices);
+ if(all.some(x=>!valid(x)))return false;
+ for(const [id,x] of Object.entries(s.invoices))
+  if(id!==x.invoiceID)return false;
+ for(let i=0;i<all.length;i++)for(let j=i+1;j<all.length;j++){
+  const x=all[i],y=all[j];
+  if(x.contractID===y.contractID&&
+    x.periodStart<y.periodEnd&&y.periodStart<x.periodEnd)return false;
+  if(x.settlementID&&x.settlementID===y.settlementID)return false;
+ }
+ return true;
+}
+function insertInvoice(ledger,invoice,{expectedRevision}={}){
+ if(!validLedger(ledger))return deny('PF_PAYROLL_LEDGER_CORRUPT');
+ if(!valid(invoice)||invoice.phase!=='DUE'||invoice.revision!==0||
+   invoice.proofs.length!==0||invoice.settlementID!==null)
+  return deny('PF_PAYROLL_NEW_INVOICE_UNVERIFIED');
+ if(ledger.revision!==expectedRevision)return deny('PF_PAYROLL_LEDGER_REVISION_STALE');
+ if(Object.prototype.hasOwnProperty.call(ledger.invoices,invoice.invoiceID))
+  return deny('PF_PAYROLL_INVOICE_ALREADY_EXISTS');
+ if(Object.values(ledger.invoices).some(x=>x.contractID===invoice.contractID&&
+  x.periodStart<invoice.periodEnd&&invoice.periodStart<x.periodEnd))
+  return deny('PF_PAYROLL_PERIOD_OVERLAP');
+ if(Object.keys(ledger.invoices).length>=512||
+  ledger.revision===Number.MAX_SAFE_INTEGER)return deny('PF_PAYROLL_LEDGER_CAP_REACHED');
+ const next=structuredClone(ledger);next.revision++;
+ next.invoices[invoice.invoiceID]=structuredClone(invoice);
+ return {status:'INSERTED',ledger:next};
+}
+function updateInvoice(ledger,{invoiceID,expectedLedgerRevision,to,
+ expectedInvoiceRevision,proof}={}){
+ if(!validLedger(ledger))return deny('PF_PAYROLL_LEDGER_CORRUPT');
+ if(ledger.revision!==expectedLedgerRevision)return deny('PF_PAYROLL_LEDGER_REVISION_STALE');
+ const current=ledger.invoices[invoiceID];
+ if(!current)return deny('PF_PAYROLL_INVOICE_NOT_FOUND');
+ const changed=transition(current,{to,expectedRevision:expectedInvoiceRevision,proof});
+ if(changed.status!=='APPLIED')return changed;
+ if(changed.invoice.settlementID&&Object.values(ledger.invoices).some(x=>
+  x.invoiceID!==invoiceID&&x.settlementID===changed.invoice.settlementID))
+  return deny('PF_PAYROLL_SETTLEMENT_ID_ALREADY_USED');
+ if(ledger.revision===Number.MAX_SAFE_INTEGER)return deny('PF_PAYROLL_LEDGER_CAP_REACHED');
+ const next=structuredClone(ledger);next.revision++;
+ next.invoices[invoiceID]=changed.invoice;
+ return {status:'UPDATED',ledger:next,receipt:{
+  invoiceID,phase:changed.invoice.phase,settlementID:changed.invoice.settlementID}};
+}
+module.exports={PHASES,valid,accrue,transition,replay,reconcile,
+ LEDGER_KEY,emptyLedger,validLedger,insertInvoice,updateInvoice};
