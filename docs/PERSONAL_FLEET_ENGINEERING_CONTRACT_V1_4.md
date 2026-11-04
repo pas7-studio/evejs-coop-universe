@@ -302,3 +302,21 @@ Cross-module critical point: a real PF order cannot be enabled merely by writing
 **Blocking dependencies:** the authoritative `pas7-studio/EveJS` fork cannot currently be written with this integration's GitHub credentials (previous `403`); initial player-owned native ship adoption/docking are still unverified; no real movement was issued. The new route reducer is therefore an **isolated source-tested reference**, not evidence of gameplay readiness.
 
 Test command (co-op repository): `node --check scripts/lib/personal-fleet-navigation.cjs && node --test tests/coop-personal-fleet-navigation.test.cjs`.
+
+## PF-06: real-native-combat safety reference (2026-11-05)
+
+New Draft PR code:
+- `scripts/lib/personal-fleet-combat.cjs`: non-deployed pure policy for original NPC pilot/ship ownership, trusted issuer and current roster/generation, native target attack legality, installed original weapon/charges/capacitor evidence; durable attack intent phases and fail-closed unknown outcome, native damage attribution and original payout receipt inspection.
+- `tests/coop-personal-fleet-combat.test.cjs`: 26 authored isolated tests for identity, legality, weapons, ammo, ACK-vs-damage, physical combat completion, replay fencing, duplicate damage events and native settlement deduplication. **Not executed** on WORK/native runtime in this session.
+
+### Native engine contracts required before this policy can authorize gameplay
+
+1. Call `coopNpcOrderBridge.issue` with `PERSONAL_FLEET` owner ONLY after explicit enablement in the native arbiter and cross-owner claim integration. Existing fork `coopNpcOrderArbiter.js` does not support this owner yet.
+2. The original `coopNpcAmmoSupply.js` inspects real installed NPC weapons, charge cargo and native controllers; it explicitly does **not** generate shots or inventory. Use its native inventory authority and the engine's original dogma/weapon fire path; no synthetic HP damage or fitted-weapon shadow inventory. `nativeWeaponActive`, capacitor, charge compatibility, target legality and ownership proof must be **trusted server-derived**.
+3. Crimewatch/standing/faction-war legality, war target status and friendly-fire restrictions must be checked on every native attack dispatch, not inferred from the client.
+4. Durable `ISSUING` intent must commit before invoking native bridge; `success:true` is an ACK, NOT evidence of hit/damage or combat completion. Unknown result is a no-redispatch quarantine.
+5. Combat contribution is a **read-only projection of original native damage events**, not an economic source. Attribution must use the existing authoritative kill/wreck/reward owner and player eligibility. The `coopNpcLossBridge.js` uses a real wreck and pending exactly-once accounting; PF must not create a second loss.
+6. `inspectNativeSettlement` only reads already authoritative and finalized `NATIVE_EVEJS_SETTLEMENT` receipts and always returns `payoutAllowed:false`. It cannot mint ISK, items, XP, bounty or a new reward. Missing/foreign/conflicting settlement stays blocked until source-native receipt verification.
+7. Release requires original native fire, hit, ammo use, legal target, safe loss and one canonical reward receipt in native SQLite/WORK tests. No test harness synthetic damage may be represented as real gameplay.
+
+**Status:** PF-06 source reference committed and verified in GitHub; its 26 tests are authored, not yet run. No engine fork modifications, no PLAY or WORK deployment. Do not mark real combat implemented.
