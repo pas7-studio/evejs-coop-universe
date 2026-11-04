@@ -132,12 +132,23 @@ test("native actor tags with no manifest are quarantined rather than respawned",
  assert.equal(r.slots[0].reason,"ORPHAN_NATIVE_SLOT_WITHOUT_MANIFEST");
  assert.equal(f.getSpawnCalls(),0);
 });
-test("missing native controller on an ACTIVE slot is blocked with no automatic replacement",t=>{
+test("missing native controller on an ACTIVE slot re-attaches the same hull and never replaces it",t=>{
+ // The invariant that matters is "no automatic REPLACEMENT": a hull that lost its runtime
+ // controller after a restart is the SAME physical NPC, and the module's own comment says
+ // every ship it vouches for must have a controller before the slot is called healthy
+ // (materializeStoredNativeController re-attaches, it never spawns). What must never happen
+ // is a new miner identity behind the operator's back.
  const f=fixture(t);f.start();f.world.controllers.delete(71001);
  const other=fixture(t,f.world),r=other.start();
  assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
- assert.equal(other.getSpawnCalls(),0);
- assert.equal(other.getRestores(),0);
+ assert.equal(other.getSpawnCalls(),0,"no replacement hull is ever spawned");
+ const miner=other.world.entities.get(71001);
+ assert.ok(miner&&Number(miner.entityID)===71001,"the original identity is still the one in the store");
+ assert.ok(other.getRestores()>=1,"its controller is re-attached to that same hull");
+ const secondMiner = [...other.world.entities.keys()]
+   .filter((id) => Number(id) !== 71001)
+   .filter((id) => String(other.world.entities.get(id).operatorKind || "").includes("miner"));
+ assert.deepEqual(secondMiner, [], "no second miner identity exists");
 });
 test("foreign owner of original cargo blocks restore and does not mutate ore",t=>{
  const f=fixture(t);f.start();

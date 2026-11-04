@@ -31,16 +31,27 @@ const body = (name) => {
 test("per-entity reads scan the cache and clone only the rows they return", { skip: skipped }, () => {
   assert.match(body("getNativeEntity"), /readCollectionRow\(/,
     "getNativeEntity must read ONE row, not clone the whole entity collection");
+  // Two acceptable implementations, both of which keep the property that matters: the row is
+  // selected inside the store (by entity) and only the returned rows are cloned.
+  //   readCollectionWhere - a scan, used where an index would be wasted;
+  //   cachedRowsForEntity - the per-entity index added later for the per-tick haul pass.
   for (const fn of ["listNativeEntitiesForSystem", "listNativeModulesForEntity",
     "listNativeCargoForEntity"]) {
     const text = body(fn);
-    assert.match(text, /readCollectionWhere\(/, `${fn} must filter inside the store`);
+    assert.match(text, /readCollectionWhere\(|cachedRowsForEntity\(/,
+      `${fn} must filter inside the store`);
     assert.doesNotMatch(text, /listNative(Entities|Modules|Cargo)\(\)\s*\.filter/,
       `${fn} must not clone the whole collection and then filter it`);
   }
-  // And the helper really clones, exactly once per returned row.
+  // And the helpers really clone, exactly once per returned row - never a cache reference.
   assert.match(body("readCollectionRow"), /cloneValue\(row\)/);
   assert.match(body("readCollectionWhere"), /cloneValue\(row\)/);
+  const indexed = body("cachedRowsForEntity");
+  assert.match(indexed, /cloneValue\(row\)/, "the indexed read clones what it returns");
+  assert.doesNotMatch(indexed, /readCollection\(/, "the indexed read never clones the table");
+  const indexer = body("entityIndexFor");
+  assert.match(indexer, /entityRowIndex/, "the entity index is cached, not rebuilt per call");
+  assert.match(indexer, /row\.entityID/, "and it buckets rows by their own entityID");
 });
 
 test("the cache is still protected: bulk reads and returned rows are clones", { skip: skipped }, () => {

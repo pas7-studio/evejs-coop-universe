@@ -33,10 +33,20 @@ test("every coop require inside the market service resolves to a real file", () 
   const pattern = /require\(path\.join\(__dirname,\s*"([^"]*coop[^"]*)"\)\)/g;
   const found = [...marketSource.matchAll(pattern)].map((match) => match[1]);
   assert.ok(found.length > 0, "the market service must still call the coop layer");
+  const resolvedFiles = [];
   for (const relative of found) {
     const resolved = path.resolve(marketDir, `${relative}.js`);
     assert.equal(fs.existsSync(resolved), true, `${relative} does not resolve from services/market`);
-    assert.equal(resolved.endsWith("coopPlayerMiningCorporateMarketRuntime.js"), true);
+    resolvedFiles.push(resolved);
+  }
+  // The corporate-market runtime is the reason this require exists; the P2P env guards moved
+  // out of the service into their own module (2026-11-05) and resolve through the same pattern.
+  assert.ok(resolvedFiles.some((file) => file.endsWith("coopPlayerMiningCorporateMarketRuntime.js")),
+    "the corporate market runtime must still be required");
+  for (const file of resolvedFiles) {
+    assert.ok(file.endsWith("coopPlayerMiningCorporateMarketRuntime.js") ||
+      file.endsWith("coopPlayerMarketEnvGuards.js"),
+    `unexpected coop require target: ${path.basename(file)}`);
   }
 });
 
