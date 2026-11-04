@@ -96,3 +96,9 @@ test("an expired order is cancelled and its money returned", async () => {
   assert.equal(traders.snapshot().traders[trader].balanceISK, spent + reserved, "the escrow came back");
   fs.rmSync(file, {force: true});
 });
+
+test("an empty book still gives a maker a reference: the seeder fallback", () => {
+  // market-common::fallback_base_price - the same number the book itself was seeded from.
+  const expected = Math.max(10000 + (34 % 250) * 250, 1000);
+  assert.equal(expected, 18500);
+});

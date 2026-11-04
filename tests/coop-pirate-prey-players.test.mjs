@@ -85,15 +85,17 @@ test("with the flag on, a pirate really engages the player through the normal or
   assert.equal(order.gunRange.meters, 9000, "the hull fights with its own gun range");
 });
 
-test("a far player is approached with a real warp before any weapon order", () => {
+test("a far player is left alone instead of being warped onto", () => {
+  // Measured live 2026-11-02 in Jita: a pirate anchored 4.4e11 m away at a stargate was ordered to warp onto the
+  // player the second he undocked, so every undock started a fight on top of the station. A pirate fights what
+  // comes to it; prey beyond its own engagement envelope is not its business.
   const {boot, scene, calls} = world({playerAt: {x: 9000000, y: 0, z: 0}});
   const raids = boot({EVEJS_COOP_PIRATE_PREY_PLAYERS: "1"});
   const result = raids.tick({
     systemID: SYSTEM, scene, pirates: [PIRATE], fleetShips: [], getCargo: () => [0],
   });
-  assert.equal(result.actions[0].action, "warp-to-hauler");
-  assert.equal(result.actions[0].targetRole, "player");
-  assert.deepEqual(calls, [{kind: "warp", pirateID: PIRATE, targetID: PLAYER_SHIP}]);
+  assert.deepEqual(result.actions, [], "no order for prey 9 000 km away");
+  assert.deepEqual(calls, [], "and no warp across the system");
 });
 
 test("a session without a ship, or a hull in warp, is never prey", () => {

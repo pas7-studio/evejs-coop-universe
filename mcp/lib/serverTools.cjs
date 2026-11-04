@@ -496,6 +496,60 @@ function createServerTools({
       },
     },
     {
+      name: "admin_rename_item",
+      description: "Rename one item a character owns, a ship hull included, with the same native primitive the client's Rename uses (requires confirm: true). Works while the character is offline.",
+      mutating: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          characterID: { type: "integer", description: "Owner character." },
+          itemID: { type: "integer", description: "Item to rename." },
+          name: { type: "string", description: "New label, up to 100 characters." },
+          waitMs: { type: "integer", description: "How long to wait for the in-server answer (default 5000)." },
+          confirm: { type: "boolean", description: "Must be true." },
+        },
+        required: ["characterID", "itemID", "name", "confirm"],
+      },
+      async handler(args) {
+        if (args.confirm !== true) return "refused: pass confirm: true to rename an item";
+        const characterID = Number(args.characterID) || 0;
+        const itemID = Number(args.itemID) || 0;
+        const name = String(args.name || "").trim();
+        if (!(characterID > 0) || !(itemID > 0)) return "characterID and itemID are required";
+        if (!name) return "name is required";
+        const answer = adminCall({ action: "rename_item", characterID, itemID, name }, { waitMs: args.waitMs });
+        if (!answer.ok) return `refused: ${answer.error || "unknown error"}`;
+        return `renamed item ${answer.itemID}: "${answer.previous || ""}" -> "${answer.name}"${answer.notified ? " (client notified)" : ""}`;
+      },
+    },
+    {
+      name: "admin_save_fitting",
+      description: "Save one owned ship's CURRENT fitting into the character's saved fittings, so it appears in the client's Fitting window (requires confirm: true).",
+      mutating: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          characterID: { type: "integer", description: "Owner character." },
+          itemID: { type: "integer", description: "Ship whose fitting is saved." },
+          name: { type: "string", description: "Fitting name shown in the Fitting window." },
+          waitMs: { type: "integer", description: "How long to wait for the in-server answer (default 5000)." },
+          confirm: { type: "boolean", description: "Must be true." },
+        },
+        required: ["characterID", "itemID", "name", "confirm"],
+      },
+      async handler(args) {
+        if (args.confirm !== true) return "refused: pass confirm: true to save a fitting";
+        const characterID = Number(args.characterID) || 0;
+        const itemID = Number(args.itemID) || 0;
+        const name = String(args.name || "").trim();
+        if (!(characterID > 0) || !(itemID > 0)) return "characterID and itemID are required";
+        if (!name) return "name is required";
+        const answer = adminCall({ action: "save_fitting", characterID, itemID, name }, { waitMs: args.waitMs });
+        if (!answer.ok) return `refused: ${answer.error || "unknown error"}`;
+        return `saved fitting ${answer.fittingID} "${answer.name}" from ship ${itemID} (${answer.items} entries, hull ${answer.shipTypeID})${answer.notified ? ", client notified" : ""}`;
+      },
+    },
+    {
       name: "admin_give_item",
       description: "Grant an item or ship hull to a character's station hangar, inside the server process. Works while the character is offline (requires confirm: true).",
       mutating: true,
