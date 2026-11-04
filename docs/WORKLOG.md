@@ -3482,3 +3482,9 @@ Why: site warehouses/depots/caches hold real loot from the site's own loot profi
 Detail: Five cases: an empty warehouse is filled from the site's own pirate combat profile into its own item id (owner 1, cargo flag), an existing or already-emptied structure is never filled twice, non-warehouse scenery is untouched, an inactive instance or a template without loot profiles is skipped with a reason, and a refused grant is recorded once instead of retried every tick. Both compose files set
 Where: docs/WORKLOG.md, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-site-loot-structures.test.mjs
 Evidence: fork 10ebb37; 5/5 tests; live on evejs-agents: Sleeper Warehouse gained 4 real items, readable through listContainerItems
+### 2026-11-04T21:36Z · d46072b · DOCS · docs(sites): record the warehouse loot chain, its live proof and its open gate
+
+Why: document lootable site structures
+Detail: docs/SITE_LOOT_STRUCTURES.md carries the measurements (ambient structureProfile, no inventory row, item rows named warehouse: 0), what the phase does (site's own loot profile, items inside the structure's own item id, seeded once), the live agents-stack proof with the four real items and their flags, and the one thing still unmeasured: the in-client cargo view after the next restart.
+Where: docs/SITE_LOOT_STRUCTURES.md, docs/SITE_SENTRIES.md, docs/WORKLOG.md
+Evidence: docs/SITE_LOOT_STRUCTURES.md; live agents-stack probe 2026-11-05
