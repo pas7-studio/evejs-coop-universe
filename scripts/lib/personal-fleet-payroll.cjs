@@ -87,11 +87,18 @@ function transition(row,{to,expectedRevision,proof}={}){
  proofs:[...row.proofs,{id:proof.id,type:expected}]};
  return {status:'APPLIED',invoice:next};
 }
-function replay(row,{invoiceID,contractID,contractRevisionHash,periodStart,periodEnd}={}){
+function replay(row,invoice={}){
  if(!valid(row))return deny('PF_PAYROLL_RECORD_CORRUPT');
- if(invoiceID!==row.invoiceID||contractID!==row.contractID||
- contractRevisionHash!==row.contractRevisionHash||
- periodStart!==row.periodStart||periodEnd!==row.periodEnd)
+ if(!obj(invoice)||invoice.invoiceID!==row.invoiceID||
+ invoice.contractID!==row.contractID||
+ invoice.pilotID!==row.pilotID||
+ invoice.employerCharacterID!==row.employerCharacterID||
+ invoice.payerWalletID!==row.payerWalletID||
+ invoice.payeeWalletID!==row.payeeWalletID||
+ invoice.contractRevisionHash!==row.contractRevisionHash||
+ invoice.periodStart!==row.periodStart||invoice.periodEnd!==row.periodEnd||
+ invoice.salaryISK!==row.salaryISK||invoice.arrearsISK!==row.arrearsISK||
+ invoice.salaryISK+invoice.arrearsISK!==row.totalISK)
   return deny('PF_PAYROLL_ID_REPLAY_CONFLICT');
  return {status:'DUPLICATE',phase:row.phase,settlementID:row.settlementID,
  nativeDebitAllowed:false};
