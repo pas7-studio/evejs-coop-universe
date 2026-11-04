@@ -3243,3 +3243,9 @@ Evidence: fork e78711b; tests/coop-site-tuning.test.mjs 3/3 pass (density, comba
 Why: The career portal died on open with ZeroDivisionError: UpdateDashedCircle divides by len(goals), every activity node comes from the client's static CAREER_PATH_GROUPS, and our definitions sent no ui_annotations, so all four goals landed in the career-path bucket and every activity group stayed empty (client trace in server log at 23:10:24).
 Where: fork Code/server/src/space/coopCareerGoals.js (full catalogue), gatewayServices/compatibilityGatewayService.js (annotations), _secondary/express/publicGatewayLocal.js (Attributes name/description/ui_annotations + ui.Annotation).
 Evidence: fork e21dd06; 43 definitions (4 career-path + 39 activities), all ids unique; encoded with the real local proto root: 2944 bytes, 43 goals decoded, group annotations present; tests/coop-career-goal-catalogue.test.mjs 3/3 pass. Not deployed.
+
+### 2026-11-04T01:40Z · 7d99164 · L1 · fix(logout): complete the safe logoff before the response reaches the client
+
+Why: Leaving in space went through SafeLogoff, whose handler only returned [] and deferred OnSafeLogoffTimerStarted/OnSafeLogoffActivated to afterCallResponse; the client showed a long countdown instead of closing.
+Where: fork Code/server/src/services/ship/shipService.js Handle_SafeLogoff and _emitInstantSafeLogoffNotifications.
+Evidence: fork 7d99164; notifications are sent before the response, the 1 s filetime grace is 0 (client timer displays logoffTime - GetSimTime() + 1 s), and a per-session flag prevents a second Activated; node --check clean. Not deployed - needs one live logoff to confirm the countdown.
