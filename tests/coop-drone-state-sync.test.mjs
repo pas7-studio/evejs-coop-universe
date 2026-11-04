@@ -13,7 +13,7 @@ const forkRoot = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs
 const require = createRequire(import.meta.url);
 const droneView = require(path.join(
   forkRoot,
-  "Code/server/src/space/coopDroneStateView.js",
+  "Code/server/src/space/coopDroneStateSync.js",
 ));
 
 const CHAR_ID = 140000005;

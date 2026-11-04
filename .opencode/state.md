@@ -96,7 +96,7 @@ wholesale from `SetState(bag.droneState)`. Two server-side holes are now closed:
 - `movementSceneRefresh.sendStateRefresh` (STATE_RESET) sent a visible-entity snapshot
   that could predate the launch and wipe the newer notifications; it now re-syncs the
   authoritative drone state right after the reset (`set-state.drone-resync`).
-The wire shape lives in the pure module `space/coopDroneStateView.js`
+The wire shape, launch telemetry and the re-sync live in `space/coopDroneStateSync.js`
 (`tests/coop-drone-state-sync.test.mjs` 3/3).
 
 ## Still open

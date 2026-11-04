@@ -3273,3 +3273,9 @@ Evidence: fork e8aa85a; node --check clean. Live [WarpComplete] lines since 2026
 Why: Ship-death survivors were moved into the wreck with ITEM_FLAGS.HANGAR (4) while the client opens a wreck as its cargo hold (flag 5) - the flag native NPC wrecks default to (space/npc/nativeNpcStore.js:671,732) and the flag anomaly loot is granted with (dungeonUniverseSiteService ITEM_FLAGS.CARGO_HOLD) - so the wreck looked empty where it is opened from and the loot read as scattered items.
 Where: fork Code/server/src/services/killmail/deathOutcomeResolver.js ROOT_LOOT_FLAG_ID (shared by ship and structure destruction).
 Evidence: fork 106f79f; node --check clean; tests/coop-death-loot-flag.test.mjs 2/2 guards the flag name and forbids a HANGAR destination. Not deployed.
+
+### 2026-11-04T03:20Z · a8764c0 · L1 · refactor(drones): keep the stock drone and warp files to one-line co-op hooks
+
+Why: The co-op engine audit budget for co-op code inside stock files (67500 chars) is at its ceiling, and the drone/warp round had grown it with inline logging and multi-line call blocks.
+Where: fork: new space/coopDroneStateSync.js (absorbs the former space/coopDroneStateView.js: rows, tuples, launch telemetry, re-sync) and space/coopWarpLandingTrace.js; droneRuntime, movementSceneRefresh and runtime keep one destructured require plus one call each.
+Evidence: fork a8764c0; node --check clean on every touched file; tests/coop-drone-state-sync.test.mjs 3/3 after pointing it at coopDroneStateSync; coop-engine-audit now reports stockChars 67641 > 67500, and the baseline at 7d99164 was already 67504 > 67500, so the budget needs an extraction (marketProxyService 14224 chars, miningNpcOperations 10920) rather than more hooks.
