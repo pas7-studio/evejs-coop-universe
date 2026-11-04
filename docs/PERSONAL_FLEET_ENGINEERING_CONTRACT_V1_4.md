@@ -359,3 +359,32 @@ node --test tests/coop-personal-fleet-payroll.test.cjs
 8. The current standalone module is a **pure reducer** and accepts abstract trusted adapter assertions. It is not itself the original EveJS wallet service, does not verify the actual character table or perform writes, and cannot guarantee cross-module atomicity by an unconnected callback. Fork write access remained blocked with GitHub 403 in prior attempt. No PLAY/WORK wallet balances were modified.
 
 **Scope note:** Native payroll wire-up and two-player economy QA are still release blockers. Continue work on the existing PR #350 without claiming real salary payments are implemented.
+
+## PF-09: cross-module integration and recovery hardening (2026-11-05)
+
+### Actual defects corrected in this PR
+
+- The existing `tests/coop-personal-fleet-claims.test.mjs` contained **two malformed mock transaction arrows** (`transact(_tables,fn)=>fn` instead of `transact:(_tables,fn)=>fn`), preventing the PF-01 test file from parsing. Repaired.
+- The existing `tests/coop-personal-fleet-writer-guard.test.mjs` used an undefined `pilotID` variable in the occupied-pilot case. Corrected to the explicit `pilot` fixture.
+- The PF-02 roster reducer previously could not release a confirmed destroyed ship into `RECOVERING` or restore its pilot to `CONTRACTED`, leaving a physical hull loss inconsistent with durable roster state.
+- Added `RECORD_LOSS` and `RECOVER_PILOT` roster commands; **both** require a trusted native-adapter confirmation AND the exact matching PF-07 loss / available-clone evidence, matching owner, pilot, original ship, assignment, generation and wreck. A clone return never recreates the lost ship.
+- Added `tests/coop-personal-fleet-integration.test.cjs`: 8 portable cross-module scenarios for hire → exclusive claim → original ship assignment, unverified loss denial, confirmed wreck → recovering pilot with no ship, verified clone return, native claim release fence, payroll period overlap, forged hull evidence and forged clone generation.
+
+### Execution evidence and limits
+
+**226/226** unit cases were executed on the **exact file contents fetched from this GitHub branch** in an in-memory JavaScript V8 harness using synchronous `node:test`/`assert`/structured-clone compatibility. Both previously broken test files are now fixed and pass the same harness. The eight newly committed cross-module integration cases were separately executed on exact GitHub source and returned **8/8 PASS**. These are **234 authored cases with 234 isolated V8 harness passing checks** (separate runs), *not* a real Node `node --test` run or SQLite/GameStore integration test.
+
+Direct `node --test` execution of the exact branch requires an authorized checkout or CI; GitHub Actions offered no existing run for the previous checked commit. The container git fetch has been unavailable due DNS. WORK stack SQLite/SIGKILL and two-player client E2E remain NOT RUN.
+
+### Required source-of-truth integration
+
+- Introduce a **single authorized orchestration transaction/saga** across roster, claims, physical ItemStore custody and original NPC loss/clone life. Do not treat a pure reducer with `verifiedLoss`/recovery evidence as proof unless the trusted adapter derives them from original native rows and persists the resulting state before ack.
+- On original confirmed loss, do not release PF global claim until native wreck/identity ledger is committed and any active order/transfer intent is fenced. Do not allow another ship to be assigned during the unknown interval.
+- On pilot recovery, the original hull remains destroyed and the roster status becomes `CONTRACTED` **with null shipItemID**. Any new assignment must use a different verified real ItemStore ship and a new durable actor claim.
+- Keep payroll liability and overlapping-period records independent of ship destruction or roster restoration; do not silently dismiss outstanding salary.
+- Feature defaults OFF and no modification to PLAY. Reconciliation of native JSON `coopNpcLife`, `coopNpcLossBridge`, FS transfer journal and GameStore SQLite is still a source-verified blocker before release.
+
+Run the *real* suite from an authorized checked-out co-op worktree:
+```sh
+node --test tests/coop-personal-fleet-*.test.*
+```
