@@ -138,3 +138,15 @@ test('unknown loss intent cannot be redispatched',()=>{
  assert.equal(step(r,'LOSS_CONFIRMED','ORIGINAL_NATIVE_WRECK_CONFIRMED').reason,
  'PF_LOSS_ILLEGAL_TRANSITION');
 });
+
+test('recovered phase requires available pilot status in native life registry',()=>{
+ const active=life();
+ const r=l.advance(active,{to:'PILOT_AVAILABLE',expectedRevision:active.revision,
+ now:60000,proof:proof(active,'ORIGINAL_CLONE_RECOVERY_CONFIRMED',{
+ originalCloneReady:true,originalShipNotRestored:true,
+ pilotStillUnassigned:true,wreckID:700})}).record;
+ assert.equal(l.assessRestart(r,observation()).reason,'PF_PILOT_LIFE_UNVERIFIED');
+ assert.equal(l.assessRestart(r,observation({pilotLife:{
+ pilotID:'coop-pilot-001',status:'AVAILABLE'}})).status,
+ 'ORIGINAL_SHIP_CONFIRMED_LOST');
+});
