@@ -25,7 +25,17 @@ function valid(row){
  (row.settlementID===null||token(row.settlementID))&&
  Array.isArray(row.proofs)&&row.proofs.length<=8&&
  row.proofs.every(p=>obj(p)&&token(p.id)&&token(p.type))&&
- new Set(row.proofs.map(p=>p.id)).size===row.proofs.length;
+ new Set(row.proofs.map(p=>p.id)).size===row.proofs.length&&
+ row.proofs.every(x=>[
+  'NATIVE_WALLET_SETTLEMENT_INTENT_DURABLE',
+  'ORIGINAL_NATIVE_WALLET_ATOMIC_RECEIPT',
+  'NATIVE_WALLET_DEFINITE_NO_DEBIT',
+  'NATIVE_WALLET_COMMIT_OUTCOME_UNKNOWN',
+  'INDEPENDENT_ORIGINAL_WALLET_RECONCILIATION'].includes(x.type))&&
+ row.revision===row.proofs.length&&
+ (row.phase!=='DUE'||row.revision===0)&&
+ (row.phase==='DUE'||row.revision>0)&&
+ (row.phase==='PAID' ? token(row.settlementID) : row.settlementID===null);
 }
 function accrue(input,{authenticatedEmployer,activeContract,periodUnbilled}={}){
  if(!obj(input)||!token(input.invoiceID)||!token(input.contractID)||
