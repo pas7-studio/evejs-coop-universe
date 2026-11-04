@@ -300,3 +300,21 @@ They are imported by 45 scripts/tests (`coop-state.cjs`, `coop-test-baseline.cjs
 `Run-Pve-Native-Gates.cjs`, the per-feature contract tests). Deleting them would
 delete working tests, not debt. They are **frozen**: no new one may be added,
 and every new engine change is a module + a commit in the fork.
+
+## Audit state 2026-11-04 (after b4c04b6 / repo test commit)
+
+- **integration drift: 0** - every integration/*.cjs now equals the deployed
+  server/src/space/*.js. Two archives that have no flat engine counterpart
+  (
+ativeNpcStore, 
+pcHardwareCatalog, both really in space/npc/) moved to
+  integration/npc/ instead of pretending to be space/ siblings.
+- **stockChars: under budget** (was 67641 > 67500). The corporate-market rules and the
+  two broken ../../integration/... requires are out of marketProxyService.js.
+- **remaining gate: space/coopVirtualWorldRuntime.js is 5966 lines > 4800.** It is
+  already split once (coopVirtualWorldRuntime.pure.js); coop-split-module.cjs now
+  finds only one movable declaration, because the rest of the file closes over ~110
+  mutable singletons. Getting under 4800 therefore needs a deliberate staged refactor
+  (state + its functions moved together behind a factory), not a mechanical split.
+  Do not raise gigaCoopMax to hide it.
+

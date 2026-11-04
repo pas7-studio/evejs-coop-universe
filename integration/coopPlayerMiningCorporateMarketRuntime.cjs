@@ -233,5 +233,49 @@ async function pnlReport(args){
  try{return await native().pnlReport(args)}
  catch{return blocked("CORP_PNL_NATIVE_READ_UNAVAILABLE")}
 }
-module.exports={createCorporateMarketRuntime,sellFromEntries,buyFromOrder,
- pnlReport,enabled};
+// Corporate stock rows carry a "coop-corporation" source. Deciding whether such a row
+// may be filled belongs to the coop layer; the stock market service keeps no rules here.
+function isCorporateSellOrder(sellOrder) {
+  return String((sellOrder && sellOrder.source) || "").toLowerCase() === "coop-corporation";
+}
+
+function skipCorporateFill(chargeBuyerWallet) {
+  return process.env.EVEJS_COOP_PLAYER_NPC_MINING_CORP_PUBLIC_MARKET !== "1" ||
+    chargeBuyerWallet !== true;
+}
+
+// One call for the stock market service: run a corporate sell and turn any non-success
+// into the same user-visible refusal the stock handler used to raise inline, so the
+// stock file owns no corporate-market logic (extraction gate) and the require path stays
+// inside the coop layer.
+async function sellAndConfirm({session, items, durationDays} = {}) {
+  const result = await sellFromEntries({session, itemList: items, durationDays});
+  if (result && result.status === "CORPORATE_SELL_PUBLISHED") return true;
+  const {throwWrappedUserError} = require("../common/machoErrors");
+  throwWrappedUserError("CustomInfo", {
+    info: "Corporate SELL was not confirmed. Check corporation market records; do not blindly retry.",
+  });
+}
+
+// One call for the stock market service's corporate-stock fill path: buy from the
+// corporate sell order, verify the native release, and turn any unproven result into a
+// user-visible refusal. Keeps the corporate-market rules inside the coop layer.
+async function buyAndConfirm({session, sellOrder, quantity, maxUnitPriceCents} = {}) {
+  const purchased = await buyFromOrder({session, sellOrder, quantity, maxUnitPriceCents});
+  if (
+    purchased &&
+    purchased.status === "CORP_SELL_FILL_RELEASED" &&
+    purchased.filledQuantity === quantity &&
+    Number.isSafeInteger(purchased.verifiedGrossCents) &&
+    purchased.verifiedGrossCents > 0
+  ) {
+    return purchased;
+  }
+  const {throwWrappedUserError} = require("../common/machoErrors");
+  throwWrappedUserError("CustomInfo", {
+    info: "Corporation ore transaction was not confirmed. Review the market before retrying.",
+  });
+}
+
+module.exports={createCorporateMarketRuntime,sellFromEntries,sellAndConfirm,buyFromOrder,
+ buyAndConfirm,isCorporateSellOrder,skipCorporateFill,pnlReport,enabled};

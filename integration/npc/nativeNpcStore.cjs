@@ -51,8 +51,20 @@ const controllerCache = {
   byEntityID: new Map(),
 };
 
+// A live profile during combat put 27% of the server inside this function: every NPC read and write
+// deep-copies its row. A recursive copy is 1.7x faster than a JSON round-trip on a real entity row and,
+// just as important, allocates no intermediate strings - the multi-second freezes above were GC pauses
+// on a heap we were filling with that garbage.
 function cloneValue(value) {
-  return JSON.parse(JSON.stringify(value));
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    const copy = new Array(value.length);
+    for (let index = 0; index < value.length; index += 1) copy[index] = cloneValue(value[index]);
+    return copy;
+  }
+  const copy = {};
+  for (const key of Object.keys(value)) copy[key] = cloneValue(value[key]);
+  return copy;
 }
 
 // Root-shape normalisation used to deep-clone and stringify the whole NPC root on
@@ -68,6 +80,40 @@ function invalidateControllerCache() {
   controllerCache.all = null;
   controllerCache.bySystem.clear();
   controllerCache.byEntityID.clear();
+}
+
+// A per-entity row cache for the two lookups the world tick calls once per hull (modules, cargo). Without it every
+// call scanned the whole collection and deep-copied each match: measured 2026-11-03 that made the ammo witness cost
+// ~1.1 s on every tick. Bounded by a short TTL and cleared on every write, so a stale list can never outlive a real
+// change by more than a few seconds.
+const entityRowIndex = new Map();
+const ENTITY_ROW_CACHE_MS = 5000;
+function invalidateEntityRowCache() {
+  entityRowIndex.clear();
+}
+// One scan builds an entity -> rows index for the whole table; a per-hull lookup is then a Map hit. The first version
+// of this cache still scanned once per hull, and with a few hundred witnessed hulls that was still ~1 s per tick.
+function entityIndexFor(tableName, collectionKey) {
+  const now = Date.now();
+  const hit = entityRowIndex.get(tableName);
+  if (hit && now - hit.atMs < ENTITY_ROW_CACHE_MS) {
+    return hit.byEntity;
+  }
+  const byEntity = new Map();
+  const rows = readCollection(tableName, collectionKey) || {};
+  for (const row of Object.values(rows)) {
+    if (!row || typeof row !== "object") continue;
+    const entityID = toPositiveInt(row.entityID, 0);
+    if (!entityID) continue;
+    if (!byEntity.has(entityID)) byEntity.set(entityID, []);
+    byEntity.get(entityID).push(row);
+  }
+  entityRowIndex.set(tableName, { atMs: now, byEntity });
+  return byEntity;
+}
+function cachedRowsForEntity(tableName, collectionKey, entityID) {
+  const rows = entityIndexFor(tableName, collectionKey).get(entityID) || [];
+  return rows.map((row) => cloneValue(row));
 }
 
 function toPositiveInt(value, fallback = 0) {
@@ -105,8 +151,33 @@ function ensureRootShape(tableName) {
 }
 
 function writeRoot(tableName, root, options = {}) {
-  invalidateRootShape(tableName);
-  return database.write(tableName, "/", root, options);
+  const result = database.write(tableName, "/", root, options);
+  // The root written here always comes from ensureRootShape(), so it is already normalized. Marking it
+  // verified avoids re-reading and re-stringifying the whole table on the next query: proving a shape
+  // this module wrote itself was 13% of a live CPU profile.
+  if (result && result.success !== false) rootShapeVerified.add(tableName);
+  else invalidateRootShape(tableName);
+  return result;
+}
+
+// The co-op read cache is a short-lived view of these collections, and it is told
+// about every write (see writeCollectionRow/removeCollectionRow), so its TTL is a
+// real time bound instead of being the only freshness mechanism.
+let coopCacheInvalidator;
+function invalidateCoopReadCache() {
+  if (coopCacheInvalidator === undefined) {
+    try {
+      const cache = require("../coopNativeReadCache");
+      coopCacheInvalidator = cache && typeof cache.nativeCache === "function"
+        ? () => {
+          try { cache.nativeCache().invalidate(); } catch (_error) { /* best effort */ }
+        }
+        : null;
+    } catch (_error) {
+      coopCacheInvalidator = null;
+    }
+  }
+  if (coopCacheInvalidator) coopCacheInvalidator();
 }
 
 function rootShapeReady(tableName) {
@@ -155,17 +226,23 @@ function readCollectionWhere(tableName, key, accept) {
 
 function writeCollectionRow(tableName, collectionKey, rowID, value, options = {}) {
   rootShapeReady(tableName);
-  return database.write(
+  if (tableName === TABLE.MODULES || tableName === TABLE.CARGO) invalidateEntityRowCache();
+  const result = database.write(
     tableName,
     `/${collectionKey}/${String(rowID)}`,
     cloneValue(value),
     options,
   );
+  if (result && result.success !== false) invalidateCoopReadCache();
+  return result;
 }
 
 function removeCollectionRow(tableName, collectionKey, rowID) {
   rootShapeReady(tableName);
-  return database.remove(tableName, `/${collectionKey}/${String(rowID)}`);
+  if (tableName === TABLE.MODULES || tableName === TABLE.CARGO) invalidateEntityRowCache();
+  const result = database.remove(tableName, `/${collectionKey}/${String(rowID)}`);
+  if (result && result.success !== false) invalidateCoopReadCache();
+  return result;
 }
 
 function allocateID(tableName, counterKey, options = {}) {
@@ -238,6 +315,14 @@ function listNativeEntities() {
     .sort((left, right) => Number(left.entityID || 0) - Number(right.entityID || 0));
 }
 
+// Read-only enumeration for the short-lived read cache, which shallow-copies each
+// row itself. The deep clone of all ~8500 entity rows per cache window was
+// measured at 24 s of CPU per 150 s (war combat reads entities through it).
+function peekNativeEntities() {
+  return Object.values(rawCollection(TABLE.ENTITIES, "entities"))
+    .sort((left, right) => Number(left.entityID || 0) - Number(right.entityID || 0));
+}
+
 function getNativeEntity(entityID) {
   return readCollectionRow(TABLE.ENTITIES, "entities", entityID);
 }
@@ -279,8 +364,7 @@ function listNativeModules() {
 function listNativeModulesForEntity(entityID) {
   const normalizedEntityID = toPositiveInt(entityID, 0);
   if (!normalizedEntityID) return [];
-  return readCollectionWhere(TABLE.MODULES, "modules",
-    (moduleRecord) => toPositiveInt(moduleRecord && moduleRecord.entityID, 0) === normalizedEntityID)
+  return cachedRowsForEntity(TABLE.MODULES, "modules", normalizedEntityID)
     .sort((left, right) => Number(left.moduleID || 0) - Number(right.moduleID || 0));
 }
 
@@ -300,7 +384,6 @@ function upsertNativeModule(moduleRecord, options = {}) {
     options,
   );
 }
-
 function removeNativeModule(moduleID) {
   return removeCollectionRow(TABLE.MODULES, "modules", moduleID);
 }
@@ -310,11 +393,20 @@ function listNativeCargo() {
     .sort((left, right) => Number(left.cargoID || 0) - Number(right.cargoID || 0));
 }
 
+// Read-only enumeration for the short-lived read cache. The rows are shallow
+// copied by that cache, so the whole cargo table does not need a deep clone per
+// cache window: a live 60 s profile put 3.8 s in exactly this clone path
+// (plan -> allCargoRows -> listNativeCargo -> readCollection). Never mutate a row
+// returned here; writers still go through upsertNativeCargo.
+function peekNativeCargo() {
+  return Object.values(rawCollection(TABLE.CARGO, "cargo"))
+    .sort((left, right) => Number(left.cargoID || 0) - Number(right.cargoID || 0));
+}
+
 function listNativeCargoForEntity(entityID) {
   const normalizedEntityID = toPositiveInt(entityID, 0);
   if (!normalizedEntityID) return [];
-  return readCollectionWhere(TABLE.CARGO, "cargo",
-    (cargoRecord) => toPositiveInt(cargoRecord && cargoRecord.entityID, 0) === normalizedEntityID)
+  return cachedRowsForEntity(TABLE.CARGO, "cargo", normalizedEntityID)
     .sort((left, right) => Number(left.cargoID || 0) - Number(right.cargoID || 0));
 }
 
@@ -362,8 +454,19 @@ function listNativeControllersForSystem(systemID) {
     return controllerCache.bySystem.get(normalizedSystemID);
   }
 
-  const systemControllers = listNativeControllers().filter(
-    (controller) => toPositiveInt(controller && controller.systemID, 0) === normalizedSystemID,
+  // Filter the RAW collection first and clone only this system's rows. Every
+  // controller write invalidates this cache, so cloning all ~8400 controllers per
+  // call was measured at 5.2 s of boot CPU (one spawn per scene, then every scene
+  // tick asks again).
+  const rows = rawCollection(TABLE.CONTROLLERS, "controllers");
+  const systemControllers = [];
+  for (const controller of Object.values(rows)) {
+    if (toPositiveInt(controller && controller.systemID, 0) === normalizedSystemID) {
+      systemControllers.push(cloneValue(controller));
+    }
+  }
+  systemControllers.sort(
+    (left, right) => Number(left.entityID || 0) - Number(right.entityID || 0),
   );
   controllerCache.bySystem.set(normalizedSystemID, systemControllers);
   return systemControllers;
@@ -374,8 +477,11 @@ function getNativeController(entityID) {
   if (!normalizedEntityID || normalizedEntityID === "0") {
     return null;
   }
-  listNativeControllers();
-  return controllerCache.byEntityID.get(normalizedEntityID) || null;
+  // One raw row, one clone. Asking listNativeControllers() here cloned every
+  // controller in the world whenever a write had invalidated the cache, and this
+  // is called per entity in the NPC tick.
+  const row = rawCollection(TABLE.CONTROLLERS, "controllers")[normalizedEntityID];
+  return row && typeof row === "object" ? cloneValue(row) : null;
 }
 
 function upsertNativeController(controllerRecord, options = {}) {
@@ -651,6 +757,7 @@ module.exports = {
   allocateWreckID,
   allocateWreckItemID,
   listNativeEntities,
+  peekNativeEntities,
   listNativeEntitiesForSystem,
   getNativeEntity,
   upsertNativeEntity,
@@ -659,6 +766,7 @@ module.exports = {
   upsertNativeModule,
   removeNativeModule,
   listNativeCargo,
+  peekNativeCargo,
   listNativeCargoForEntity,
   upsertNativeCargo,
   removeNativeCargo,

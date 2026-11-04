@@ -125,11 +125,14 @@ function createWaveReinforcements({
      if(requests.has(key))continue; // unknown outcomes are NEVER retried.
      if(requests.size>=maxPending){result.status="REQUEST_FENCE_CAP_REACHED";break;}
      const req={phase:"WARP_ISSUING",systemID,instanceID:site.instanceID,siteID:site.siteID,
-      helperID,victimID:victim.ship.itemID,targetID,sourceEncounterKey:helper.encounterKey,
+      helperID,victimID:victim.ship.itemID,targetID,enemyID:targetID,sourceEncounterKey:helper.encounterKey,
       origin:{...helper.ship.position},at:now,sawWarp:false};
      requests.set(key,req); // re-entrant native callbacks cannot issue twice
      let out;
-     try{out=warpToEntity(helperID,targetID,
+     // Reinforcements join the FIGHT, not the player's hull. The native warp is "warp to this entity", so
+     // targeting the player landed the helper at 0 km, inside him (owner report 2026-11-03: "3 pirates, right
+     // in me, exactly 0 km"). The ally in trouble is a real position in the same fight.
+     try{out=warpToEntity(helperID,victim.ship.itemID,
        {forceImmediateStart:true,broadcastWarpStartToVisibleSessions:true})}
      catch{out=null}
      req.phase=out?.success===true?"WARP_ACCEPTED":

@@ -59,6 +59,23 @@ function verifyLoad({store,haulerID,minerID,cargoID,quantity,typeID,ownerID,flee
  return null;
 }
 function strictTransferCargo(scene,fleet,miner,options,store,probe){
+ // A blocked hauler is retried every few seconds for as long as the cause lasts; that
+ // used to write the same refusal for every fleet member on every attempt (measured
+ // 2026-11-03: 89327 events, 22 duplicates per 5 s, one fleet, one reason). One line
+ // per fleet and reason per window is enough to see the cause, and the count of what
+ // was folded into it is reported.
+ const BLOCK_NOTIFY_WINDOW_MS=Math.max(1000,Number(process.env.EVEJS_COOP_HAUL_BLOCK_WINDOW_MS)||60000);
+ const blockNotifyState=new Map();
+ const gateBlockNotify=(key,nowMs)=>{
+  const state=blockNotifyState.get(key);
+  if(!state){blockNotifyState.set(key,{atMs:nowMs,suppressed:0});return{emit:true,suppressed:0};}
+  state.suppressed+=1;
+  if(nowMs-state.atMs<BLOCK_NOTIFY_WINDOW_MS)return{emit:false,suppressed:state.suppressed};
+  const suppressed=state.suppressed;
+  state.atMs=nowMs;
+  state.suppressed=0;
+  return{emit:true,suppressed};
+ };
  const stop=(reason,uncertain=false,hauler=null,cargoID=0)=>{
   if(uncertain){
    miner.coopHaulNeedsOperatorRepair=reason;
@@ -67,9 +84,12 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
    fleet.coopHaulCargoNeedsOperatorRepair=reason;
    markHaulRepair([fleet,hauler],reason);
   }
-  safeObserve(probe,"living-haul-custody-blocked",
-   {itemID:miner.itemID,systemID:scene?.systemID},
-   {fleetID:fleet?.fleetID,cargoID,reason,operatorRepairRequired:uncertain,nativeMutation:false});
+  const gate=gateBlockNotify(`${Number(fleet?.fleetID)||0}|${reason}`,Date.now());
+  if(gate.emit)
+   safeObserve(probe,"living-haul-custody-blocked",
+    {itemID:miner.itemID,systemID:scene?.systemID},
+    {fleetID:fleet?.fleetID,cargoID,reason,operatorRepairRequired:uncertain,nativeMutation:false,
+     suppressedSinceLast:gate.suppressed});
   return 0;
  };
  if(!flags.on("EVEJS_COOP_NATIVE_HAUL_CARGO")||
@@ -82,16 +102,27 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
   return stop("ALIFE10_ATOMIC_HAUL_REQUIRED",true);
  const systemID=Number(scene?.systemID),fleetID=Number(fleet?.fleetID);
  const minerID=Number(miner?.itemID),minerOwner=Number(miner?.ownerID);
- if(![systemID,fleetID,minerID,minerOwner].every(integer)||
-  !Array.isArray(fleet?.minerEntityIDs)||!fleet.minerEntityIDs.includes(minerID)||
-  !Array.isArray(fleet?.haulerEntityIDs)||fleet.haulerEntityIDs.length<1||
-  fleet.haulerEntityIDs.length>32||new Set(fleet.haulerEntityIDs).size!==fleet.haulerEntityIDs.length||
-  Number(fleet.systemID)!==systemID||miner?.kind!=="ship"||miner?.nativeNpc!==true||
-  miner.transient!==false||miner.coopHaulNeedsOperatorRepair||
-  fleet.coopHaulNeedsOperatorRepair||
-  scene.getEntityByID?.(minerID)!==miner||isWarping(miner)||
-  miner.destroyed===true||miner.isDestroyed===true||!vector(miner.position))
-  return stop("HAUL_MINER_NOT_PHYSICALLY_ATTESTED");
+ // One clause per reason: the fleet was blocked for hours with the single verdict
+ // HAUL_MINER_NOT_PHYSICALLY_ATTESTED, and nothing in the log said which of the
+ // thirteen conditions had failed. The base reason is kept so existing checks and
+ // event consumers still recognise it.
+ const attest=(clause)=>{stop("HAUL_MINER_NOT_PHYSICALLY_ATTESTED:"+clause);return 0;};
+ if(![systemID,fleetID,minerID,minerOwner].every(integer))return attest("ids");
+ if(!Array.isArray(fleet?.minerEntityIDs)||!fleet.minerEntityIDs.includes(minerID))
+  return attest("fleet_miner_list");
+ if(!Array.isArray(fleet?.haulerEntityIDs)||fleet.haulerEntityIDs.length<1||
+  fleet.haulerEntityIDs.length>32||new Set(fleet.haulerEntityIDs).size!==fleet.haulerEntityIDs.length)
+  return attest("fleet_hauler_list");
+ if(Number(fleet.systemID)!==systemID)return attest("fleet_system_mismatch");
+ if(miner?.kind!=="ship")return attest("not_a_ship");
+ if(miner?.nativeNpc!==true)return attest("not_native_npc");
+ if(miner.transient!==false)return attest("transient_miner");
+ if(miner.coopHaulNeedsOperatorRepair)return attest("miner_needs_repair");
+ if(fleet.coopHaulNeedsOperatorRepair)return attest("fleet_needs_repair");
+ if(scene.getEntityByID?.(minerID)!==miner)return attest("scene_entity_mismatch");
+ if(isWarping(miner))return attest("warping");
+ if(miner.destroyed===true||miner.isDestroyed===true)return attest("destroyed");
+ if(!vector(miner.position))return attest("no_position");
  if(typeof store.getNativeEntity!=="function"||
   typeof store.listNativeCargoForEntity!=="function"||
   typeof store.listNativeCargo!=="function"||

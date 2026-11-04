@@ -1,7 +1,8 @@
 "use strict";
 // Organic native NPC raids: pirates target real ore-bearing mining ships.
 // EveJS handles locking, damage, pursuit, aggression response and wrecks.
-// No scripted kills, fake mining, arena bubbles or player-target selection.
+// No scripted kills, fake mining or arena bubbles. Player hulls are never targeted by default;
+// EVEJS_COOP_PIRATE_PREY_PLAYERS=1 is the one explicit, operator-controlled exception (see below).
 const pos=v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):null;
 // A loaded hauler is preferred over a loaded miner only within this slack of the
 // nearest authorized hull, never across an entire solar system.
@@ -12,6 +13,9 @@ const HAULER_PREFERENCE_METERS=50000;
 const APPROACH_VERIFY_MS=20000;
 const ATTACK_NO_LOCK_MS=90000;
 const RELEASE_COOLDOWN_MS=120000;
+// A refused release is not re-attempted for this long: the refusing owner will keep refusing until its
+// own state changes (measured: 493 refusals in 6.6 minutes for three hulls).
+const REFUSAL_BACKOFF_MS=60000;
 const valid=p=>!!p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
 const range=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 // A hull is really warping only with a native warp state, never with mode GOTO:
@@ -21,10 +25,46 @@ const warping=e=>{const mode=String(e?.mode||"").toUpperCase();
  return mode==="WARP"||Boolean(e?.pendingWarp)||Boolean(e?.warpState)||
   e?.isWarping===true;};
 const holdsAttack=c=>String(c?.manualOrder?.type||"").toLowerCase()==="attack";
+// EVEJS_COOP_PIRATE_PREY_PLAYERS=1 lets a pirate take a real player hull as prey, through the very
+// same order path every NPC prey uses (approach warp, the hull's own gun range, the warp point).
+// It is OFF by default: the stock invariant is that this world fights itself, and a player is drawn
+// in only when an operator deliberately switches it on. Nothing here guesses a target - the ship id
+// comes from the live session and the scene, and a hull that is docked, warping or unusable is
+// never chosen.
+const playerPreyEnabled=env=>String(env&&env.EVEJS_COOP_PIRATE_PREY_PLAYERS||"")==="1";
+// A pirate is a site rat, not a system-wide hunter: it fights what comes to it. Measured live 2026-11-02 in Jita:
+// gate pirates 4.4e11 m away were ordered to warp onto a player the moment he undocked, so every undock produced an
+// instant fight on top of the station. Prey is only legal inside the hull's own engagement envelope; anything further
+// away is simply not this rat's business. NPC prey keep their own rules.
+const PLAYER_PREY_ENVELOPE_METERS_DEFAULT=150000;
+const playerPreyEnvelopeMeters=env=>{
+ const value=Number(env&&env.EVEJS_COOP_PIRATE_PREY_RANGE_METERS);
+ return Number.isFinite(value)&&value>0?value:PLAYER_PREY_ENVELOPE_METERS_DEFAULT;
+};
+function playerPreyShips(scene){
+ const out=[],seen=new Set();
+ if(!scene?.sessions||typeof scene.sessions.values!=="function"||
+  typeof scene.getEntityByID!=="function")return out;
+ for(const session of scene.sessions.values()){
+  const shipID=pos(session&&session._space&&session._space.shipID);
+  if(!shipID||seen.has(shipID))continue;
+  let ship=null;
+  try{ship=scene.getEntityByID(shipID);}catch(_error){ship=null;}
+  if(!ship||String(ship.kind||"")!=="ship")continue;
+  // A hull flown by the pirate itself, or one that already left, is not prey.
+  if(ship.session&&Number(ship.session.characterID)!==Number(session.characterID))continue;
+  if(!valid(ship.position))continue;
+  if(String(ship.mode||"").toUpperCase().includes("WARP")||ship.pendingWarp||ship.warpState)continue;
+  seen.add(shipID);
+  out.push({id:shipID,role:"player",ship,ore:0,
+   characterID:Number(session.characterID)||0});
+ }
+ return out;
+}
 function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=480000,
  approachVerifyMs=APPROACH_VERIFY_MS,attackNoLockMs=ATTACK_NO_LOCK_MS,
  releaseCooldownMs=RELEASE_COOLDOWN_MS,ensurePoint=null,preyScrambled=null,
- gunRange=null}){
+ gunRange=null,env=process.env}){
  if(typeof warp!=="function"||typeof attack!=="function"||cooldownMs<60000)throw Error("invalid native raid API");
  if(release!==null&&typeof release!=="function")throw Error("invalid native raid release API");
  if(ensurePoint!==null&&typeof ensurePoint!=="function")throw Error("invalid native raid point API");
@@ -34,6 +74,9 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
  // Per-hull throttle for a hull a live wreck claim owns: the stock behavior loop
  // re-acquires its own target after every release.
  const excludedReleasedAt=new Map();
+ // A refused release is retried on a backoff instead of once per tick: the owner that refused keeps
+ // refusing until its own state changes, and every retry costs a native call and a probe record.
+ const refusions=new Map();
  // One owner per record: only the director that issued an order may release it.
  function releaseOrder(pirateID,reason){
   if(!release)return {released:false,reason:"RELEASE_UNAVAILABLE"};
@@ -59,6 +102,9 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
     .filter(t=>t.ship&&t.ore>0&&valid(t.ship.position)&&
      !String(t.ship.mode||"").toUpperCase().includes("WARP")&&
      !t.ship.pendingWarp&&!t.ship.warpState);
+  // A real player hull joins the same prey list only when an operator switched it on. It carries no
+  // ore, so it is never the "better prize" by cargo - proximity decides, exactly as it does for NPCs.
+  if(playerPreyEnabled(env))for(const prey of playerPreyShips(scene))candidates.push(prey);
   const actions=[];
   // A prey that really reads back as warp-scrambled cannot leave the fight, so
   // its attack order is never released for "no native lock": the lock is exactly
@@ -131,7 +177,10 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
      }
      if(!pendingRelease)continue;
     }
-    if(playerShipIDs.has(activeTarget))continue;
+    // A player hull is never hijacked as a side effect of somebody else's fight. Our own player
+    // hunt (a lease with targetRole player) is the one exception: that order is exactly what the
+    // approach below is meant to turn into a weapon attack.
+    if(playerShipIDs.has(activeTarget)&&String(old?.targetRole||"")!=="player")continue;
     if(!pendingRelease&&manual?.type==="attack"&&manualTarget===activeTarget)continue;
     if(!pendingRelease&&manual&&manual.type!=="resumeBehavior"&&
       (!ownedApproach||manual.type!=="warp"))continue;
@@ -182,7 +231,9 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
 
    // After an approach, prefer the very same *still authorized* hull.
    // The convoy may move, but the raid should not silently target-hop.
+   const huntEnvelope=playerPreyEnvelopeMeters(env);
    const authorized=candidates.filter(x=>x.id!==id&&
+    (x.role!=="player"||range(ship.position,x.ship.position)<=huntEnvelope)&&
     canAttack({systemID,pirateID:id,targetID:x.id}));
    // A loaded hauler is the better prize ONLY when it is really here. Sorting by
    // role first sent pirates after a hauler that was 4.4e11 m away (a stuck fleet
@@ -200,6 +251,14 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
     x.id===old.targetID)||preferredHauler||nearestFirst[0];
    if(!target)continue;
    const distance=range(ship.position,target.ship.position);
+   // Never warp onto a player hull. The native warp command is "warp to THIS entity", so the hull lands at the
+   // target's own position - measured live 2026-11-02: the owner reported three pirates "at 0 km, inside me",
+   // and that is exactly what warpToEntity(target) produces. A player is fought where he already is or not at all.
+   if(distance>250000&&String(target.role||"")==="player"){
+    actions.push({pirateID:id,targetID:Number(target.id),targetRole:"player",
+     action:"player-warp-refused",distanceMeters:distance});
+    continue;
+   }
    let result,action,released=pendingRelease,gun=null;
    if(distance>250000){
     // One owner per record: the hull's own previous attack order is released
@@ -270,6 +329,11 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
    const id=pos(raw);
    if(!id)continue;
    const now=clock();
+   // A refusal is not retried every tick. The owner that refused keeps refusing until its own state
+   // changes, and each retry costs a native call plus a probe record (measured on the play stack: 493
+   // refusals in 6.6 minutes, 2.5 s apart, for three hulls). It is retried when the window ends.
+   const refusal=refusions.get(id);
+   if(refusal&&refusal.reason===reason&&now-refusal.at<REFUSAL_BACKOFF_MS)continue;
    // The stock behavior loop re-acquires its own target after a release, so a
    // hull whose wreck claim is live is released again, at most every 15 s.
    if(!force&&now-(excludedReleasedAt.get(id)||0)<15000)continue;
@@ -277,6 +341,8 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
    const leaseKey=[...leases.keys()].find(key=>Number(key.split(":")[1])===id);
    const lease=leaseKey?leases.get(leaseKey):null;
    const outcome=releaseOrder(id,reason);
+   if(outcome&&outcome.released===false)refusions.set(id,{at:now,reason});
+   else refusions.delete(id);
    const targetID=Number(lease?.targetID)||0;
    if(leaseKey)leases.set(leaseKey,{nextAt:now+releaseCooldownMs,targetID,
     targetRole:String(lease?.targetRole||""),phase:"released",issuedAtMs:now});

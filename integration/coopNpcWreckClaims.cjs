@@ -2,10 +2,15 @@
 // Durable proof of an authoritative native-NPC kill; never an item claim,
 // loot right, credit, or money grant. A missing native attacker fails closed.
 const fs=require("node:fs"),path=require("node:path");
+// Stage 2 of the JSON->gameStore migration. A claim is the only proof that a
+// wreck may be looted, so it is written with an explicit synchronous SQLite
+// flush instead of a hand-rolled fsync+rename of the whole journal; the legacy
+// file is read once per install and then only used if the store refuses a write.
+const TABLE="coopWreckClaims";
 const id=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
 const named=x=>typeof x==="string"&&/^coop-pilot-[0-9]{3,}$/.test(x);
 const clone=x=>JSON.parse(JSON.stringify(x));
-function createWreckClaims({file,clock=()=>Date.now(),maxClaims=500,ttlMs=3600000}={}){
+function createWreckClaims({file,clock=()=>Date.now(),maxClaims=500,ttlMs=3600000,gameStore=null}={}){
  if(typeof file!=="string"||!path.isAbsolute(file)||typeof clock!=="function"||
     !Number.isSafeInteger(maxClaims)||maxClaims<1||maxClaims>5000||
     !Number.isSafeInteger(ttlMs)||ttlMs<60000||ttlMs>86400000)
@@ -25,8 +30,7 @@ function createWreckClaims({file,clock=()=>Date.now(),maxClaims=500,ttlMs=360000
   (v.loot===null||(v.loot&&Number.isSafeInteger(v.loot.stacks)&&v.loot.stacks>=0&&
    Number.isSafeInteger(v.loot.quantity)&&v.loot.quantity>=0&&
    Array.isArray(v.loot.typeIDs)&&v.loot.typeIDs.length<=64));
- try{
-  const v=JSON.parse(fs.readFileSync(file,"utf8"));
+ function normalizeJournal(v){
   if(v?.version!==1||!v.claims||Array.isArray(v.claims)||typeof v.claims!=="object"||
     Object.keys(v.claims).length>maxClaims||
     Object.entries(v.claims).some(([key,x])=>!validate(key,x)))
@@ -36,9 +40,19 @@ function createWreckClaims({file,clock=()=>Date.now(),maxClaims=500,ttlMs=360000
     Object.keys(closed).length>maxClaims||
     Object.entries(closed).some(([key,x])=>!validateClosed(key,x)))
    throw Error("INVALID_NATIVE_WRECK_CLAIMS_JOURNAL");
-  state={...v,closed};
- }catch(e){if(e.code!=="ENOENT")throw e;}
- function persist(next){
+  return {...v,closed};
+ }
+ // A claim is the only proof that a wreck may be looted, so the write must be on
+ // disk before the caller continues. A synchronous WAL commit gives that without
+ // a whole-file rewrite and without the directory-entry weakness of rename.
+ function persistStore(next){
+  if(!gameStore||typeof gameStore.flushTableSync!=="function")return false;
+  const written=gameStore.write(TABLE,"/",next,{force:true});
+  if(!written||written.success===false)return false;
+  const flushed=gameStore.flushTableSync(TABLE);
+  return !!flushed&&flushed.success!==false;
+ }
+ function writeFileJournal(next){
   fs.mkdirSync(path.dirname(file),{recursive:true});
   const tmp=file+".tmp-"+process.pid;
   const fd=fs.openSync(tmp,"wx",0o600);
@@ -46,7 +60,28 @@ function createWreckClaims({file,clock=()=>Date.now(),maxClaims=500,ttlMs=360000
   finally{fs.closeSync(fd);}
   try{fs.renameSync(tmp,file);}
   catch(e){try{fs.unlinkSync(tmp);}catch(_){}throw e;}
+ }
+ function persist(next){
+  if(!persistStore(next))writeFileJournal(next);
   state=next;
+ }
+ function readStoreJournal(){
+  if(!gameStore)return null;
+  const result=gameStore.read(TABLE,"/");
+  if(!result||result.success!==true)return null;
+  const data=result.data;
+  if(!data||typeof data!=="object"||Array.isArray(data)||
+    Object.keys(data).length===0)return null;
+  return data;
+ }
+ const stored=readStoreJournal();
+ // A damaged stored journal is fatal - it is never silently replaced by the file.
+ if(stored)state=normalizeJournal(stored);
+ else{
+  let legacy=null;
+  try{legacy=JSON.parse(fs.readFileSync(file,"utf8"));}
+  catch(e){if(e.code!=="ENOENT")throw e;}
+  if(legacy){state=normalizeJournal(legacy);persist(state);}
  }
  function record({proof,wreck}={}){
   const now=clock(),key=String(proof?.wreckID);
@@ -127,7 +162,10 @@ let singleton=null,currentFile=null;
 function getWreckClaims(){
  const file=process.env.EVEJS_COOP_NPC_WRECK_CLAIMS_FILE||
   "/var/lib/evejs/coop-npc-wreck-claims.json";
- if(!singleton||currentFile!==file){singleton=createWreckClaims({file});currentFile=file;}
+ if(!singleton||currentFile!==file){
+  singleton=createWreckClaims({file,gameStore:require("../gameStore")});
+  currentFile=file;
+ }
  return singleton;
 }
-module.exports={createWreckClaims,getWreckClaims};
+module.exports={TABLE,createWreckClaims,getWreckClaims};

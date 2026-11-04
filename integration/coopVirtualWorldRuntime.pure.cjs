@@ -619,16 +619,45 @@ function ensureNativeGateTransfer(runtime){
  nativeGateTransfer=prepared;
 }
 
+// The witness only needs a recent assignment list: identityRegistry.snapshot() deep-clones every link record, and
+// measured 2026-11-03 that clone alone made this phase cost ~1 s on every world tick. A hull that linked within the
+// last half minute is simply witnessed on the next pass.
+const ammoAssignmentsCache={atMs:0,value:[]};
+function cachedAmmoAssignments(registry,nowMs){
+ if(nowMs-ammoAssignmentsCache.atMs<30000)return ammoAssignmentsCache.value;
+ ammoAssignmentsCache.value=Object.values(registry.snapshot().links||{});
+ ammoAssignmentsCache.atMs=nowMs;
+ return ammoAssignmentsCache.value;
+}
+
 function observeNativeAmmoConsumption(){
  if(process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
   !identityRegistry||!visitedSystems.size)return;
+ // Measured 2026-11-03: this phase cost 1.07 s on EVERY world tick (perf sample "native-ammo-observe"). It called
+ // runtime.ensureScene() for every visited system, so it loaded full static data for ~35 systems per tick just to
+ // look at them, with zero assignments to witness. Two rules now: no assignments means no work at all, and a scene
+ // is only ever observed if it already exists - this phase must never create one.
  const runtime=require("./runtime"),store=require("./npc/nativeNpcStore");
+ const assignments=cachedAmmoAssignments(identityRegistry,Date.now());
+ if(assignments.length===0)return;
  if(!nativeAmmoWitness)nativeAmmoWitness=
   require("./coopNpcAmmoWitness").createAmmoWitness({store});
- const assignments=Object.values(identityRegistry.snapshot().links||{});
- for(const systemID of visitedSystems){
-  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
-  const result=nativeAmmoWitness.sample({scene,assignments});
+ const scenes=runtime&&runtime.scenes instanceof Map?runtime.scenes:null;
+ if(!scenes)return;
+ // Only systems that really hold a witnessed hull are worth sampling, and each scene gets only its own rows: the
+ // witness walks the assignment list per scene, so passing the whole world to every scene was the actual cost
+ // (measured 2026-11-03: ~1.1 s on every tick).
+ const bySystem=new Map();
+ for(const link of assignments){
+  const systemID=Number(link&&link.systemID);
+  if(!Number.isSafeInteger(systemID)||systemID<=0)continue;
+  if(!bySystem.has(systemID))bySystem.set(systemID,[]);
+  bySystem.get(systemID).push(link);
+ }
+ for(const [systemID,rows] of bySystem){
+  const scene=scenes.get(Number(systemID))||null;
+  if(!scene)continue;
+  const result=nativeAmmoWitness.sample({scene,assignments:rows});
   if(result.events.length)
    require("./coopRuntimeProbe").observe("living-native-npc-ammo-debit",null,
     {spaceState:{systemID}},{events:result.events,

@@ -37,7 +37,7 @@ const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events
 // Stations are static: read them once per process instead of parsing the whole
 // station table for a single name.
 
-const ALLOWED_ACTIONS = new Set(["chat_command", "create_courier_contract", "give_item", "remove_item", "blueprint_auto", "board_ship", "fit_ship", "move_item", "fit_slots", "give_fit", "restore_last_loss", "batch", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "war_payout_diagnose", "war_mercenary_settle", "war_mercenary_state", "inspect_npc", "scene_slim_diagnose", "grant_evermarks", "npc_pair_diagnose", "raid_diagnose", "war_state", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose", "militia_state", "militia_enlist", "spawn_war_fleet", "release_identity", "assign_identity", "war_fleet_state", "fleet_reconstitute"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "create_courier_contract", "give_item", "remove_item", "rename_item", "save_fitting", "blueprint_auto", "board_ship", "fit_ship", "move_item", "fit_slots", "give_fit", "restore_last_loss", "batch", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "war_payout_diagnose", "war_mercenary_settle", "war_mercenary_state", "inspect_npc", "scene_slim_diagnose", "grant_evermarks", "npc_pair_diagnose", "raid_diagnose", "war_state", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose", "militia_state", "militia_enlist", "spawn_war_fleet", "release_identity", "assign_identity", "war_fleet_state", "fleet_reconstitute", "dungeon_mission_repair", "militia_restore", "skill_restore_points"]);
 
 const MAX_REQUESTS_PER_DRAIN = 8;
 
@@ -325,6 +325,111 @@ function removeItem(request) {
     removed: [itemID],
     item: { itemID, typeID: item.typeID, name: item.itemName || item.shipName || null },
   };
+}
+
+// Saves the CURRENT fitting of one owned ship as a saved fitting, so it shows up
+// in the client's Fitting window. fitData is taken from the real items on the
+// hull as [typeID, flagID, quantity] - exactly the shape the fitting store and
+// the client's fitting browser already use - so a saved fitting is never a
+// guess about what the ship has.
+function saveFittingFromShip(request) {
+  const characterID = Number(request.characterID) || 0;
+  const itemID = Number(request.itemID) || 0;
+  const name = String(request.name || "").replace(/[\r\n]+/g, " ").trim().slice(0, 100);
+  if (!(itemID > 0)) return { ok: false, error: "itemID is required" };
+  if (!name) return { ok: false, error: "name is required" };
+  const ship = readRow("items", itemID);
+  if (!ship) return { ok: false, error: "ship " + itemID + " does not exist" };
+  if (Number(ship.ownerID) !== characterID) {
+    return { ok: false, error: "ship " + itemID + " is not owned by " + characterID };
+  }
+  if (Number(ship.categoryID) !== 6) {
+    return { ok: false, error: "item " + itemID + " is not a ship hull (categoryID " + ship.categoryID + ")" };
+  }
+  const fitted = readItemRows().filter((row) => Number(row.locationID) === itemID);
+  if (!fitted.length) return { ok: false, error: "ship " + itemID + " has nothing fitted" };
+  const fitData = fitted.map((row) => [
+    Number(row.typeID) || 0,
+    Number(row.flagID) || 0,
+    Math.max(1, Number(row.quantity) || 1),
+  ]);
+  let store = null;
+  try {
+    store = require("../_secondary/fitting/fittingStore");
+  } catch (error) {
+    return { ok: false, error: "fitting store unavailable: " + String(error && error.message || error) };
+  }
+  const result = store.saveFitting(
+    characterID,
+    { shipTypeID: Number(ship.typeID) || 0, name, description: "", fitData },
+    store.OWNER_SCOPE.CHARACTER,
+  );
+  if (!result || result.success === false) {
+    return { ok: false, error: String(result && result.errorMsg || "save refused") };
+  }
+  const fittingID = Number(result.data && result.data.fittingID) || 0;
+  let notified = 0;
+  const session = liveSessionFor(characterID);
+  if (session && typeof session.sendNotification === "function" && fittingID > 0) {
+    try {
+      const { notifyFittingMutation } = require("../services/fitting/fittingMgrServiceHelpers");
+      notifyFittingMutation(session, "OnFittingAdded", [characterID, fittingID], {
+        ownerScope: store.OWNER_SCOPE.CHARACTER,
+      });
+      notified = 1;
+    } catch (_error) {
+      // The fitting is stored; the client picks it up on the next Fitting window open.
+    }
+  }
+  emitEvent("admin-save-fitting", "SAVED", {
+    characterID, itemID, fittingID, name, items: fitData.length, notified,
+  });
+  return { ok: true, fittingID, name, shipTypeID: Number(ship.typeID) || 0, items: fitData.length, notified };
+}
+
+// Renames one owned item, a ship hull included. It uses the same native
+// primitive the client's own Rename uses (invBroker.SetLabel calls
+// updateInventoryItem and then pushes evelocations cfg data), so the hangar
+// list, the fitting window and the ship name in space stay consistent. The
+// data layer is authoritative, so this also works while the character is
+// offline; an online character is told about the new label right away.
+function renameItem(request) {
+  const characterID = Number(request.characterID) || 0;
+  const itemID = Number(request.itemID) || 0;
+  const name = String(request.name || "").replace(/[\r\n]+/g, " ").trim().slice(0, 100);
+  if (!(itemID > 0)) return { ok: false, error: "itemID is required" };
+  if (!name) return { ok: false, error: "name is required" };
+  const item = readRow("items", itemID);
+  if (!item) return { ok: false, error: "item " + itemID + " does not exist" };
+  if (Number(item.ownerID) !== characterID) {
+    return { ok: false, error: "item " + itemID + " is not owned by " + characterID };
+  }
+  const itemStore = require("../services/inventory/itemStore");
+  if (typeof itemStore.updateInventoryItem !== "function") {
+    return { ok: false, error: "updateInventoryItem is missing" };
+  }
+  const previous = String(item.itemName || item.shipName || "");
+  const result = itemStore.updateInventoryItem(itemID, (current) => ({ ...current, itemName: name }));
+  if (!result || result.success === false) {
+    return { ok: false, error: String(result && result.errorMsg || "rename refused") };
+  }
+  let notified = 0;
+  const session = liveSessionFor(characterID);
+  if (session && typeof session.sendNotification === "function" && Number(item.categoryID) === 6) {
+    try {
+      const { buildList } = require("../services/_shared/serviceHelpers");
+      session.sendNotification("OnCfgDataChanged", "charid", [
+        "evelocations",
+        buildList([itemID, name, null, 0.0, 0.0, 0.0, null]),
+      ]);
+      notified = 1;
+    } catch (_error) {
+      // The name is already stored; a missed notification is not a failure and
+      // the client picks it up on the next inventory refresh.
+    }
+  }
+  emitEvent("admin-rename-item", "RENAMED", { characterID, itemID, previous, name, notified });
+  return { ok: true, itemID, name, previous, notified };
 }
 
 // Makes an owned, docked ship the active hull. Native and session-free, so it
@@ -1670,4 +1775,145 @@ function assignIdentity(request) {
 }
 
 
-module.exports = {fs, siblingSuffix, REQUESTS, RESULTS, EVENTS, ALLOWED_ACTIONS, MAX_REQUESTS_PER_DRAIN, readJsonLines, writeJsonLines, appendJsonLine, emitEvent, readRow, readItemRows, liveSessionFor, executeChatCommand, blueprintAuto, createCourierContract, giveItem, removeItem, boardShip, moveItem, fitShip, fitSlots, giveFit, restoreLastLoss, deployStructure, resolveWarPatrolLoadout, spawnNativeNpc, militiaEnlist, warFleetAuthorities, freeHullLinks, listFreeHullsFor, spawnWarFleet, warFleetState, fleetReconstitute, releaseIdentity, assignIdentity};
+// Clearing the 24h re-enlistment cooldown is the only way back into a militia after an
+// accidental leave. It edits the same atomic war row the store uses (cooldown only) and
+// leaves the enlist transition itself to the normal militia path.
+function militiaRestore(request) {
+  const characterID = Number(request.characterID) || 0;
+  const factionID = Number(request.factionID) || 0;
+  if (!(characterID > 0)) return { ok: false, error: "characterID is required" };
+  try {
+    const gameStore = require("../gameStore");
+    const warStore = require("./coopFactionWarStore" + siblingSuffix);
+    const rows = gameStore.coopAtomicNativeRows;
+    if (!rows || typeof rows.transact !== "function") {
+      return { ok: false, error: "atomic rows are unavailable" };
+    }
+    const cleared = rows.transact([warStore.TABLE], (tx) => {
+      const current = tx.get(warStore.TABLE, warStore.KEY);
+      if (!current || !current.enlistments) return { status: "NO_WAR_RECORD" };
+      const enlistment = current.enlistments[String(characterID)];
+      if (!enlistment) return { status: "NO_ENLISTMENT" };
+      if (factionID && Number(enlistment.factionID) !== factionID) {
+        return { status: "FACTION_MISMATCH", factionID: Number(enlistment.factionID) || 0 };
+      }
+      tx.put(warStore.TABLE, warStore.KEY, {
+        ...current,
+        enlistments: {
+          ...current.enlistments,
+          [String(characterID)]: { ...enlistment, cooldownUntil: 0 },
+        },
+      });
+      return { status: "COOLDOWN_CLEARED", factionID: Number(enlistment.factionID) || 0 };
+    });
+    return { ok: true, characterID, cleared };
+  } catch (error) {
+    return { ok: false, error: "militia restore failed: " + String(error && error.message || error) };
+  }
+}
+
+// Operator tool: put ONE skill back to a known skill-point total without touching the
+// level it belongs to. Built for the 2026-11-04 free-skill-point regression: applying
+// a skill injector to the skill that was training reset it to the level threshold
+// (20 minutes left -> 8.9 hours; fork fix in skillQueueRuntime.applyFreeSkillPointsInternal).
+// It refuses to cross a level boundary, so it can only restore points, never grant a level.
+function restoreSkillPoints(request) {
+  const characterID = Number(request.characterID) || 0;
+  const typeID = Number(request.typeID) || 0;
+  const skillPoints = Math.trunc(Number(request.skillPoints));
+  if (!(characterID > 0) || !(typeID > 0) || !Number.isFinite(skillPoints) || skillPoints < 0) {
+    return { ok: false, error: "characterID, typeID and skillPoints are required" };
+  }
+  try {
+    const skillState = require("../services/skills/skillState");
+    const queueRuntime = require("../services/skills/training/skillQueueRuntime");
+    const queueStateModule = require("../services/skills/training/skillQueueState");
+    const math = require("../services/skills/training/skillTrainingMath");
+    const records = skillState.getCharacterBaseSkills(characterID);
+    const target = records.find((record) => Number(record.typeID) === typeID);
+    if (!target) return { ok: false, error: "SKILL_NOT_FOUND" };
+    const previousPoints = Number(target.trainedSkillPoints ?? target.skillPoints ?? 0);
+    const currentLevel = Number(target.trainedSkillLevel ?? target.skillLevel ?? 0);
+    const requestedLevel = math.getSkillLevelForPoints(target.skillRank, skillPoints);
+    if (requestedLevel !== currentLevel) {
+      return { ok: false, error: "LEVEL_BOUNDARY_REFUSED", currentLevel, requestedLevel };
+    }
+    const next = {
+      ...target,
+      skillPoints,
+      trainedSkillPoints: skillPoints,
+      effectiveSkillPoints: skillPoints,
+      inTraining: false,
+      trainingStartSP: skillPoints,
+      trainingDestinationSP: skillPoints,
+      trainingStartTime: null,
+      trainingEndTime: null,
+    };
+    const replace = skillState.replaceCharacterSkillRecords(
+      characterID,
+      records.map((record) => (Number(record.typeID) === typeID ? next : record)),
+    );
+    if (!replace || replace.success === false) {
+      return { ok: false, error: "SKILL_WRITE_FAILED" };
+    }
+    // Optional restitution: unspent points the same operation wasted (a consumed
+    // injector that could not finish its skill). Bounded, written to the same field the
+    // injector uses, so the pilot applies them through the normal client flow.
+    const freeSkillPoints = Math.trunc(Number(request.freeSkillPoints));
+    let grantedFreeSkillPoints = 0;
+    if (Number.isFinite(freeSkillPoints) && freeSkillPoints > 0) {
+      if (freeSkillPoints > 10_000_000) {
+        return { ok: false, error: "freeSkillPoints must be <= 10000000" };
+      }
+      const characters = require("../services/character/characterState");
+      const record = characters.getCharacterRecord(characterID);
+      if (!record) return { ok: false, error: "CHARACTER_NOT_FOUND" };
+      const updated = characters.updateCharacterRecord(characterID, (current) => ({
+        ...current,
+        freeSkillPoints:
+          Math.max(0, Number(current.freeSkillPoints) || 0) + freeSkillPoints,
+      }));
+      if (!updated || updated.success === false) {
+        return { ok: false, error: "FREE_SKILL_POINTS_WRITE_FAILED" };
+      }
+      grantedFreeSkillPoints = freeSkillPoints;
+    }
+    // The current queue entry starts from the restored points NOW, so its ETA is the
+    // real remaining time and not a measurement from the lost baseline.
+    const queueState = queueStateModule.getCharacterQueueState(characterID);
+    let restarted = false;
+    if (
+      queueState &&
+      queueState.active === true &&
+      Array.isArray(queueState.queue) &&
+      queueState.queue.length > 0 &&
+      Number(queueState.queue[0].typeID) === typeID
+    ) {
+      queueStateModule.setCharacterQueueState(characterID, {
+        ...queueState,
+        activeStartTime: String(math.getNowFileTime()),
+      });
+      restarted = true;
+    }
+    const snapshot = queueRuntime.syncQueueAfterAttributeChange(characterID);
+    return {
+      ok: true,
+      characterID,
+      typeID,
+      previousPoints,
+      skillPoints,
+      level: requestedLevel,
+      restarted,
+      grantedFreeSkillPoints,
+      queueActive: Boolean(snapshot && snapshot.active),
+      trainingEndTime:
+        snapshot && snapshot.currentEntry
+          ? String(snapshot.currentEntry.trainingEndTime)
+          : null,
+    };
+  } catch (error) {
+    return { ok: false, error: "skill restore failed: " + String(error && error.message || error) };
+  }
+}
+
+module.exports = {fs, siblingSuffix, REQUESTS, RESULTS, EVENTS, ALLOWED_ACTIONS, MAX_REQUESTS_PER_DRAIN, readJsonLines, writeJsonLines, appendJsonLine, emitEvent, readRow, readItemRows, liveSessionFor, executeChatCommand, blueprintAuto, createCourierContract, giveItem, removeItem, renameItem, saveFittingFromShip, boardShip, moveItem, fitShip, fitSlots, giveFit, restoreLastLoss, deployStructure, resolveWarPatrolLoadout, spawnNativeNpc, militiaEnlist, militiaRestore, restoreSkillPoints, warFleetAuthorities, freeHullLinks, listFreeHullsFor, spawnWarFleet, warFleetState, fleetReconstitute, releaseIdentity, assignIdentity};

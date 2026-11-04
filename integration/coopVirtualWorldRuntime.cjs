@@ -1,14 +1,43 @@
-﻿"use strict";
+"use strict";
 
 // Pure helpers live in space\coopVirtualWorldRuntime.pure.js (split by scripts/coop-split-module.cjs).
 const { observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, pickFundingCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity } = require("./coopVirtualWorldRuntime.pure");
 const jsonFileCache = require("./coopJsonFileCache");
+// Does a native NPC ship exist in that system right now? This is a read-only
+// question, and it must never load a scene: ensureScene() builds belts, statics,
+// gates and asteroid fields for a system nobody is in. The identity registry and
+// the NPC materializer ask this once per stored link, so the old version rebuilt
+// whole solar systems inside the world tick - the measured cause of 40 s
+// materialization phases, minute-long ticks and an unresponsive HTTP/gRPC surface.
+// A loaded scene answers directly; an unloaded one is answered from the native NPC
+// store, which is the durable record the registry actually cares about.
+function findNativeShip(systemID, entityID) {
+  const system = Number(systemID) || 0;
+  const entity = Number(entityID) || 0;
+  if (!(system > 0) || !(entity > 0)) return null;
+  const runtime = require("./runtime");
+  const scenes = runtime && runtime.scenes;
+  const scene = scenes instanceof Map ? scenes.get(system) : null;
+  if (scene && typeof scene.getEntityByID === "function") {
+    return scene.getEntityByID(entity) || null;
+  }
+  try {
+    const record = require("./npc/nativeNpcStore").getNativeEntity(entity);
+    if (!record || Number(record.systemID) !== system) return null;
+    return { kind: "ship", nativeNpc: true, itemID: entity, systemID: system };
+  } catch (_error) {
+    return null;
+  }
+}
 // Optional background driver of virtual world; no NPC ships materialized.
 let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null,warpPointDirector=null,nativeGunRange=null;
 let warTaxIncome=null,warDoctrineInstance=null,warCaptureByForce=null,warFleetRegistry=null,warBattleDirector=null,warEngagement=null,warPosture=null,warLossReconcile=null,warGarrison=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null,gateStagingSkipKey=null,followOrderReason=null;
 // Native wreck IDs this process confirmed (and, after a restart, the durable
 // casualty ledger): the only proof that a registered warship is really gone.
 let casualtySeedDone=false;
+// The last pirate-raid action set that was printed, so an unchanged raid does not reprint kilobytes
+// of JSON every tick.
+let lastRaidLogSignature="";
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 // Real merit per pilot (coop-pilot-XXX -> record). Nothing promotes a pilot yet,
 // so it is empty and every commander is a recruit; the career phase fills it.
@@ -40,7 +69,8 @@ function warMeritRecords(){
  try{return warMeritLedger.records();}catch{return {}}
 }
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
-let wreckClaimReconcile=null,wreckRecoveryTimer=null,wreckRecoveryFastBusy=false,perfTimer=null;
+let wreckClaimReconcile=null,wreckRecoveryTimer=null,wreckRecoveryFastBusy=false,perfTimer=null,
+ memoryTimer=null,loopMonitor=null;
 const lootStationNotes=new Map();
 // Wall-clock instant this process started running the living world. A wreck
 // claim is never closed or re-spawned inside the boot grace window, because a
@@ -50,20 +80,53 @@ let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,
 // The courier roster is data, not a constant: every seeded "Haul ..." character
 // is a real carrier with its own hull and balance. A hardcoded id list silently
 // ignored any courier added later, so a new carrier never accepted a contract.
+// A short-lived memo for values a world phase re-reads on every tick. Measured 2026-11-02: the garrison phase cost
+// 1.0-2.3 s per tick just to read the war state and clone the fleet registry, twice a minute, while the data it
+// reads changes at most once a cycle. Staleness is bounded by the TTL and never delays a real decision.
+const memoCache=new Map();
+// Per-scene throttle for the convoy renewal pass (see ensureNativeMining). WeakMap so a dropped scene never leaks.
+const nativeMiningRenewalAt=new WeakMap();
+function memoFor(ttlMs,key,loader,options={}){
+ const ttl=Math.max(0,Number(ttlMs)||0);
+ const now=Date.now();
+ const cached=memoCache.get(key);
+ if(cached&&now-cached.at<ttl)return cached.value;
+ if(options.wrap==="snapshot"){
+  const real=loader();
+  // Never Object.create(real) here: a frozen registry makes the snapshot
+  // assignment throw and the whole phase dies (that is exactly what happened to
+  // the garrison). The helper returns a writable copy, or the raw object.
+  const wrapper=require("./coopMemoSnapshot").wrapSnapshot(real,source=>{
+   const snapshotKey=key+":snapshot";
+   const hit=memoCache.get(snapshotKey);
+   if(hit&&Date.now()-hit.at<ttl)return hit.value;
+   const value=typeof source.snapshot==="function"?source.snapshot():{};
+   memoCache.set(snapshotKey,{at:Date.now(),value});
+   return value;
+  });
+  memoCache.set(key,{at:now,value:wrapper});
+  return wrapper;
+ }
+ const value=loader();
+ memoCache.set(key,{at:now,value});
+ return value;
+}
+
 function safeNpcPhase(phase,run){
  // Opt-in phase timing (EVEJS_COOP_PERF_METRICS=1): a measured phase is the only
- // honest basis for the next optimisation.
- const timed=require("./coopPerfMetrics"+(__filename.endsWith(".js")?"":".cjs")).enabled();
- const started=timed?process.hrtime.bigint():0n;
+ // honest basis for the next optimisation. timePhase records the phase's retained heap as well when
+ // EVEJS_COOP_MEMORY_METRICS=1, which is what turns "the heap grew" into "this phase grew it".
+ const perf=require("./coopPerfMetrics"+(__filename.endsWith(".js")?"":".cjs"));
+ if(perf.enabled())return perf.timePhase(phase,()=>runSafeNpcPhase(phase,run));
+ return runSafeNpcPhase(phase,run);
+}
+function runSafeNpcPhase(phase,run){
  try{return run();}
  catch(error){
   console.warn("[CoopLivingWorld] "+phase,error.message);
   try{require("./coopRuntimeProbe").observe("living-world-phase-failed",null,null,
    {phase,reason:String(error.message).slice(0,160)});}catch(_ignored){}
   return null;
- }finally{
-  if(timed)require("./coopPerfMetrics"+(__filename.endsWith(".js")?"":".cjs")).metrics()
-   .observe(phase,Number(process.hrtime.bigint()-started)/1e6);
  }
 }
 // Opt-in shared native order arbitration; original native behavior stays OFF.
@@ -76,6 +139,37 @@ function alifeOrderArbitrationEnabled(env={}){
 // FW-003: use the very same native GameStore and physical identity as
 // existing living-world orders. A missing/corrupt registry is UNKNOWN and
 // cannot silently surrender a warship to a civilian/raid planner.
+// Which systems the periodic NPC reconcile touches this cycle. One ~200 ms
+// reconcile per visited system in a single tick was measured at 2.1-3.8 s of
+// blocked event loop, so occupied systems always run and the rest rotate.
+let npcReconcileCursor=0;
+const NPC_RECONCILE_SLICE=3;
+function playerSystemsNow(){
+ const out=new Set();
+ try{
+  const scenes=require("./runtime").scenes;
+  if(!(scenes instanceof Map))return out;
+  for(const [key,scene] of scenes){
+   const sessions=scene&&scene.sessions;
+   if(!sessions||typeof sessions.values!=="function")continue;
+   for(const session of sessions.values())
+    if(Number(session&&session.characterID)>0){out.add(Number(key));break;}
+  }
+ }catch(_error){/* no live scene registry: rotate everything */}
+ return out;
+}
+function nextReconcileSystems(){
+ const all=[...visitedSystems].map(Number).filter(id=>Number.isSafeInteger(id)&&id>0);
+ const occupied=playerSystemsNow();
+ const priority=all.filter(id=>occupied.has(id));
+ const rest=all.filter(id=>!occupied.has(id));
+ const picks=[];
+ for(let i=0;i<NPC_RECONCILE_SLICE&&rest.length>0;i++){
+  picks.push(rest[npcReconcileCursor%rest.length]);
+  npcReconcileCursor=(npcReconcileCursor+1)%Math.max(1,rest.length);
+ }
+ return [...priority,...picks];
+}
 function advanceNativeWarDemobilization(){
  const {enabled,createWarDemobilizer}=require("./coopWarDemobilizer");
  if(!enabled(process.env)||!visitedSystems.size||!identityRegistry)return;
@@ -177,23 +271,31 @@ const WAR_MIRROR_FILE=()=>process.env.EVEJS_COOP_WAR_STATE_MIRROR_FILE||
 function warMirrorEnabled(){
  return String(process.env.EVEJS_COOP_WAR_STATE_MIRROR??"1")!=="0";
 }
+// FW-051: the mirror now lives in its own SQLite table (space/coopWarMirror.js).
+// The JSON file is read once per install and then healed into the store, so it
+// is a migration source, not a second writer. A dedicated table cannot rebuild
+// a sibling row group, which is exactly what made the file necessary in FW-041.
+let warMirrorInstance=null;
+function warMirror(){
+ if(warMirrorInstance)return warMirrorInstance;
+ const core=require("./coopFactionWarCore");
+ warMirrorInstance=require("./coopWarMirror").createWarMirror({
+  gameStore:require("../gameStore"),
+  validate:state=>core.validateState(state),
+  file:WAR_MIRROR_FILE(),
+  onHeal:()=>console.log("[CoopFactionWar] war mirror migrated from JSON file into coopWarMirror")
+ });
+ return warMirrorInstance;
+}
 function mirrorWarState(state){
  if(!warMirrorEnabled())return;
- try{
-  const fs=require("node:fs"),file=WAR_MIRROR_FILE(),tmp=file+".tmp";
-  fs.writeFileSync(tmp,JSON.stringify(state));
-  fs.renameSync(tmp,file);
- }catch(_error){/* a mirror is best effort, never a reason to fail a war write */}
+ try{warMirror().write(state);}
+ catch(_error){/* a mirror is best effort, never a reason to fail a war write */}
 }
 function readWarMirror(){
  if(!warMirrorEnabled())return null;
- try{
-  const fs=require("node:fs");
-  const parsed=JSON.parse(fs.readFileSync(WAR_MIRROR_FILE(),"utf8"));
-  const core=require("./coopFactionWarCore");
-  core.validateState(parsed);
-  return parsed;
- }catch(_error){return null}
+ try{return warMirror().read();}
+ catch(_error){return null}
 }
 // Pure: which record to use on boot. A mirror may only replace an ABSENT or EMPTY
 // record - it can never overwrite a live war with an older copy.
@@ -1042,7 +1144,14 @@ function advanceNativeWarSovereigntyProjection(){
   evidence:"MILITARY_CONTROL_REPORTED_NATIVE_CLAIM_ONLY_WHEN_STRUCTURE_BACKED"
  });
 }
+let warOpeningTicks=0;
 function advanceNativeWarOpening(){
+ // Opening a war is a slow strategic action, but it was evaluated on every 30 s
+ // tick and measured 658 ms of blocked loop (it reads the 1 MB war state and
+ // walks every campaign). Once every four ticks (2 min) is the same decision at a
+ // quarter of the price.
+ warOpeningTicks=(warOpeningTicks+1)%4;
+ if(warOpeningTicks!==1)return;
  const {enabled}=require("./coopWarMobilizer");
  if(!enabled(process.env))return warSkip("opening","WAR_FLAGS_OFF");
  // A kill can only pay a bounty once the chest payer is installed.
@@ -1736,7 +1845,13 @@ function advanceNativeWarGateStaging(){
 // navy back. This refills a side through the SAME sanctioned spawn path an
 // operator uses (`spawn_war_fleet`: real doctrine row, real native ship, real
 // free pilot identity) and reports the native status of every attempt.
+let warGarrisonTicks=0;
 function advanceNativeWarGarrison(){
+ // The garrison really spawns formations now (it threw on every tick before, so
+ // this work never ran). One formation costs ~1.4 s of blocked loop, so it runs
+ // on every second tick, offset from war-opening so the two never collide.
+ warGarrisonTicks=(warGarrisonTicks+1)%2;
+ if(warGarrisonTicks!==0)return;
  const garrison=require("./coopWarGarrison");
  if(!garrison.enabled(process.env))return warSkip("garrison","FLAG_OFF");
  if(!nativeWarFleetRegistry())return warSkip("garrison","NO_WAR_FLEET_REGISTRY");
@@ -1747,6 +1862,10 @@ function advanceNativeWarGarrison(){
   // single slot rotated between them and the assault never began. Two sides per tick is
   // still one sanctioned spawn per side, and it lets a front muster in one cycle.
   maxSpawnsPerTick:2,
+  // A formation is ~0.7 s of real spawn work. Whatever does not fit in this
+  // budget is continued on the next garrison tick, so one tick can never hold the
+  // loop for two full formations.
+  maxMsPerTick:600,
   // FW-134: the hulls this exact side already lost in this campaign, straight from the
   // casualty ledger - the only record that survives a released identity link.
   lossCount:({campaignID,factionID})=>{
@@ -1757,8 +1876,14 @@ function advanceNativeWarGarrison(){
       Number(row.victimFactionID)===Number(factionID)).length;
    }catch(_error){return 0}
   },
-  readWarState:()=>warStateStore().read(),
-  registry:nativeWarFleetRegistry(),
+  // FW-033 measured 2026-11-02: this phase cost 1.0-2.3 s on EVERY world tick (perf sample "native-faction-war-
+  // garrison"), because readWarState() reads the whole war state out of the game store and the fleet registry clones
+  // every hull, twice per minute, for a refill that changes at most once a cycle. A 20 s cache cannot delay a real
+  // garrison refill in any way that matters.
+  readWarState:()=>memoFor(20000,"garrison-war-state",()=>warStateStore().read()),
+  registry:memoFor(20000,"garrison-fleet-registry",()=>nativeWarFleetRegistry(),{
+   wrap:"snapshot"
+  }),
   // FW-115: a commander spawns the formation its EARNED merit allows (recruit 1, pilot 2,
   // wingman 3, squad-lead 5 ...), so a veteran side brings tackle, EWAR and logistics
   // instead of the single identical frigate every side used to field.
@@ -2515,7 +2640,8 @@ function start(){
     migrateFactions:process.env.EVEJS_COOP_FACTION_LAYOUT_V2==="1"});
   const {createLife}=require("./coopNpcLife");
   nextLife=createLife({file:process.env.EVEJS_COOP_LIFE_FILE||"/var/lib/evejs/coop-npc-life.json",
-   recoveryMs:Number(process.env.EVEJS_COOP_CLONE_RECOVERY_MS||1800000)});
+   recoveryMs:Number(process.env.EVEJS_COOP_CLONE_RECOVERY_MS||1800000),
+   gameStore:require("../gameStore")});
  }catch(error){
   // Never delete or reinitialize real persisted state to fake a ready world.
   require("./coopRuntimeProbe").observe("living-startup-failed",null,null,
@@ -2562,6 +2688,27 @@ function start(){
    }catch(_ignored){}
   },60000);
   perfTimer.unref?.();
+ }
+ // Memory attribution (EVEJS_COOP_MEMORY_METRICS=1): the live size of every registry and the retained heap of each
+ // world phase, so a leak is a name rather than a heap graph. The event-loop monitor (EVEJS_COOP_EVENT_LOOP_MONITOR=1)
+ // is the permanent version of the inspector probe that every restart used to wipe.
+ if(require("./coopMemoryMetrics").enabled()){
+  memoryTimer=setInterval(()=>{
+   try{
+    const phaseMemory=require("./coopPerfMetrics").memoryRecorder();
+    require("./coopRuntimeProbe").observe("coop-memory-sample",null,null,
+     require("./coopMemoryMetrics").sample({phaseMemory}));
+    phaseMemory.reset();
+   }catch(_memoryError){/* telemetry must never change the world */}
+  },60000);
+  memoryTimer.unref?.();
+ }
+ if(require("./coopEventLoopMonitor").enabled()){
+  loopMonitor=require("./coopEventLoopMonitor").createMonitor({
+   observe:(event,detail)=>require("./coopRuntimeProbe").observe(event,null,null,detail),
+   memory:()=>require("./coopMemoryMetrics").memoryUsage()
+  });
+  loopMonitor.start();
  }
  timer=setInterval(()=>worldPhaseCoordinator.tick(runPhase=>{
   backgroundTicks++;
@@ -2686,6 +2833,7 @@ function start(){
   runPhase("native-faction-war-battle-line-relief",advanceNativeWarBattleLineRelief);
   runPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
   // FW-033: refill a side that lost its garrison, before the assault phase counts it.
+  // FW-033: refill a side that lost its garrison, before the assault phase counts it.
   runPhase("native-faction-war-garrison",advanceNativeWarGarrison);
   runPhase("native-faction-war-assault",advanceNativeWarAssault);
   runPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
@@ -2779,8 +2927,12 @@ runPhase("native-faction-war-battle",advanceNativeWarCombat);
   if(process.env.EVEJS_COOP_ECONOMY_DESTINATION==="1")
    runPhase("economy-destination-ore",observeEconomyOre);
   runPhase("native-activity",observeNativeActivity);
+  // Each per-system reconcile costs ~200 ms, and doing every visited system in one
+  // tick was measured at 2.1-3.8 s of blocked event loop. Systems a player is
+  // really sitting in are always reconciled; the rest rotate a few per cycle, so a
+  // tick now pays at most (player systems + NPC_RECONCILE_SLICE) reconciles.
   if(backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1")
-   for(const systemID of visitedSystems)runPhase("npc-reconcile:"+systemID,
+   for(const systemID of nextReconcileSystems())runPhase("npc-reconcile:"+systemID,
     ()=>observeSession(null,{itemID:0,spaceState:{systemID}}));
  }),30000);
  timer.unref?.();
@@ -3278,7 +3430,8 @@ function advanceNativeWreckCustody(){ if(process.env.EVEJS_COOP_NPC_WRECK_TRANSF
   store,sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
   resolveType:id=>require("../services/inventory/itemTypeRegistry").resolveItemByTypeID(id),
   root:process.env.EVEJS_COOP_NPC_WRECK_CUSTODY_ROOT||
-   "/var/lib/evejs/coop-npc-wreck-custody"
+   "/var/lib/evejs/coop-npc-wreck-custody",
+  gameStore:require("../gameStore")
  });
  const recovered=wreckCustody.recover();
  if(recovered.status!=="CLEAN"){
@@ -3477,6 +3630,13 @@ function ensureNativeMining(scene,systemID){
   // interval; do not re-run general mining scene init after startup.
   // The pinned upstream startup hook + native renewal policy enforce
   // loss cooldown and spawn caps before any replacement is permitted.
+  // Measured 2026-11-03 (coop-memory-sample): this call was the single largest allocator of the whole world tick -
+  // 143.5 MB retained across 32 calls per minute (every system, every ~7.5 s tick), while a convoy loss is
+  // reconciled on a cooldown measured in minutes. One pass per scene per minute is enough and allocates 8x less.
+  const nowMs=Date.now();
+  const lastAtMs=Number(nativeMiningRenewalAt.get(scene)||0);
+  if(nowMs-lastAtMs<60000)return;
+  nativeMiningRenewalAt.set(scene,nowMs);
   if(process.env.EVEJS_COOP_CONVOY_RENEWAL==="1")
    require("../services/mining/miningNpcOperations").handleSceneCreated(scene);
   return;
@@ -4485,7 +4645,12 @@ function advanceNativeRaids(){
      });
     }
    }
-   console.info("[CoopLivingWorld] Native pirate raid",JSON.stringify({systemID,actions:orders}));
+   // One line per CHANGE, not per tick: the full action list is several kilobytes and the same
+   // release/re-issue cycle repeats every few seconds, which buried the log and cost docker-log IO.
+   // An unchanged raid is still visible through the probe events.
+   const raidSignature=orders.map(action=>[action.pirateID,action.targetID,action.action].join(":")).sort().join("|");
+   if(raidSignature!==lastRaidLogSignature){lastRaidLogSignature=raidSignature;
+    console.info("[CoopLivingWorld] Native pirate raid",JSON.stringify({systemID,actions:orders}));}
    require("./coopWorldSignals").notifyRaid(scene,orders);
    require("./coopRuntimeProbe").observe("living-pirate-raid",null,
     {spaceState:{systemID}},{actions:orders});
@@ -4657,9 +4822,10 @@ function observeSession(session,ship){
         identityRegistry=createRegistry({
           file:process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json",
           exists:(system,id)=>{
-           const ship=runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id);
+           const ship=findNativeShip(system,id);
            return ship?.kind==="ship"&&ship.nativeNpc===true;
-          }
+          },
+          gameStore:require("../gameStore"),
         });
         // Recover an interrupted native gate movement first; then restore
         // saved real NPC hulls before the materializer may prune stale links.
@@ -4695,12 +4861,14 @@ function observeSession(session,ship){
           limit:materializeLimit.limit,
           exemptRoles:nativeMining?["miner","hauler"]:[],
           exists:(system,id)=>{
-           const ship=runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id);
+           const ship=findNativeShip(system,id);
            return ship?.kind==="ship"&&ship.nativeNpc===true;
           },
           spawn:(system,pilot)=>{
             const nativeScene=runtime.ensureScene(system,{refreshStargates:false});
-            const anchor=require("./coopNpcTopology").anchorOptionsForRole(nativeScene,pilot.role);
+            const anchor=require("./coopNpcTopology").anchorOptionsForRole(nativeScene,pilot.role,{
+             spreadMeters:process.env.EVEJS_COOP_NPC_SPAWN_SPREAD==="1"?12000:0,
+            });
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
             const pool=require("./coopNpcSpawnPools").spawnPoolForRole(pilot.role,
              {enabled:process.env.EVEJS_COOP_NPC_ROLE_POOLS==="1"});
@@ -4759,7 +4927,22 @@ function observeSession(session,ship){
       }
       // Never create a generic fake miner/hauler when EveJS already has
       // physical mining NPCs with actual mining lasers and ore cargo.
+      // A pirate is only materialized where a player can actually meet it, and never as a high-sec gate camp:
+      // measured 2026-11-02 the world kept exactly three pirates in every one of 36 systems, so wherever the owner
+      // logged in he met the same three hulls, and Jita (no asteroid belt at all) got a gate camp at the 4-4 undock.
+      const livePlayerCount=scene&&scene.sessions&&typeof scene.sessions.size==="number"
+        ?scene.sessions.size:0;
+      const security=require("./coopHighSecNpcSafety").systemSecurityFor(systemID);
+      const highSec=Number.isFinite(Number(security))&&Number(security)>=0.45;
+      const beltAnchors=highSec
+        ?require("./coopNpcTopology").waypoints(scene).filter(p=>p.kind==="asteroidBelt").length
+        :1;
       const materialize=(nativeMining?residents.filter(p=>p.role!=="miner"&&p.role!=="hauler"):residents)
+       .filter(p=>{
+        if(String(p.role||"")!=="pirate")return true;
+        if(livePlayerCount<=0)return false;
+        return beltAnchors>0;
+       })
        .map(p=>({...p,durable:process.env.EVEJS_COOP_DURABLE_NPC_SHIPS==="1"}));
       // Trust EveJS's active mining-fleet ship IDs, never a persisted
       // "miner" label alone, when making stock NPC capacity exemptions.
@@ -4999,7 +5182,7 @@ function observeSession(session,ship){
               behaviorOverrides:{autoAggro:false,autoActivateWeapons:false,targetPreference:"none"}
             });
           },
-          exists:(id,entityID)=>Boolean(runtime.ensureScene(id,{refreshStargates:false})?.getEntityByID(entityID))
+          exists:(id,entityID)=>Boolean(findNativeShip(id,entityID))
         });
       }
       const factions=Object.values(factionDirector.snapshot().factions);

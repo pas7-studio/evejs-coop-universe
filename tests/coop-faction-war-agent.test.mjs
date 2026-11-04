@@ -37,15 +37,18 @@ test('authentic native agent Accept enlists exactly once without mission or corp
  assert.match(f.action(3).data.agentSays[0],/Enlistment recorded/);
  assert.equal(f.peek().enlistments['41'].factionID,11);
  assert.equal(f.peek().history.length,1);
- assert.deepEqual(f.action(null).data.actions[0],[9,9]);
+ assert.deepEqual(f.action(null).data.actions[0],[1,1]);
  assert.equal(f.warAgent.briefing({session:f.session,agentID:71})['Mission ID'],null);
 }));
-test('stock Decline explicitly leaves militia with cooldown',()=>withFlags(()=>{
+test('stock Decline never ends militia service - only the militia card does',()=>withFlags(()=>{
  const f=fixture();f.action(3);
- assert.match(f.action(9).data.agentSays[0],/Service ended/);
- assert.equal(f.peek().enlistments['41'].status,'LEFT');
- assert.match(f.action(null).data.agentSays[0],/cooldown/);
- assert.equal(f.peek().history.length,2);
+ // 2026-11-04 (fork 5a6db18): action 9 is the dialog's only button. Treating it as
+ // "leave the militia" unenlisted a pilot who merely closed a buggy briefing, so the
+ // agent now reports the real path instead of changing military status.
+ assert.match(f.action(9).data.agentSays[0],/No military status changed/);
+ assert.equal(f.peek().enlistments['41'].status,'ACTIVE');
+ assert.equal(f.peek().history.length,1);
+ assert.deepEqual(f.action(null).data.actions[0],[1,1]);
 }));
 test('existing native mission never shadowed',()=>withFlags(()=>{
  const f=fixture();f.setMission({missionID:25});

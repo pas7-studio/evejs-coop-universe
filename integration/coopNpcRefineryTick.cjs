@@ -41,9 +41,23 @@ function note(options, event, fields) {
   } catch (_error) { /* telemetry only */ }
 }
 
+// A single-slot cache is defeated by two statuses alternating (A, B, A, B...), which is exactly what a
+// refinery cycle does: measured 48 identical "blocked" records in two minutes for the same station.
+// A signature is therefore suppressed for a window instead of only until the next different one.
+const NOTE_WINDOW_MS = 60000;
 function once(options, key, signature) {
-  if (lastNote.get(key) === signature) return false;
-  lastNote.set(key, signature);
+  const now = Date.now();
+  let seen = lastNote.get(key);
+  if (!(seen instanceof Map)) {
+    seen = new Map();
+    lastNote.set(key, seen);
+  }
+  const previous = Number(seen.get(signature)) || 0;
+  if (previous > 0 && now - previous < NOTE_WINDOW_MS) return false;
+  seen.set(signature, now);
+  if (seen.size > 32) {
+    for (const [other, at] of seen) if (now - Number(at || 0) >= NOTE_WINDOW_MS) seen.delete(other);
+  }
   return true;
 }
 

@@ -36,6 +36,29 @@ function waveKey(index) {
   return "wave_" + String(wave).padStart(2, "0");
 }
 
+function waveIndex(key) {
+  const match = /^wave_(\d+)$/.exec(String(key || ""));
+  return match ? Math.max(0, Number(match[1]) || 0) : 0;
+}
+
+// How long an agent-mission instance may sit with an impossible wave list
+// before the sweep closes it. Waves are armed by wave_cleared, not by time, so a
+// chain that never advanced is dead, not slow - but the window is generous so an
+// owner who docks for the night and comes back still finds his real site.
+function staleMaxAgeMs() {
+  const raw = Number(process.env.EVEJS_COOP_MISSION_STALE_HOURS);
+  const hours = Number.isFinite(raw) && raw > 0 ? raw : 12;
+  return Math.round(hours * 3600000);
+}
+
+function completionKeysOf(instance) {
+  const metadata = instance && instance.objectiveState && instance.objectiveState.metadata;
+  const keys = Array.isArray(metadata && metadata.completionEncounterKeys)
+    ? metadata.completionEncounterKeys
+    : [];
+  return keys.map((key) => String(key || "")).filter(Boolean);
+}
+
 // siteKey is the only place the owning character is written down for a mission
 // dungeon ("mission:<characterID>:<sequence>").
 function parseMissionSiteKey(siteKey) {
@@ -180,15 +203,174 @@ function onWaveSpawn(input, deps = {}) {
   return result;
 }
 
+// Why an agent-mission instance can never satisfy its objective any more.
+//
+// Measured 2026-11-03 on "Gone Berserk" (client-dungeon:875, instance 6, created
+// 2026-10-27): objectiveState counted 7 waves and required all of them
+// (completionEncounterKeys wave_01..wave_07), but only wave_01 (a trigger message
+// with no spawn record), wave_06 (skipped by the coop cap) and wave_07 (two hulls
+// flagged non-objective) existed. Waves 02..05 were never spawned and nothing arms
+// them any more, so isEncounterCompletionSatisfied stayed false forever and the
+// player stood in a cleared pocket with an uncompletable mission.
+function unsatisfiableMissionReason(instance, options = {}) {
+  if (!instance || !isAgentMissionInstance(instance)) return null;
+  if (String(instance.lifecycleState || "").toLowerCase() !== "active") return null;
+  const objective = (instance && instance.objectiveState) || {};
+  if (String(objective.state || "").toLowerCase() === "completed") return null;
+  if (Math.max(0, Number(objective.completedAtMs) || 0) > 0) return null;
+  if (Math.max(0, Number(instance.objectiveSatisfiedAtMs) || 0) > 0) return null;
+  if (Math.max(0, Number(instance.metadata && instance.metadata.objectiveSatisfiedAtMs) || 0) > 0) return null;
+  const keys = completionKeysOf(instance);
+  if (keys.length <= 0) return null;
+  const maxAgeMs = Math.max(0, Number(options.maxAgeMs) || staleMaxAgeMs());
+  const nowMs = Math.max(0, Number(options.nowMs) || Date.now());
+  const createdAtMs = Math.max(0, Number(instance.timers && instance.timers.createdAtMs) || 0);
+  if (createdAtMs <= 0 || nowMs - createdAtMs < maxAgeMs) return null;
+  const cap = capFor();
+  const states = (instance.spawnState && instance.spawnState.encounterStatesByKey) || {};
+  const stalled = keys.filter((key) => {
+    const index = waveIndex(key);
+    // A wave above the cap is settled on the next spawn pass, not broken.
+    if (cap > 0 && index > cap) return false;
+    const state = states[key];
+    if (!state) return true;
+    return Math.max(0, Number(state.spawnedAtMs) || 0) <= 0 &&
+      Math.max(0, Number(state.completedAtMs) || 0) <= 0;
+  });
+  return stalled.length > 0 ? "STALE_MISSION_WAVE_CHAIN_BROKEN" : null;
+}
+
+// A mission wave that has a higher wave completed after it was never recorded at
+// all is a bookkeeping hole, not a wave the player still owes: the chain really did
+// pass it. Measured 2026-11-03 on "The Blockade" (client-dungeon:1940,
+// instance 59114): wave_01 carried no state at all (its on_load spawn was never
+// recorded), wave_02/03 followed from it and so never armed, wave_04 was skipped by
+// the coop cap and wave_05 had really spawned and been cleared - and the mission sat
+// at current_wave 2 forever, because its completion keys could never all settle.
+//
+// The heal only settles waves that are BELOW a wave the server itself recorded as
+// completed; it never settles the wave that is being fought, and it never spawns or
+// kills anything, so no mission can be credited by it alone.
+function settleWavesPassedByCompletedWaves(instance, plans, options = {}) {
+  const out = [];
+  if (!instance || !isAgentMissionInstance(instance)) return out;
+  const states = (instance.spawnState && instance.spawnState.encounterStatesByKey) || {};
+  const ordered = (Array.isArray(plans) ? plans : [])
+    .map((plan) => ({
+      key: String((plan && plan.key) || ""),
+      wave: Math.max(0, Number(plan && plan.waveIndex) || waveIndex(plan && plan.key)),
+    }))
+    .filter((plan) => plan.key && plan.wave > 0)
+    .sort((left, right) => left.wave - right.wave);
+  if (ordered.length <= 0) return out;
+  let highestCompletedWave = 0;
+  let lowestActiveWave = 0;
+  for (const plan of ordered) {
+    const state = states[plan.key];
+    if (!state) continue;
+    if (Math.max(0, Number(state.completedAtMs) || 0) > 0) {
+      highestCompletedWave = Math.max(highestCompletedWave, plan.wave);
+      continue;
+    }
+    if (Math.max(0, Number(state.spawnedAtMs) || 0) > 0) {
+      lowestActiveWave = lowestActiveWave > 0
+        ? Math.min(lowestActiveWave, plan.wave)
+        : plan.wave;
+    }
+  }
+  if (highestCompletedWave <= 0) return out;
+  const limitWave = lowestActiveWave > 0
+    ? Math.min(highestCompletedWave, lowestActiveWave)
+    : highestCompletedWave;
+  const nowMs = Math.max(0, Number(options.nowMs) || Date.now());
+  for (const plan of ordered) {
+    if (plan.wave >= limitWave) break;
+    const state = states[plan.key];
+    if (state) {
+      if (Math.max(0, Number(state.spawnedAtMs) || 0) > 0) continue;
+      if (Math.max(0, Number(state.completedAtMs) || 0) > 0) continue;
+    }
+    out.push({
+      key: plan.key,
+      patch: {
+        key: plan.key,
+        spawnedAtMs: nowMs,
+        completedAtMs: nowMs,
+        remainingEntityIDs: [],
+        spawnCount: 0,
+        trigger: "coop_mission_chain_heal",
+        settledWithoutSpawn: true,
+        healedAtMs: nowMs,
+      },
+    });
+  }
+  return out;
+}
+
+// Close (never complete) the agent-mission instances that can no longer satisfy
+// their objective, so the pocket despawns and the owner can quit and retake the
+// mission instead of standing in a site that will never finish.
+function sweepStaleMissionInstances(deps = {}) {
+  const dungeonRuntime = deps.dungeonRuntime;
+  const result = { scanned: 0, closed: [] };
+  if (!dungeonRuntime || typeof dungeonRuntime.listInstancesByLifecycle !== "function") return result;
+  let rows = [];
+  try {
+    rows = dungeonRuntime.listInstancesByLifecycle("active", { rawRows: true }) || [];
+  } catch (_error) {
+    return result;
+  }
+  const nowMs = Math.max(0, Number(deps.nowMs) || Date.now());
+  const limit = Math.max(1, Number(deps.limit) || 25);
+  const maxAgeMs = Math.max(0, Number(deps.maxAgeMs) || staleMaxAgeMs());
+  for (const summary of rows) {
+    if (result.closed.length >= limit) break;
+    // Summaries carry siteKind/siteOrigin/siteKey but not the wave bookkeeping, and
+    // cloning every active instance would be a per-slice cost for nothing: only the
+    // few agent-mission instances are read in full.
+    if (!isAgentMissionInstance(summary)) continue;
+    const createdAtMs = Math.max(0, Number(summary.timers && summary.timers.createdAtMs) || 0);
+    if (createdAtMs <= 0 || nowMs - createdAtMs < maxAgeMs) continue;
+    let instance = summary;
+    try {
+      if (typeof dungeonRuntime.getInstance === "function") {
+        instance = dungeonRuntime.getInstance(Number(summary.instanceID)) || summary;
+      }
+    } catch (_error) { /* fall back to the summary, which simply fails closed */ }
+    const reason = unsatisfiableMissionReason(instance, { nowMs, maxAgeMs });
+    if (!reason) continue;
+    result.scanned += 1;
+    try {
+      dungeonRuntime.setLifecycleState(Number(instance.instanceID), "failed", {
+        lifecycleReason: reason,
+        nowMs,
+      });
+      result.closed.push({ instanceID: Number(instance.instanceID), reason });
+      try {
+        require(PROBE).observe("living-mission-wave", null,
+          { spaceState: { systemID: Number(instance.solarSystemID) || 0 } },
+          { status: "STALE_INSTANCE_CLOSED", reason,
+            instanceID: Number(instance.instanceID), totalWaves: completionKeysOf(instance).length });
+      } catch (_error) { /* observation must never break the sweep */ }
+    } catch (_error) { /* a failed close is retried on the next pass */ }
+  }
+  return result;
+}
+
 module.exports = {
   enabled,
   capFor,
   waveKey,
+  waveIndex,
   parseMissionSiteKey,
   isAgentMissionInstance,
   totalWavesOf,
   describeWave,
   capPlan,
+  completionKeysOf,
+  unsatisfiableMissionReason,
+  settleWavesPassedByCompletedWaves,
+  sweepStaleMissionInstances,
   onWaveSpawn,
   onNativeWaveSpawn,
 };

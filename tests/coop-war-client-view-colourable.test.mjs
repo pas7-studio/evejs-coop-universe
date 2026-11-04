@@ -32,19 +32,19 @@ function pirateControllerState() {
     warID: "war:500020-500001", state: "ACTIVE",
     attackerFactionID: 500020, defenderFactionID: 500001, declaredAt: 1,
   };
-  // 30000142: held by pirate faction 500020, owned by Caldari 500001.
-  state.territories["30000142"] = {
-    systemID: 30000142, originalOwnerFactionID: 500001,
+  // 30045324: held by pirate faction 500020, owned by Caldari 500001.
+  state.territories["30045324"] = {
+    systemID: 30045324, originalOwnerFactionID: 500001,
     militaryControllerFactionID: 500020, state: "OCCUPIED", revision: 1, changedAt: 1,
   };
-  // 30000144: contested front, still controller 500020.
-  state.territories["30000144"] = {
-    systemID: 30000144, originalOwnerFactionID: 500001,
+  // 30045325: contested front, still controller 500020.
+  state.territories["30045325"] = {
+    systemID: 30045325, originalOwnerFactionID: 500001,
     militaryControllerFactionID: 500020, state: "CONTESTED", revision: 2, changedAt: 2,
   };
   state.campaigns["camp:1"] = {
     campaignID: "camp:1", warID: "war:500020-500001", state: "ASSAULT",
-    sourceSystemID: 30000142, targetSystemID: 30000144, startedAt: 1,
+    sourceSystemID: 30045324, targetSystemID: 30045325, startedAt: 1,
     objectiveEvidence: [], revision: 2,
   };
   return state;
@@ -66,14 +66,14 @@ test("a pirate military controller never reaches the client as occupier", () => 
   }
   const bySystem = new Map(entries);
   // The occupier falls back to the real owner, so the star keeps a valid colour.
-  assert.equal(bySystem.get(30000142).occupierID, 500001);
-  assert.equal(bySystem.get(30000142).contested, true);
+  assert.equal(bySystem.get(30045324).occupierID, 500001);
+  assert.equal(bySystem.get(30045324).contested, true);
 });
 
 test("a system with no client-colourable side is dropped, not sent as 0", () => {
   const state = core.empty();
-  state.territories["30000140"] = {
-    systemID: 30000140, originalOwnerFactionID: 500020,
+  state.territories["30045326"] = {
+    systemID: 30045326, originalOwnerFactionID: 500020,
     militaryControllerFactionID: 500019, state: "SECURE", revision: 1, changedAt: 1,
   };
   const { entries } = view.occupationPairs(buildKeyVal, { [WARZONE_ID]: WARZONE_FACTIONS }, { state });
@@ -82,8 +82,8 @@ test("a system with no client-colourable side is dropped, not sent as 0", () => 
 
 test("empire-only war state is unchanged by the guard", () => {
   const state = core.empty();
-  state.territories["30000142"] = {
-    systemID: 30000142, originalOwnerFactionID: 500001,
+  state.territories["30045324"] = {
+    systemID: 30045324, originalOwnerFactionID: 500001,
     militaryControllerFactionID: 500001, state: "SECURE", revision: 1, changedAt: 1,
   };
   const { entries } = view.occupationPairs(buildKeyVal, { [WARZONE_ID]: WARZONE_FACTIONS }, { state });

@@ -45,6 +45,10 @@ function createWarGarrison({
   garrisonSize = 2,
   cooldownMs = 180000,
   maxSpawnsPerTick = 1,
+  // Wall-clock budget for one tick. A formation spawns several real hulls and was
+  // measured at ~0.7 s; this phase is idempotent, so whatever it defers is simply
+  // continued on the next tick instead of blocking the loop for both sides.
+  maxMsPerTick = null,
   // FW-134: how many hulls this exact side already lost in this campaign. A side that
   // keeps dying refills more slowly, which is what finally lets an assault empty a
   // system for the capture sustain window instead of trading one hull forever.
@@ -60,7 +64,9 @@ function createWarGarrison({
     (lossCount !== null && typeof lossCount !== "function") ||
     !Number.isInteger(garrisonSize) || garrisonSize < 1 || garrisonSize > 6 ||
     !Number.isSafeInteger(cooldownMs) || cooldownMs < 10000 ||
-    !Number.isInteger(maxSpawnsPerTick) || maxSpawnsPerTick < 1 || maxSpawnsPerTick > 2
+    !Number.isInteger(maxSpawnsPerTick) || maxSpawnsPerTick < 1 || maxSpawnsPerTick > 2 ||
+    (maxMsPerTick !== null &&
+      (!Number.isFinite(maxMsPerTick) || maxMsPerTick < 100 || maxMsPerTick > 5000))
   ) throw Error("WAR_GARRISON_AUTHORITIES_REQUIRED");
   const nextAt = new Map();
 
@@ -95,6 +101,7 @@ function createWarGarrison({
     try { free = (listFreePilots() || []).filter(pilot); } catch (_error) { free = []; }
     const applied = [], skips = [];
     let spawned = 0;
+    const startedAt = clock();
     for (const campaign of campaigns) {
       const targetSystemID = Number(campaign.targetSystemID);
       const war = state.wars[campaign.warID];
@@ -115,6 +122,11 @@ function createWarGarrison({
       ].filter(side => pos(side.factionID));
       for (const side of sides) {
         if (spawned >= maxSpawnsPerTick) break;
+        if (maxMsPerTick !== null && spawned > 0 && clock() - startedAt > maxMsPerTick) {
+          skips.push({ campaignID: campaign.campaignID, factionID: side.factionID,
+            reason: "TICK_BUDGET_DEFERRED" });
+          break;
+        }
         const factionID = side.factionID;
         const systemID = side.systemID;
         if (!pos(systemID)) {

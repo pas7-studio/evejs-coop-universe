@@ -60,6 +60,7 @@ function createMetrics({ window = WINDOW, now = () => Date.now() } = {}) {
 }
 
 let singleton = null;
+let phaseMemory = null;
 function enabled(env = process.env) {
   return env.EVEJS_COOP_PERF_METRICS === "1";
 }
@@ -67,17 +68,29 @@ function metrics() {
   if (!singleton) singleton = createMetrics();
   return singleton;
 }
+function memoryRecorder() {
+  if (!phaseMemory) {
+    phaseMemory = require("./coopMemoryMetrics").createPhaseMemory();
+  }
+  return phaseMemory;
+}
 
 // Times one synchronous call. A thrown error is re-thrown unchanged: this must
-// never alter control flow.
+// never alter control flow. When memory metrics are on, the retained heap of the phase is recorded too, so a
+// growing registry can be named instead of guessed from a heap graph.
 function timePhase(name, run) {
   if (!enabled()) return run();
   const started = process.hrtime.bigint();
+  const memoryOn = require("./coopMemoryMetrics").enabled();
+  const heapBefore = memoryOn ? process.memoryUsage().heapUsed : 0;
   try {
     return run();
   } finally {
     metrics().observe(name, Number(process.hrtime.bigint() - started) / 1e6);
+    if (memoryOn) {
+      memoryRecorder().note(name, process.memoryUsage().heapUsed - heapBefore);
+    }
   }
 }
 
-module.exports = { createMetrics, metrics, enabled, timePhase };
+module.exports = { createMetrics, metrics, enabled, timePhase, memoryRecorder };

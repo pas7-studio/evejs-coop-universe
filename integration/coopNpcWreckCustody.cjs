@@ -3,6 +3,7 @@
 // atomic two-table transaction. A crash before durable debit confirmation
 // is fenced for operator repair, never interpreted as free goods.
 const fs=require("node:fs"),path=require("node:path");
+const TABLE="coopWreckCustody";
 const validID=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
 const named=x=>typeof x==="string"&&/^coop-pilot-[0-9]{3,}$/.test(x);
 const vec=x=>!!x&&["x","y","z"].every(k=>Number.isFinite(x[k]));
@@ -20,7 +21,7 @@ function syncDirectory(dir){
  try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
 }
 function createWreckCustody({store,sceneForSystem,resolveType,root,
- clock=()=>Date.now(),maxTransactions=10000,maxDistance=2500}={}){
+ clock=()=>Date.now(),maxTransactions=10000,maxDistance=2500,gameStore=null}={}){
  if(!store||!["getNativeEntity","getNativeWreck","getNativeWreckItem",
  "listNativeCargoForEntity","allocateCargoID","removeNativeWreckItem",
  "upsertNativeWreckItem","allocateWreckItemID",
@@ -36,11 +37,7 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
  const writerLock=path.join(root,"native-wreck-custody.writer.lock");
  let lockUnsafe=false;
  const filename=itemID=>path.join(dir,String(itemID)+".json");
- function read(txID){
-  const file=filename(txID);
-  let value;
-  try{value=JSON.parse(fs.readFileSync(file,"utf8"));}
-  catch(e){if(e.code==="ENOENT")return null;throw e;}
+ function validateTx(value,txID){
   if(value?.version!==1||!STATES.has(value.phase)||
    validID(value.itemID)!==validID(txID)||!validID(value.wreckID)||
    !validID(value.systemID)||!validID(value.entityID)||
@@ -69,7 +66,39 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    throw Error("INVALID_NATIVE_WRECK_CUSTODY_JOURNAL");
   return value;
  }
+ // Stage 2 of the JSON->gameStore migration: one row per native wreck item in
+ // coopWreckCustody instead of one file per transaction. The journal is still a
+ // write-ahead fence - every write is flushed synchronously before the item is
+ // touched - but it no longer depends on a directory entry being durable, which
+ // is the one thing a file+rename fence cannot promise on POSIX.
+ function journalRows(){
+  const result=gameStore.read(TABLE,"/");
+  if(!result||result.success!==true)return {};
+  const data=result.data;
+  return data&&typeof data==="object"&&!Array.isArray(data)?data:{};
+ }
+ function read(txID){
+  if(!gameStore){
+   const file=filename(txID);
+   let value;
+   try{value=JSON.parse(fs.readFileSync(file,"utf8"));}
+   catch(e){if(e.code==="ENOENT")return null;throw e;}
+   return validateTx(value,txID);
+  }
+  const rows=journalRows(),key=String(txID);
+  if(!Object.prototype.hasOwnProperty.call(rows,key))return null;
+  return validateTx(rows[key],txID);
+ }
  function persist(tx){
+  if(gameStore){
+   const written=gameStore.write(TABLE,"/"+String(tx.itemID),tx,{force:true});
+   if(!written||written.success===false)throw Error("CUSTODY_JOURNAL_WRITE_FAILED");
+   if(typeof gameStore.flushTableSync==="function"){
+    const flushed=gameStore.flushTableSync(TABLE);
+    if(!flushed||flushed.success===false)throw Error("CUSTODY_JOURNAL_FLUSH_FAILED");
+   }
+   return;
+  }
   const file=filename(tx.itemID);
   fs.mkdirSync(dir,{recursive:true});
   const temp=file+".tmp-"+process.pid;
@@ -86,6 +115,37 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    throw error;
   }
  }
+ // Row keys replace the directory listing. A key that is not a native item ID is
+ // the stored equivalent of an unexpected file and needs operator repair.
+ function journalKeys(){
+  if(gameStore){
+   const keys=Object.keys(journalRows());
+   return keys.some(key=>!/^\d+$/.test(key))?null:keys;
+  }
+  let files;
+  try{files=fs.existsSync(dir)?fs.readdirSync(dir):[];}
+  catch(e){if(e.code==="ENOENT")return [];throw e;}
+  if(files.some(name=>!/^\d+\.json$/.test(name)))return null;
+  return files.map(name=>name.slice(0,-5));
+ }
+ // One-time read-through of an install that still has the file journals. A
+ // damaged legacy journal is left on disk for the operator instead of guessed at.
+ function importLegacyJournals(){
+  if(!gameStore)return;
+  let names;
+  try{names=fs.readdirSync(dir);}
+  catch(e){if(e.code==="ENOENT")return;throw e;}
+  const journals=names.filter(name=>/^\d+\.json$/.test(name));
+  if(!journals.length||Object.keys(journalRows()).length)return;
+  for(const name of journals){
+   const itemID=Number(name.slice(0,-5));
+   let value;
+   try{value=JSON.parse(fs.readFileSync(filename(itemID),"utf8"));}
+   catch(_){continue;}
+   try{validateTx(value,itemID);persist(value);}catch(_){/* operator repair */}
+  }
+ }
+ try{importLegacyJournals();}catch(_){/* boot must never fail on a legacy import */}
  function sameCargo(row,tx){
   return row&&Number(row.cargoID)===tx.cargoID&&
    Number(row.entityID)===tx.entityID&&
@@ -194,12 +254,11 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    if(previous)return previous;
    // No new custody action with any unresolved transaction. A PREPARED
    // crash can mean a native source was debited with no journal ACK.
-   const files=fs.existsSync(dir)?fs.readdirSync(dir):[];
-   if(files.some(name=>!/^\d+\.json$/.test(name)))
-    return {status:"UNEXPECTED_CUSTODY_JOURNAL_FILES"};
-   if(files.length>=maxTransactions)return {status:"CUSTODY_JOURNAL_CAP"};
-   for(const name of files){
-    const tx=read(Number(name.slice(0,-5)));
+   const keys=journalKeys();
+   if(keys===null)return {status:"UNEXPECTED_CUSTODY_JOURNAL_FILES"};
+   if(keys.length>=maxTransactions)return {status:"CUSTODY_JOURNAL_CAP"};
+   for(const key of keys){
+    const tx=read(Number(key));
     if(tx?.phase!=="SETTLED")return {status:"OTHER_CUSTODY_UNRESOLVED"};
    }
    const links=assignments.filter(a=>a?.pilotID===claim.attackerPilotID&&
@@ -316,23 +375,22 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
   }finally{busy.delete(itemID);}
  }
  function recoverUnlocked(){
-  let files;
-  try{files=fs.readdirSync(dir);}catch(e){if(e.code==="ENOENT")return {status:"CLEAN",recovered:0};throw e;}
-  if(files.some(x=>!/^\d+\.json$/.test(x))||files.length>maxTransactions)
+  const keys=journalKeys();
+  if(keys===null||keys.length>maxTransactions)
    return {status:"REPAIR_UNEXPECTED_CUSTODY_FILES",recovered:0};
   let recovered=0;const pending=[];
-  for(const name of files){
+  for(const key of keys){
    let tx;
-   try{tx=read(Number(name.slice(0,-5)));}
-   catch(e){pending.push({file:name,reason:"CORRUPT_JOURNAL"});continue;}
+   try{tx=read(Number(key));}
+   catch(e){pending.push({file:String(key),reason:"CORRUPT_JOURNAL"});continue;}
    if(tx.phase==="SETTLED")continue;
    if(tx.phase==="PREPARED"){
-    pending.push({file:name,reason:"PREPARED_OUTCOME_UNCERTAIN"});continue;
+    pending.push({file:String(key),reason:"PREPARED_OUTCOME_UNCERTAIN"});continue;
    }
    let status;
    try{status=settle(tx).status;}catch(e){status="REPAIR_REQUIRED";}
    if(status==="NATIVE_WRECK_CARGO_SETTLED")recovered++;
-   else pending.push({file:name,reason:status});
+   else pending.push({file:String(key),reason:status});
   }
   return {status:pending.length?"NEEDS_OPERATOR_REPAIR":"CLEAN",
    recovered,pending};
@@ -380,4 +438,4 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
  }
  return {transfer,recover};
 }
-module.exports={createWreckCustody};
+module.exports={TABLE,createWreckCustody};

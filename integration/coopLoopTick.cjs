@@ -38,7 +38,7 @@ function markReceiptMoved({ownerID, stationID, typeID, movedTo, now = Date.now()
     return {status: "MOVED"};
   } catch (_error) { return {status: "NO_RECEIPT"}; }
 }
-const PHASES = ["refinery", "manufacture", "distribution", "distributionRun"];
+const PHASES = ["refinery", "manufacture", "distribution", "distributionRun", "marketMakers"];
 let distributionRunInFlight = false;
 let lastDistributionRunStatus = null;
 let lastDistributionStatus = null;
@@ -255,6 +255,7 @@ function distributionRunAuthorities(options = {}) {
         if (!systemID) return false;
         const registry = require("./coopIdentityRegistry").createRegistry({
           file: env.EVEJS_COOP_IDENTITY_FILE || "/var/lib/evejs/coop-npc-links.json",
+          gameStore: require("../gameStore"),
           exists: (system, id) => {
             try {
               const scene = sceneFor(system);
@@ -902,6 +903,7 @@ function distributionRunAuthorities(options = {}) {
             const pilots = (JSON.parse(require("fs").readFileSync(ledgerFile, "utf8")) || {}).pilots || {};
             const registry = require("./coopIdentityRegistry").createRegistry({
               file: env.EVEJS_COOP_IDENTITY_FILE || "/var/lib/evejs/coop-npc-links.json",
+              gameStore: require("../gameStore"),
               exists: (system, id) => {
                 try {
                   const scene = sceneFor(system);
@@ -945,6 +947,7 @@ function distributionRunAuthorities(options = {}) {
             "/var/lib/evejs/coop-npc-links.json";
           const registry = require("./coopIdentityRegistry").createRegistry({
             file: identityFile,
+            gameStore: require("../gameStore"),
             exists: (system, id) => {
               try {
                 const scene = sceneFor(system);
@@ -1073,6 +1076,7 @@ function distributionAuthorities(options = {}) {
       const registry = require("./coopIdentityRegistry").createRegistry({
         file: (options.env || process.env).EVEJS_COOP_IDENTITY_FILE ||
           "/var/lib/evejs/coop-npc-links.json",
+        gameStore: require("../gameStore"),
         exists: (system, id) => {
           try {
             const scene = runtime.ensureScene(system, {refreshStargates: false});
@@ -1165,6 +1169,12 @@ function tick(options = {}) {
     String(require("./coopNpcRefineryTick").tick({
       systemID: options.systemID, stationID: options.stationID, fleetID: options.fleetID,
       gameStore: options.gameStore, marketRoot: options.marketRoot, now: options.now,
+    }).status || "UNKNOWN"));
+  run("marketMakers", String(env.EVEJS_COOP_MARKET_MAKERS || "") === "1", () =>
+    String(require("./coopMarketMakerMarket").startBackground({
+      types: options.marketMakerTypes,
+      stationID: options.stationID,
+      now: options.now,
     }).status || "UNKNOWN"));
   run("manufacture", String(env.EVEJS_COOP_NPC_MANUFACTURE || "") === "1", () =>
     String(require("./coopNpcManufactureTick").tick({

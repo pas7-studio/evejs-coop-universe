@@ -21,13 +21,41 @@ function anchorOptions(scene){
 }
 // Use only actual EveJS scene POIs: pirates and patrols can encounter
 // real Perimeter miners, while beltless Jita falls back to genuine gates.
-function anchorOptionsForRole(scene,role){
+function anchorOptionsForRole(scene,role,options={}){
  const points=waypoints(scene);
+ // A pirate is never anchored on a station: a station is where its prey undocks with the station's
+ // own shield and repair behind it, so a pirate parked there is a farming loop, not a world. In a
+ // beltless system like Jita this used to put three pirates on top of the 4-4 undock. Meant only for
+ // observation/testing, EVEJS_COOP_PIRATE_ALLOW_STATION_ANCHOR=1 brings the old behaviour back.
+ const allowPirateStationAnchor=String(
+  (options.env||process.env).EVEJS_COOP_PIRATE_ALLOW_STATION_ANCHOR||"")==="1";
+ const hostile=String(role||"")==="pirate"&&!allowPirateStationAnchor;
  const order=role==="trader"?["station","stargate","asteroidBelt"]:
-  ["pirate","patrol","miner","hauler"].includes(role)?
-   ["asteroidBelt","stargate","station"]:["stargate","station","asteroidBelt"];
- const entry=order.map(kind=>points.find(p=>p.kind===kind)).find(Boolean)||points[0];
+  hostile?["asteroidBelt","stargate"]:
+   ["pirate","patrol","miner","hauler"].includes(role)?
+    ["asteroidBelt","stargate","station"]:["stargate","station","asteroidBelt"];
+ const entry=order.map(kind=>points.find(p=>p.kind===kind)).find(Boolean)||
+  (hostile?null:points[0]);
  if(!entry)return null;
+ // EVEJS_COOP_NPC_SPAWN_SPREAD=1: a group anchored on the same POI used to materialize inside a few
+ // hundred metres of one hull, so three pirates looked like one ship. The spread is a real position
+ // around the real POI, never a made-up place in space; the anchor name stays for the leash.
+ const spreadMeters=Math.max(0,Number(options.spreadMeters)||0);
+ if(spreadMeters>0&&validPosition(entry.position)){
+  const angle=Math.random()*Math.PI*2;
+  const radius=spreadMeters*(0.35+Math.random()*0.65);
+  const height=(Math.random()-0.5)*spreadMeters*0.4;
+  return {
+   anchorName:entry.name,
+   anchorDescriptor:{
+    kind:"coordinates",
+    position:{x:entry.position.x+Math.cos(angle)*radius,
+     y:entry.position.y+Math.sin(angle)*radius,
+     z:entry.position.z+height},
+    direction:{x:1,y:0,z:0},
+   },
+  };
+ }
  return {anchorDescriptor:{kind:entry.kind,itemID:entry.id},anchorName:entry.name};
 }
 module.exports={waypoints,anchorOptions,anchorOptionsForRole,validPosition};

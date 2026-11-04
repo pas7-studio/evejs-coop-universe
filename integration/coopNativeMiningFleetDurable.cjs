@@ -9,6 +9,10 @@
  */
 const MAX_SLOTS=16, MAX_WING=32;
 const busy=new Set();
+// Slots whose native rows were verified in this process: a scene re-created a minute later does not
+// need to re-read the store for a fleet that never changed (a cached slot is only trusted while every
+// actor is still a real entity in the scene).
+const slotVerifiedAt=new Map();
 // Slot status used to be invisible: start() was called without a log callback and
 // its result was discarded, so a blocked slot looked exactly like a healthy one in
 // the event log. One event per real status change, never per scene tick.
@@ -265,7 +269,7 @@ function repairPartialSlot({scene,store,systemID,slot,key,db,spawn,ensureState,m
  if(!born?.success||!born.data||born.data.minerSpawnResult?.data?.partialFailure||
      born.data.haulerSpawnResult?.data?.partialFailure)
   throw Error("ALIFE08_PARTIAL_NATIVE_SPAWN");
- const newMin=ids(born.data.minerEntityIDs||[]),newHau=ids(born.data.haulerEntityIDs||[]);
+ let newMin=ids(born.data.minerEntityIDs||[]),newHau=ids(born.data.haulerEntityIDs||[]);
  // The native wing spawner always creates AT LEAST one miner (miningNpcOperations:
  // amount = Math.max(1, ...)), even when only a hauler is missing. A repair that asked
  // for 0 miners therefore got 1 and refused itself: measured 2026-10-28
@@ -277,8 +281,22 @@ function repairPartialSlot({scene,store,systemID,slot,key,db,spawn,ensureState,m
    " partial="+String(Boolean(born&&born.data&&(born.data.minerSpawnResult?.data?.partialFailure||born.data.haulerSpawnResult?.data?.partialFailure)))+
    " ids="+String([...(newMin||[]),...(newHau||[])].join(",")));
  const merged={minerEntityIDs:[...aliveMin,...newMin],haulerEntityIDs:[...aliveHau,...newHau]};
- if(merged.minerEntityIDs.length+merged.haulerEntityIDs.length>MAX_WING)
-  throw Error("ALIFE08_REPAIR_WING_TOO_LARGE");
+ if(merged.minerEntityIDs.length+merged.haulerEntityIDs.length>MAX_WING){
+  // The native wing spawner always creates at least one miner, so a wing already at
+  // MAX_WING that lost only a hauler kept asking for 0 miners and getting 1: merged hit
+  // MAX_WING+1 and the slot was refused for ever (measured live 2026-11-01, slot
+  // 30000144-1: 22 miners + 10 haulers, 2 haulers gone, "ALIFE08_REPAIR_WING_TOO_LARGE"
+  // repeating every boot and no ore delivered). The ceiling is the invariant, not the
+  // mandatory extra: keep the hulls the slot actually needs and drop the surplus spawn,
+  // which pruneStaleSlotHulls then destroys. Refuse only when even the required hulls
+  // do not fit, because silently delivering a smaller wing would be a lie.
+  const room=MAX_WING-aliveMin.length-aliveHau.length-newHau.length;
+  if(room<missingMin||room<0)
+   throw Error("ALIFE08_REPAIR_WING_TOO_LARGE:alive="+aliveMin.length+"m/"+aliveHau.length+
+    "h need="+missingMin+"m/"+missingHau+"h new="+newMin.length+"m/"+newHau.length+"h max="+MAX_WING);
+  newMin=newMin.slice(0,Math.min(newMin.length,room));
+  merged.minerEntityIDs=[...aliveMin,...newMin];
+ }
  // Duplicates from earlier failed repairs are removed first, so the witness below can
  // match what this slot really owns.
  const pruned=pruneStaleSlotHulls({store,systemID,slot,
@@ -572,6 +590,8 @@ function createService({db,store,nativeService,ensureState,spawn,register,destro
   try{
    for(let slot=1;slot<=fleetCount;slot++){
     const key=slotKey(systemID,slot);
+    // Scene creation pays this for every slot; when it is slow the status says which path it took.
+    const slotStartedAt = process.env.EVEJS_SCENE_STARTUP_PROFILE === "1" ? Date.now() : 0;
     // Allocate and verify one slot's native actors. Used for a brand new slot
     // and for a slot whose previous witness proved abandoned.
     const seedSlot=()=>{
@@ -632,8 +652,19 @@ function createService({db,store,nativeService,ensureState,spawn,register,destro
       reports.push({...seedSlot(),reseededFrom:"ABANDONED_WITNESS",...orphans});
       continue;
      }
+     // A slot verified moments ago and still fully present in the scene needs no store read at all:
+     // ALREADY_ACTIVE reconciliation cost 249-1168 ms per slot and ran on every scene creation of a
+     // fleet system. The cache is trusted only while every actor is still a real entity in the scene.
+     const memoKey=systemID+":"+slot;
+     const memo=slotVerifiedAt.get(memoKey);
+     const slotIsFresh=Boolean(memo)&&Date.now()-memo.at<60000&&
+      memo.minerIDs.every(id=>scene.getEntityByID(id))&&
+      memo.haulerIDs.every(id=>scene.getEntityByID(id));
+     if(!slotIsFresh&&memo)slotVerifiedAt.delete(memoKey);
+     let healed=null,recomposed=null;
+     if(!slotIsFresh){
      // A slot that lost only some ships keeps the survivors and their cargo.
-     const healed=repairPartialSlot({scene,store,systemID,slot,key,db,spawn,ensureState,
+     healed=repairPartialSlot({scene,store,systemID,slot,key,db,spawn,ensureState,
       minerIDs,haulerIDs,destroy,log});
      if(healed){
       minerIDs=healed.minerEntityIDs;
@@ -643,7 +674,7 @@ function createService({db,store,nativeService,ensureState,spawn,register,destro
      // A surviving slot can still be composed wrong: the hull in the hauler role may
      // be a mining hull with a hold far smaller than one ore stack, which no amount
      // of healing fixes. Repair the composition additively (flag-gated).
-     const recomposed=repairSlotComposition({scene,store,systemID,slot,key,db,spawn,
+     recomposed=repairSlotComposition({scene,store,systemID,slot,key,db,spawn,
       ensureState,minerIDs,haulerIDs,log});
      if(recomposed&&recomposed.status==="HAULER_AWAY"){
       // The slot is whole, one hull is simply out on a real trip. Say so and leave it
@@ -659,7 +690,11 @@ function createService({db,store,nativeService,ensureState,spawn,register,destro
       haulerIDs=recomposed.haulerEntityIDs;
       ensureControllers([...minerIDs,...haulerIDs]);
      }
-     verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
+     // Only a slot that actually changed needs this intermediate verification: the tail re-verifies
+     // everything anyway, and on a 32-hull fleet each verification costs hundreds of milliseconds of
+     // store reads.
+     if(healed||recomposed)verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
+     }
      // ALIFE-13: verify ALL original cargo transfers and historical manifests
      // before restoring ANY physical hull or registering a mining state.
      // Empty haulers are not proof that prior warehouse receipts completed.
@@ -674,7 +709,9 @@ function createService({db,store,nativeService,ensureState,spawn,register,destro
      // controller; the native mining tick then prunes it from its own fleet
      // record and that role silently stops working. Re-attach the controller.
      const restored=ensureControllers([...minerIDs,...haulerIDs]);
-     verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
+     if(!slotIsFresh)verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
+     slotVerifiedAt.set(memoKey,{at:Date.now(),minerIDs:minerIDs.slice(),
+      haulerIDs:haulerIDs.slice()});
      const registered=registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,log,
       originAnchor:record.originAnchor||null});
      const pendingStationCargo=resumePendingStationCargo(scene,slot,haulerIDs);
@@ -683,6 +720,12 @@ function createService({db,store,nativeService,ensureState,spawn,register,destro
      // both lists makes a hauler-less fleet visible instead of silently idle.
      const liveRecord=(typeof getFleets==="function"?(getFleets()||[]):[])
       .find(x=>Number(x&&x.fleetID)===fleetIDForSlot(systemID,slot));
+     if(slotStartedAt>0){
+      const elapsed=Date.now()-slotStartedAt;
+      if(elapsed>=200)console.info("[MiningFleetProfile] system="+systemID+" slot="+slot+
+       " status="+(restored?"RESTORED":registered?"RELINKED":"ALREADY_ACTIVE")+
+       " repaired="+(healed?1:0)+" recomposed="+(recomposed?1:0)+" ms="+elapsed);
+     }
      reports.push(result(restored?"RESTORED":registered?"RELINKED":"ALREADY_ACTIVE",slot,{
       minerIDs,haulerIDs,restored,pendingStationCargo,repaired:!!healed,
       recomposed:!!recomposed,
@@ -804,5 +847,5 @@ function noteDroppedFleetActors(fleetRecord,deps={}){
  }
  return dropped;
 }
-module.exports={createService,start,systemHasBelts,repairSlotComposition,roleMarker,slotKey,fleetIDForSlot,healFleetActors,noteDroppedFleetActors,
+module.exports={createService,start,systemHasBelts,repairSlotComposition,repairPartialSlot,roleMarker,slotKey,fleetIDForSlot,healFleetActors,noteDroppedFleetActors,
  pruneStaleSlotHulls};

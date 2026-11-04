@@ -5,6 +5,23 @@ const pos=x=>Number.isSafeInteger(x)&&x>0;
 const safe=x=>String(x||"").replace(/[<>\x00-\x1f]/g," ").slice(0,90);
 const reply=(s,actions=[])=>({success:true,data:{agentSays:[s,null],actions,
  lastActionInfo:{missionCompleted:0,missionDeclined:0,missionQuit:0,missionCantReplay:0}}});
+// One line per agent+reason per minute: the militia desk used to answer with a bare
+// null and nothing said which precondition failed, so the dialog showed only "Decline".
+const contextFailAt = new Map();
+function contextFail(agentID, reason) {
+  try {
+    const key = String(agentID) + "|" + String(reason);
+    const now = Date.now();
+    if (now - (contextFailAt.get(key) || 0) > 60000) {
+      contextFailAt.set(key, now);
+      require("../utils/logger").info(
+        "[FactionMilitiaAgent] unavailable agent=" + agentID + " reason=" + reason,
+      );
+    }
+  } catch (_error) { /* diagnostics must never change the answer */ }
+  return null;
+}
+
 function allowedFactionIDs(env){
  const raw=String(env.EVEJS_COOP_MILITIA_FACTION_IDS||"").trim();
  if(!raw)return new Set();
@@ -30,24 +47,26 @@ function createFactionWarAgent({getAgent,getMission,getSessions,getFactionForCor
    const sessions=getSessions(),charID=session.characterID;
    if(!Array.isArray(sessions)||sessions.filter(s=>s===session).length!==1||
     sessions.filter(s=>s?.characterID===charID).length!==1||
-    !getCharacter(charID))return null;
+    !getCharacter(charID))return contextFail(agentID,"session_or_character");
    const a=getAgent(agentID);
    if(a?.agentID!==agentID||a.isInSpace===true||!pos(a.stationID)||
-    !pos(a.solarSystemID)||!pos(a.corporationID)||
-    getDockedLocationKind(session)!=="station"||
-    getDockedLocationID(session)!==a.stationID||
-    getMission(charID,agentID))return null;
+    !pos(a.solarSystemID)||!pos(a.corporationID))
+    return contextFail(agentID,"agent_not_desk");
+   if(getDockedLocationKind(session)!=="station"||
+    getDockedLocationID(session)!==a.stationID)return contextFail(agentID,"not_docked_at_agent_station");
+   if(getMission(charID,agentID))return contextFail(agentID,"existing_mission_with_agent");
    const f=getFactionForCorporation(a.corporationID);
    if(!pos(f?.factionID)||!allowedFactionIDs(env).has(f.factionID)||
-    !pos(f.militiaCorporationID))return null;
+    !pos(f.militiaCorporationID))return contextFail(agentID,"corporation_faction_not_militia");
    const original=getFaction(f.factionID);
    if(!original||original.factionID!==f.factionID||
-    original.militiaCorporationID!==f.militiaCorporationID)return null;
+    original.militiaCorporationID!==f.militiaCorporationID)
+    return contextFail(agentID,"faction_record_mismatch");
    const standing=getEffectiveStanding(charID,f.factionID);
-   if(!standing||!Number.isFinite(standing.standing))return null;
+   if(!standing||!Number.isFinite(standing.standing))return contextFail(agentID,"no_standing");
    return {session,agentID,characterID:charID,factionID:f.factionID,
     factionName:safe(f.name),standing:standing.standing};
-  }catch{return null}
+  }catch(error){return contextFail(agentID,"exception:"+String(error&&error.message||error).slice(0,60))}
  }
  function storeFor(ctx){
   // Re-evaluate the authenticated native session at the exact atomic write.
@@ -77,8 +96,8 @@ function createFactionWarAgent({getAgent,getMission,getSessions,getFactionForCor
   if(!Number.isSafeInteger(now)||now<=0)return reply("[Militia] Clock unavailable.");
   const name=ctx.factionName||"the faction";
   if(actionID===null||actionID===undefined||Number(actionID)===1||Number(actionID)===2){
-   if(same)return reply("[Militia] You serve "+name+". This is military service, NOT a native corporation transfer. The stock Decline button ends your militia service and starts a 24-hour cooldown. "+
-    frontline(ctx),[[9,9],[1,1]]);
+   if(same)return reply("[Militia] You serve "+name+". This is military service, NOT a native corporation transfer. Declining this briefing changes nothing: militia service ends only from the militia card in the Factional Warfare window. "+
+    frontline(ctx),[[1,1]]);
    if(active)return reply("[Militia] You already serve another faction. Leave your current militia with its own authorized agent first.",[[1,1]]);
    if(existing?.cooldownUntil>now)return reply("[Militia] Re-enlistment cooldown is active. No change made.",[[1,1]]);
    if(ctx.standing<0)return reply("[Militia] Faction standing must be at least 0 to enlist. Current: "+ctx.standing+".",[[1,1]]);
@@ -95,15 +114,13 @@ function createFactionWarAgent({getAgent,getMission,getSessions,getFactionForCor
     return reply("[Militia] Enlistment blocked: "+safe(result?.reason||result?.status),[[1,1]]);
    }catch{return reply("[Militia] Transaction unavailable. No verified enlistment receipt.",[[1,1]])}
   }
-  if(Number(actionID)===9&&same){
-   const eventID="fw-leave:"+ctx.characterID+":"+existing.enlistedAt;
-   try{const result=store.execute({type:"LEAVE_MILITIA",eventID,
-    characterID:ctx.characterID,proofID:"agent-confirm:"+ctx.agentID});
-    if(result?.status==="APPLIED"||result?.status==="DUPLICATE")
-     return reply("[Militia] Service ended. The 24-hour re-enlistment cooldown is active.",[[1,1]]);
-    return reply("[Militia] Resignation blocked: "+safe(result?.reason||result?.status),[[1,1]]);
-   }catch{return reply("[Militia] Transaction unavailable; service status unconfirmed.",[[1,1]])}
-  }
+  // Action 9 is what the mission-brief dialog sends for "Decline", and the client sends
+  // it for the only button that dialog had. Treating it as "leave the militia" once
+  // unenlisted a pilot who merely closed a bugged briefing. The desk never ends service
+  // now: leaving the militia stays on the militia card in the Factional Warfare window,
+  // where the button says exactly that.
+  if(Number(actionID)===9&&same)
+   return reply("[Militia] No military status changed. To end militia service use the militia card in the Factional Warfare window.",[[1,1]]);
   return reply("[Militia] Unsupported agent action. No military status changed.",[[1,1]]);
  }
  function frontline(ctx){
@@ -125,6 +142,13 @@ function createFactionWarAgent({getAgent,getMission,getSessions,getFactionForCor
   }catch{return ""}
  }
  function briefing({session,agentID}={}){
+  try{
+    require("../utils/logger").info("[FactionMilitiaAgent] briefing agent="+String(agentID)+
+      " char="+String(session&&session.characterID)+
+      " bound="+String(session&&session.currentBoundObjectID)+
+      " flags="+[process.env.EVEJS_COOP_FACTION_WAR,process.env.EVEJS_COOP_FACTION_MILITIA_AGENT,
+        process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS].join("/"));
+  }catch(_error){}
   const ctx=context(session,agentID);if(!ctx)return null;
   return {ContentID:null,"Mission Title ID":"Faction Militia",
    "Mission Briefing ID":"Native faction service desk for "+ctx.factionName+

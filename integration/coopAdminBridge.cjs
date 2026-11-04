@@ -18,7 +18,7 @@
 // runtime decision is never only in a chat log.
 
 // Pure helpers live in space/coopAdminBridgeActions.js (split by scripts/coop-split-module.cjs).
-const { fs, siblingSuffix, REQUESTS, RESULTS, EVENTS, ALLOWED_ACTIONS, MAX_REQUESTS_PER_DRAIN, readJsonLines, writeJsonLines, appendJsonLine, emitEvent, readRow, liveSessionFor, executeChatCommand, blueprintAuto, createCourierContract, giveItem, removeItem, boardShip, moveItem, fitShip, fitSlots, giveFit, restoreLastLoss, deployStructure, resolveWarPatrolLoadout, spawnNativeNpc, militiaEnlist, warFleetAuthorities, freeHullLinks, listFreeHullsFor, spawnWarFleet, warFleetState, fleetReconstitute, releaseIdentity, assignIdentity } = require("./coopAdminBridgeActions");
+const { fs, siblingSuffix, REQUESTS, RESULTS, EVENTS, ALLOWED_ACTIONS, MAX_REQUESTS_PER_DRAIN, readJsonLines, writeJsonLines, appendJsonLine, emitEvent, readRow, liveSessionFor, executeChatCommand, blueprintAuto, createCourierContract, giveItem, removeItem, renameItem, saveFittingFromShip, boardShip, moveItem, fitShip, fitSlots, giveFit, restoreLastLoss, deployStructure, resolveWarPatrolLoadout, spawnNativeNpc, militiaEnlist, militiaRestore, restoreSkillPoints, warFleetAuthorities, freeHullLinks, listFreeHullsFor, spawnWarFleet, warFleetState, fleetReconstitute, releaseIdentity, assignIdentity } = require("./coopAdminBridgeActions");
 let stationIndex = null;
 function stationRecord(stationID) {
   const id = Number(stationID) || 0;
@@ -124,6 +124,10 @@ function executeRequest(request) {
   if (action === "spawn_war_fleet") return spawnWarFleet(request);
   if (action === "war_fleet_state") return warFleetState(request);
   if (action === "fleet_reconstitute") return fleetReconstitute(request);
+  // One-click way back into a militia after an accidental leave: clears the 24h
+  // re-enlistment cooldown on the real war record, then the normal enlist path applies.
+  if (action === "militia_restore") return militiaRestore(request);
+  if (action === "skill_restore_points") return restoreSkillPoints(request);
   if (action === "release_identity") return releaseIdentity(request);
   if (action === "assign_identity") return assignIdentity(request);
   // Read-only war diagnostics: never reserves, orders or writes anything.
@@ -306,6 +310,67 @@ function executeRequest(request) {
       };
     } catch (error) {
       return { ok: false, error: "inspect failed: " + String(error && error.message || error) };
+    }
+  }
+  // Operator repair for an agent-mission dungeon whose wave chain is already dead.
+  // Measured 2026-11-03 on "Gone Berserk" (client-dungeon:875, instance 6, created
+  // 2026-10-27): objectiveState required 7 waves, only wave_01 (no spawn record),
+  // wave_06 (skipped by the coop cap) and wave_07 existed, and the two wave_07 hulls
+  // were flagged non-objective, so the objective could never be satisfied and the
+  // player stood in a cleared pocket. Owner explicitly asked for this instance to be
+  // credited: mark the objective satisfied AND completed, close the site as completed
+  // and sync the owning mission record so the reward is handed in normally.
+  if (action === "dungeon_mission_repair") {
+    const instanceID = Number(request.instanceID) || 0;
+    if (!(instanceID > 0)) return { ok: false, error: "instanceID is required" };
+    const requestedCharacterID = Number(request.characterID) || 0;
+    try {
+      const dungeonRuntime = require("../services/dungeon/dungeonRuntime");
+      const existing = dungeonRuntime.getInstance(instanceID);
+      if (!existing) return { ok: false, error: "instance not found" };
+      const ownerCharacterID = Number(existing && existing.metadata && existing.metadata.missionCharacterID) || 0;
+      if (requestedCharacterID > 0 && ownerCharacterID !== requestedCharacterID) {
+        return { ok: false, error: "instance belongs to character " + ownerCharacterID };
+      }
+      const nowMs = Date.now();
+      dungeonRuntime.markInstanceObjectiveSatisfied(instanceID, {
+        reason: "operator_repair",
+        nowMs,
+      });
+      dungeonRuntime.mergeObjectiveState(instanceID, {
+        state: "completed",
+        completedAtMs: nowMs,
+        metadata: { repairedAtMs: nowMs, repairedReason: "operator_repair" },
+      }, { nowMs });
+      dungeonRuntime.setLifecycleState(instanceID, "completed", {
+        lifecycleReason: "operator_repair",
+        nowMs,
+      });
+      const refreshed = dungeonRuntime.getInstance(instanceID) || existing;
+      let mission = null;
+      try {
+        mission = require("../services/agent/agentMissionRuntime").syncMissionRecordForDungeonInstance(
+          refreshed,
+          { notifyTracker: true, notifyMissionChange: true, nowMs },
+        );
+      } catch (error) {
+        mission = { error: String((error && error.message) || error) };
+      }
+      return {
+        ok: true,
+        instanceID,
+        characterID: ownerCharacterID,
+        lifecycleState: String(refreshed && refreshed.lifecycleState || ""),
+        objectiveState: refreshed && refreshed.objectiveState,
+        mission: mission && {
+          agentID: mission.agentID,
+          missionID: mission.missionID,
+          runtimeStatus: mission.runtimeStatus,
+          objectiveCompleted: mission.objectiveCompleted,
+        },
+      };
+    } catch (error) {
+      return { ok: false, error: "repair failed: " + String((error && error.message) || error) };
     }
   }
   // Read-only: the raid director's own view of a system - every linked pirate,
@@ -575,6 +640,8 @@ function executeRequest(request) {
   if (action === "create_courier_contract") return createCourierContract(request);
   if (action === "give_item") return giveItem(request);
   if (action === "remove_item") return removeItem(request);
+  if (action === "rename_item") return renameItem(request);
+  if (action === "save_fitting") return saveFittingFromShip(request);
   if (action === "fit_ship") return fitShip(request);
   if (action === "move_item") return moveItem(request);
   if (action === "fit_slots") return fitSlots(request);
