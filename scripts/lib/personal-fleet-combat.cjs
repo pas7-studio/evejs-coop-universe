@@ -47,7 +47,7 @@ function createAttack(command,{authenticatedIssuer,actor,legalTarget,weapon,now}
   !positive(weapon.moduleID)||!positive(weapon.originalModuleItemID)||
   weapon.moduleID!==weapon.originalModuleItemID||
   weapon.installedOnOriginalShip!==true||
-  weapon.nativeWeaponActive===false||
+  weapon.nativeWeaponActive!==true||
   weapon.nativeCanActivate!==true||weapon.capacitorSufficient!==true||
   weapon.chargeRequired!==true&&weapon.chargeRequired!==false||
   (weapon.chargeRequired===true&&
@@ -138,4 +138,30 @@ function combatContribution({nativeDamageEvents,wreck,sourceEntityID,targetID}={
  return {status:'OBSERVED',sourceEntityID,targetID,damageUnits:amount,
   wreckID:wreck?.wreckID??null,settlementAllowed:false};
 }
-module.exports={PHASES,valid,createAttack,transition,replay,combatContribution};
+
+function inspectNativeSettlement({nativeReceipt,existingReceipt,targetID,wreckID}={}){
+ // A PF-owned NPC never mints bounties/rewards. This is a projection of an
+ // existing authoritative settlement, not a permission to create one.
+ if(!positive(targetID)||!positive(wreckID))return block('PF_REWARD_CONTEXT_INVALID');
+ if(!object(nativeReceipt)||nativeReceipt.authority!=='NATIVE_EVEJS_SETTLEMENT'||
+  !token(nativeReceipt.settlementID)||nativeReceipt.originalTargetID!==targetID||
+  nativeReceipt.wreckID!==wreckID||
+  nativeReceipt.finalized!==true||
+  !Number.isSafeInteger(nativeReceipt.iskAmount)||nativeReceipt.iskAmount<0||
+  !Array.isArray(nativeReceipt.itemIDs)||nativeReceipt.itemIDs.length>256||
+  nativeReceipt.itemIDs.some(x=>!positive(x))||
+  new Set(nativeReceipt.itemIDs).size!==nativeReceipt.itemIDs.length)
+  return block('PF_NATIVE_REWARD_RECEIPT_UNVERIFIED');
+ if(existingReceipt!==null&&existingReceipt!==undefined){
+  if(!object(existingReceipt)||existingReceipt.settlementID!==nativeReceipt.settlementID||
+    existingReceipt.wreckID!==wreckID||
+    existingReceipt.originalTargetID!==targetID)
+   return block('PF_REWARD_SETTLEMENT_CONFLICT');
+  return {status:'ALREADY_SETTLED',settlementID:nativeReceipt.settlementID,
+   payoutAllowed:false};
+ }
+ return {status:'NATIVE_SETTLEMENT_OBSERVED',
+  settlementID:nativeReceipt.settlementID,iskAmount:nativeReceipt.iskAmount,
+  originalItemIDs:[...nativeReceipt.itemIDs],payoutAllowed:false};
+}
+module.exports={PHASES,valid,createAttack,transition,replay,combatContribution,inspectNativeSettlement};
