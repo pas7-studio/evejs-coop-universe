@@ -3255,3 +3255,9 @@ Evidence: fork 7d99164; notifications are sent before the response, the 1 s file
 Why: Five drones launched but the client drone window showed 1/5, and the server wrote nothing at all for a launch (no log line, no coop event), so the cause could not be seen from logs. The client rebuilds stateByDroneID from SetState and deletes any drone whose ownerID is not session.charid and controllerID is not session.shipid, so a stale pre-launch SetState or a foreign-identity tuple reads as a wrong count.
 Where: fork Code/server/src/services/drone/droneRuntime.js (launch summary log, warn on every refused launch, post-burst syncDroneStatesForSession), new pure module Code/server/src/space/coopDroneStateView.js (one owner for the SetState row and the OnDroneStateChange tuple).
 Evidence: fork 60296b9; node --check clean; tests/coop-drone-state-sync.test.mjs 3/3 (five drones produce five rows with pilot+ship identity, resync tuples survive michelle.OnDroneStateChange, foreign/uncontrolled drones are excluded). Not deployed: needs one live launch to read [Drone] Launch counters and see 5/5.
+
+### 2026-11-04T02:25Z · 762aaf7 · L1 · fix(drones): re-assert drone state after every SetState scene refresh
+
+Why: The stale-snapshot path is movementSceneRefresh: SetState (STATE_RESET) is built from a visible-entity snapshot and the client replaces michelle.stateByDroneID with bag.droneState from it, so a snapshot taken before the launch burst erases the newer OnDroneStateChange entries and the window counts 1/5.
+Where: fork Code/server/src/space/movement/dispatch/movementSceneRefresh.js sendStateRefresh (lazy droneRuntime require, syncDroneStatesForSession after the reset, movement debug event set-state.drone-resync).
+Evidence: fork 762aaf7; node --check clean; the sync itself is covered by tests/coop-drone-state-sync.test.mjs (3/3). Not deployed - one live launch plus one scene refresh must show [Drone] Launch counters and a 5/5 window.
