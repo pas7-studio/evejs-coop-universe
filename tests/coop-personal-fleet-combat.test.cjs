@@ -108,3 +108,11 @@ test('PF-14: fabricated combat proof type never validates',()=>{
  receipts:[{id:'fake-01',type:'FAKE_DAMAGE'}]},command()).reason,
  'PF_COMBAT_RECORD_CORRUPT');
 });
+
+
+test('PF-14: RESOLVED without native end proof is corrupt',()=>{
+ const r=start();
+ assert.equal(c.replay({...r,phase:'RESOLVED',revision:1,
+ receipts:[{id:'native-ack-only',type:'ORIGINAL_NATIVE_ATTACK_ACK'}]},
+ command()).reason,'PF_COMBAT_RECORD_CORRUPT');
+});
