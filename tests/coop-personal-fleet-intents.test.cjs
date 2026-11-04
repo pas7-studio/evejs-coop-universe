@@ -234,3 +234,11 @@ test('PF-14: forged durable receipt type is rejected',()=>{
  receipts:[{id:'fake-01',type:'SYNTHETIC_SUCCESS'}]},cmd()).reason,
  'PF_INTENT_RECORD_CORRUPT');
 });
+
+
+test('PF-14: terminal completed state without native completion proof is corrupt',()=>{
+ const r=start();
+ assert.equal(replay({...r,phase:'COMPLETED',revision:1,
+ receipts:[{id:'fence-only',type:'DURABLE_DISPATCH_FENCE'}]},cmd()).reason,
+ 'PF_INTENT_RECORD_CORRUPT');
+});
