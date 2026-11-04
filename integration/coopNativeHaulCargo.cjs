@@ -58,24 +58,29 @@ function verifyLoad({store,haulerID,minerID,cargoID,quantity,typeID,ownerID,flee
  }
  return null;
 }
+// A blocked hauler is retried every few seconds for as long as the cause lasts; that
+// used to write the same refusal for every fleet member on every attempt (measured
+// 2026-11-03: 89327 events, 22 duplicates per 5 s, one fleet, one reason). One line
+// per fleet and reason per window is enough to see the cause, and the count of what
+// was folded into it is reported.
+//
+// MEASURED 2026-11-04: the suppression map was declared INSIDE strictTransferCargo, so
+// every call started with an empty map and every attempt emitted ("suppressedSinceLast":0
+// on all 13 440 events in one hour, 7.6 MB of event file). The state has to outlive the
+// call it suppresses, which is exactly one level up: module scope.
+const BLOCK_NOTIFY_WINDOW_MS=Math.max(1000,Number(process.env.EVEJS_COOP_HAUL_BLOCK_WINDOW_MS)||60000);
+const blockNotifyState=new Map();
+function gateBlockNotify(key,nowMs){
+ const state=blockNotifyState.get(key);
+ if(!state){blockNotifyState.set(key,{atMs:nowMs,suppressed:0});return{emit:true,suppressed:0};}
+ state.suppressed+=1;
+ if(nowMs-state.atMs<BLOCK_NOTIFY_WINDOW_MS)return{emit:false,suppressed:state.suppressed};
+ const suppressed=state.suppressed;
+ state.atMs=nowMs;
+ state.suppressed=0;
+ return{emit:true,suppressed};
+}
 function strictTransferCargo(scene,fleet,miner,options,store,probe){
- // A blocked hauler is retried every few seconds for as long as the cause lasts; that
- // used to write the same refusal for every fleet member on every attempt (measured
- // 2026-11-03: 89327 events, 22 duplicates per 5 s, one fleet, one reason). One line
- // per fleet and reason per window is enough to see the cause, and the count of what
- // was folded into it is reported.
- const BLOCK_NOTIFY_WINDOW_MS=Math.max(1000,Number(process.env.EVEJS_COOP_HAUL_BLOCK_WINDOW_MS)||60000);
- const blockNotifyState=new Map();
- const gateBlockNotify=(key,nowMs)=>{
-  const state=blockNotifyState.get(key);
-  if(!state){blockNotifyState.set(key,{atMs:nowMs,suppressed:0});return{emit:true,suppressed:0};}
-  state.suppressed+=1;
-  if(nowMs-state.atMs<BLOCK_NOTIFY_WINDOW_MS)return{emit:false,suppressed:state.suppressed};
-  const suppressed=state.suppressed;
-  state.atMs=nowMs;
-  state.suppressed=0;
-  return{emit:true,suppressed};
- };
  const stop=(reason,uncertain=false,hauler=null,cargoID=0)=>{
   if(uncertain){
    miner.coopHaulNeedsOperatorRepair=reason;
@@ -142,19 +147,35 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
  if(!Array.isArray(source)||!Array.isArray(all)||source.length>1000||
   !Array.isArray(miner.nativeCargoItems))return stop("HAUL_CARGO_PREIMAGE_INVALID");
  const cached=new Map(miner.nativeCargoItems.map(x=>[Number(x?.itemID),x]));
+ // MEASURED 2026-11-04: the uniqueness test was `all.filter(...).length!==1` INSIDE the
+ // per-item loop, i.e. a full scan of every native cargo row (measured 15 310) once per ore
+ // stack, on every attempt, for every fleet. The whole file is scanned once into a count map
+ // instead, and the verdict now names the exact clause that failed instead of one blanket
+ // reason nobody could act on.
+ const cargoIDCounts=new Map();
+ for(const row of all){
+  const id=Number(row?.cargoID);
+  if(!Number.isSafeInteger(id)||id<=0)continue;
+  cargoIDCounts.set(id,(cargoIDCounts.get(id)||0)+1);
+ }
  const seen=new Set(),cargo=[];
+ const conflict=(clause)=>stop("HAUL_SOURCE_CARGO_IDENTITY_CONFLICT:"+clause);
  for(const item of source){
   const key=Number(item?.cargoID),local=cached.get(key);
-  if(!integer(key)||seen.has(key)||!integer(Number(item?.typeID))||
-    !integer(Number(item?.quantity))||Number(item?.quantity)>1000000000||
-    Number(item?.entityID)!==minerID||Number(item?.ownerID)!==minerOwner||
-    Number(item?.moduleID||0)!==0||item.transient!==false||
-    Number(item?.categoryID)!==25||
-    Number(item?.coopHaulFleetID||0)!==0||
-    !local||Number(local.typeID)!==Number(item.typeID)||
-    Number(local.quantity)!==Number(item.quantity)||
-    all.filter(x=>Number(x?.cargoID)===key).length!==1)
-   return stop("HAUL_SOURCE_CARGO_IDENTITY_CONFLICT");
+  if(!integer(key))return conflict("cargo_id");
+  if(seen.has(key))return conflict("duplicate_in_source");
+  if(!integer(Number(item?.typeID)))return conflict("type_id");
+  if(!integer(Number(item?.quantity))||Number(item.quantity)>1000000000)return conflict("quantity");
+  if(Number(item?.entityID)!==minerID)return conflict("wrong_entity");
+  if(Number(item?.ownerID)!==minerOwner)return conflict("wrong_owner");
+  if(Number(item?.moduleID||0)!==0)return conflict("fitted_module_row");
+  if(item.transient!==false)return conflict("transient_row");
+  if(Number(item?.categoryID)!==25)return conflict("not_an_ore_category");
+  if(Number(item?.coopHaulFleetID||0)!==0)return conflict("stale_fleet_flag");
+  if(!local)return conflict("cached_item_missing");
+  if(Number(local.typeID)!==Number(item.typeID))return conflict("cached_type_differs");
+  if(Number(local.quantity)!==Number(item.quantity))return conflict("cached_quantity_differs");
+  if((cargoIDCounts.get(key)||0)!==1)return conflict("cargo_id_not_unique");
   seen.add(key);
   const ore=resolveType(Number(item.typeID));
   const volume=Number(ore?.volume);

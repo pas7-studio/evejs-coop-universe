@@ -3446,3 +3446,9 @@ Why: site sentries fire real sentry-gun attributes; war side size is a deploymen
 Detail: Three cases: 1..8 hulls per side accepted and 0/9/16/2.5 refused, the per-tick budget stays inside 1..6, and the runtime knob is provably clamped to 1..8 with a default of four - so a typo in a compose file cannot turn a war into a swarm.
 Where: docs/WORKLOG.md, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, integration/coopVirtualWorldRuntime.war.cjs, integration/coopWarMobilizer.cjs, tests/coop-site-sentries.test.mjs, tests/coop-site-sentry-fire.test.mjs, tests/coop-site-sentry-spawn.test.mjs, tests/coop-war-side-size.test.mjs
 Evidence: fork 1a8294a, ec29a33; sentry fire 8/8, spawn 6/6, decision 3/3, war side 3/3, mobilization 17/17, AUDIT_OK; live: native damage path dropped a ship shield 725 -> 706.68 with the Blood Raider Sentry Gun vector
+### 2026-11-04T20:24Z · 386fab1 · DOCS · docs(sites): record the battery->sentry chain, its numbers and its honest gaps
+
+Why: document the site-sentry mechanism and its measured coverage
+Detail: docs/SITE_SENTRIES.md keeps every measurement behind the feature: category 23 scenery with no weapon data, a category 11 battery spawn that still has zero modules, the real faction sentry-gun profiles with their damage/cycle/range, the nine-of-twelve coverage over four real systems, the three Sleeper batteries that stay inert because this build has no Sleeper sentry type, and the live native-damag
+Where: docs/SITE_SENTRIES.md
+Evidence: docs/SITE_SENTRIES.md; fork 63ccce4; agents-stack probes 2026-11-05

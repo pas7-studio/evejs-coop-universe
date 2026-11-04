@@ -1,25 +1,25 @@
-# COOP STATE 2026-11-04T16:22:50.556Z
-rev 93fd94d0 | pin c3ea396b | overlay WRONG_PIN
+# COOP STATE 2026-11-04T20:38:46.203Z
+rev 386fab18 | pin c3ea396b | overlay WRONG_PIN
 
 ## TESTS
-807 files / 7015 pass / 14 fail / 84 skip | baseline REGRESSION
-REGRESSION coop-career-goals.test.mjs
-REGRESSION coop-client-contract-payloads.test.mjs
-REGRESSION coop-fleet-slot-recompose.test.mjs
-REGRESSION coop-integration-shims.test.mjs
-REGRESSION coop-native-durable-slot-heal.test.mjs
+816 files / 7063 pass / 6 fail / 84 skip | baseline REGRESSION
+REGRESSION coop-corp-market-wallet.test.mjs
+REGRESSION coop-flag-registry.test.mjs
+REGRESSION coop-hook-requires.test.mjs
+REGRESSION coop-native-mining-fleet-durable.test.mjs
+REGRESSION coop-npc-store-read-cost.test.mjs
 
 ## GATES
 telemetry events 5000
 client logs 3 file(s)
 
 ## LAST RUN
-runId 20261104-162250 | note 2026-11-04 late: <token> gates unfrozen; campaign presenting character; durable log; noconsole in both launchers
-server events 5000 (living-haul-custody-blocked, living-native-weapon-event, living-native-activity, living-haul-approach-issued, living-haul-empty-retry) | client log files 0
+runId 20261104-203846 | note -
+server events 5000 (living-haul-custody-blocked, living-haul-approach-issued, living-haul-empty-retry, living-native-activity, living-economy-ore) | client log files 3
 
 ## NEXT
-Owner: relaunch via Play.bat and confirm noconsole in the exefile command line; then FM map, corp-wallet sale, injector, campaign issued-by row. Remaining red: coop-fleet-slot-recompose + coop-native-
+not stated
 
 ## READ
-state/digests/20261104-162250.md | state/ledger.json
+state/digests/20261104-203846.md | state/ledger.json
 docs/DEVELOPMENT_DOCTRINE.md | docs/GAMEPLAY_TESTING.md

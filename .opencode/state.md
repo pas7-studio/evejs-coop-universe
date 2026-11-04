@@ -1,4 +1,44 @@
-# Co-op FW / client-visibility handoff (2026-11-03→04)
+# Co-op handoff (2026-11-05, fork tip `63ccce4`)
+
+## Current state
+
+**The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
+reachable only from HEAD). Re-attached with `git checkout -B coop/pas7std`. Never
+work detached here again.
+
+Committed on the branch but **not deployed to the play stack** (one restart ships
+all of it):
+
+- Site batteries really shoot: `space/coopSiteSentries.js` (decision),
+  `coopSiteSentrySpawn.js` (one native sentry per battery), `coopSiteSentryFire.js`
+  (the type's own damage vector through the native damage path). Measured over 4
+  real systems: 12 batteries -> 9 resolve (Angel/Sansha/Serpentis/Guristas), 3 are
+  Sleeper batteries that stay inert (no Sleeper sentry type in this build). Native
+  damage path proven live: ship shield 725 -> 706.679975. Switch
+  `EVEJS_COOP_SITE_SENTRIES=1`, set in both compose files. Details:
+  `docs/SITE_SENTRIES.md`.
+- Campaign LP row is truthful now (`progress_interval 1`, amount 0, real militia
+  issuer) instead of the raw `UI/Campaigns/RewardsPerNumberContributions`
+  placeholders.
+- The P2P env invariants moved out of the stock market service into
+  `space/coopPlayerMarketEnvGuards.js` (same errors, same order); stock-char
+  budget ratcheted 67 500 -> 65 500 (measured 65 315).
+- A war side fields four hulls by default (was three), raised by
+  `EVEJS_COOP_WAR_SIDE_SIZE` (1..8), per tick by `EVEJS_COOP_WAR_SIDE_TICK` (1..6).
+
+## NEXT (owner actions)
+
+1. **Restart window** for the play stack: rebuild `evejs-local` from the fork tip,
+   then `scripts/Start-Play-Stack.ps1 -Action Up`.
+2. **Stand in a site afterwards**: expect
+   `[CoopLivingWorld] site sentries in <system>: battery <id> -> <type> #<id>`,
+   `coop-site-sentry-fired` in `coop-events.jsonl`, then damage on the client.
+   Until that exists the sentries are NOT verified in game.
+3. **Name the jobs window** (Agency -> Careers, a career agent in station, or
+   Agency -> Job Board) before any Explorer/Soldier-of-Fortune/industry job
+   content is written; the three windows take different payloads.
+
+# Historical handoff (2026-11-03 -> 04)
 
 ## Committed in the fork (`pas7-studio/EveJS`, branch `coop/pas7std`, tip)
 All are committed but **NOT deployed** — the play stack has not been restarted.
