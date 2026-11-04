@@ -158,3 +158,43 @@ test('forged clone recovery receipt cannot make an unassigned pilot fly',()=>{
  assert.equal(result.reason,'PF_CLONE_RECOVERY_UNVERIFIED');
  assert.equal(x.state.pilots[pilotID].status,'RECOVERING');
 });
+
+const binding=()=>({pilotID,shipItemID,nativeEntityID:shipItemID,
+ assignmentID:'assignment-1',generation:1,nativeItemVerified:true});
+test('roster claim audit requires exact original binding, not merely a claim',()=>{
+ const x=fixture();preparePilot(x);getClaim(x);assign(x);
+ assert.equal(roster.auditClaims(x.state,x.rows.get(claim.KEY),{
+  bindings:[]}).reason,'PF_ASSIGNED_NATIVE_CLAIM_MISMATCH');
+ assert.deepEqual(roster.auditClaims(x.state,x.rows.get(claim.KEY),{
+  bindings:[binding()]}),{status:'READY',assignmentCount:1});
+});
+test('a forged native item binding blocks assignment readiness',()=>{
+ const x=fixture();preparePilot(x);getClaim(x);assign(x);
+ assert.equal(roster.auditClaims(x.state,x.rows.get(claim.KEY),{
+  bindings:[{...binding(),nativeItemVerified:false}]}).reason,
+  'PF_NATIVE_BINDING_INVALID_OR_DUPLICATE');
+});
+test('a confirmed wreck with still-held native claim must not permit reassignment',()=>{
+ const x=fixture();preparePilot(x);getClaim(x);assign(x);
+ const lost=x.apply(x.command('RECORD_LOSS','record-loss-1',{
+  pilotID,shipItemID,wreckID:700,assignmentID:'assignment-1',
+  expectedGeneration:1,expectedPilotRevision:1}),{
+  verifiedLoss:true,lossEvidence:confirmedLoss()});
+ assert.equal(lost.status,'APPLIED');
+ assert.equal(roster.auditClaims(x.state,x.rows.get(claim.KEY),{bindings:[]}).reason,
+  'PF_ORPHANED_CLAIM_RECONCILIATION_REQUIRED');
+});
+test('verified release clears orphan fence, but cannot recreate destroyed hull',()=>{
+ const x=fixture();preparePilot(x);getClaim(x);assign(x);
+ x.apply(x.command('RECORD_LOSS','record-loss-1',{
+  pilotID,shipItemID,wreckID:700,assignmentID:'assignment-1',
+  expectedGeneration:1,expectedPilotRevision:1}),{
+  verifiedLoss:true,lossEvidence:confirmedLoss()});
+ const released=x.claims.execute({type:'RELEASE',operationID:'release-1',
+  entityID:shipItemID,pilotID,ownerCharacterID:90,
+  assignmentID:'assignment-1',expectedGeneration:1});
+ assert.equal(released.status,'APPLIED');
+ assert.deepEqual(roster.auditClaims(x.state,x.rows.get(claim.KEY),
+  {bindings:[]}),{status:'READY',assignmentCount:0});
+ assert.equal(x.state.pilots[pilotID].shipItemID,null);
+});
