@@ -47,7 +47,8 @@ function validate(state){
  }
  for(const [k,r] of Object.entries(state.processed)){
   if(!validID(k)||!isObj(r)||!RECEIPT.test(r.signature)||
-    !isObj(r.receipt)||typeof r.commandSignature!=='string'||\n    r.commandSignature.length>1024||!['HIRED','ASSIGNED','UNASSIGNED','DOCTRINE_CHANGED','SUSPENDED','DISMISSED','LOSS_RECORDED','PILOT_RECOVERED'].includes(r.receipt.type))
+    !isObj(r.receipt)||typeof r.commandSignature!=='string'||
+    r.commandSignature.length>1024||!['HIRED','ASSIGNED','UNASSIGNED','DOCTRINE_CHANGED','SUSPENDED','DISMISSED','LOSS_RECORDED','PILOT_RECOVERED'].includes(r.receipt.type))
    throw Error('PF_ROSTER_RECEIPT_CORRUPT');
  }
  return state;
@@ -60,7 +61,10 @@ function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelea
    !Number.isSafeInteger(cmd.expectedRevision)||cmd.expectedRevision<0||
    !['HIRE','ASSIGN','UNASSIGN','SET_DOCTRINE','SUSPEND','DISMISS','RECORD_LOSS','RECOVER_PILOT'].includes(cmd.type))
   return blocked('PF_COMMAND_INVALID');
- const signature=commandSignature(cmd);\n const prior=state.processed[cmd.operationID];\n if(prior)return prior.signature===cmd.payloadHash&&\n  prior.commandSignature===signature?
+ const signature=commandSignature(cmd);
+ const prior=state.processed[cmd.operationID];
+ if(prior)return prior.signature===cmd.payloadHash&&
+  prior.commandSignature===signature?
   {status:'DUPLICATE',receipt:structuredClone(prior.receipt),state}:
   blocked('PF_OPERATION_REPLAY_CONFLICT');
  if(cmd.expectedRevision!==state.revision)return blocked('PF_ROSTER_REVISION_STALE');
@@ -159,7 +163,8 @@ function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelea
   if(cmd.type!=='DISMISS')p.revision++;
  }
  next.revision++;
- next.processed[cmd.operationID]={signature:cmd.payloadHash,\n  commandSignature:signature,receipt};
+ next.processed[cmd.operationID]={signature:cmd.payloadHash,
+  commandSignature:signature,receipt};
  try{validate(next);}catch{return blocked('PF_NEXT_ROSTER_INVALID');}
  return {status:'APPLIED',receipt,state:next};
 }
