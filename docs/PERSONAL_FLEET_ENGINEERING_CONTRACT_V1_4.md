@@ -464,3 +464,25 @@ Committed `tests/coop-personal-fleet-sqlite-crash.test.cjs`: **four real process
 **Critical scope restriction:** This is an independently controlled disposable SQLite **wallet/intent fixture**, NOT the deployed original EveJS `coopGameStoreAtomic.js` adapter or the native `characters`/wallet schema semantics. Its simplified JSON `balanceISK` rows are synthetic test data, with no player credentials, game state, PLAY/WORK mounts, or production wallet mutations. It proves SQLite rollback/commit boundaries and demonstrates the desired no-retry fence only in this fixture. It DOES NOT prove that the real PF-08 adapter survives a crash, nor that the native engine performs exactly-once settlement. After native fork access is granted, reimplement the same four crash probes against actual original GameStore native wallet transactions, recovering the same physical original ItemStore ship and real persisted ledger.
 
 **PF-15 acceptance remaining:** run GitHub Actions Node 22 workflow; test true `coopAtomicNativeRows.transact` over original rows, ensure `coopCommitOutcomeUnknown` handling during COMMIT failure, check independent wallet/reconciliation reader and durable actor claims under SIGKILL; verify native ship/clone/wreck physical conservation and two-player client E2E on WORK. Feature remains default OFF; no production integration until native write permissions are available.
+
+## PF-16 — real fork GameStore adapter acceptance gate (2026-11-05)
+
+**Goal:** do not confuse a synthetic SQLite crash drill with native GameStore/character/wallet integration.
+
+Committed `tests/native/coop-personal-fleet-gamestore.native.test.cjs`, an **explicitly native-gated** test file. It is deliberately outside the generic `tests/coop-personal-fleet-*.test.*` Node CI glob. To run on an authorized read-only fork checkout (Linux/Node 22 with `node:sqlite`):
+
+```sh
+EVEJS_NATIVE_FORK_ROOT=/absolute/path/to/EveJS \
+  node --test tests/native/coop-personal-fleet-gamestore.native.test.cjs
+```
+
+**Fails hard** when `EVEJS_NATIVE_FORK_ROOT` is absent, non-absolute, or `Code/server/src/space/coopGameStoreAtomic.js` is missing. It imports `createSqliteAdapter` and `createGameStoreAdapter` from the **original fork source**, not a copied helper or mock implementation.
+
+Six native-gated assertions:
+- 4 real on-disk SQLite worker SIGKILL boundaries through the fork's `createSqliteAdapter`: after committed intent, after uncommitted debit, just before wallet/receipt COMMIT, and immediately after COMMIT. Check intact SQLite DB, ISK conservation, rollback vs durable double-entry commit and original settlement receipt identity after reopen. All wallets and ledger rows are disposable **synthetic fixture data**.
+- 1 injected COMMIT exception through the fork's `createSqliteAdapter`, asserting `coopCommitOutcomeUnknown === true` and no durable write from the injected rollback fixture.
+- 1 injected ambiguous COMMIT through `createGameStoreAdapter`, asserting poisoned state, one fatal escalation and rejection of any second native writer invocation.
+
+**Actual verification so far:** remote GitHub fetched the exact source of the fork's `coopGameStoreAtomic.js`. An isolated V8 execution of the **actual source** with a stubbed underlying SQLite transactor confirmed the GameStore poison behavior: `NATIVE_GAMESTORE_COMMITTED_BUT_CACHE_UNSAFE` on first call, then `NATIVE_GAMESTORE_POISONED`, `fatal` once, original transactor once. This is **NOT** a full six-test Node run. The current container has Node v22.16.0 but cannot resolve `github.com`, so it cannot obtain the actual fork checkout. The six native-gated tests are **authored but NOT EXECUTED**; the previously tested PF-15 synthetic SQLite 4/4 remains a separate result.
+
+**Next acceptance blockers:** native fork write access (GitHub create_branch still returned HTTP 403 earlier), actual original wallet schema and GameStore account invalidation, exactly-once original ISK debit/credit with real GameStore cache+flush, production ItemStore original hull ownership, WAR/mining writer fences, real restart/SIGKILL/WORK client E2E. No PLAY restart, no native engine commits and no merging of Draft PR #350.
