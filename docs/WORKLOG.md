@@ -3494,3 +3494,9 @@ Why: market-maker trading document read once per process instead of per call
 Detail: The integration/*.cjs archive must equal the deployed module byte for byte; the audit gate caught the drift, as designed.
 Where: integration/coopMarketMakerTraders.cjs
 Evidence: fork fcae8c0; profile 2219s: 58s self time in coopMarketMakerTraders read/write; 13/13 maker tests; AUDIT_OK
+### 2026-11-04T21:41Z · 60e4903 · L1 · test(perf): pin the coalesced virtual-world save
+
+Why: coalesce the virtual-world state save (28% of non-idle CPU was synchronous writes + fsync)
+Detail: Two cases: five cycles with physical locations inside one save window do not touch the file, and an explicit flush writes the LATEST pilot positions (the durability escape hatch, also registered on beforeExit); a flush with nothing pending is a no-op rather than an extra write.
+Where: docs/WORKLOG.md, integration/coopVirtualWorld.cjs, tests/coop-virtual-world-save-throttle.test.mjs
+Evidence: fork 0cec93c; profile: writeFileUtf8 89.27s, fsync 14.41/4.57/2.00s of 2219s; 2/2 new tests; AUDIT_OK
