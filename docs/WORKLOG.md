@@ -3542,3 +3542,8 @@ Why: NPC buyer demand policy: small lots, cash reserve, dynamic types, capped pr
 Detail: Eight cases: no fixed allowlist (an ore and a manufactured type are both eligible), never the whole stack (fraction and unit cap, 95 % left on the book), the cash reserve is held (a big lot is refused, a small one fits), one lot per type per tick with open types skipped, cheapest first under the per-tick budget, a capped 3 % premium that never exceeds the unit price cap, only attested/open/player 
 Where: scripts/overlay-spec.cjs, tests/coop-npc-buyer-lots.test.mjs
 Evidence: 9 new tests; AUDIT_OK; fork 99f4698+; measured: goods 86 993 unsold in New Caldari, buyer flags off
+### 2026-11-04T23:07Z · 0f21737 · L1 · test(buyer): pin the whole-stack small-lot rule
+
+Why: buyer policy aligned with the whole-stack native executor
+Where: docs/WORKLOG.md, tests/coop-npc-buyer-lots.test.mjs
+Evidence: 9/9 lots tests; AUDIT_OK; executor found: coopNpcCorporateBuyerAtomic gated by EVEJS_COOP_NPC_BUY_PLAYER_ASK

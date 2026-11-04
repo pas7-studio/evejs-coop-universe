@@ -50,8 +50,37 @@ all of it):
   outside `Play.bat`: without `noconsole` a log write during window creation raises
   `IOError: [Errno 9] Bad file descriptor` and aborts it.
 
-## NEXT (owner actions)
+## FOUR THINGS STILL OPEN (in priority order, with the exact next step)
 
+1. **NPC buyers actually buying.** Everything exists and nothing is on:
+   `space/coopNpcCorporateBuyerAtomic.js` buys ONE whole verified player ask with real
+   ISK from the corporation wallet and a real item transfer (gated by
+   `EVEJS_COOP_NPC_BUY_PLAYER_ASK=1`, absent on the play stack);
+   `space/coopNpcBuyerCoordinator.js` is the durable-claim wrapper ("Not registered on the
+   live timer"); `space/coopNpcBuyerLots.js` is the owner's demand rule (no fixed
+   allowlist, small lots, cash reserve, capped premium, `wholeStackOnly: true` for this
+   executor). Next: register the coordinator on the economy tick, feed it the lots plan,
+   then prove ONE live purchase (journal SETTLED, player wallet credited, corp wallet
+   debited, item in corp). Never mint ISK to make it work.
+2. **Jobs on the Agency Job Board** (owner chose this window). Measured: 10 941 agents
+   exist across divisions 18/22-29/37 and **zero mission offers**, so
+   `journal.GetMyAgentJournalDetails` is empty and the Job Board has nothing to show. The
+   client flags all default ON, so this is purely server content: offer career-agent
+   missions per path (Explorer / Industrialist / Enforcer / Soldier of Fortune) bound to
+   our dungeon templates, and pay on completion (SP/ISK/LP/standing through
+   `applyMissionStandingChanges`).
+3. **ISK for war participation.** The mechanism is installed
+   (`coopWarKillMerit.setBountyPayer` -> `coopWarBounty.pay` -> `coopWarTreasury` PAYOUT,
+   which releases a HELD escrow only), and it pays nothing because the militia factions hold
+   0 ISK. Needs a real funding source for the faction wallet (its own market income), never
+   a minted balance.
+4. **Remaining lag hot spots.** Baseline and method in `docs/LAG_PROFILE_20261105.md`; fixed
+   so far: haul storm, market-maker document, world save, scene deadline memo. Still hot:
+   other synchronous JSON writers on tick paths (`coop-economy.json`,
+   `coop-courier-flights.json`, the gameStore flush) and GC pressure (heap ~2.7 GB, the
+   15 310-row cargo table being cloned). Measure again before changing anything.
+
+## NEXT (owner actions)
 1. **Restart window** for the play stack: rebuild `evejs-local` from the fork tip,
    then `scripts/Start-Play-Stack.ps1 -Action Up`.
 2. **Stand in a site afterwards**: expect
