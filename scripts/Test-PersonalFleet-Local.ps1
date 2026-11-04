@@ -89,8 +89,18 @@ if ($all.Count -lt 10 -or $tests.Count -lt 11){
 foreach($src in @($all)+@($tests)){
   Run-Command "Syntax: $($src.Name)" $repoRoot 'node' @('--check',$src.FullName)
 }
-Run-Command 'Real native Node unit + reference SQLite tests' $repoRoot 'node' (@('--test')+@($tests | ForEach-Object {$_.FullName}))
-Write-Host 'PF_REFERENCE_TESTS_PASS'
+$isWindows=[System.Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
+$regularTests=@($tests | Where-Object {$_.Name -ne 'coop-personal-fleet-sqlite-crash.test.cjs'})
+$crashTest=Join-Path $repoRoot 'tests\\coop-personal-fleet-sqlite-crash.test.cjs'
+if(-not (Test-Path -LiteralPath $crashTest -PathType Leaf)){
+  throw 'PF15 SQLite crash test missing; refusing partial PASS'
+}
+Run-Command 'Real Node reference contract suite' $repoRoot 'node' (@('--test')+@($regularTests | ForEach-Object {$_.FullName}))
+Write-Host 'PF_REFERENCE_CONTRACTS_PASS'
+if(-not $isWindows){
+  Run-Command 'Real SQLite SIGKILL PF15' $repoRoot 'node' @('--test',$crashTest)
+  Write-Host 'PF15_SQLITE_SIGKILL_PASS'
+}
 if($WithNative){
   if([System.Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT){
     throw 'Native SIGKILL gate requires Linux/WSL; run from Windows with WSL2 installed'
@@ -104,6 +114,10 @@ if($WithNative){
   if($LASTEXITCODE -ne 0 -or -not $linuxRepo){throw 'WSL cannot access orchestration checkout'}
   $linuxFork=(& wsl.exe -- wslpath -a $winFork | Out-String).Trim()
   if($LASTEXITCODE -ne 0 -or -not $linuxFork){throw 'WSL cannot access native fork'}
+  $linuxCrash="$linuxRepo/tests/coop-personal-fleet-sqlite-crash.test.cjs"
+  & wsl.exe -- env NODE_NO_WARNINGS=1 node --test $linuxCrash
+  if($LASTEXITCODE -ne 0){throw "PF15_SQLITE_SIGKILL_FAILED exit $LASTEXITCODE"}
+  Write-Host 'PF15_SQLITE_SIGKILL_PASS'
   $linuxTest="$linuxRepo/tests/native/coop-personal-fleet-gamestore.native.test.cjs"
   & wsl.exe -- env "EVEJS_NATIVE_FORK_ROOT=$linuxFork" NODE_NO_WARNINGS=1 node --test $linuxTest
   if($LASTEXITCODE -ne 0){throw "PF_NATIVE_SQLITE_GATE_FAILED exit $LASTEXITCODE"}
