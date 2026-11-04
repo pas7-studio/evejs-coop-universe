@@ -43,7 +43,8 @@ function validate(state){
  return state;
 }
 function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelease=false,
- verifiedTermination=false,verifiedLoss=false,verifiedRecovery=false}={}){
+ verifiedTermination=false,verifiedLoss=false,verifiedRecovery=false,
+ lossEvidence=null,recoveryEvidence=null}={}){
  try{validate(state);}catch{return blocked('PF_ROSTER_CORRUPT');}
  if(!isObj(cmd)||!validID(cmd.operationID)||!RECEIPT.test(cmd.payloadHash)||
    !Number.isSafeInteger(cmd.expectedRevision)||cmd.expectedRevision<0||
@@ -96,7 +97,12 @@ function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelea
    // Trusted adapter MUST have confirmed this exact original hull/wreck via
    // PF-07 and native ledger in one authorized committed reconciliation.
    if(p.status!=='ASSIGNED'||!pos(p.shipItemID)||!pos(cmd.wreckID)||
-      cmd.shipItemID!==p.shipItemID||verifiedLoss!==true)
+      cmd.shipItemID!==p.shipItemID||verifiedLoss!==true||
+      !isObj(lossEvidence)||lossEvidence.phase!=='LOSS_CONFIRMED'||
+      lossEvidence.pilotID!==p.pilotID||lossEvidence.originalShipItemID!==p.shipItemID||
+      lossEvidence.assignmentID!==cmd.assignmentID||lossEvidence.wreckID!==cmd.wreckID||
+      lossEvidence.ownerCharacterID!==state.ownerCharacterID||
+      !pos(lossEvidence.generation)||lossEvidence.generation!==cmd.expectedGeneration)
     return blocked('PF_ORIGINAL_SHIP_LOSS_UNVERIFIED');
    const shipItemID=p.shipItemID;
    p.shipItemID=null;p.status='RECOVERING';
@@ -104,7 +110,15 @@ function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelea
   }else if(cmd.type==='RECOVER_PILOT'){
    // Returning pilot has NO restored original ship; assigning a new hull
    // later requires a fresh PF actor claim and actual ItemStore custody.
-   if(p.status!=='RECOVERING'||p.shipItemID!==null||verifiedRecovery!==true)
+   if(p.status!=='RECOVERING'||p.shipItemID!==null||verifiedRecovery!==true||
+      !isObj(recoveryEvidence)||recoveryEvidence.phase!=='PILOT_AVAILABLE'||
+      recoveryEvidence.pilotID!==p.pilotID||
+      recoveryEvidence.ownerCharacterID!==state.ownerCharacterID||
+      recoveryEvidence.originalShipItemID!==cmd.lostShipItemID||
+      !pos(recoveryEvidence.wreckID)||
+      recoveryEvidence.wreckID!==cmd.wreckID||
+      !pos(recoveryEvidence.generation)||
+      recoveryEvidence.generation!==cmd.expectedGeneration)
     return blocked('PF_CLONE_RECOVERY_UNVERIFIED');
    p.status='CONTRACTED';receipt={type:'PILOT_RECOVERED',pilotID:p.pilotID};
   }else if(cmd.type==='SUSPEND'){
