@@ -56,10 +56,17 @@ test("only combat families and only real amounts are touched", () => {
   assert.equal(empty.encounters[0].amount, 0);
 });
 
-test("the cap and the off switch are real knobs", () => {
-  const capped = scaling.scaleEncounterAmounts({encounters: [{key: "wave_01", amount: 40}]},
+test("the cap and the off switch are real knobs", () => {  const capped = scaling.scaleEncounterAmounts({encounters: [{key: "wave_01", amount: 40}]},
     {difficulty: 6, family: "combat"}, scaling.readTuning({EVEJS_COOP_SITE_WAVE_SCALE_MAX: "48"}));
   assert.equal(capped.encounters[0].amount, 48);
   assert.equal(scaling.readTuning({EVEJS_COOP_SITE_WAVE_SCALE_D4: "3"}).d4, 3);
   assert.equal(scaling.enabled({EVEJS_COOP_SITE_WAVE_SCALE: "0"}), false);
+});
+
+test("a scaled site is recognisable in the scanner by its own name", () => {
+  assert.equal(scaling.markSiteLabel("Sansha Port", {siteFamily: "combat", difficulty: 5}),
+    "Sansha Port [CO-OP x2.5]");
+  assert.equal(scaling.markSiteLabel("Sansha Port", {siteFamily: "combat", difficulty: 3}), "Sansha Port");
+  assert.equal(scaling.markSiteLabel("Veldspar Field", {siteFamily: "ore", difficulty: 5}), "Veldspar Field");
+  assert.equal(scaling.markerFor(6), " [CO-OP x3]");
 });
