@@ -3249,3 +3249,9 @@ Evidence: fork e21dd06; 43 definitions (4 career-path + 39 activities), all ids 
 Why: Leaving in space went through SafeLogoff, whose handler only returned [] and deferred OnSafeLogoffTimerStarted/OnSafeLogoffActivated to afterCallResponse; the client showed a long countdown instead of closing.
 Where: fork Code/server/src/services/ship/shipService.js Handle_SafeLogoff and _emitInstantSafeLogoffNotifications.
 Evidence: fork 7d99164; notifications are sent before the response, the 1 s filetime grace is 0 (client timer displays logoffTime - GetSimTime() + 1 s), and a per-session flag prevents a second Activated; node --check clean. Not deployed - needs one live logoff to confirm the countdown.
+
+### 2026-11-04T02:10Z · 60296b9 · L1 · fix(drones): log every launch and resync drone state after the launch burst
+
+Why: Five drones launched but the client drone window showed 1/5, and the server wrote nothing at all for a launch (no log line, no coop event), so the cause could not be seen from logs. The client rebuilds stateByDroneID from SetState and deletes any drone whose ownerID is not session.charid and controllerID is not session.shipid, so a stale pre-launch SetState or a foreign-identity tuple reads as a wrong count.
+Where: fork Code/server/src/services/drone/droneRuntime.js (launch summary log, warn on every refused launch, post-burst syncDroneStatesForSession), new pure module Code/server/src/space/coopDroneStateView.js (one owner for the SetState row and the OnDroneStateChange tuple).
+Evidence: fork 60296b9; node --check clean; tests/coop-drone-state-sync.test.mjs 3/3 (five drones produce five rows with pilot+ship identity, resync tuples survive michelle.OnDroneStateChange, foreign/uncontrolled drones are excluded). Not deployed: needs one live launch to read [Drone] Launch counters and see 5/5.
