@@ -8,6 +8,19 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const maxAgeMs=120000,maxRange=250000;
 const busy=c=>Boolean(c?.currentTargetID)||
   (Boolean(c?.manualOrder?.type)&&String(c.manualOrder.type).toLowerCase()!=="resumebehavior");
+// A defender that cannot even lock the attacker cannot shoot it either. Until now it got a plain
+// attack order anyway, which a sniper 150 km away never felt: the NPC burned toward him at subwarp
+// speed and never fired. Owner report 2026-11-05: "he sat at 150 km and sniped, they did not react
+// at all - they should warp into his face". The reach here is the hull's OWN lock range
+// (`maxTargetRange`, derived from dogma by space/npc/nativeNpcService.js), so a sentry that really
+// can shoot 150 km keeps doing exactly that and only a blind one closes the distance.
+const defaultEngagementRangeMeters=65000;
+const engagementReach=ship=>{
+ const lock=Number(ship?.maxTargetRange);
+ return Number.isFinite(lock)&&lock>0?lock:defaultEngagementRangeMeters;
+};
+const inWarp=ship=>String(ship?.mode||"").toUpperCase().includes("WARP")||
+ Boolean(ship?.pendingWarp||ship?.warpState||ship?.isWarping);
 function siteEntries(systemID,scene,instances){
  if(!id(systemID)||scene?.systemID!==systemID||typeof scene.getEntityByID!=="function"||
     !Array.isArray(instances)||instances.length>256)return {status:"INVALID_SITE_SOURCE",sites:[],owners:new Map()};
@@ -45,13 +58,19 @@ function siteEntries(systemID,scene,instances){
  return {status:"OK",sites,owners};
 }
 function createDirector({clock=()=>Date.now(),getController,getNativeEntity,resolveVerifiedPlayer,issueAttack,
- notify=()=>{},cooldownMs=120000,maxOrdersPerTick=4}={}){
+ notify=()=>{},warpToAttacker=null,aggressionFor=null,cooldownMs=120000,warpCooldownMs=30000,
+ maxOrdersPerTick=4,engagementRangeMeters=0}={}){
  if(typeof clock!=="function"||typeof getController!=="function"||
     typeof getNativeEntity!=="function"||
     typeof resolveVerifiedPlayer!=="function"||typeof issueAttack!=="function"||
     typeof notify!=="function"||!Number.isSafeInteger(cooldownMs)||cooldownMs<30000||
+    !Number.isSafeInteger(warpCooldownMs)||warpCooldownMs<5000||
+    (warpToAttacker!==null&&typeof warpToAttacker!=="function")||
+    (aggressionFor!==null&&typeof aggressionFor!=="function")||
+    !Number.isSafeInteger(engagementRangeMeters)||engagementRangeMeters<0||
     !Number.isSafeInteger(maxOrdersPerTick)||maxOrdersPerTick<1||maxOrdersPerTick>8)
   throw Error("INVALID_PVE_SITE_DEFENSE_CONFIG");
+ const reach=ship=>engagementRangeMeters>0?engagementRangeMeters:engagementReach(ship);
  const issued=new Map();
  function tick({systemID,scene,instances=[],excludedIDs=[]}={}){
   const now=clock(),out={status:"NO_NATIVE_SITES",sites:0,defenders:0,events:[],orders:0};
@@ -105,8 +124,20 @@ function createDirector({clock=()=>Date.now(),getController,getNativeEntity,reso
    let siteOrders=0;
    for(const victim of members){
     if(siteOrders>=2||out.orders>=maxOrdersPerTick)break;
-    const aggressorID=id(victim.controller.lastAggressorID),at=victim.controller.lastAggressedAtMs;
+    const witnessed=!id(victim.controller.lastAggressorID)&&typeof aggressionFor==="function"
+      ?aggressionFor({systemID,victimEntityID:victim.ship.itemID,nowMs:now})
+      :null;
+    // A native controller does not always record a player aggressor. The verified damage witness
+    // fills exactly that gap (same victim, same system, fresh window) and nothing else.
+    const aggressorID=id(victim.controller.lastAggressorID)||id(witnessed?.attackerShipID),
+      at=Number.isSafeInteger(victim.controller.lastAggressedAtMs)&&victim.controller.lastAggressedAtMs>0
+        ?victim.controller.lastAggressedAtMs
+        :Number(witnessed?.atMs);
     if(!aggressorID||!Number.isSafeInteger(at)||at<=0||at>now||now-at>maxAgeMs)continue;
+    if(witnessed&&!id(victim.controller.lastAggressorID))
+      out.events.push({status:"NATIVE_SITE_DEFENSE_FROM_WITNESS",instanceID:site.instanceID,
+       siteID:site.siteID,victimID:victim.ship.itemID,targetID:aggressorID,
+       characterID:id(witnessed.characterID)});
     const attacker=playerFor(aggressorID);
     if(!attacker||distance(attacker.position,victim.ship.position)>maxRange)continue;
     const faction=id(victim.ship.factionID),corp=id(victim.ship.corporationID);
@@ -116,25 +147,39 @@ function createDirector({clock=()=>Date.now(),getController,getNativeEntity,reso
      const helperID=helper.ship.itemID,key=site.instanceID+":"+helperID;
      if(helperID===victim.ship.itemID||
         (faction?helper.ship.factionID!==faction:helper.ship.corporationID!==corp)||
-        busy(helper.controller)||helper.ship.pendingWarp||helper.ship.warpState||
-        String(helper.ship.mode||"").toUpperCase().includes("WARP")||
+        busy(helper.controller)||inWarp(helper.ship)||
         distance(helper.ship.position,attacker.position)>maxRange)continue;
      const previous=issued.get(key);
      // An UNKNOWN native ACK permanently fences auto-reissue until operator action.
-     if(previous&&(previous.phase==="UNKNOWN"||now-previous.at<cooldownMs))continue;
-     issued.set(key,{phase:"ISSUING",at:now,targetID:aggressorID,siteID:site.siteID});
+     if(previous&&previous.phase==="UNKNOWN")continue;
+     const gap=distance(helper.ship.position,attacker.position);
+     const far=gap>reach(helper.ship);
+     // A warping defender is not given the attack order until the SAME physical hull actually
+     // arrived in reach: the native ACK is a command, not a position.
+     const arrivedFromWarp=Boolean(previous&&previous.phase==="WARPING")&&!far;
+     if(previous&&!arrivedFromWarp&&now-previous.at<(far?warpCooldownMs:cooldownMs))continue;
+     if(far&&typeof warpToAttacker!=="function")continue; // no warp capability: never pretend
+     issued.set(key,{phase:"ISSUING",at:now,targetID:aggressorID,siteID:site.siteID,gap});
      let result;
-     try{result=issueAttack(helperID,aggressorID,{allowWeapons:true,keepLock:true});}
+     try{
+      result=far
+       ?warpToAttacker(helperID,aggressorID,
+         {forceImmediateStart:true,broadcastWarpStartToVisibleSessions:true})
+       :issueAttack(helperID,aggressorID,{allowWeapons:true,keepLock:true});
+     }
      catch{result=null;}
      if(result?.success===false){issued.delete(key);continue;}
      if(result?.success!==true){
-      issued.set(key,{phase:"UNKNOWN",at:now,targetID:aggressorID,siteID:site.siteID});
+      issued.set(key,{phase:"UNKNOWN",at:now,targetID:aggressorID,siteID:site.siteID,gap});
       out.events.push({status:"NATIVE_ATTACK_OUTCOME_UNKNOWN",instanceID:site.instanceID,
-       siteID:site.siteID,helperID,targetID:aggressorID});continue;
+       siteID:site.siteID,helperID,targetID:aggressorID,far,gapMeters:Math.round(gap)});continue;
      }
-     issued.set(key,{phase:"ACCEPTED",at:now,targetID:aggressorID,siteID:site.siteID});
-     out.events.push({status:"NATIVE_SITE_DEFENSE_ORDER_ACCEPTED",instanceID:site.instanceID,
-      siteID:site.siteID,victimID:victim.ship.itemID,helperID,targetID:aggressorID});
+     issued.set(key,{phase:far?"WARPING":"ACCEPTED",at:now,targetID:aggressorID,
+      siteID:site.siteID,gap});
+     out.events.push({status:far?"NATIVE_SITE_DEFENSE_WARP_ISSUED"
+       :"NATIVE_SITE_DEFENSE_ORDER_ACCEPTED",instanceID:site.instanceID,
+      siteID:site.siteID,victimID:victim.ship.itemID,helperID,targetID:aggressorID,
+      gapMeters:Math.round(gap),reachMeters:Math.round(reach(helper.ship))});
      siteOrders++;out.orders++;
     }
    }

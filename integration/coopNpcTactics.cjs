@@ -7,6 +7,14 @@ const meters=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const named=x=>typeof x==="string"&&/^coop-pilot-[0-9]{3,}$/.test(x);
 const inWarp=ship=>String(ship?.mode||"").toUpperCase().includes("WARP")||
  Boolean(ship?.pendingWarp||ship?.warpState||ship?.isWarping);
+// How far this hull can actually engage: its own native lock range, with a sane floor. Before this,
+// "far" meant more than 250 km, so a responder sent after a sniper at 150 km only got an attack
+// order: it burned at subwarp speed and never fired a shot, and the player felt nothing.
+const defaultEngagementRangeMeters=65000;
+const reachOf=ship=>{
+ const lock=Number(ship?.maxTargetRange);
+ return Number.isFinite(lock)&&lock>0?lock:defaultEngagementRangeMeters;
+};
 
 function createTactics({
  clock=()=>Date.now(),warpToPoint,warpToEntity,attack,resumeBehavior,stopOrder,
@@ -132,7 +140,7 @@ function createTactics({
    }
    engaged.add(id);
    if(!pos(helper.ship.position)||!pos(target.position)||inWarp(helper.ship))continue;
-   if(meters(helper.ship.position,target.position)>250000){
+   if(meters(helper.ship.position,target.position)>reachOf(helper.ship)){
     if(now>=aid.nextAt){
      const result=warpToEntity(id,aid.attackerID,{forceImmediateStart:true,broadcastWarpStartToVisibleSessions:true});
      aid.nextAt=now+(result?.success?30000:60000);
@@ -215,7 +223,7 @@ function createTactics({
      .slice(0,Math.min(3,maxResponders+bonus));
    let mobilized=0;
    for(const helper of helpers){
-    const far=meters(helper.ship.position,attacker.position)>250000;
+    const far=meters(helper.ship.position,attacker.position)>reachOf(helper.ship);
     const action=far
      ?warpToEntity(helper.entityID,attackerID,{forceImmediateStart:true,broadcastWarpStartToVisibleSessions:true})
      :attack(helper.entityID,attackerID,{allowWeapons:true,keepLock:true});

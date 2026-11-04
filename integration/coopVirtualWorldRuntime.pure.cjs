@@ -1090,7 +1090,15 @@ function advanceNativePveSiteDefense(){
    resolveVerifiedPlayer:(scene,ship)=>
     require("./coopNativeConsequences").resolveVerifiedPlayerID(scene,ship),
    issueAttack:(npcID,playerID,options)=>
-    npc.issueAttackOrder(npcID,playerID,options)
+    npc.issueAttackOrder(npcID,playerID,options),
+   // A defender that cannot lock the sniper must close the distance with a REAL native warp and
+   // only then fight; a plain attack order from 150 km left the player untouched.
+   warpToAttacker:(npcID,playerID,options)=>
+    npc.warpToEntity(npcID,playerID,options),
+   // The verified damage witness is the only other source of "who shot this defender".
+   aggressionFor:({systemID,victimEntityID,nowMs})=>
+    require("./coopNpcAggressionLedger").getSharedLedger()
+     .lastFor({systemID,victimEntityID,nowMs})
   });
  }
  const reserved=new Set([...(bridge.snapshot()||[]),
