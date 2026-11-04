@@ -3547,3 +3547,9 @@ Evidence: 9 new tests; AUDIT_OK; fork 99f4698+; measured: goods 86 993 unsold in
 Why: buyer policy aligned with the whole-stack native executor
 Where: docs/WORKLOG.md, tests/coop-npc-buyer-lots.test.mjs
 Evidence: 9/9 lots tests; AUDIT_OK; executor found: coopNpcCorporateBuyerAtomic gated by EVEJS_COOP_NPC_BUY_PLAYER_ASK
+### 2026-11-04T23:36Z · 7030a17 · L3 · test(teleport): pin the pilot delivery lane for in-space teleports
+
+Why: in-space teleports reach the pilot lane (MJD/Tr): lead-stamped owner delivery instead of one raw broadcast
+Detail: Seven cases against the deployed fork module: a pilot-owned entity gets exactly one owner copy carrying the 4-tick pilot lead while watchers get the raw broadcast with the owner excluded (one position must never arrive twice on two stamps); the bundle is speed -> position -> stop -> velocity on a single stamp and carries the destination the caller already moved the ship to; an NPC or sessionless e
+Where: integration/coopAdminBridgeActions.cjs, scripts/overlay-spec.cjs, tests/coop-owner-teleport.test.mjs
+Evidence: fork 1b5cb47; 7 tests; AUDIT_OK (65488 chars, budget not raised); probe: 4383 -> microJumpDrive 12000ms 100000m; image evejs-local rebuilt; live client verification pending restart window

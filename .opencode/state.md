@@ -1,10 +1,25 @@
-# Co-op handoff (2026-11-05, fork tip `e2d259a`)
+# Co-op handoff (2026-11-05, fork tip `1b5cb47`)
 
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
 reachable only from HEAD). Re-attached with `git checkout -B coop/pas7std`. Never
 work detached here again.
+
+**In-space teleports reach the pilot now** (`1b5cb47`, measured 2026-11-05): the micro jump
+drive resolved correctly server-side (type 4383 → effect `microJumpDrive` 4921, 12 000 ms,
+100 km) and the ship really moved, but the pilot's copy of `SetBallPosition` went out on the raw
+destiny stamp, which the client destiny ticker discards as "too old" (`destiny/net/client/_ticker.pyj`).
+New `space/coopOwnerTeleport.js` sends the owner a lead-stamped copy (`PILOT_WARP_ACTIVATION_DELAY_
+DESTINY_TICKS` = 4, the same lead the pilot warp corrections use), excludes the owner from the raw
+watcher broadcast, keeps the watchers-only path for unready sessions and writes a
+`space.teleport.delivery` record per teleport. **Not yet seen in a live client**: verify with the
+record + the overview-distance trick in `docs/TELEPORT_DELIVERY.md` §4/§5. One stock line, budget
+65 488 ≤ 65 500 (not raised).
+
+**Incident 2026-11-05 23:26 UTC:** a recursive `grep` over the 245 MB backup sqlite inside the
+running server container was OOM-killed and took `evejs-server-1` down; it came back healthy by
+itself and the client had to relog. Never recursive-grep `/var/lib/evejs` inside that container.
 
 Committed on the branch but **not deployed to the play stack** (one restart ships
 all of it):
