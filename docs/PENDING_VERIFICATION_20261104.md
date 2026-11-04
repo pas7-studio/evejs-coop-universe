@@ -19,6 +19,8 @@ Client launch stays through `Play.bat` (never `bin64\exefile.exe`).
 
 | # | Commit | Action | PASS evidence |
 |---|---|---|---|
+| 0 | `7c8f6cc` campaigns content tags | open Возможности -> Военные кампании | the campaign card renders with its title, progress and career icon; no `contentTagType` and no `_hover_frame` in the client log |
+| 0a | `b2228b5` onlineStatus CRowset | log in, open contacts / address book, wait for a contact to log in | no `'blue.DBRowDescriptor' object has no attribute 'index'`; online dots update |
 | 1 | `55a60cf` warzone renderable systems | open the Faction Warfare / theaters-of-war map | map window opens, no `KeyError: 30000132` in the client log |
 | 2 | `ddf6bbb` Loot All partial move | `Loot All` on a wreck with a nearly full hold | items that fit are looted, no `NotEnoughCargoSpace` exception |
 | 3 | `17e3c78` owner names unicode | open overview in a system with a named character | no `must be unicode, not str` in the client log; names render |

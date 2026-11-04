@@ -157,6 +157,46 @@ test("Get describes the campaign in the set the client actually renders", () => 
   assert.equal(objective.attributes.rewards.isk_reward, undefined, "nothing is minted");
 });
 
+// The client resolves every content tag id through
+// metadata.common.content_tags.content_tags_data.get_content_tag(), which returns
+// None for an id it does not ship. The campaign card then holds
+// ContentTag(id, None) and Job.career_tag -> ContentTag.tag_type raises
+//   AttributeError: 'NoneType' object has no attribute 'contentTagType'
+// inside CampaignJobCard._construct_title_icons (measured 2026-11-04 12:06:50 on
+// character 140000005: the whole card aborted, so the tile was dark and empty).
+// This is the exact id list of the client's ContentTags enum.
+const CLIENT_CONTENT_TAGS = new Set([
+  "activity_combat", "activity_donation", "activity_fleet",
+  "activity_gas_harvesting", "activity_hacking", "activity_hauling",
+  "activity_ice_harvesting", "activity_logistics", "activity_manufacturing",
+  "activity_mining", "activity_salvaging", "activity_trading", "activity_travel",
+  "career_path_enforcer", "career_path_explorer", "career_path_industrialist",
+  "career_path_soldier_of_fortune",
+  "feature_acp", "feature_agent_missions", "feature_capsuleer_day",
+  "feature_combat_anomalies", "feature_corporation_projects",
+  "feature_cosmic_anomalies", "feature_cosmic_signatures", "feature_daily_goals",
+  "feature_dungeons", "feature_epic_arcs", "feature_escalation_dungeon",
+  "feature_ess", "feature_factional_warfare", "feature_freelance_projects",
+  "feature_homefront_operations", "feature_ice_belts", "feature_introductions",
+  "feature_landmarks", "feature_mercenary_tactical_ops", "feature_ore_anomalies",
+  "feature_paragon_missions", "feature_pirate_insurgencies",
+  "feature_sansha_incursions", "feature_seasons", "feature_triglavian",
+  "feature_winter_nexus", "feature_world_events", "feature_campaigns",
+]);
+
+test("every served objective content tag exists in the client's ContentTags enum", () => {
+  const result = service.handleRequest(
+    "eve_public.campaign.api.GetRequest", envelope(getRequest(CAMPAIGN_UUID)));
+  const body = decode(result.responseTypeName, result.responsePayloadBuffer);
+  const tags = body.available_objectives[0].attributes.content_tags
+    .map((tag) => tag.name);
+  assert.ok(tags.includes("feature_campaigns"), "the campaigns provider filters on this");
+  assert.ok(tags.includes("career_path_enforcer"), "the card's title icon needs a career tag");
+  for (const tag of tags) {
+    assert.ok(CLIENT_CONTENT_TAGS.has(tag), `unknown content tag ${tag}`);
+  }
+});
+
 test("stats report the measured warzone progress, not a fabricated number", () => {
   const result = service.handleRequest(
     "eve_public.campaign.api.GetStatsRequest", envelope(getRequest(CAMPAIGN_UUID)));
