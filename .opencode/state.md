@@ -113,13 +113,24 @@ The launcher keeps the client's own console output under
 1. Loot: confirm a real wreck/can drag now logs a reason; if the source is still
    unresolvable, materialize scene loot as real items (needs the new warn line live).
 2. Overview: load a profile in the client to confirm the unicode error is gone.
-3. Drone counter: after deploy, launch five and read `[Drone] Launch ... launched=5
-   active=5/5` plus a 5/5 window; if it still shows 1/5 the loss is client-side and the
-   movement trace shows whether a SetState arrived after the resync.
+3. Drone counter: exception #79 in the client log proves the SERVER refused extra launches
+   with "Maximum active drones already in space." at 22:58:38 - so it counted five drones
+   while the window showed 1/5. The display loss is the SetState rebuild (fixed by the
+   resync); after deploy, launch five and read `[Drone] Launch ... launched=5 active=5/5`.
 4. Logout: shipped in 7d99164, needs one live logoff to confirm no countdown.
-5. 77 km pilot-distance desync; death loot scattered (`npcWreckService`) - both need the
-   owner to say what he measured (distance between what, and where the loot appeared).
-6. Second "Изменения принадлежности" card (never identified; need the window/panel name).
+5. 77 km pilot-distance desync; death loot scattered - the loot half is the flag bug
+   (106f79f) plus Loot All aborting (ddf6bbb); the 77 km number still needs the owner's
+   subject (distance between what).
+6. "Изменения принадлежности" card: exception #83/#84 is a jobboard card crash in
+   `jobboard/client/features/agent_missions/job.py subtitle -> _epic_arc ->
+   epicArcController.GetActiveMission -> _GetAgent` returning None, then
+   `IsAgentStandingSufficientToUse(None)` -> `'NoneType' has no attribute 'factionID'`.
+   So cfg.agents does not contain an epic-arc start agent. Still needs one live `GetAgents`
+   dump (or the owner's screenshot) to know which agent id is missing.
+   Also unexplained: `AttributeError: Activate` in Jump.GateActivity (stargate jump FX),
+   `KeyError: 30000132` in the theaters-of-war landing page (our occupation state names a
+   focus system the client's warzone map does not list), `AttributeError: RemoveMissileImpact`
+   (missile impact FX action name) and `IndexError` in Project Discovery results.
 7. Warp landing for heavy hulls (~4 km): `WARP_COMPLETION_DISTANCE_MAX_METERS = 1` in
    runtime.js, so the server lands on the target; measure the real client value first.
 8. After deploy: `militia_restore` for 140000005, then enlist both pilots into Caldari.
