@@ -90,3 +90,21 @@ test('PF-13: same combat operation/hash cannot extend native action expiry',()=>
  assert.equal(c.replay(row,command({expiresAt:200000})).reason,
  'PF_COMBAT_REPLAY_CONFLICT');
 });
+
+
+test('PF-14: duplicated saved combat receipts are corrupt',()=>{
+ const r=start(),receipt={id:'proof-x',type:'DURABLE_COMBAT_DISPATCH_FENCE'};
+ assert.equal(c.replay({...r,phase:'ISSUING',revision:2,
+ receipts:[receipt,receipt]},command()).reason,'PF_COMBAT_RECORD_CORRUPT');
+});
+test('PF-14: combat revision mismatch fails closed',()=>{
+ const r=start();
+ assert.equal(c.replay({...r,revision:3},command()).reason,
+ 'PF_COMBAT_RECORD_CORRUPT');
+});
+test('PF-14: fabricated combat proof type never validates',()=>{
+ const r=start();
+ assert.equal(c.replay({...r,phase:'ISSUING',revision:1,
+ receipts:[{id:'fake-01',type:'FAKE_DAMAGE'}]},command()).reason,
+ 'PF_COMBAT_RECORD_CORRUPT');
+});
