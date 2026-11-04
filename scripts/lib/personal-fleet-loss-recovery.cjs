@@ -51,6 +51,7 @@ function advance(s,{to,expectedRevision,proof,now}={}){
  if(!Number.isSafeInteger(now)||now<0)return denied('PF_LOSS_CLOCK_INVALID');
  const required=TRANSITIONS[s.phase]?.[to];
  if(!required)return denied('PF_LOSS_ILLEGAL_TRANSITION');
+ if(s.proofs.length>=12)return denied('PF_LOSS_PROOF_CAP_REACHED');
  if(proof?.type!==required||!str(proof.id)||proof.operationID!==s.operationID||
   proof.shipItemID!==s.originalShipItemID||proof.pilotID!==s.pilotID||
   proof.generation!==s.generation||s.proofs.some(x=>x.id===proof.id))
@@ -120,7 +121,8 @@ function assessRestart(s,{nativeShip,hangarItem,wreck,lossLedger,pilotLife}={}){
    s.wreckID!==wreck.wreckID)
    return {status:'NEEDS_RECONCILIATION',reason:'PF_WRECK_NOT_YET_COMMITTED'};
   if(pilotLife?.pilotID!==s.pilotID||
-   !['RECOVERING','AVAILABLE'].includes(pilotLife.status))
+   !['RECOVERING','AVAILABLE'].includes(pilotLife.status)||
+   (s.phase==='PILOT_AVAILABLE'&&pilotLife.status!=='AVAILABLE'))
    return {status:'NEEDS_RECONCILIATION',reason:'PF_PILOT_LIFE_UNVERIFIED'};
   return {status:'ORIGINAL_SHIP_CONFIRMED_LOST',
    pilotStatus:pilotLife.status,originalShipRestored:false,spawnAllowed:false};
