@@ -191,3 +191,34 @@ This branch now also includes:
 **Critical deployment blocker:** the engine fork's existing WAR assignment writer and any other competing actor-owning writers do not yet consult the PF registry in a shared transaction. Therefore PF-01 registry writes are explicitly gated by `writersIntegrated()`. The integration wiring MUST prove these reciprocal cross-writer checks (not simply set the callback to true); otherwise personal fleet claim writes stay disabled. The `verifyMiningFree` and `verifyOtherClaimsFree` callbacks must be authoritative and transactionally coordinated: an outside read-only check cannot enforce serializable ownership against an unmodified writer.
 
 **Repo write permissions:** creating a branch in `pas7-studio/EveJS` @ `coop/pas7std` returned HTTP 403 in this session. Code is therefore intentionally maintained here as a **portable, non-deployed reference**, not falsely represented as installed in the engine fork. A fork-authorized agent must port it, add the reciprocal checks, execute WORK tests, and open the corresponding engine PR. No PLAY changes were made.
+
+## PF-01B: reciprocal legacy-writer admission guard
+
+Files:
+- `scripts/lib/personal-fleet-writer-guard.cjs` (non-deployed reference)
+- `tests/coop-personal-fleet-writer-guard.test.mjs` (13 authored scenarios)
+
+### Mandatory fork integration anchors
+
+The following are **source anchors verified in `pas7-studio/EveJS` @ `coop/pas7std`**, not already installed PF hooks:
+
+1. `Code/server/src/space/coopWarFleetRegistry.js` → `createWarFleetRegistry().execute(command)` → existing `transact(tx => { ... })` → `ASSIGN` case, BEFORE `s.ships[id] = {...details,...}`. Call the `assertPersonalFleetActorFree(tx,{entityID,pilotID})` guard on exact original native IDs. Refuse if `.ok!==true`. Validate both WAR registry and PF registry through the SAME authoritative SQLite commit. Do not add `corporationRuntime` to a separate transaction.
+2. `Code/server/src/space/coopPlayerMiningShiftOrders.js` only owns funded shift *directives*; it does NOT itself own initial NPC mining fleet spawning. Find and guard **actual hiring/slot/custody writers** (including `coopPlayerMiningHiring`, `coopNativeMiningFleetDurable`, their active engine fork counterparts) where new ship/pilot assignment is first committed. A guard on only `assign()` shift command is insufficient.
+3. `coopNpcExpeditionDirector` and `coopNpcOrderArbiter` own movement/lease, not necessarily durable entity custody. Verify whether expedition changes exclusive ship assignment; if it does, guard that writer too. Ensure actual client-directed orders cannot bypass `coopNpcOrderBridge`.
+4. During PF claim admission, `verifyMiningFree`, `verifyOtherClaimsFree` and `verifyNativeActor` are **placeholders for authoritative checkers**, not permission callbacks from client data. If writers and claims span different storage authorities, refuse new PF claims until a serializable cross-owner claim bridge exists.
+5. Do not allow a config flag or `writersIntegrated:()=>true` by itself to certify integration. Prove by executable cross-writer tests: WAR claim first -> PF refused, PF claim first -> WAR refused, funded mining claim -> PF refused, PF claim -> miner acquisition refused, concurrent competing writers -> exactly one succeeds, restart preserves winner.
+
+### PF-01B phase status
+
+`SOURCE_IMPLEMENTED` as portable orchestration code; **NOT DEPLOYED**, native fork PR **BLOCKED (GitHub branch creation 403)**; authored tests **NOT_RUN**. Do not claim a passing Node run, real SQLite transaction, WORK runtime validation or two-client gameplay from GitHub commits alone.
+
+Run locally from the co-op repository after checkout:
+
+```sh
+node --check scripts/lib/personal-fleet-contract.cjs
+node --check scripts/lib/personal-fleet-claims.cjs
+node --check scripts/lib/personal-fleet-writer-guard.cjs
+node --test tests/coop-personal-fleet-contract.test.mjs tests/coop-personal-fleet-claims.test.mjs tests/coop-personal-fleet-writer-guard.test.mjs
+```
+
+Avoid merging into PLAY or turning on PF flags before the reciprocal fork hooks and native crash tests pass.
