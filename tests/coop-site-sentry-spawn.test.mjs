@@ -119,3 +119,15 @@ test("a failed native spawn is reported, not retried into a spawn storm", () => 
   instance.tick({systemID: 30000144, scene, instances: INSTANCES});
   assert.equal(calls.length, 1, "one attempt per battery");
 });
+
+test("a structure label that names the faction is enough, with no spawn query at all", () => {
+  // Measured: "Drone Collection" carries only factionID 500021 and no encounter query, while
+  // real sites label their batteries with the faction ("Sansha Defense Battery").
+  const {instance, calls} = build({instances: INSTANCES, template: {populationHints: {encounters: []}}});
+  const result = instance.tick({systemID: 30000144,
+    scene: sceneWith([140000005], [battery({itemName: "Blood Raider Defense Battery"})]),
+    instances: INSTANCES});
+  assert.equal(result.status, "SENTRIES_SPAWNED");
+  assert.equal(calls[0].options.profileQuery,
+    "parity_destructible_sentry_guns_13116_blood_raider_sentry_gun");
+});

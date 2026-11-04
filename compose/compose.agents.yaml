@@ -198,6 +198,10 @@ services:
       # move until that is fixed. Keep 0.
       EVEJS_COOP_WAR_MERCENARY_CONTRACT: "1"
       EVEJS_COOP_COMPONENT_MARKET: "1"
+      # Site sentries on the WORK stack only: proves spawn + fire against sites the agents
+      # seed, without touching the owner's world. See compose.play-coop.yaml for the
+      # matching key once the owner opens a restart window.
+      EVEJS_COOP_SITE_SENTRIES: "1"
       # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
       # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
       # Remove this line for normal agent runs.

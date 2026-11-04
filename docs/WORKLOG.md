@@ -3440,3 +3440,9 @@ Why: campaign LP row tells the truth; P2P env guards extracted from the stock ma
 Detail: The campaign page test now asserts the LP arm the client actually reads (amount 0, interval 1, a real militia issuer) instead of no_lp_reward, because the client draws the card either way and only a real interval avoids the unformatted placeholder. Three guard cases pin the exact P2P error names and their order after the checks moved out of the stock market service. The stock-char budget ratchets 
 Where: docs/WORKLOG.md, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, scripts/coop-engine-audit.cjs, tests/coop-fw-campaign-page.test.mjs, tests/coop-player-market-env-guards.test.mjs
 Evidence: fork a74c536; campaign page 10/10, env guards 3/3, AUDIT_OK with stockChars 65315 <= 65500
+### 2026-11-04T20:19Z · aeb0a5b · L1 · test(war): pin the per-side band and the deployment knob
+
+Why: site sentries fire real sentry-gun attributes; war side size is a deployment knob
+Detail: Three cases: 1..8 hulls per side accepted and 0/9/16/2.5 refused, the per-tick budget stays inside 1..6, and the runtime knob is provably clamped to 1..8 with a default of four - so a typo in a compose file cannot turn a war into a swarm.
+Where: docs/WORKLOG.md, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, integration/coopVirtualWorldRuntime.war.cjs, integration/coopWarMobilizer.cjs, tests/coop-site-sentries.test.mjs, tests/coop-site-sentry-fire.test.mjs, tests/coop-site-sentry-spawn.test.mjs, tests/coop-war-side-size.test.mjs
+Evidence: fork 1a8294a, ec29a33; sentry fire 8/8, spawn 6/6, decision 3/3, war side 3/3, mobilization 17/17, AUDIT_OK; live: native damage path dropped a ship shield 725 -> 706.68 with the Blood Raider Sentry Gun vector
