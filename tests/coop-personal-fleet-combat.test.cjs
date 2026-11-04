@@ -73,3 +73,20 @@ test('conflicting settlement or duplicated physical item IDs are rejected',()=>{
  assert.equal(c.inspectNativeSettlement({nativeReceipt:nativeSettlement({itemIDs:[1001,1001]}),
   targetID:700,wreckID:20}).reason,'PF_NATIVE_REWARD_RECEIPT_UNVERIFIED');
 });
+
+
+test('PF-13: same combat operation/hash cannot swap native target',()=>{
+ const row=start();
+ assert.equal(c.replay(row,command({targetID:701})).reason,
+ 'PF_COMBAT_REPLAY_CONFLICT');
+});
+test('PF-13: same combat operation/hash cannot swap pilot assignment',()=>{
+ const row=start();
+ assert.equal(c.replay(row,command({assignmentID:'pf-assignment-999'})).reason,
+ 'PF_COMBAT_REPLAY_CONFLICT');
+});
+test('PF-13: same combat operation/hash cannot extend native action expiry',()=>{
+ const row=start();
+ assert.equal(c.replay(row,command({expiresAt:200000})).reason,
+ 'PF_COMBAT_REPLAY_CONFLICT');
+});
