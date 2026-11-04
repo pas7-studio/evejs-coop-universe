@@ -46,3 +46,30 @@ test('native damage events never authorize payout',()=>{const x=c.combatContribu
 test('duplicate native damage event ID refuses attribution',()=>{const e={eventID:1,sourceEntityID:500,targetEntityID:700,damageUnits:20,authority:'NATIVE_EVEJS_DAMAGE'};assert.equal(c.combatContribution({sourceEntityID:500,targetID:700,nativeDamageEvents:[e,e]}).reason,'PF_COMBAT_ATTRIBUTION_DUPLICATED_EVENT')});
 test('unknown damage authority refuses attribution',()=>assert.equal(c.combatContribution({sourceEntityID:500,targetID:700,nativeDamageEvents:[{eventID:1,sourceEntityID:500,targetEntityID:700,damageUnits:1,authority:'SYNTHETIC'}]}).reason,'PF_COMBAT_ATTRIBUTION_CORRUPT'));
 test('wrong original wreck does not certify loss',()=>assert.equal(c.combatContribution({sourceEntityID:500,targetID:700,nativeDamageEvents:[],wreck:{wreckID:20,originalTargetID:701,authority:'NATIVE_EVEJS_WRECK'}}).reason,'PF_COMBAT_WRECK_UNVERIFIED'));
+
+test('inactive native weapon cannot issue a physical attack',()=>assert.equal(
+ c.createAttack(command(),trusted({weapon:weapon({nativeWeaponActive:false})})).reason,
+ 'PF_COMBAT_NATIVE_WEAPON_UNVERIFIED'));
+const nativeSettlement=(changes={})=>({authority:'NATIVE_EVEJS_SETTLEMENT',
+ settlementID:'native-settlement-01',originalTargetID:700,wreckID:20,
+ finalized:true,iskAmount:5000,itemIDs:[1001,1002],...changes});
+test('native settlement is observed, never an authorization to mint ISK',()=>{
+ const result=c.inspectNativeSettlement({nativeReceipt:nativeSettlement(),
+  existingReceipt:null,targetID:700,wreckID:20});
+ assert.equal(result.status,'NATIVE_SETTLEMENT_OBSERVED');
+ assert.equal(result.payoutAllowed,false);
+ assert.deepEqual(result.originalItemIDs,[1001,1002]);
+});
+test('existing native payout cannot be settled again by PF',()=>{
+ const result=c.inspectNativeSettlement({nativeReceipt:nativeSettlement(),
+  existingReceipt:{settlementID:'native-settlement-01',originalTargetID:700,wreckID:20},
+  targetID:700,wreckID:20});
+ assert.equal(result.status,'ALREADY_SETTLED');assert.equal(result.payoutAllowed,false);
+});
+test('conflicting settlement or duplicated physical item IDs are rejected',()=>{
+ assert.equal(c.inspectNativeSettlement({nativeReceipt:nativeSettlement(),
+  existingReceipt:{settlementID:'foreign',originalTargetID:700,wreckID:20},
+  targetID:700,wreckID:20}).reason,'PF_REWARD_SETTLEMENT_CONFLICT');
+ assert.equal(c.inspectNativeSettlement({nativeReceipt:nativeSettlement({itemIDs:[1001,1001]}),
+  targetID:700,wreckID:20}).reason,'PF_NATIVE_REWARD_RECEIPT_UNVERIFIED');
+});
