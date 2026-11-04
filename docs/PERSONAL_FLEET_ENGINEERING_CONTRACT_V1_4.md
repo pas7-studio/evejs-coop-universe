@@ -280,3 +280,11 @@ node --test tests/coop-personal-fleet-intents.test.cjs
 ```
 
 **Status:** PF-04 source reference authored, not deployed, native bridge unchanged, checked-in unit tests not run, no PLAY/WORK stack touched. `pas7-studio/EveJS` remained non-writable in the previous attempt (GitHub integration 403). This is not a gameplay-ready personal fleet order subsystem.
+
+### PF-04 continuation: reconciliation and stale fleet fencing
+
+- Intent admission and pre-dispatch both check the **current trusted fleet revision**, original assignment generation and active physical custody. A stale client roster cannot issue an order after ownership changes.
+- `reconcile()` resolves an `OUTCOME_UNKNOWN` operation only from an independently verified, exact original native receipt (same operationID, payload hash, physical native entity and assignment generation), and only to `NATIVE_REQUESTED`, `COMPLETED` or `NATIVE_REJECTED` under distinct physical proof requirements. It NEVER invokes the native command again.
+- 32 authored PF-04 cases now exist; the six Personal Fleet test files contain 124 authored `node:test` cases in total, **not a claim of 124 passing tests**. All server fork runtime, native SQLite and WORK two-client gates remain unverified.
+
+Cross-module critical point: a real PF order cannot be enabled merely by writing a good durable intent. The authoritative fork arbiter must explicitly recognize owner `PERSONAL_FLEET`, and the order bridge must verify the Personal Fleet claim and preserve the existing native WAR exclusion, native busy state and TACTICS emergency arbitration. These fork patches were not committed due to a previous GitHub 403.
