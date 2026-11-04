@@ -120,7 +120,10 @@ test('unsupported doctrine rejected',()=>{
 });
 test('same operation id and payload returns original receipt',()=>{
  const h=hire();
- const x=apply(h.state,command('HIRE','hire-001'));
+ const x=apply(h.state,command('HIRE','hire-001',{
+  pilotID:'coop-pilot-001',contractID:'contract-001',
+  hireReceipt:'b'.repeat(64)
+ }));
  assert.equal(x.status,'DUPLICATE');
  assert.deepEqual(x.receipt,h.receipt);
 });
@@ -200,4 +203,28 @@ test('PF-11: payroll witness must match original pilot and contract',()=>{
   pendingInvoices:0,uncertainSettlements:0,nativeTerminationVerified:true};
  assert.equal(apply(h.state,cmd,{verifiedTermination:true,
   liabilityEvidence:evidence}).reason,'PF_DISMISS_LIABILITIES_UNVERIFIED');
+});
+
+test('PF-12: same operation ID and same hash cannot hijack different ship',()=>{
+ const state=assigned();
+ const forged=command('ASSIGN','assign-001',{
+  expectedRevision:1,pilotID:'coop-pilot-001',
+  expectedPilotRevision:0,shipItemID:999
+ });
+ assert.equal(apply(state,forged,{verifiedCustody:true}).reason,
+  'PF_OPERATION_REPLAY_CONFLICT');
+});
+test('PF-12: same operation ID and same hash cannot switch action type',()=>{
+ const h=hire();
+ assert.equal(apply(h.state,command('DISMISS','hire-001',{
+  pilotID:'coop-pilot-001',expectedRevision:0,
+  expectedPilotRevision:0
+ }),{verifiedTermination:true}).reason,'PF_OPERATION_REPLAY_CONFLICT');
+});
+test('PF-12: same operation ID and same hash cannot change hire receipt',()=>{
+ const h=hire();
+ assert.equal(apply(h.state,command('HIRE','hire-001',{
+  pilotID:'coop-pilot-001',contractID:'contract-001',
+  hireReceipt:'c'.repeat(64)
+ }),{verifiedHire:true}).reason,'PF_OPERATION_REPLAY_CONFLICT');
 });
