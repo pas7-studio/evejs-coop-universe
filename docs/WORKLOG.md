@@ -3423,3 +3423,8 @@ Evidence: fork d7bb2f5; 15/15 site tests; AUDIT_OK; evejs-agents probe: 5024 com
 Why: stop the per-tick ammo bank recovery warning spam
 Where: tests/coop-ammo-journal-notice.test.mjs
 Evidence: fork <hash>; 4/4 notice tests; play stack redeployed healthy with coopSiteVariants + 2 km gate warp
+### 2026-11-04T19:49Z · 99374eb · L1 · test(sites): pin the battery-to-sentry decision
+
+Why: decide the real sentry type for inert site batteries
+Where: tests/coop-site-sentries.test.mjs
+Evidence: fork <hash>; 3/3 sentry tests; measured: batteries cat 23 zero weapon data, sentries cat 11 with real damage
