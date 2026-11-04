@@ -37,7 +37,7 @@ test('occupied entity blocks WAR writer',()=>{
 });
 test('occupied pilot blocks mining writer even for different ship',()=>{
  const s=empty();s.claims['500']=claim();s.generations['500']=1;
- assert.equal(guard(context(s),{entityID:999,pilotID}).reason,
+ assert.equal(guard(context(s),{entityID:999,pilotID:pilot}).reason,
   'PF_ACTOR_ALREADY_RESERVED');
 });
 test('different physical actor is admissible',()=>{
