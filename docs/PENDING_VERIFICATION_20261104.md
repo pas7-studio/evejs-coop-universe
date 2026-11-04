@@ -21,6 +21,8 @@ Client launch stays through `Play.bat` (never `bin64\exefile.exe`).
 |---|---|---|---|
 | 0 | `ef26dcb` frontlines-map allowlist | open the Faction Warfare landing page / "Occupancy changes" panel | map draws, no `KeyError: 30002803` / `30000132` in the client log |
 | 0b | `14da668` launcher `noconsole` | relaunch through `Play.bat`, then open the overview and the Neocom panels | no `IOError: [Errno 9] Bad file descriptor` from `logmodule.LogTraceback`; left Neocom strip and overview/selected-item panel stay after login |
+| 0c | `85ce916` free SP keep earned points | inject a skill injector while a skill is training | the remaining time drops, it never jumps back to a restarted level |
+| 0d | `d4e2b20` corporation wallet sale | sell loot with the Corporation wallet selected and no duration | the ISK lands on the corporation wallet; a personal sale is unchanged |
 | 0a | `7c8f6cc` campaigns content tags | open Возможности -> Военные кампании | the campaign card renders with its title, progress and career icon; no `contentTagType` and no `_hover_frame` in the client log |
 | 0a | `b2228b5` onlineStatus CRowset | log in, open contacts / address book, wait for a contact to log in | no `'blue.DBRowDescriptor' object has no attribute 'index'`; online dots update |
 | 1 | `55a60cf` warzone renderable systems | open the Faction Warfare / theaters-of-war map | map window opens, no `KeyError: 30000132` in the client log |
