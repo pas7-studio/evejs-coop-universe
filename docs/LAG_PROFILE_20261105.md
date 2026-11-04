@@ -57,8 +57,10 @@ one of those is a blocking call on the event loop, which is exactly what a playe
   `gameStore` sqlite flush (`enqueuePersistenceOperation`, 3.76 s) and any other
   `writeFileSync` on a tick path. Each should either be coalesced like the world file or
   moved onto a write-behind queue with an explicit `flush()`.
-- **`getSceneActivityState` (22.86 s)**: called per scene per tick; worth a per-tick memo
-  keyed by (scene, simTime).
+- **getSceneActivityState (22.86 s)** - **fixed** in 8114ec8: computed once per system per
+  sim stamp through space/npc/sceneActivityMemo.js, with the session count in the key so a
+  pilot arriving is never hidden. The remaining cold-scene branches still recompute when the
+  stamp moves, which is the cheapest possible behaviour without changing when NPCs are ticked.
 - **GC (17.84 s, heap ~2.7 GB live on the play stack)**: the largest single allocator is
   probably the 15 310-row native cargo table being cloned by `listNativeCargo()`; anything
   that needs counts should use a counted read instead of a clone + sort.

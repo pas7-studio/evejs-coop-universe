@@ -3506,3 +3506,9 @@ Why: record the CPU profile and the lag-fix baseline
 Detail: docs/LAG_PROFILE_20261105.md records the measurement (2 219 s profiled: writeFileUtf8 89.27 s, market-maker read 27.35 s, getSceneActivityState 22.86 s, market-maker write 20.00 s, GC 17.84 s, fsync 14.41 + 4.57 + 2.00 s - synchronous writes are ~28% of all non-idle CPU), the two fixes it produced (single-instance trading document, coalesced world save), the remaining hot spots (other synchronous 
 Where: docs/LAG_PROFILE_20261105.md, docs/WORKLOG.md, scripts/coop-cpuprofile-top.cjs
 Evidence: docs/LAG_PROFILE_20261105.md; scripts/coop-cpuprofile-top.cjs; profile of evejs-agents 2026-11-05
+### 2026-11-04T21:44Z · 4249cbd · L1 · test(perf): pin the scene-activity memo
+
+Why: memoise the per-scene activity/deadline computation per sim stamp
+Detail: Three cases on the extracted helper (no game store needed): the same stamp reuses the very same answer and a new stamp recomputes, a pilot arriving at the same stamp is not hidden, systems never share an answer and the map stays bounded.
+Where: docs/WORKLOG.md, tests/coop-scene-activity-memo.test.mjs
+Evidence: profile: getSceneActivityState 22.86s of 2219s; 3/3 memo tests; AUDIT_OK
