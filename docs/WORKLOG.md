@@ -3530,3 +3530,9 @@ Why: refresh the session handoff after the 2026-11-05 fix round
 Detail: The handoff now names the deployed-vs-pending line for every change of 2026-11-05 (warehouse loot, gate warps, sentries, the five lag fixes, the deployable sweep, the client-launch runbook), the two log lines and two event names that prove the site features in game, and the rule to run the launch verifier before reporting a client-side symptom. The jobs window question stays open as the only block
 Where: .opencode/state.md, docs/WORKLOG.md
 Evidence: state.md rewritten; five red gates cleared (48/48)
+### 2026-11-04T22:58Z · 5475f06 · L1 · test(militia): pin the enlistment record as the only militia truth
+
+Why: militia enlistment truth from the enlistment record (re-enlist was blocked by a stale session flag); war rewards LP/standing
+Detail: Five cases: ACTIVE advertises its faction, LEFT advertises none (the exact bug that hid the enlist flow) while keeping leave and cooldown on record, no record is 'never enlisted', a broken store means unknown rather than a wrong faction, and the FW window asks the enlistment record first and corrects the session before answering.
+Where: tests/coop-militia-session-truth.test.mjs
+Evidence: fork 99f4698, ce39307; 11 new tests; AUDIT_OK 65473/65500; live: enlistment LEFT + standing 1.921 + cooldown 0
