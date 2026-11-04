@@ -45,6 +45,7 @@ function accrue(input,{authenticatedEmployer,activeContract,periodUnbilled}={}){
  activeContract?.payeeWalletID!==input.payeeWalletID||
  activeContract?.revisionHash!==input.contractRevisionHash||
  activeContract?.salaryISK!==input.salaryISK||
+ activeContract?.verifiedArrearsISK!==input.arrearsISK||
  activeContract?.activeThroughoutPeriod!==true||
  periodUnbilled!==true)return deny('PF_PAYROLL_CONTRACT_OR_PERIOD_UNVERIFIED');
  const row={version:1,invoiceID:input.invoiceID,contractID:input.contractID,
