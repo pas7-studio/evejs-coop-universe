@@ -3261,3 +3261,15 @@ Evidence: fork 60296b9; node --check clean; tests/coop-drone-state-sync.test.mjs
 Why: The stale-snapshot path is movementSceneRefresh: SetState (STATE_RESET) is built from a visible-entity snapshot and the client replaces michelle.stateByDroneID with bag.droneState from it, so a snapshot taken before the launch burst erases the newer OnDroneStateChange entries and the window counts 1/5.
 Where: fork Code/server/src/space/movement/dispatch/movementSceneRefresh.js sendStateRefresh (lazy droneRuntime require, syncDroneStatesForSession after the reset, movement debug event set-state.drone-resync).
 Evidence: fork 762aaf7; node --check clean; the sync itself is covered by tests/coop-drone-state-sync.test.mjs (3/3). Not deployed - one live launch plus one scene refresh must show [Drone] Launch counters and a 5/5 window.
+
+### 2026-11-04T02:45Z · e8aa85a · L1 · diag(warp): log landing geometry and the pilot landing correction
+
+Why: The owner reports landing ~4 km short (heavy hulls) and one 77 km divergence, while the server's [WarpComplete] shows it always finishes on the target point (WARP_COMPLETION_DISTANCE_MAX_METERS = 1), so the shortfall is the client's own solver and could not be told apart from a missing correction.
+Where: fork Code/server/src/space/runtime.js: [WarpComplete] now carries stopDistance, shipRadius, shipMass, inertia; new [WarpLanding] records the authoritative position and stamp sent to the pilot after the warp resolves.
+Evidence: fork e8aa85a; node --check clean. Live [WarpComplete] lines since 2026-11-01 show station warps landing edge=500 and belt warps edge=10-12 km (client-requested range), i.e. the server never lands short. One live warp with the new line is required before changing warp behaviour.
+
+### 2026-11-04T02:55Z · 106f79f · L1 · fix(loot): put ship-death loot in the wreck's cargo hold, not its hangar
+
+Why: Ship-death survivors were moved into the wreck with ITEM_FLAGS.HANGAR (4) while the client opens a wreck as its cargo hold (flag 5) - the flag native NPC wrecks default to (space/npc/nativeNpcStore.js:671,732) and the flag anomaly loot is granted with (dungeonUniverseSiteService ITEM_FLAGS.CARGO_HOLD) - so the wreck looked empty where it is opened from and the loot read as scattered items.
+Where: fork Code/server/src/services/killmail/deathOutcomeResolver.js ROOT_LOOT_FLAG_ID (shared by ship and structure destruction).
+Evidence: fork 106f79f; node --check clean; tests/coop-death-loot-flag.test.mjs 2/2 guards the flag name and forbids a HANGAR destination. Not deployed.
