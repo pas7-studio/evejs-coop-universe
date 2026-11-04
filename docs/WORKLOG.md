@@ -3303,3 +3303,9 @@ Evidence: fork ddf6bbb; node --check clean; tests/coop-loot-all-partial-move.tes
 Why: Client traceback EXCEPTION #33 (live 2026-11-03 22:38:41): KeyError 30000132 in the theaters-of-war landing page - it sorts every occupation state by dateTaken, takes the newest system and indexes its own frontlines map with it (systems[focus_system_id]). Our payload was built from every static system of a belligerent faction, so a front outside the warzone map (Ansila, The Forge) could win that sort and kill the window.
 Where: fork space/coopWarClientView.js: occupationPairs builds states from warzoneSystems() (belligerent systems inside the war regions) instead of staticWarzoneSystems(), and warzoneOccupationStates drops live fronts outside the supplied system set; no systems set keeps the old behaviour. integration/coopWarClientView.cjs refreshed (drift 30 -> 29).
 Evidence: fork 55a60cf; node --check clean; tests/coop-war-occupation-renderable.test.mjs 2/2 plus the existing coop-war-client-view suites 15/15. Not deployed.
+
+### 2026-11-04T04:45Z · faaefa4 · L1 · fix(overview): send public character names as unicode too
+
+Why: All 17 'must be unicode, not str' tracebacks in the 2026-11-03 session carry text='SaSaNyah', a pilot from another corporation ([RAIH]; confirmed from the owner's Local/chat logs), so corp/alliance owner rows cannot be the source: the name reaches cfg.eveowners via charMgr.GetPublicInfo/GetPublicInfo3 where characterName was a py2 byte str, and the overview dies in PrimeDisplayName -> ExtractLocalizedTags.
+Where: fork services/character/charMgrService.js buildPublicInfoEntries (characterName, description, title as wstring).
+Evidence: fork faaefa4; node --check clean; tests/coop-client-rowset-and-owner-name.test.mjs 5/5 (rowset class, both owner registries, public info, and the marshal opcode difference 0x2e vs 0x13). Not deployed.

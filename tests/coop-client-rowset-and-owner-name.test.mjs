@@ -77,3 +77,16 @@ test("both owner registries send the name as wstring", () => {
     );
   }
 });
+
+test("public character info sends the name as unicode", () => {
+  // A pilot outside our corporation reaches cfg.eveowners only through GetPublicInfo /
+  // GetPublicInfo3, so this is the producer behind the repeated 'SaSaNyah' traceback.
+  const source = readFileSync(path.join(srcRoot, "services/character/charMgrService.js"), "utf8");
+  const at = source.indexOf('"characterName"');
+  assert.ok(at > 0, "characterName entry must exist");
+  const entry = source.slice(at, at + 400);
+  assert.ok(
+    entry.includes('type: "wstring"'),
+    "characterName must be marshalled as wstring, not a py2 byte str",
+  );
+});
