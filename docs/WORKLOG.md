@@ -3408,3 +3408,8 @@ Evidence: fork a9a0395; 10/10 site tests; evejs-agents shows combat lowsec[3,10]
 Why: keep the wave-scaling hook inside the stock-file budget (scaleForSite one-liner)
 Where: docs/WORKLOG.md
 Evidence: fork 6e64ae8; coop-engine-audit AUDIT_OK (stockChars under 67500); funnel proof d3 unchanged, d4 x2, d5 x2.5, d6 x3 on evejs-agents
+### 2026-11-04T18:44Z · 05f0703 · L1 · test(sites): pin the scanner marker and the ore revert (fork e5d5756)
+
+Why: mark scaled sites in the scanner and revert the ore ceiling
+Where: tests/coop-site-wave-scaling.test.mjs
+Evidence: fork e5d5756; probe on evejs-agents: markSiteLabel('Sansha Port',d5)='Sansha Port [CO-OP x2.5]', d3/ore unchanged; ore profile [2,5]/[3,5] as authored, combat lowsec[3,10] nullsec[4,10]
