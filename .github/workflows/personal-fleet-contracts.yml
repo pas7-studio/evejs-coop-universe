@@ -1,0 +1,37 @@
+name: Personal Fleet reference contract tests
+on:
+  pull_request:
+    paths:
+      - 'scripts/lib/personal-fleet-*.cjs'
+      - 'tests/coop-personal-fleet-*.test.*'
+      - 'docs/PERSONAL_FLEET_ENGINEERING_CONTRACT_V1_4.md'
+      - '.github/workflows/personal-fleet-contracts.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  node-contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate reference source syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          for source in scripts/lib/personal-fleet-*.cjs; do
+            node --check "$source"
+          done
+          for source in tests/coop-personal-fleet-*.test.cjs tests/coop-personal-fleet-*.test.mjs; do
+            node --check "$source"
+          done
+      - name: Run all Personal Fleet contract tests in native Node
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/coop-personal-fleet-*.test.cjs tests/coop-personal-fleet-*.test.mjs
