@@ -54,6 +54,14 @@ const confirmedLoss=()=>{
  {wreckID:700,systemID,originalNativeShipAbsent:true,originalHangarShipAbsent:true,
  wreckItemIdentityVerified:true,nativeLossLedgerCommitted:true}).record;
 };
+const recoveredLoss=()=>{
+ let row=confirmedLoss();
+ row=advance(row,'CLONE_RECOVERING','DURABLE_CLONE_RECOVERY_STARTED',
+  {readyAt:25000,durablePilotStatus:'RECOVERING',originalShipNotRestored:true}).record;
+ row=advance(row,'PILOT_AVAILABLE','ORIGINAL_CLONE_RECOVERY_CONFIRMED',
+  {originalCloneReady:true,originalShipNotRestored:true,pilotStillUnassigned:true,wreckID:700},30000).record;
+ return row;
+};
 test('hire -> exclusive claim -> assign preserves same physical ship',()=>{
  const x=fixture();assert.equal(preparePilot(x).status,'APPLIED');
  assert.equal(getClaim(x).status,'APPLIED');
@@ -73,7 +81,9 @@ test('native confirmed wreck moves pilot to recovery and never recreates hull',(
  const lost=confirmedLoss();
  assert.equal(lost.phase,'LOSS_CONFIRMED');
  const changed=x.apply(x.command('RECORD_LOSS','record-loss-1',{
- pilotID,shipItemID,wreckID:700,expectedPilotRevision:1}),{verifiedLoss:true});
+ pilotID,shipItemID,wreckID:700,assignmentID:'assignment-1',
+ expectedGeneration:1,expectedPilotRevision:1}),{verifiedLoss:true,
+ lossEvidence:confirmedLoss()});
  assert.equal(changed.status,'APPLIED');
  assert.equal(x.state.pilots[pilotID].status,'RECOVERING');
  assert.equal(x.state.pilots[pilotID].shipItemID,null);
@@ -84,11 +94,15 @@ test('native confirmed wreck moves pilot to recovery and never recreates hull',(
 test('clone recovery leaves pilot idle and requires new physical claim',()=>{
  const x=fixture();preparePilot(x);getClaim(x);assign(x);
  x.apply(x.command('RECORD_LOSS','record-loss-1',{
- pilotID,shipItemID,wreckID:700,expectedPilotRevision:1}),{verifiedLoss:true});
+ pilotID,shipItemID,wreckID:700,assignmentID:'assignment-1',
+ expectedGeneration:1,expectedPilotRevision:1}),{verifiedLoss:true,
+ lossEvidence:confirmedLoss()});
  assert.equal(x.apply(x.command('RECOVER_PILOT','recover-1',{
- pilotID,expectedPilotRevision:2}),{}).reason,'PF_CLONE_RECOVERY_UNVERIFIED');
+ pilotID,expectedPilotRevision:2,lostShipItemID:500,wreckID:700,
+ expectedGeneration:1}),{}).reason,'PF_CLONE_RECOVERY_UNVERIFIED');
  assert.equal(x.apply(x.command('RECOVER_PILOT','recover-1',{
- pilotID,expectedPilotRevision:2}),{verifiedRecovery:true}).status,'APPLIED');
+ pilotID,expectedPilotRevision:2,lostShipItemID:500,wreckID:700,
+ expectedGeneration:1}),{verifiedRecovery:true,recoveryEvidence:recoveredLoss()}).status,'APPLIED');
  assert.equal(x.state.pilots[pilotID].status,'CONTRACTED');
  assert.equal(x.state.pilots[pilotID].shipItemID,null);
 });
@@ -120,4 +134,27 @@ test('same contracted pilot salary period cannot be billed twice after loss',()=
  const duplicate=payroll.accrue({...input,invoiceID:'invoice-2'},authority);
  assert.equal(payroll.insertInvoice(ledger.ledger,duplicate.invoice,
   {expectedRevision:1}).reason,'PF_PAYROLL_PERIOD_OVERLAP');
+});
+
+test('forged loss evidence from different ship cannot clear roster custody',()=>{
+ const x=fixture();preparePilot(x);getClaim(x);assign(x);
+ const result=x.apply(x.command('RECORD_LOSS','record-loss-1',{
+  pilotID,shipItemID,wreckID:700,assignmentID:'assignment-1',
+  expectedGeneration:1,expectedPilotRevision:1}),{
+  verifiedLoss:true,lossEvidence:{...confirmedLoss(),originalShipItemID:501}});
+ assert.equal(result.reason,'PF_ORIGINAL_SHIP_LOSS_UNVERIFIED');
+ assert.equal(x.state.pilots[pilotID].shipItemID,500);
+});
+test('forged clone recovery receipt cannot make an unassigned pilot fly',()=>{
+ const x=fixture();preparePilot(x);getClaim(x);assign(x);
+ x.apply(x.command('RECORD_LOSS','record-loss-1',{
+  pilotID,shipItemID,wreckID:700,assignmentID:'assignment-1',
+  expectedGeneration:1,expectedPilotRevision:1}),{
+  verifiedLoss:true,lossEvidence:confirmedLoss()});
+ const result=x.apply(x.command('RECOVER_PILOT','recover-1',{
+  pilotID,expectedPilotRevision:2,lostShipItemID:500,wreckID:700,
+  expectedGeneration:1}),{verifiedRecovery:true,
+  recoveryEvidence:{...recoveredLoss(),generation:999}});
+ assert.equal(result.reason,'PF_CLONE_RECOVERY_UNVERIFIED');
+ assert.equal(x.state.pilots[pilotID].status,'RECOVERING');
 });
