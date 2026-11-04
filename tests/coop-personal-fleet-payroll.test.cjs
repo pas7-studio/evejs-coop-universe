@@ -239,3 +239,19 @@ test('PF-11: verified arrears must match the native contract exactly',()=>{
  });
  assert.equal(x.status,'DUE');assert.equal(x.invoice.totalISK,1700);
 });
+
+
+test('PF-13: identical invoice ID with changed salary cannot receive previous receipt',()=>{
+ assert.equal(p.replay(start(),input({salaryISK:9999})).reason,
+ 'PF_PAYROLL_ID_REPLAY_CONFLICT');
+});
+test('PF-13: identical invoice ID with changed arrears cannot replay',()=>{
+ assert.equal(p.replay(start(),input({arrearsISK:100})).reason,
+ 'PF_PAYROLL_ID_REPLAY_CONFLICT');
+});
+test('PF-13: identical invoice ID cannot replace payee wallet or pilot',()=>{
+ assert.equal(p.replay(start(),input({payeeWalletID:777})).reason,
+ 'PF_PAYROLL_ID_REPLAY_CONFLICT');
+ assert.equal(p.replay(start(),input({pilotID:'coop-pilot-002'})).reason,
+ 'PF_PAYROLL_ID_REPLAY_CONFLICT');
+});
