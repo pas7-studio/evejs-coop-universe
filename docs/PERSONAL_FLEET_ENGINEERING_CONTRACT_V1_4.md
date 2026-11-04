@@ -334,3 +334,28 @@ New Draft PR code:
 **Important crash-recovery gap:** the current reference reducer models the rules but neither makes durable writes, produces a native wreck, modifies an actual NPC clone, nor heals pending filesystem/SQLite commits. A production solution must implement a committed intent/reconcile saga across real EveJS authorities and inject SIGKILL at each step; avoid claiming this unit module provides crash-safe persistence by itself. No live ship spawn, player inventory custody, payment, PLAY/WORK restart or deployment occurred.
 
 **Evidence:** 23 PF-07 unit tests authored and GitHub files verified, **NOT_EXECUTED** in this session. Container could run Node v22.16.0 but cannot resolve github.com to fetch the exact GitHub branch; do not claim tests green until checked-out branch is executed. Run `node --check scripts/lib/personal-fleet-loss-recovery.cjs && node --test tests/coop-personal-fleet-loss-recovery.test.cjs` in an authorized checkout.
+
+## PF-08: original-wallet NPC salaries, arrears and payroll ledger (2026-11-05)
+
+New portable, **NON-DEPLOYED** source:
+- `scripts/lib/personal-fleet-payroll.cjs` — immutable invoice and wallet settlement policy, independent reconciliation of ambiguous wallet outcomes, and a bounded canonical payroll ledger. Key: `coop-personal-fleet\u001fpayroll-ledger-v1` in the native `corporationRuntime` SQLite table (proposed; not installed).
+- `tests/coop-personal-fleet-payroll.test.cjs` — 36 authored scenarios including original active contract, integer ISK, salary/arrears and integer overflow, durable intent, dual-sided native wallet debit/credit proof, no debit when insufficient funds, unknown commit quarantine, exact idempotent receipts, **overlapping payroll periods across different invoice IDs**, unique settlement IDs, and independent reconciliation.
+
+**Evidence:** In this session the EXACT two file contents fetched from GitHub after commit were executed through a synchronous in-memory V8 JavaScript harness with a small `node:test`, `node:assert/strict`, and `structuredClone` compatibility shim: **36/36 PASS (0 failed)**. This is an actual isolated execution of checked-in code, **NOT a native Node test command, real SQLite transaction, real wallet transfer, WORK E2E, or payroll delivery**. The container has Node 22.16.0 but `github.com` DNS is unavailable to fetch the exact branch via git. Run the real test in a checked-out repo before merge:
+```sh
+node --check scripts/lib/personal-fleet-payroll.cjs
+node --test tests/coop-personal-fleet-payroll.test.cjs
+```
+
+### Mandatory production integration
+
+1. Contract authority: bind each payroll period and wage to the authenticated employer, exact active native NPC contract, employer wallet, payee wallet and server-derived tariff. No arbitrary payee or salary from client input.
+2. All amounts must be safe-integer **ISK units**, never JS fractional floating point or presumed USD values. If the original native economy stores fractional ISK, implement a proven canonical integer conversion or block.
+3. In a native `coopAtomicNativeRows.transact` callback (SQLite `BEGIN IMMEDIATE`), load and validate the entire payroll ledger; refuse overlapping periods within a single contract **even with different invoice IDs**. Insert before any payment attempt, never discard the invoice to bypass an unknown outcome.
+4. Commit a distinct `SETTLING` intent **before** attempting native wallet transfer. A native wallet debit+credit must happen in the same authoritative GameStore transaction with a stable original settlement ID, exactly one debit, exactly one credit and durable receipt; otherwise `PAID` is forbidden. `PAID` from callback success without validated original wallet rows is invalid.
+5. When debit/credit outcome is unknown, permanently fence the invoice in `OUTCOME_UNKNOWN`; never retry settlement or create a replacement invoice for an overlapping period. Independent reconciliation examines original wallet ledger/settlement history to decide committed paid versus definite no-effect, with no assumption based on a timeout.
+6. `INSUFFICIENT_FUNDS` carries no proof of payment and may schedule another attempted settlement ONLY after definite no-debit proof. Partial payments must not be silently represented as full settlement; introduce a separate auditable installment contract if required.
+7. Termination/suspension/payroll arrears need a single contract and liability source-of-truth. Do not dismiss a contracted pilot while original unpaid liabilities are orphaned; explicitly settle, transfer or retain them under native contract policy.
+8. The current standalone module is a **pure reducer** and accepts abstract trusted adapter assertions. It is not itself the original EveJS wallet service, does not verify the actual character table or perform writes, and cannot guarantee cross-module atomicity by an unconnected callback. Fork write access remained blocked with GitHub 403 in prior attempt. No PLAY/WORK wallet balances were modified.
+
+**Scope note:** Native payroll wire-up and two-player economy QA are still release blockers. Continue work on the existing PR #350 without claiming real salary payments are implemented.
