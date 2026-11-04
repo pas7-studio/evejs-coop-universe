@@ -1,4 +1,4 @@
-# Pending verification — 21 fork commits (2026-11-04)
+# Pending verification — 22 fork commits (2026-11-04)
 
 Everything below is committed on `coop/pas7std` and **not deployed**. Nothing here is
 proven live yet; each line names the exact observation that turns it into PASS or FAIL.
@@ -22,6 +22,7 @@ Client launch stays through `Play.bat` (never `bin64\exefile.exe`).
 | 1 | `55a60cf` warzone renderable systems | open the Faction Warfare / theaters-of-war map | map window opens, no `KeyError: 30000132` in the client log |
 | 2 | `ddf6bbb` Loot All partial move | `Loot All` on a wreck with a nearly full hold | items that fit are looted, no `NotEnoughCargoSpace` exception |
 | 3 | `17e3c78` owner names unicode | open overview in a system with a named character | no `must be unicode, not str` in the client log; names render |
+| 3a | `faaefa4` public character names unicode | fly next to a pilot from another corporation | their name renders in overview, no `must be unicode, not str` |
 | 4 | `0e890d2` rowset class | open the Contracts window / wait for the Neocom blip | no `'module' object has no attribute 'Rowset'` |
 | 5 | `a8764c0` drone/warp extraction | any drone launch | behaviour unchanged, `[Drone] Launch` still logged |
 | 6 | `106f79f` wreck cargo-hold flag | die (or kill an NPC ship) and open the wreck | surviving modules/cargo appear in the wreck's cargo hold |
