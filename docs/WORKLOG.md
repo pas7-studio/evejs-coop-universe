@@ -3413,3 +3413,8 @@ Evidence: fork 6e64ae8; coop-engine-audit AUDIT_OK (stockChars under 67500); fun
 Why: mark scaled sites in the scanner and revert the ore ceiling
 Where: tests/coop-site-wave-scaling.test.mjs
 Evidence: fork e5d5756; probe on evejs-agents: markSiteLabel('Sansha Port',d5)='Sansha Port [CO-OP x2.5]', d3/ore unchanged; ore profile [2,5]/[3,5] as authored, combat lowsec[3,10] nullsec[4,10]
+### 2026-11-04T18:56Z · f1fdb09 · L1 · test(sites): pin the co-op pool variants
+
+Why: add real co-op site variants to the spawn pool and land gate warps at 3 km
+Where: tests/coop-site-variants.test.mjs
+Evidence: fork d7bb2f5; 15/15 site tests; AUDIT_OK; evejs-agents probe: 5024 combat templates incl. 40 coop: variants, 'Co-op x2.5: Crimson Hand Supply Depot' d5 waves 7->18..10->25, resolvable by templateID
