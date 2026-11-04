@@ -255,3 +255,28 @@ Source files added to this Draft PR:
 **Canonical state flow:** PREPARED → NATIVE_REQUESTED → ACTIVE → RETURN_REQUESTED → DOCKING → COMMITTED_DOCKED, or confirmed original wreck → CONFIRMED_LOST. An unknown outcome is a durable quarantine, never permission to re-spawn. Physical observations return read-only `OBSERVED_*` statuses; a state transition additionally requires independently sourced durable evidence. Docking requires original hangar item custody and absence of the native actor; mere station approach does not satisfy it.
 
 **Native implementation prerequisites:** (1) player-inventory native row and fitting/cargo provenance discovery; (2) original item ownership and exclusivity locks in native GameStore; (3) creation/attachment of exact native NPC entity/controller without a second item; (4) crash journal and idempotent restoration; (5) station sessionless reverse custody transaction. Until proven, activation and docking remain default OFF and no production behavior must use this pure reference.
+
+## PF-04: Personal Fleet durable order intent policy (added 2026-11-05)
+
+This PR now has two additional **non-deployed reference** files:
+- `scripts/lib/personal-fleet-intents.cjs`: immutable intent admission, trusted authority proofs, bounded TTL, safe per-command target requirements, durable dispatch phase fencing, native ACK vs actual completion distinction, permanent `OUTCOME_UNKNOWN` and replay with `dispatchAllowed:false`.
+- `tests/coop-personal-fleet-intents.test.cjs`: **26 authored unit cases** (including initial roster revision zero). Note: committed files verified in GitHub, but **NOT EXECUTED** with Node in this session.
+
+### Required engine fork integration (not done)
+
+1. `Code/server/src/space/coopNpcOrderArbiter.js`: the existing `OWNERS` Set currently permits only RAID/TACTICS/GATE/PATROL/CIVILIAN/WAR/EXPEDITION. `PERSONAL_FLEET` requires explicit opt-in owner registration and rules; never masquerade as WAR, TACTICS, RAID or a fake player session.
+2. `Code/server/src/space/coopNpcOrderBridge.js`: all real orders pass its unique named-pilot, matching scene/entity/controller, WAR claim exclusion and native busy checks. Add the PF ownership proof without bypassing this bridge, and preserve TACTICS-only emergency preemption. A bridge `success:true` is **ACK** only, not movement/kill/arrival proof.
+3. A command from the client is first bound to an actual authenticated `characterID` on the server. `authenticatedIssuer`, `actorProof`, `targetPermitted`, `leaseAvailable`, `payloadHash`, and `proof` are **trusted server-derived values only**. Never accept their values as client-controlled authorization.
+4. `QUEUED -> ISSUING` transition must be DURABLY COMMITTED in GameStore **before** invoking the existing native `coopNpcOrderBridge.issue()`. After a crash, an `ISSUING` operation is UNKNOWN until original native proof reconciles it; never blindly redispatch.
+5. Native `execute()` may return a synchronous definite rejection (`success:false`), a success acknowledgement, throw, or an ambiguous value. Map these respectively to `NATIVE_REJECTED`, `NATIVE_REQUESTED`, or `OUTCOME_UNKNOWN`. Do not mark `COMPLETED` from an acknowledgement or a timer.
+6. Independent completion evidence: FOLLOW -> actual native follower distance/position to correct leader and current scene; WARP -> verified destination arrival; ATTACK -> allowed native firing/damage or combat end per semantic order completion; DEFEND -> actual guarded entity controller behavior; RETREAT -> real escape/arrival; RETURN_TO_BASE -> verified sessionless docking and original ItemStore custody. If not yet supported, expose `NATIVE_REQUESTED` or explicit BLOCKED rather than fabricate completion.
+7. Any command that requires a target must be checked for legality (Crimewatch, hostile flags, immunity, target still present) and authorization **again at dispatch**. Client-supplied IDs alone never authorize an attack.
+
+### Executable unit command
+
+```sh
+node --check scripts/lib/personal-fleet-intents.cjs
+node --test tests/coop-personal-fleet-intents.test.cjs
+```
+
+**Status:** PF-04 source reference authored, not deployed, native bridge unchanged, checked-in unit tests not run, no PLAY/WORK stack touched. `pas7-studio/EveJS` remained non-writable in the previous attempt (GitHub integration 403). This is not a gameplay-ready personal fleet order subsystem.
