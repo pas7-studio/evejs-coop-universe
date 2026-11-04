@@ -3476,3 +3476,9 @@ Why: autopilot gate warps land 10 km out: the client's 10 km default was treated
 Detail: Two cases with the live numbers behind them: a gate warp stop distance is 2000 m for a 0 m and for a 10 km request and still honours 20 km, and the gate envelope/scatter thresholds are the new 10 km constant instead of the 2 500 m jump range.
 Where: docs/WORKLOG.md, tests/coop-gate-warp-default-range.test.mjs
 Evidence: fork 445f390; 2/2 tests; measured distToTargetEdge 11009 / 11315 vs jump range 2500
+### 2026-11-04T21:36Z · df85a82 · L1 · test(sites),ops(compose): pin lootable site structures and enable them
+
+Why: site warehouses/depots/caches hold real loot from the site's own loot profile
+Detail: Five cases: an empty warehouse is filled from the site's own pirate combat profile into its own item id (owner 1, cargo flag), an existing or already-emptied structure is never filled twice, non-warehouse scenery is untouched, an inactive instance or a template without loot profiles is skipped with a reason, and a refused grant is recorded once instead of retried every tick. Both compose files set
+Where: docs/WORKLOG.md, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-site-loot-structures.test.mjs
+Evidence: fork 10ebb37; 5/5 tests; live on evejs-agents: Sleeper Warehouse gained 4 real items, readable through listContainerItems

@@ -92,6 +92,10 @@ Evidence to collect then:
 
 Until then the feature must not be described as "verified in game".
 
+## Related
+
+* Site structures that hold loot (warehouses, depots, caches): [SITE_LOOT_STRUCTURES.md](SITE_LOOT_STRUCTURES.md).
+
 ## Related decisions from the same work
 
 * The earlier idea of adding a category 11 *battery* spawn entry to the co-op
