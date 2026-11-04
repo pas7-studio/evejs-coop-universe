@@ -41,8 +41,10 @@ from `docs/client-contracts/baseline.json` by what they actually return, because
 client sees: a getter that returns `null` where the view guards for it ("no event", "no pending
 something") is correct, while an *action* that returns `null` silently does nothing.
 
-Current split: 31 return `null`, 8 return data from an audit log, 4 return an empty list, 1 returns a
-scalar.
+Current split (measured 2026-11-04 with `node scripts/coop-placeholder-audit.cjs`): 23 return
+`null`, 6 return data from an audit log, 8 return an empty list. The previous note counted 31
+`null` and 4 empty lists; the placeholders did not grow, the classifier now separates the
+audit-log answers from plain `null`.
 
 Correct by contract, deliberately left alone:
 - `pingService.Ping` - the client's idle keepalive (`connectionService.PingLoop`); nothing to return;

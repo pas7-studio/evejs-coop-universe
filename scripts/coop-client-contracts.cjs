@@ -54,6 +54,7 @@ const GUARDED_STUBS = Object.freeze({
   "pingService.Ping": "fire-and-forget proxy",
   "eventLog.LogPlayerRequestedDisconnect": "fire-and-forget proxy",
   "localizationServer.UpdateLocalizationQAWrap": "QA only",
+  "keeper.GetLevelEditor": "QA/authoring only: called from scenarioMgr's level editor, never from a player window",
   "publicQaToolsServer.MoveMeTo": "QA only, wrapped in try/except UserError",
   "publicQaToolsServer.SlashCmd": "QA only",
   "node_graph.process_client_blackboard_request": "QA node graph only",
@@ -207,6 +208,29 @@ function classify(entry) {
   return "OK";
 }
 
+// A stub's reason may also be inherited from its service: whole families are
+// acceptable for the same reason, and writing it once keeps the register honest
+// instead of leaving dozens of "unreviewed" rows that nobody re-checks.
+const GUARDED_STUB_PREFIXES = [
+  ["alert.", "fire-and-forget telemetry; the client never reads the answer"],
+  ["petitioner.", "the petition window renders an empty list/answer and keeps its local state first"],
+  ["account.GiveCash", "performs the transfer; the client does not read the answer"],
+  ["authentication.", "applied server-side, no return value the client reads"],
+  ["beyonce.", "GM/debug tooling only"],
+  ["publicQaToolsServer.", "QA only"],
+  ["node_graph.qa_", "QA node graph only"],
+  ["rewardMgr.GetRewardLPLogs", "reads the reward audit log; an empty list is the honest answer"],
+  ["survey.", "survey tooling; answers come from the survey event log"],
+];
+
+function stubReason(key) {
+  if (GUARDED_STUBS[key]) return GUARDED_STUBS[key];
+  for (const [prefix, reason] of GUARDED_STUB_PREFIXES) {
+    if (String(key).startsWith(prefix)) return reason;
+  }
+  return "";
+}
+
 function build() {
   const calls = JSON.parse(fs.readFileSync(CALLS, "utf8")).calls;
   const services = readServer();
@@ -220,7 +244,7 @@ function build() {
       service, method, key, sites: info.sites,
       module: (info.modules && info.modules[0]) || "",
       status: classify(entry),
-      reason: GUARDED_STUBS[key] || "",
+      reason: stubReason(key),
       file: entry ? path.relative(SERVER_SRC, entry.file) : "",
     });
   }

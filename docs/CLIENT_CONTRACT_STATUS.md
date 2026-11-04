@@ -27,7 +27,7 @@ Total client calls: 542 · MISSING 0 · STUB 37 · NULLABLE 102 · OK 403
 | `charUnboundMgr.GetCharacterLockType` | 1 | characterSelection.pyj | services\character\charService.js | `if lockTypeID is not None` |
 | `clientStatLogger.LogString` | 4 | michelle.pyj | services\logging\clientStatLoggerService.js | fire-and-forget proxy |
 | `eventLog.LogPlayerRequestedDisconnect` | 1 | clientStatsSvc.pyj | services\logging\eventLogService.js | fire-and-forget proxy |
-| `keeper.GetLevelEditor` | 2 | scenarioMgr.pyj | services\dungeon\keeperService.js | **unreviewed** |
+| `keeper.GetLevelEditor` | 2 | scenarioMgr.pyj | services\dungeon\keeperService.js | QA/authoring only: called from scenarioMgr's level editor, never from a player window |
 | `localizationServer.UpdateLocalizationQAWrap` | 2 | localizationClient.pyj | services\support\localizationServerService.js | QA only |
 | `milestoneMgr.ProcessCharacterLogon` | 1 | milestoneSvc.pyj | services\character\milestoneMgrService.js | fire-and-forget |
 | `node_graph.process_client_blackboard_request` | 1 | graph.pyj | services\nodegraph\nodeGraphService.js | QA node graph only |
@@ -38,11 +38,11 @@ Total client calls: 542 · MISSING 0 · STUB 37 · NULLABLE 102 · OK 403
 | `node_graph.qa_subscribe` | 1 | log_graph.pyj | services\nodegraph\nodeGraphService.js | QA only |
 | `node_graph.qa_unsubscribe` | 1 | log_graph.pyj | services\nodegraph\nodeGraphService.js | QA only |
 | `operationsManager.process_client_event` | 1 | eventHandler.pyj | services\character\operationsManagerService.js | telemetry, fire-and-forget |
-| `petitioner.GetCategoryProperties` | 1 | petitionWindow.pyj | services\support\petitionerService.js | **unreviewed** |
-| `petitioner.GetClientPickerInfo` | 1 | petitionWindow.pyj | services\support\petitionerService.js | **unreviewed** |
-| `petitioner.GetLog` | 1 | petition.pyj | services\support\petitionerService.js | **unreviewed** |
+| `petitioner.GetCategoryProperties` | 1 | petitionWindow.pyj | services\support\petitionerService.js | the petition window renders an empty list/answer and keeps its local state first |
+| `petitioner.GetClientPickerInfo` | 1 | petitionWindow.pyj | services\support\petitionerService.js | the petition window renders an empty list/answer and keeps its local state first |
+| `petitioner.GetLog` | 1 | petition.pyj | services\support\petitionerService.js | the petition window renders an empty list/answer and keeps its local state first |
 | `petitioner.MarkAsRead` | 1 | petition.pyj | services\support\petitionerService.js | fire-and-forget, local list updated first |
-| `petitioner.PropertyPopulationInfo` | 1 | petitionWindow.pyj | services\support\petitionerService.js | **unreviewed** |
+| `petitioner.PropertyPopulationInfo` | 1 | petitionWindow.pyj | services\support\petitionerService.js | the petition window renders an empty list/answer and keeps its local state first |
 | `pingService.Ping` | 1 | connectionService.pyj | services\ping\pingService.js | fire-and-forget proxy |
 | `publicQaToolsServer.MoveMeTo` | 2 | publicQaToolsClient.pyj | services\support\publicQaToolsServerService.js | QA only, wrapped in try/except UserError |
 | `publicQaToolsServer.SlashCmd` | 1 | publicQaToolsClient.pyj | services\support\publicQaToolsServerService.js | QA only |
@@ -50,7 +50,7 @@ Total client calls: 542 · MISSING 0 · STUB 37 · NULLABLE 102 · OK 403
 | `pvpFilamentMgr.GetMostRecentEvent` | 1 | pvpFilamentSvc.pyj | services\activity\pvpFilamentMgrService.js | the filament UI hides the event block when empty |
 | `pvpFilamentMgr.GetNextEventDate` | 1 | pvpFilamentSvc.pyj | services\activity\pvpFilamentMgrService.js | the filament UI hides the event block when empty |
 | `pvpFilamentMgr.LeavePVPQueue` | 1 | pvpFilamentSvc.pyj | services\activity\pvpFilamentMgrService.js | fire-and-forget |
-| `rewardMgr.GetRewardLPLogs` | 1 | lpIncursionsPanel.pyj | services\rewards\rewardMgrService.js | **unreviewed** |
+| `rewardMgr.GetRewardLPLogs` | 1 | lpIncursionsPanel.pyj | services\rewards\rewardMgrService.js | reads the reward audit log; an empty list is the honest answer |
 | `structureDeployment.CancelUnanchor` | 1 | structureDeployment.pyj | services\structure\structureDeploymentService.js | fire-and-forget |
 | `structureDeployment.RenameStructure` | 1 | menuFunctions.pyj | services\structure\structureDeploymentService.js | fire-and-forget, then structureDirectory refresh |
 | `structureDeployment.Unanchor` | 1 | structureDeployment.pyj | services\structure\structureDeploymentService.js | fire-and-forget, the structure refresh tells the truth |
@@ -61,13 +61,13 @@ Total client calls: 542 · MISSING 0 · STUB 37 · NULLABLE 102 · OK 403
 
 | call | sites | client module | server file | why it is acceptable today |
 | --- | --- | --- | --- | --- |
-| `account.GiveCash` | 2 | giveIskPanel.pyj | services\account\accountService.js | **unreviewed** |
-| `account.GiveCashFromCorpAccount` | 1 | transferMoneyWnd.pyj | services\account\accountService.js | **unreviewed** |
-| `alert.BeanDelivery` | 1 | alert.pyj | services\alert\alertService.js | **unreviewed** |
-| `alert.GroupBeanDelivery` | 1 | alert.pyj | services\alert\alertService.js | **unreviewed** |
-| `alert.SendClientStackTraceAlert` | 1 | alert.pyj | services\alert\alertService.js | **unreviewed** |
-| `authentication.SetLanguageID` | 1 | gameui.pyj | services\login\authenticationService.js | **unreviewed** |
-| `beyonce.AdminGetBubbleID` | 1 | michelle.pyj | services\ship\beyonceService.js | **unreviewed** |
+| `account.GiveCash` | 2 | giveIskPanel.pyj | services\account\accountService.js | performs the transfer; the client does not read the answer |
+| `account.GiveCashFromCorpAccount` | 1 | transferMoneyWnd.pyj | services\account\accountService.js | performs the transfer; the client does not read the answer |
+| `alert.BeanDelivery` | 1 | alert.pyj | services\alert\alertService.js | fire-and-forget telemetry; the client never reads the answer |
+| `alert.GroupBeanDelivery` | 1 | alert.pyj | services\alert\alertService.js | fire-and-forget telemetry; the client never reads the answer |
+| `alert.SendClientStackTraceAlert` | 1 | alert.pyj | services\alert\alertService.js | fire-and-forget telemetry; the client never reads the answer |
+| `authentication.SetLanguageID` | 1 | gameui.pyj | services\login\authenticationService.js | applied server-side, no return value the client reads |
+| `beyonce.AdminGetBubbleID` | 1 | michelle.pyj | services\ship\beyonceService.js | GM/debug tooling only |
 | `billMgr.CharPayBill` | 1 | walletSvc.pyj | services\account\billMgrService.js | **unreviewed** |
 | `billMgr.PayCorporationBill` | 1 | walletSvc.pyj | services\account\billMgrService.js | **unreviewed** |
 | `billMgr.SendAutomaticPaySettings` | 1 | corpBillsAutoPaySettingsPanel.pyj | services\account\billMgrService.js | **unreviewed** |
@@ -123,7 +123,7 @@ Total client calls: 542 · MISSING 0 · STUB 37 · NULLABLE 102 · OK 403
 | `overviewPresetMgr.StoreLinkAndGetID` | 1 | eveEditPlainText.pyj | services\overview\overviewPresetMgrService.js | **unreviewed** |
 | `paperDollServer.UpdateExistingCharacterFull` | 1 | ccSvc.pyj | services\character\paperDollServerService.js | **unreviewed** |
 | `paperDollServer.UpdateExistingCharacterLimited` | 1 | ccSvc.pyj | services\character\paperDollServerService.js | **unreviewed** |
-| `petitioner.EscalatePetition` | 1 | petition.pyj | services\support\petitionerService.js | **unreviewed** |
+| `petitioner.EscalatePetition` | 1 | petition.pyj | services\support\petitionerService.js | the petition window renders an empty list/answer and keeps its local state first |
 | `ProjectDiscovery.fix_task_id` | 1 | devpopup.pyj | services\character\projectDiscoveryService.js | **unreviewed** |
 | `pvpFilamentMgr.GetCharacterStatistics` | 1 | pvpFilamentSvc.pyj | services\activity\pvpFilamentMgrService.js | **unreviewed** |
 | `repackagingSvc.RepackageItems` | 3 | invItemFunctions.pyj | services\station\repackagingService.js | **unreviewed** |
