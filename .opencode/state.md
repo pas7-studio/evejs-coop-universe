@@ -127,10 +127,12 @@ The launcher keeps the client's own console output under
    `IsAgentStandingSufficientToUse(None)` -> `'NoneType' has no attribute 'factionID'`.
    So cfg.agents does not contain an epic-arc start agent. Still needs one live `GetAgents`
    dump (or the owner's screenshot) to know which agent id is missing.
-   Also unexplained: `AttributeError: Activate` in Jump.GateActivity (stargate jump FX),
-   `KeyError: 30000132` in the theaters-of-war landing page (our occupation state names a
-   focus system the client's warzone map does not list), `AttributeError: RemoveMissileImpact`
-   (missile impact FX action name) and `IndexError` in Project Discovery results.
+   Two FX crashes are client-side and need a two-client repro: `AttributeError: Activate`
+   is `effects.GateActivity.Start -> gateBall.Activate()` on a raw `_destiny.ClientBall`
+   (the FX reached a session before that stargate had a Python space object - we broadcast
+   the observer gate flash in completeStargateJump), and `AttributeError: RemoveMissileImpact`
+   is the client's own missile controller (`eveSpaceObject/missile.pyj`). `IndexError` in
+   Project Discovery results is also client-side until the PD payload exists.
 7. Warp landing for heavy hulls (~4 km): `WARP_COMPLETION_DISTANCE_MAX_METERS = 1` in
    runtime.js, so the server lands on the target; measure the real client value first.
 8. After deploy: `militia_restore` for 140000005, then enlist both pilots into Caldari.
