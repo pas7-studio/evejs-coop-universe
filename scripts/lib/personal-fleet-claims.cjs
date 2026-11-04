@@ -58,7 +58,11 @@ function createPersonalFleetClaims({gameStore,verifyNativeActor,verifyMiningFree
     cmd.ownerCharacterID,cmd.assignmentID,cmd.systemID??null,cmd.expectedGeneration??null]);
   try{
    const wrapped=gameStore.coopAtomicNativeRows.transact([TABLE],tx=>{
-    const s=validate(tx.get(TABLE,KEY)||empty());
+    const stored=tx.get(TABLE,KEY);
+    // Undefined is not a trustworthy native absence witness. Missing rows
+    // must be an explicit null from the authoritative transaction adapter.
+    if(stored===undefined)return denied('PF_CLAIM_ROW_READ_UNCERTAIN');
+    const s=validate(stored===null?empty():stored);
     if(own(s.processed,cmd.operationID)){
      const p=s.processed[cmd.operationID];
      return p.signature===signature?{status:'DUPLICATE',receipt:structuredClone(p.receipt)}:
@@ -66,16 +70,30 @@ function createPersonalFleetClaims({gameStore,verifyNativeActor,verifyMiningFree
     }
     if(Object.keys(s.processed).length>=1024)return denied('RECEIPT_CAP_REACHED');
     const war=tx.get(TABLE,WAR_KEY);
+    if(war===undefined)return denied('WAR_REGISTRY_READ_UNCERTAIN');
     // Missing WAR registry is safe only when its writer is explicitly
     // integrated; corrupt or in-flight WAR reservations are not safe.
     if(war!==null&&(!war||war.version!==1||!war.ships||
        typeof war.ships!=='object'||Array.isArray(war.ships)||
        (war.transfers!==undefined&&(!war.transfers||typeof war.transfers!=='object'||Array.isArray(war.transfers)))))
       return denied('WAR_REGISTRY_UNVERIFIED');
-    if(war&&(
-      Object.values(war.ships).some(x=>x?.entityID===cmd.entityID||x?.pilotID===cmd.pilotID)||
-      Object.values(war.transfers||{}).some(x=>x?.entityID===cmd.entityID||x?.pilotID===cmd.pilotID)))
-      return denied('WAR_ACTOR_RESERVED');
+    if(war){
+      // Validate the complete ownership projection before granting a claim;
+      // malformed unrelated WAR entries must not look harmless.
+      for(const [id,ship] of Object.entries(war.ships)){
+        if(!goodID(Number(id))||String(Number(id))!==id||!ship||
+          ship.entityID!==Number(id)||!PILOT.test(ship.pilotID))
+         return denied('WAR_REGISTRY_UNVERIFIED');
+      }
+      for(const [id,flight] of Object.entries(war.transfers||{})){
+        if(!goodID(Number(id))||String(Number(id))!==id||!flight||
+          flight.entityID!==Number(id)||!PILOT.test(flight.pilotID))
+         return denied('WAR_REGISTRY_UNVERIFIED');
+      }
+      if(Object.values(war.ships).some(x=>x.entityID===cmd.entityID||x.pilotID===cmd.pilotID)||
+        Object.values(war.transfers||{}).some(x=>x.entityID===cmd.entityID||x.pilotID===cmd.pilotID))
+       return denied('WAR_ACTOR_RESERVED');
+    }
     const existing=s.claims[String(cmd.entityID)];
     let receipt;
     if(cmd.type==='CLAIM'){
