@@ -269,3 +269,9 @@ Owner asked "where are my previous builds" — nothing had been deleted: the sto
 holds 45 fittings for 140000005 (Talos 10 + NAGIB-1, Algos 5, Vexor 5, Venture 2,
 Megathron 2, TFI 20). A new fitting only appears in the Fitting window after the
 window is reopened; it is not a lost fitting.
+
+**2026-11-05, high-tier set (ids 1685..1689):** RF AC Machariel-lite (5x 800mm AC II,
+4x Republic Fleet Gyrostabilizer, T2 Burst Aerator), Deadspace Shield Torp (4x Torpedo
+II, Gist A-Type Large SB, DG multispec, CN BCS), Faction Arty Sniper (3x 1400mm II +
+2x HML II), Faction Cruise Fleet (6x Cruise II, 3x CN BCS), Armor Brick T2 (Imp Navy
+1600mm plate, 2x EANM II, 3x Trimark II). 25 TFI fittings total, all PG/CPU/cal legal.
