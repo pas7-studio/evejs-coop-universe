@@ -44,7 +44,7 @@ function validate(state){
 }
 function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelease=false,
  verifiedTermination=false,verifiedLoss=false,verifiedRecovery=false,
- lossEvidence=null,recoveryEvidence=null}={}){
+ lossEvidence=null,recoveryEvidence=null,liabilityEvidence=null}={}){
  try{validate(state);}catch{return blocked('PF_ROSTER_CORRUPT');}
  if(!isObj(cmd)||!validID(cmd.operationID)||!RECEIPT.test(cmd.payloadHash)||
    !Number.isSafeInteger(cmd.expectedRevision)||cmd.expectedRevision<0||
@@ -129,6 +129,21 @@ function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelea
    if((p.status!=='CONTRACTED'&&p.status!=='SUSPENDED')||
      p.shipItemID!==null||verifiedTermination!==true)
     return blocked('PF_DISMISS_REQUIRES_RELEASED_CONTRACT');
+   // Do not orphan DUE, SETTLING, OUTCOME_UNKNOWN or other unpaid payroll
+   // when deleting a pilot. This assertion must come from the canonical
+   // wallet/contract ledger in the same serialized native transaction.
+   if(!isObj(liabilityEvidence)||
+      liabilityEvidence.source!=='ORIGINAL_NATIVE_CONTRACT_AND_PAYROLL'||
+      liabilityEvidence.pilotID!==p.pilotID||
+      liabilityEvidence.contractID!==p.contractID||
+      liabilityEvidence.employerCharacterID!==state.ownerCharacterID||
+      !Number.isSafeInteger(liabilityEvidence.ledgerRevision)||
+      liabilityEvidence.ledgerRevision<0||
+      liabilityEvidence.outstandingISK!==0||
+      liabilityEvidence.pendingInvoices!==0||
+      liabilityEvidence.uncertainSettlements!==0||
+      liabilityEvidence.nativeTerminationVerified!==true)
+    return blocked('PF_DISMISS_LIABILITIES_UNVERIFIED');
    delete next.pilots[p.pilotID];
    receipt={type:'DISMISSED',pilotID:p.pilotID,contractID:p.contractID};
   }
