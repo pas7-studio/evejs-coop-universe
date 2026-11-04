@@ -117,19 +117,7 @@ if($WithNative){
   $linuxFork=(& wsl.exe -- wslpath -a $winFork | Out-String).Trim()
   if($LASTEXITCODE -ne 0 -or -not $linuxFork){throw 'WSL cannot access native fork'}
   $wslMajor=(& wsl.exe -- node -p 'process.versions.node.split(".")[0]' | Out-String).Trim()
-  if($LASTEXITCODE -ne 0 -or $wslMajor -notmatch '^[0-9]+
-  & wsl.exe -- env NODE_NO_WARNINGS=1 node --test $linuxCrash
-  if($LASTEXITCODE -ne 0){throw "PF15_SQLITE_SIGKILL_FAILED exit $LASTEXITCODE"}
-  Write-Host 'PF15_SQLITE_SIGKILL_PASS'
-  $linuxTest="$linuxRepo/tests/native/coop-personal-fleet-gamestore.native.test.cjs"
-  & wsl.exe -- env "EVEJS_NATIVE_FORK_ROOT=$linuxFork" NODE_NO_WARNINGS=1 node --test $linuxTest
-  if($LASTEXITCODE -ne 0){throw "PF_NATIVE_SQLITE_GATE_FAILED exit $LASTEXITCODE"}
-  Write-Host 'PF_NATIVE_SQLITE_GATE_PASS'
-}else{
-  Write-Warning 'Native fork SIGKILL gate NOT RUN. Re-run with -WithNative and WSL2 Node 22+.'
-}
-Write-Host 'PF_CHECKS_COMPLETE; this is NOT proof of in-game NPC fleet functionality'
- -or [int]$wslMajor -lt 22){
+  if($LASTEXITCODE -ne 0 -or $wslMajor -notmatch '^[0-9]+$' -or [int]$wslMajor -lt 22){
     throw 'Linux WSL must have Node.js 22+ installed'
   }
   $linuxCrash="$linuxRepo/tests/coop-personal-fleet-sqlite-crash.test.cjs"
