@@ -139,4 +139,52 @@ function apply(state,cmd,{verifiedHire=false,verifiedCustody=false,verifiedRelea
  try{validate(next);}catch{return blocked('PF_NEXT_ROSTER_INVALID');}
  return {status:'APPLIED',receipt,state:next};
 }
-module.exports={DOCTRINES,empty,validate,apply};
+
+/**
+ * PF-10 read-only cross-authority readiness check.
+ * Trusted native adapter must pass atomic snapshots and an original ItemStore
+ * binding for EACH assigned physical hull. Missing, stale or unreadable
+ * authorities are NOT evidence of an empty universe.
+ * This does not create/release a claim or authorize item mutation.
+ */
+function auditClaims(state,claimState,{bindings}={}){
+ try{validate(state);
+  require('./personal-fleet-claims.cjs').validate(claimState);
+ }catch{return blocked('PF_CROSS_AUTHORITY_STATE_CORRUPT');}
+ if(!Array.isArray(bindings))return blocked('PF_NATIVE_BINDINGS_UNAVAILABLE');
+ const byPilot=new Map(),byShip=new Map(),byEntity=new Map();
+ for(const b of bindings){
+  if(!isObj(b)||!PILOT.test(b.pilotID)||!pos(b.shipItemID)||
+    !pos(b.nativeEntityID)||!validID(b.assignmentID)||
+    !pos(b.generation)||b.nativeItemVerified!==true||
+    byPilot.has(b.pilotID)||byShip.has(b.shipItemID)||
+    byEntity.has(b.nativeEntityID))
+   return blocked('PF_NATIVE_BINDING_INVALID_OR_DUPLICATE');
+  byPilot.set(b.pilotID,b);byShip.set(b.shipItemID,b);
+  byEntity.set(b.nativeEntityID,b);
+ }
+ for(const p of Object.values(state.pilots)){
+  const b=byPilot.get(p.pilotID);
+  const matching=Object.values(claimState.claims).filter(x=>x.pilotID===p.pilotID);
+  if(p.status==='ASSIGNED'){
+   if(!b||p.shipItemID!==b.shipItemID||matching.length!==1||
+      matching[0].entityID!==b.nativeEntityID||
+      matching[0].assignmentID!==b.assignmentID||
+      matching[0].generation!==b.generation||
+      matching[0].ownerCharacterID!==state.ownerCharacterID)
+    return blocked('PF_ASSIGNED_NATIVE_CLAIM_MISMATCH');
+  }else if(b||matching.length){
+   // Following a confirmed loss, old claims must be safely released in native
+   // SQLite before the recovered pilot can accept an entirely new ship.
+   return blocked('PF_ORPHANED_CLAIM_RECONCILIATION_REQUIRED');
+  }
+ }
+ for(const entry of Object.values(claimState.claims))
+  if(!state.pilots[entry.pilotID])
+   return blocked('PF_CLAIM_WITHOUT_CONTRACTED_PILOT');
+ for(const b of bindings)
+  if(!state.pilots[b.pilotID])
+   return blocked('PF_BINDING_WITHOUT_CONTRACTED_PILOT');
+ return {status:'READY',assignmentCount:bindings.length};
+}
+module.exports={DOCTRINES,empty,validate,apply,auditClaims};
