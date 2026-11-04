@@ -388,3 +388,18 @@ Run the *real* suite from an authorized checked-out co-op worktree:
 ```sh
 node --test tests/coop-personal-fleet-*.test.*
 ```
+
+## PF-10 — Native deployment readiness and claim/roster reconciliation (2026-11-05)
+
+**Implementation in this PR**
+- New `.github/workflows/personal-fleet-contracts.yml` runs `node --check` and `node --test` with Node 22 against every checked-in Personal Fleet source/test module when the relevant paths change in a pull request or via workflow_dispatch. No npm install, live server, native wallet, docker volumes, or access to credentials is needed. GitHub had **not yet reported a workflow run** for the creation commit when checked; do not mark GitHub CI green until an actual run succeeds.
+- `scripts/lib/personal-fleet-roster.cjs#auditClaims()` is a read-only cross-authority consistency gate. It validates roster and the full PF claims registry, then verifies a unique trusted ItemStore binding for every assigned native entity: owner, pilot, assignment ID, claim generation, shipItemID and nativeEntityID must match. It blocks orphaned claims after confirmed hull loss, mismatched/duplicate physical bindings, missing claims and claims for non-contracted pilots. It does not clear a claim or mutate inventory.
+- Four additional `tests/coop-personal-fleet-integration.test.cjs` cases validate the cross-authority gate, forged original-binding evidence, a lost ship whose claim is still fenced, and claim release after real wreck proof.
+
+**Execution evidence:** 12/12 cross-module PF-09+PF-10 tests executed in a synchronous in-memory JavaScript V8 harness against exact file contents retrieved from GitHub (with Node assert/test/structuredClone shims). Previous 226 single-module tests passed their earlier isolated V8 harness run. This is NOT a full genuine Node test run, CI success or native SQLite/WORK integration.
+
+**Native fork write block reconfirmed 2026-11-05:** attempting to create `feat/personal-fleet-native-pf10-20261105` in `pas7-studio/EveJS` from `coop/pas7std` returned `403 Resource not accessible by integration`. The remote authoritative EveJS engine remains unchanged.
+
+**Must not relax:** an `auditClaims() === READY` return means only that supplied snapshots are self-consistent; it is NOT an authorization to issue a native command, since the real adapter must prove snapshots were read from the SAME serialized native transaction and the caller is authenticated. In particular, after a confirmed wreck, do not permit clone recovery to re-assign any physical ship until the prior global claim has been formally released via verified native custody and all pending native order/transfer intents are fenced.
+
+**Release gates remain:** fork permission; production original ItemStore adoption and reverse docking; reciprocal WAR/Mining claims in original writers; PERSONAL_FLEET support in native arbiter/bridge; real combat/wallet settlement; native SQLite SIGKILL and restart; authentic two-client PLAY-untouched WORK E2E. Keep default OFF and PR Draft.
