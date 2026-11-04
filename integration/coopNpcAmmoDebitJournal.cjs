@@ -22,8 +22,37 @@ const sibling = () => {
  catch (_error) { return require("./coopNpcAmmoBankAtomic.cjs"); }
 };
 const MAX_TX_BYTES = 8192;
-function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
- if(typeof root!=="string"||!path.isAbsolute(root)||root.length<2||
+// One operator-repair notice per ship per outcome, not one per tick. Measured live
+// 2026-11-04: a single fenced warship printed the same NEEDS_OPERATOR_REPAIR line every
+// second, which buries every other line in the log and hides the fact that the state is
+// not changing. A pure function so the rule is testable without a filesystem.
+const RECOVERY_NOTICE_INTERVAL_MS = 600000;
+const RECOVERY_NOTICE_LIMIT = 4096;
+function shouldNotifyRecovery(previous, signature, nowMs, intervalMs = RECOVERY_NOTICE_INTERVAL_MS) {
+  const at = Number(nowMs);
+  if (!Number.isFinite(at)) return true;
+  if (!previous || typeof previous !== "object") return true;
+  if (previous.signature !== signature) return true;
+  const last = Number(previous.at);
+  return !Number.isFinite(last) || at - last >= intervalMs;
+}
+const recoveryNotices = new Map();
+function noteBankRecovery(entityID, status, reason, clock) {
+  const signature = String(status || "") + ":" + String(reason || "");
+  const previous = recoveryNotices.get(entityID);
+  let nowMs = Date.now();
+  try {
+    const tick = typeof clock === "function" ? Number(clock()) : NaN;
+    if (Number.isFinite(tick)) nowMs = tick;
+  } catch (_error) { /* the notice must never break a preflight */ }
+  if (!shouldNotifyRecovery(previous, signature, nowMs)) return false;
+  if (recoveryNotices.size >= RECOVERY_NOTICE_LIMIT) recoveryNotices.clear();
+  recoveryNotices.set(entityID, {signature, at: nowMs});
+  console.warn("[CoopAmmoJournal] bank recovery", String(status || ""), String(reason || ""));
+  return true;
+}
+
+function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){ if(typeof root!=="string"||!path.isAbsolute(root)||root.length<2||
   typeof store?.listNativeCargoForEntity!=="function"||
   typeof store?.getNativeEntity!=="function"||
   typeof clock!=="function")
@@ -234,8 +263,7 @@ function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
       require("../gameStore"),"npcCargo","coopAmmoCycles_"+String(id))});
     if(recovered.status==="ABORTED")
      bankShip=sibling().inspectShip({root,entityID});
-    else console.warn("[CoopAmmoJournal] bank recovery",
-     String(recovered.status||"UNKNOWN"),String(recovered.reason||""));
+    else noteBankRecovery(entityID,recovered.status||"UNKNOWN",recovered.reason||"");
    }catch(error){
     console.warn("[CoopAmmoJournal] bank recovery threw",
      String(error&&error.message||error));
@@ -327,4 +355,4 @@ function preflightBank(args){
  try{return active().preflightBank(args);}
  catch(_){return {ok:false,status:"NATIVE_AMMO_BANK_UNSAFE"};}
 }
-module.exports={createAmmoDebitJournal,begin,commit,preflightBank};
+module.exports={createAmmoDebitJournal,begin,commit,preflightBank,noteBankRecovery,shouldNotifyRecovery};

@@ -3418,3 +3418,8 @@ Evidence: fork e5d5756; probe on evejs-agents: markSiteLabel('Sansha Port',d5)='
 Why: add real co-op site variants to the spawn pool and land gate warps at 3 km
 Where: tests/coop-site-variants.test.mjs
 Evidence: fork d7bb2f5; 15/15 site tests; AUDIT_OK; evejs-agents probe: 5024 combat templates incl. 40 coop: variants, 'Co-op x2.5: Crimson Hand Supply Depot' d5 waves 7->18..10->25, resolvable by templateID
+### 2026-11-04T19:14Z · 9c62f7b · L1 · test(ammo): pin the operator-repair notice rule
+
+Why: stop the per-tick ammo bank recovery warning spam
+Where: tests/coop-ammo-journal-notice.test.mjs
+Evidence: fork <hash>; 4/4 notice tests; play stack redeployed healthy with coopSiteVariants + 2 km gate warp
