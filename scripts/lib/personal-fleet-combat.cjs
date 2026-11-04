@@ -63,6 +63,18 @@ function createAttack(command,{authenticatedIssuer,actor,legalTarget,weapon,now}
   expiresAt:command.expiresAt,phase:'PROPOSED',revision:0,receipts:[]};
  return {status:'PROPOSED',record:row};
 }
+const finalReceiptValid=r=>{
+ const last=r.receipts.at(-1)?.type;
+ return ({
+  PROPOSED:r.receipts.length===0,
+  ISSUING:last==='DURABLE_COMBAT_DISPATCH_FENCE',
+  NATIVE_REQUESTED:last==='ORIGINAL_NATIVE_ATTACK_ACK',
+  ENGAGED:last==='ORIGINAL_NATIVE_DAMAGE_OR_ACTIVATION',
+  RESOLVED:last==='ORIGINAL_NATIVE_COMBAT_RESOLVED',
+  REJECTED:['PRE_DISPATCH_NATIVE_REJECTION','DEFINITE_NATIVE_NO_EFFECT'].includes(last),
+  OUTCOME_UNKNOWN:last==='NATIVE_COMBAT_OUTCOME_UNCERTAIN'
+ })[r.phase]===true;
+};
 function valid(r){
  return object(r)&&r.version===1&&token(r.operationID)&&token(r.assignmentID)&&
   PILOT.test(r.pilotID)&&positive(r.nativeEntityID)&&positive(r.systemID)&&
@@ -81,7 +93,7 @@ function valid(r){
    'ORIGINAL_NATIVE_COMBAT_RESOLVED'].includes(x.type))&&
   r.revision===r.receipts.length&&
   (r.phase!=='PROPOSED'||r.revision===0)&&
-  (r.phase==='PROPOSED'||r.revision>0);
+  (r.phase==='PROPOSED'||r.revision>0)&&finalReceiptValid(r);
 }
 const MOVES={PROPOSED:{ISSUING:'DURABLE_COMBAT_DISPATCH_FENCE',
  REJECTED:'PRE_DISPATCH_NATIVE_REJECTION'},
