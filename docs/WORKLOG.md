@@ -3452,3 +3452,9 @@ Why: document the site-sentry mechanism and its measured coverage
 Detail: docs/SITE_SENTRIES.md keeps every measurement behind the feature: category 23 scenery with no weapon data, a category 11 battery spawn that still has zero modules, the real faction sentry-gun profiles with their damage/cycle/range, the nine-of-twelve coverage over four real systems, the three Sleeper batteries that stay inert because this build has no Sleeper sentry type, and the live native-damag
 Where: docs/SITE_SENTRIES.md
 Evidence: docs/SITE_SENTRIES.md; fork 63ccce4; agents-stack probes 2026-11-05
+### 2026-11-04T21:00Z · d5abf81 · L1 · test(living): pin the storm suppression and the deployable sweep
+
+Why: stop the haul event storm and the deployable despawn; name the failing haul clause
+Detail: Three cases: the suppression map is declared at module scope before strictTransferCargo (declaring it inside the function is the bug that emitted 13 440 events in one hour), the conflict verdict names the failing clause and no full cargo scan runs inside the per-item loop, and the empty-container sweep checks for a deployable (category 22) before the removal that deleted the owner's Mobile Tractor
+Where: .opencode/state.md, docs/WORKLOG.md, integration/coopNativeHaulCargo.cjs, state/NOW.md, state/changelog.jsonl, state/digests/20261031-175251.md, state/digests/20261104-203846.md, state/manifest.json, state/status.json, tests/coop-haul-storm-and-deployable-sweep.test.mjs
+Evidence: fork 8fe1892; 3/3 new tests, AUDIT_OK; measured: 2349 of the last 3000 events were living-haul-custody-blocked, 15 310 cargo rows scanned per ore stack, jettison log 'Container 9988400124749 is now empty — despawning early'
