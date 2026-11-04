@@ -3500,3 +3500,9 @@ Why: coalesce the virtual-world state save (28% of non-idle CPU was synchronous 
 Detail: Two cases: five cycles with physical locations inside one save window do not touch the file, and an explicit flush writes the LATEST pilot positions (the durability escape hatch, also registered on beforeExit); a flush with nothing pending is a no-op rather than an extra write.
 Where: docs/WORKLOG.md, integration/coopVirtualWorld.cjs, tests/coop-virtual-world-save-throttle.test.mjs
 Evidence: fork 0cec93c; profile: writeFileUtf8 89.27s, fsync 14.41/4.57/2.00s of 2219s; 2/2 new tests; AUDIT_OK
+### 2026-11-04T21:41Z · 98a7510 · DOCS · docs(perf): the lag profile, what it fixed and what is still hot
+
+Why: record the CPU profile and the lag-fix baseline
+Detail: docs/LAG_PROFILE_20261105.md records the measurement (2 219 s profiled: writeFileUtf8 89.27 s, market-maker read 27.35 s, getSceneActivityState 22.86 s, market-maker write 20.00 s, GC 17.84 s, fsync 14.41 + 4.57 + 2.00 s - synchronous writes are ~28% of all non-idle CPU), the two fixes it produced (single-instance trading document, coalesced world save), the remaining hot spots (other synchronous 
+Where: docs/LAG_PROFILE_20261105.md, docs/WORKLOG.md, scripts/coop-cpuprofile-top.cjs
+Evidence: docs/LAG_PROFILE_20261105.md; scripts/coop-cpuprofile-top.cjs; profile of evejs-agents 2026-11-05
