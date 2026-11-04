@@ -80,6 +80,15 @@ function gateBlockNotify(key,nowMs){
  state.suppressed=0;
  return{emit:true,suppressed};
 }
+function cacheRowFromStoreRow(row){
+ const quantity=Number(row&&row.quantity)||0;
+ return {itemID:Number(row&&row.cargoID)||0, ownerID:Number(row&&row.ownerID)||0,
+  locationID:Number(row&&row.entityID)||0, moduleID:0, typeID:Number(row&&row.typeID)||0,
+  groupID:Number(row&&row.groupID)||0, categoryID:Number(row&&row.categoryID)||0,
+  quantity, stacksize:quantity, singleton:0, flagID:5,
+  itemName:String((row&&row.itemName)||""),
+  volume:Math.max(0,Number(row&&row.volume)||0)};
+}
 function strictTransferCargo(scene,fleet,miner,options,store,probe){
  const stop=(reason,uncertain=false,hauler=null,cargoID=0)=>{
   if(uncertain){
@@ -159,6 +168,7 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
   cargoIDCounts.set(id,(cargoIDCounts.get(id)||0)+1);
  }
  const seen=new Set(),cargo=[];
+ let repairedCargoRows=0;
  const conflict=(clause)=>stop("HAUL_SOURCE_CARGO_IDENTITY_CONFLICT:"+clause);
  for(const item of source){
   const key=Number(item?.cargoID),local=cached.get(key);
@@ -172,9 +182,17 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
   if(item.transient!==false)return conflict("transient_row");
   if(Number(item?.categoryID)!==25)return conflict("not_an_ore_category");
   if(Number(item?.coopHaulFleetID||0)!==0)return conflict("stale_fleet_flag");
-  if(!local)return conflict("cached_item_missing");
-  if(Number(local.typeID)!==Number(item.typeID))return conflict("cached_type_differs");
-  if(Number(local.quantity)!==Number(item.quantity))return conflict("cached_quantity_differs");
+  if(!local){
+   // The durable row exists and passed every identity check; the display copy simply did not
+   // have it. Add it back instead of refusing the whole fleet.
+   if(!Array.isArray(miner.nativeCargoItems))miner.nativeCargoItems=[];
+   miner.nativeCargoItems.push(cacheRowFromStoreRow(item));
+   repairedCargoRows+=1;
+  }else if(Number(local.typeID)!==Number(item.typeID)||
+    Number(local.quantity)!==Number(item.quantity)){
+   Object.assign(local,cacheRowFromStoreRow(item));
+   repairedCargoRows+=1;
+  }
   if((cargoIDCounts.get(key)||0)!==1)return conflict("cargo_id_not_unique");
   seen.add(key);
   const ore=resolveType(Number(item.typeID));
@@ -188,6 +206,14 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
   if(miner.nativeCargoItems.some(x=>Number(x?.moduleID||0)===0))
    return stop("HAUL_LOCAL_CARGO_WITHOUT_NATIVE_SOURCE",true);
   return 0;
+ }
+ if(repairedCargoRows>0){
+  const repairGate=gateBlockNotify(`${Number(fleet?.fleetID)||0}|CACHE_REPAIRED`,Date.now());
+  if(repairGate.emit)
+   safeObserve(probe,"living-haul-cache-repaired",
+    {itemID:miner.itemID,systemID:scene?.systemID},
+    {fleetID:fleet?.fleetID,rows:repairedCargoRows,suppressedSinceLast:repairGate.suppressed,
+     reason:"DURABLE_CARGO_ROW_IS_AUTHORITATIVE_OVER_THE_ENTITY_COPY"});
  }
  const db=atomicRequired?null:(options.database||require("../gameStore"));
  if(!atomicRequired&&(!db||typeof db.setTransientPath!=="function"||

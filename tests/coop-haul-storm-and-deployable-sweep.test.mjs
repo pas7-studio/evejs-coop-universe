@@ -38,10 +38,17 @@ test("the conflict verdict names the failing clause, and the scan is not per ite
     "no full cargo scan inside the per-item loop");
   assert.match(source, /const cargoIDCounts=new Map\(\);/,
     "one counted pass over the cargo rows per attempt");
-  for (const clause of ["cached_quantity_differs", "stale_fleet_flag", "fitted_module_row",
+  for (const clause of ["stale_fleet_flag", "fitted_module_row", "wrong_owner",
     "cargo_id_not_unique"]) {
     assert.ok(source.includes(`conflict("${clause}")`), `clause ${clause} is reported`);
   }
+  // A stale display copy is no longer a refusal: the durable row is authoritative (measured
+  // 2026-11-05, "cached_quantity_differs" blocked the owner's ore loop for hours).
+  assert.doesNotMatch(source, /conflict\("cached_(quantity|type)_differs"\)|conflict\("cached_item_missing"\)/,
+    "a stale entity copy must be repaired from the durable row, not refused");
+  assert.match(source, /function cacheRowFromStoreRow\(row\)/,
+    "the repair builds the cache row from the durable row");
+  assert.match(source, /living-haul-cache-repaired/, "and it is observed, not silent");
 });
 
 test("emptying a deployable never despawns the deployable", () => {
