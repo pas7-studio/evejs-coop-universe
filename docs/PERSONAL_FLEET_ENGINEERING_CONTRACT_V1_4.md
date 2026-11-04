@@ -222,3 +222,22 @@ node --test tests/coop-personal-fleet-contract.test.mjs tests/coop-personal-flee
 ```
 
 Avoid merging into PLAY or turning on PF flags before the reciprocal fork hooks and native crash tests pass.
+
+## PF-02: first personal squadron roster code
+
+New non-deployed reference:
+- `scripts/lib/personal-fleet-roster.cjs`: pure revisioned personal squadron model with immutable `HIRE`, `ASSIGN`, `UNASSIGN`, `SET_DOCTRINE`, `SUSPEND`, `DISMISS` operations and bounded pilot roster.
+- `tests/coop-personal-fleet-roster.test.mjs`: 21 authored isolated cases covering original ship references, hire/custody/release/termination evidence gates, stale per-fleet and per-pilot revisions, replay, double assignment, and doctrine restriction.
+
+**Security boundary:** booleans such as `verifiedHire`, `verifiedCustody`, `verifiedRelease`, and `verifiedTermination` are INJECTED TRUSTED ADAPTER ASSERTIONS, **not input supplied by clients**. `payloadHash` must be computed from the canonical command on the trusted server, not accepted from the EVE client. `apply()` is a pure reducer only: no wallet debits, no native ship adoption, no authenticated session, no persistence or cross-writer lock. Its `HIRE` operation must run only AFTER the actual GameStore hiring/wallet authority has proven the exact contract and receipt in the same durable operation or reconciled saga. `ASSIGN` requires the separately verified global actor claim and ship custody evidence. Do not call this pure module from a public RPC with client-selected verification flags.
+
+### PF-01 hardening
+
+- Missing row **`null`** and unreadable row **`undefined`** are different: the durable PF claim registry and WAR registry require explicit absence evidence and block an indeterminate read.
+- Cross-writer guard validates all claim entries before admitting any other actor; it cannot overlook an unrelated corrupt entry after finding a matching reservation.
+- WAR claim admission rejects malformed unrelated WAR ship/transfer projections.
+- Four additional targeted PF-01 tests cover undefined PF/WAR rows and malformed unrelated WAR records.
+
+### Evidence status
+
+All PF-01/PF-02 code is only in the orchestration-side Draft PR, not in the engine fork. The current session's GitHub connector is permitted to write `evejs-coop-universe` but fork branch creation returned 403. Node tests and native WORK stack tests have **NOT been executed** in this session. Do not claim a green test count from authored tests. Treat the source as implementation material for a permitted local fork agent.
