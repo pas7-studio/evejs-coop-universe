@@ -44,6 +44,11 @@ function createTraders({ file, clock = () => Date.now(), writeFile = null } = {}
   if (writeFile === null && instancesByPath.has(filePath)) {
     return instancesByPath.get(filePath);
   }
+  const staleMs = Math.max(60_000, int(process.env.EVEJS_COOP_MARKET_MAKER_STALE_MS) || 3_600_000);
+  const retentionMs = Math.max(staleMs, int(process.env.EVEJS_COOP_MARKET_MAKER_RETENTION_MS) || 7 * DAY_MS);
+  const operationCap = Math.max(64, int(process.env.EVEJS_COOP_MARKET_MAKER_OP_CAP) || 5_000);
+  const reconcileEveryMs = Math.max(1_000, int(process.env.EVEJS_COOP_MARKET_MAKER_RECONCILE_MS) || 60_000);
+  let lastReconcileAt = 0;
   const persist = writeFile || ((target, text) => {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, text, "utf8");
@@ -101,6 +106,17 @@ function createTraders({ file, clock = () => Date.now(), writeFile = null } = {}
     const record = traderRecord(state, traderID, nowMs);
     if (!record) return { status: "UNKNOWN_TRADER" };
     const trader = TRADERS.find(entry => entry.traderID === traderID);
+    const typeID = int(meta && meta.typeID);
+    const staleAt = nowMs - staleMs;
+    for (const operation of Object.values(state.operations)) {
+      if (!operation || operation.phase !== "RESERVED") continue;
+      if (operation.traderID !== traderID) continue;
+      if (typeID > 0 && int(operation.meta && operation.meta.typeID) !== typeID) continue;
+      // Only an age-old reservation (see reconcile()) may be replaced.
+      if (int(operation.at) >= staleAt) {
+        return { status: "RESERVATION_PENDING", operationID: operation.operationID };
+      }
+    }
     if (record.balanceISK < amount) return { status: "NO_BALANCE" };
     if (record.spentTodayISK + amount > trader.dailySpendISK) return { status: "DAILY_CAP" };
     const operationID = `op-${nowMs}-${Object.keys(state.operations).length + 1}-${traderID}`;
@@ -156,6 +172,67 @@ function createTraders({ file, clock = () => Date.now(), writeFile = null } = {}
     return { status: "REFUNDED", amountISK: operation.amountISK };
   }
 
+  // One reservation whose outcome never resolved (a thrown placement) must not hold money for
+  // ever. After staleMs with no live order pointing at it, the money goes back and the row is
+  // settled with an explicit reason; settled rows are pruned after the retention window and the
+  // document is capped, so the file cannot grow to megabytes again.
+  function reconcile({ nowMs = clock() } = {}) {
+    const state = read();
+    const now = int(nowMs) || clock();
+    if (now - lastReconcileAt < reconcileEveryMs) {
+      return { status: "SKIPPED", reason: "RECENTLY_RECONCILED" };
+    }
+    lastReconcileAt = now;
+    const liveOperationIDs = new Set();
+    for (const record of Object.values(state.traders)) {
+      for (const order of Object.values((record && record.orders) || {})) {
+        if (order && order.operationID) liveOperationIDs.add(String(order.operationID));
+      }
+    }
+    const refunded = [];
+    const staleAt = now - staleMs;
+    for (const operation of Object.values(state.operations)) {
+      if (!operation || operation.phase !== "RESERVED") continue;
+      if (int(operation.at) > staleAt) continue;
+      if (liveOperationIDs.has(String(operation.operationID))) continue;
+      const record = traderRecord(state, operation.traderID, now);
+      if (record) {
+        const amount = pos(operation.amountISK);
+        record.balanceISK += amount;
+        record.spentTodayISK = Math.max(0, int(record.spentTodayISK) - amount);
+      }
+      operation.phase = "REFUNDED";
+      operation.reason = "STALE_RESERVATION";
+      operation.refundedAt = now;
+      refunded.push({ operationID: operation.operationID, traderID: operation.traderID,
+        amountISK: pos(operation.amountISK) });
+    }
+    const keepAfter = now - retentionMs;
+    let pruned = 0;
+    for (const [operationID, operation] of Object.entries(state.operations)) {
+      if (!operation || operation.phase === "RESERVED") continue;
+      if (liveOperationIDs.has(String(operationID))) continue;
+      if (int(operation.refundedAt || operation.boundAt || operation.at) > keepAfter) continue;
+      delete state.operations[operationID];
+      pruned += 1;
+    }
+    // A hard cap: drop the oldest settled rows first, never a reservation that is still open.
+    const operationIDs = Object.keys(state.operations);
+    if (operationIDs.length > operationCap) {
+      const settled = operationIDs
+        .filter(operationID => state.operations[operationID].phase !== "RESERVED")
+        .sort((left, right) => int(state.operations[left].at) - int(state.operations[right].at));
+      for (const operationID of settled) {
+        if (Object.keys(state.operations).length <= operationCap) break;
+        delete state.operations[operationID];
+        pruned += 1;
+      }
+    }
+    if (refunded.length || pruned) write(state);
+    return { status: "RECONCILED", refunded, pruned,
+      operations: Object.keys(state.operations).length };
+  }
+
   // A value, not the live document: callers compare two snapshots (tests do) and a caller
   // must never be able to change the store by mutating what it was handed. The expensive part
   // was the per-call file read + JSON.parse, and that is gone - copying five trader records is
@@ -167,7 +244,7 @@ function createTraders({ file, clock = () => Date.now(), writeFile = null } = {}
       : JSON.parse(JSON.stringify(state));
   }
 
-  const api = Object.freeze({ reserve, bind, refund, snapshot, filePath });
+  const api = Object.freeze({ reserve, bind, refund, reconcile, snapshot, filePath });
   if (writeFile === null) instancesByPath.set(filePath, api);
   return api;
 }
