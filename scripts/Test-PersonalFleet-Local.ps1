@@ -66,7 +66,7 @@ if (-not (Test-Path -LiteralPath $engine -PathType Leaf)){
 }
 if ($Sync) {
   if (Git-Output $ForkRoot @('status','--porcelain')) {
-    throw 'Native fork dirty; refusing sync. No changes were overwritten.'
+    Write-Warning 'Native fork has local changes. They will be preserved (fetch-only; no merge or reset).'
   }
   Run-Command 'Fetch Personal Fleet branch' $repoRoot 'git' @('fetch','origin',$branch)
   Run-Command 'Fast-forward Personal Fleet branch' $repoRoot 'git' @('merge','--ff-only',"origin/$branch")
