@@ -262,3 +262,10 @@ each hull. `remove_item` does NOT delete the fitted children: 328 orphan items s
 with `locationID` = the removed hull and had to be deleted in batches of 60
 (`admin_batch` caps at 64 actions). Verify with a read-only sqlite script before
 calling it done.
+
+**2026-11-05 follow-up: 5 more TFI fittings (ids 1680..1684)** — Torpedo Shield
+Brawler, Torpedo Dual Prop, Smartbomb Brick, Passive Shield Regen, Neut Brawler.
+Owner asked "where are my previous builds" — nothing had been deleted: the store
+holds 45 fittings for 140000005 (Talos 10 + NAGIB-1, Algos 5, Vexor 5, Venture 2,
+Megathron 2, TFI 20). A new fitting only appears in the Fitting window after the
+window is reopened; it is not a lost fitting.
