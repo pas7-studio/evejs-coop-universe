@@ -10,10 +10,10 @@ const PROOFS={APPROACHING:'ORIGINAL_NATIVE_APPROACH_ACK',AT_GATE:'ORIGINAL_NATIV
 const reject=reason=>({status:'BLOCKED',reason});
 function validate(s){
  if(!s||s.version!==1||!validToken(s.routeID)||!validToken(s.fleetID)||!POS(s.ownerCharacterID)||!POS(s.generation)||!Number.isSafeInteger(s.revision)||s.revision<0||!Array.isArray(s.members)||s.members.length<1||s.members.length>12)throw Error('PF_ROUTE_INVALID');
- const seen=new Set(),ships=new Set();
+ const seen=new Set(),ships=new Set(),nativeEntities=new Set();
  for(const m of s.members){
-  if(!m||!PILOT.test(m.pilotID)||!POS(m.shipItemID)||!POS(m.nativeEntityID)||!POS(m.fromSystemID)||!POS(m.toSystemID)||m.fromSystemID===m.toSystemID||!PHASES.has(m.phase)||!Number.isSafeInteger(m.revision)||m.revision<0||seen.has(m.pilotID)||ships.has(m.shipItemID)||!POS(m.generation)||m.generation!==s.generation||!Array.isArray(m.proofIDs)||m.proofIDs.length>12||m.proofIDs.some(x=>!validToken(x))||new Set(m.proofIDs).size!==m.proofIDs.length)throw Error('PF_ROUTE_MEMBER_INVALID');
-  seen.add(m.pilotID);ships.add(m.shipItemID);
+  if(!m||!PILOT.test(m.pilotID)||!POS(m.shipItemID)||!POS(m.nativeEntityID)||!POS(m.fromSystemID)||!POS(m.toSystemID)||m.fromSystemID===m.toSystemID||!PHASES.has(m.phase)||!Number.isSafeInteger(m.revision)||m.revision<0||seen.has(m.pilotID)||ships.has(m.shipItemID)||nativeEntities.has(m.nativeEntityID)||!POS(m.generation)||m.generation!==s.generation||!Array.isArray(m.proofIDs)||m.proofIDs.length>12||m.proofIDs.some(x=>!validToken(x))||new Set(m.proofIDs).size!==m.proofIDs.length)throw Error('PF_ROUTE_MEMBER_INVALID');
+  seen.add(m.pilotID);ships.add(m.shipItemID);nativeEntities.add(m.nativeEntityID);
  }
  return s;
 }
