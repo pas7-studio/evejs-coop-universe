@@ -3,36 +3,43 @@ import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 import path from "node:path";
 
-// Measured live 2026-11-04: the site batteries are category 23 with zero weapon attributes
-// and are materialised as static content, so they can never fire. The shooting sentries
-// are category 11 "Destructible Sentry Gun" types, per faction and per size. This module
-// only decides the NAME of the real type; damage comes from the type's own attributes.
+// Measured live 2026-11-04/05, in this order:
+//  - the batteries a client sees inside a site are category 23 scenery with hit points
+//    only, materialised as static content: no controller, so they can never fire;
+//  - category 11 "Destructible Sentry Gun" BATTERIES also carry zero damage attributes in
+//    this build (their damage sits in a missile charge the data does not name);
+//  - the faction's own "<Faction> Sentry Gun" type does carry a complete weapon profile
+//    (damage, multiplier, cycle, range) and has a native NPC profile as well.
+// So a battery is defended by its faction's real sentry gun, and this module only names it.
 const forkRoot = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
 const require = createRequire(import.meta.url);
 const sentries = require(path.join(forkRoot, "Code/server/src/space/coopSiteSentries.js"));
 
-test("a missile battery takes its faction from the site's own spawn query", () => {
-  assert.equal(sentries.pickSentryTypeName({structureName: "Heavy Missile Battery",
-    spawnQuery: "guristas_deadspace_pve"}), "Guristas Heavy Missile Battery");
-  assert.equal(sentries.pickSentryTypeName({structureName: "Light Missile Battery",
-    spawnQuery: "sanshas_deadspace_pve"}), "Sansha Light Missile Battery");
-  assert.equal(sentries.pickSentryTypeName({structureName: "Cruise Missile Battery",
-    spawnQuery: "blood_deadspace_pve"}), "Blood Cruise Missile Battery");
+test("a battery is defended by its faction's own sentry gun", () => {
+  assert.equal(sentries.pickFiringTypeName({structureName: "Heavy Missile Battery",
+    spawnQuery: "guristas_deadspace_pve"}), "Guristas Sentry Gun");
+  assert.equal(sentries.pickFiringTypeName({structureName: "Cruise Missile Battery",
+    spawnQuery: "blood_deadspace_pve"}), "Blood Raider Sentry Gun");
+  assert.equal(sentries.pickFiringTypeName({structureName: "Light Missile Battery",
+    spawnQuery: "sanshas_deadspace_pve"}), "Sansha Sentry Gun");
 });
 
-test("size comes from the structure's own name, heavy is the default", () => {
-  assert.equal(sentries.sizeFromName("Light Missile Battery"), "Light");
-  assert.equal(sentries.sizeFromName("Cruise Missile Battery"), "Cruise");
-  assert.equal(sentries.sizeFromName("Sentry"), "Heavy");
-});
-
-test("an unknown faction or a non-battery never gets a type", () => {
-  assert.equal(sentries.pickSentryTypeName({structureName: "Heavy Missile Battery", spawnQuery: ""}), "");
-  assert.equal(sentries.pickSentryTypeName({structureName: "Heavy Missile Battery",
-    spawnQuery: "npc_deadspace_hostiles"}), "");
-  assert.equal(sentries.pickSentryTypeName({structureName: "Warp Disruption Battery (Container)",
-    spawnQuery: "guristas_deadspace_pve"}), "Guristas Heavy Missile Battery",
-  "a named battery still resolves; whether the caller uses it is a separate decision");
-  assert.equal(sentries.pickSentryTypeName({structureName: "Cargo Rig",
+test("scenery that is not a battery never gets a gun", () => {
+  assert.equal(sentries.pickFiringTypeName({structureName: "Cargo Rig",
     spawnQuery: "serpentis_deadspace_pve"}), "");
+  assert.equal(sentries.pickFiringTypeName({structureName: "Acceleration Gate",
+    spawnQuery: "serpentis_deadspace_pve"}), "");
+  assert.equal(sentries.isBatteryName("Angel Cruise Missile Battery"), true);
+  assert.equal(sentries.isBatteryName("Cargo Rig"), false);
+});
+
+test("a site with no faction, or a faction with no sentry gun in this build, is skipped", () => {
+  assert.equal(sentries.pickFiringTypeName({structureName: "Heavy Missile Battery",
+    spawnQuery: ""}), "");
+  assert.equal(sentries.pickFiringTypeName({structureName: "Heavy Missile Battery",
+    spawnQuery: "npc_deadspace_hostiles"}), "");
+  for (const faction of ["rogue", "caldari", "ammatar", "khanid"]) {
+    assert.equal(sentries.pickFiringTypeName({structureName: "Heavy Missile Battery",
+      spawnQuery: `${faction}_deadspace_pve`}), "", `${faction} has no sentry gun type`);
+  }
 });

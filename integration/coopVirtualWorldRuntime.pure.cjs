@@ -22,7 +22,7 @@ let warFleetRegistry=null,bridge=null,identityRegistry=null,
 // Declared here because the extraction left them behind: every phase that
 // touched one threw ReferenceError, which froze that part of the world.
 let lossBridge=null,factionDirector=null,raidDirector=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,warpPointDirector=null,nativeGunRange=null,warGateHandoff=null,warRecoverySocket=null,nativeOrderBridge=null,lootCommerce=null,nativeAmmoSupply=null,warTreasuryInstance=null,
- siteSentrySpawner=null;
+ siteSentrySpawner=null,siteSentryFireDirector=null;
 function bindWarRuntime(state){
  if(!state||typeof state!=="object")return false;
  if(state.bridge!==undefined)bridge=state.bridge||null;
@@ -1155,6 +1155,39 @@ function advanceSiteSentries(){
  }
 }
 
+function advanceSiteSentryFire(){
+ // The sentry entity a battery spawns carries the faction's real Sentry Gun type, and the
+ // retail loadout data leaves it with no modules - measured on a live spawn: 0 weapon
+ // modules, empty loadout. So the gun's own type attributes (damage, multiplier, cycle,
+ // range) are fired through the engine's own damage path, which keeps client damage
+ // notifications, destruction and kill attribution exactly as they are for a native shot.
+ if(process.env.EVEJS_COOP_SITE_SENTRIES!=="1"||!visitedSystems.size)return;
+ const runtime=require("./runtime"),fitting=require("../services/fitting/liveFittingState");
+ const weaponPath=runtime.droneInterop&&runtime.droneInterop.applyWeaponDamageToTarget;
+ if(!(runtime.scenes instanceof Map)||typeof weaponPath!=="function")return;
+ if(!siteSentryFireDirector){
+  siteSentryFireDirector=require("./coopSiteSentryFire").createSentryFire({
+   listSentries:()=>siteSentrySpawner?siteSentrySpawner.snapshot():[],
+   getEntity:(scene,entityID)=>scene&&typeof scene.getEntityByID==="function"?
+    scene.getEntityByID(entityID):null,
+   readAttributes:typeID=>fitting.getTypeDogmaAttributes(typeID),
+   // Measured: the seen-from-outside export is droneInterop.applyWeaponDamageToTarget;
+   // the bare name is undefined, so a wrong path here would silently never fire.
+   applyDamage:(scene,attacker,target,damage,nowMs)=>
+    weaponPath(scene,attacker,target,damage,nowMs,{}),
+   observe:(name,context,_session,payload)=>require("./coopObserve").observe(
+    require("./coopRuntimeProbe"),name,context,payload)
+  });
+ }
+ for(const systemID of [...visitedSystems].slice(0,12)){
+  const scene=runtime.scenes.get(systemID);
+  if(!scene||Number(scene.systemID)!==Number(systemID))continue;
+  const result=siteSentryFireDirector.tick({systemID,scene});
+  if(result.shots.length)console.log(`[CoopLivingWorld] site sentries fired in ${systemID}: `+
+   result.shots.map(shot=>`#${shot.sentryID} -> #${shot.targetID} ${shot.damage}`).join(", "));
+ }
+}
+
 function advanceNpcRecognition(){
  if(process.env.EVEJS_COOP_NPC_MEMORY!=="1"||!identityRegistry||!visitedSystems.size)return;
  const runtime=require("./runtime");
@@ -1253,4 +1286,4 @@ function releaseSpawnedIdentity({pilotID,entityID=0,reason=""}={}){
  return {...released,reason:String(reason||"IDENTITY_REASSIGNED")};
 }
 
-module.exports = {projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceSiteSentries, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};
+module.exports = {projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceSiteSentries, advanceSiteSentryFire, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};

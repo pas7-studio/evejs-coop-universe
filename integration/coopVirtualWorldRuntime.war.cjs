@@ -1196,6 +1196,10 @@ function createWarRuntime({ getWorld, getIdentityRegistry, getTacticsDirector, g
   });
   warMobilizer=createWarMobilizer({
    registry,
+   // A side may only field what the deployment allows: default four hulls, raised by
+   // EVEJS_COOP_WAR_SIDE_SIZE (1..8) once the tick budget has been measured.
+   maxPerSide:Math.max(1,Math.min(8,Math.trunc(Number(process.env.EVEJS_COOP_WAR_SIDE_SIZE)||4))),
+   maxPerTick:Math.max(1,Math.min(6,Math.trunc(Number(process.env.EVEJS_COOP_WAR_SIDE_TICK)||2))),
    readWarState:()=>warStateStore().read(),
    readLinks:()=>Object.values(getIdentityRegistry().snapshot().links||{}),
    // Existing scenes only: a military director must never manufacture an

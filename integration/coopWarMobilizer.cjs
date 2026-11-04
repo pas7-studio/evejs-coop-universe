@@ -90,14 +90,17 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
  // physically present around six systems while the whole war registered six of them, so a
  // front was a skirmish of four hulls. The rank cap still binds (a recruit commands one
  // hull), so this only lets experienced sides field what they have earned.
- clock=()=>Date.now(),env=process.env,maxPerTick=2,maxPerSide=3}={}){
+ // FW-141: the per-side size is a deployment decision, not a constant. Default four
+ // (one more than the old three) and let a deployment that measured stable ticks raise
+ // it up to eight; nothing above eight may ever be configured.
+ clock=()=>Date.now(),env=process.env,maxPerTick=2,maxPerSide=4}={}){
  if(!registry?.snapshot||!registry?.execute||
   [readWarState,readLinks,sceneForSystem,getNativeEntity,getController,
    getFactionForCorporation,inspectReadiness,getOrderLeases,isTactical,clock]
    .some(x=>typeof x!=="function")||
   (commandCap!==null&&typeof commandCap!=="function")||
-  !Number.isSafeInteger(maxPerTick)||maxPerTick<1||maxPerTick>4||
-  !Number.isSafeInteger(maxPerSide)||maxPerSide<1||maxPerSide>4)
+  !Number.isSafeInteger(maxPerTick)||maxPerTick<1||maxPerTick>6||
+  !Number.isSafeInteger(maxPerSide)||maxPerSide<1||maxPerSide>8)
   throw Error("WAR_MOBILIZATION_NATIVE_AUTHORITIES_REQUIRED");
  let busy=false;
  function tick({systemIDs=[],dryRun=false}={}){

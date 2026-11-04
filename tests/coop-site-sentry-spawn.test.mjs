@@ -13,10 +13,10 @@ const require = createRequire(import.meta.url);
 const spawner = require(path.join(forkRoot, "Code/server/src/space/coopSiteSentrySpawn.js"));
 
 const PROFILES = [
-  {profileID: "parity_destructible_sentry_guns_17594_blood_heavy_missile_battery",
-    name: "Blood Heavy Missile Battery"},
-  {profileID: "parity_destructible_sentry_guns_17593_blood_light_missile_battery",
-    name: "Blood Light Missile Battery"},
+  {profileID: "parity_destructible_sentry_guns_13116_blood_raider_sentry_gun",
+    name: "Blood Raider Sentry Gun"},
+  {profileID: "parity_destructible_sentry_guns_13068_guristas_sentry_gun",
+    name: "Guristas Sentry Gun"},
 ];
 
 function sceneWith(sessions, entities) {
@@ -62,7 +62,7 @@ test("a battery in a live site spawns one native sentry of its own faction and s
   assert.equal(result.status, "SENTRIES_SPAWNED");
   assert.equal(calls.length, 1, "exactly one native spawn");
   assert.equal(calls[0].options.profileQuery,
-    "parity_destructible_sentry_guns_17594_blood_heavy_missile_battery");
+    "parity_destructible_sentry_guns_13116_blood_raider_sentry_gun");
   assert.deepEqual(calls[0].options.spawnStateOverride.position, {x: 1000, y: 0, z: 0},
     "the sentry stands exactly where the battery stands");
   assert.equal(calls[0].options.transient, true);
@@ -93,7 +93,7 @@ test("a site without a known faction skips once, and says why", () => {
   const scene = sceneWith([140000005], [battery()]);
   const result = instance.tick({systemID: 30000144, scene, instances: INSTANCES});
   assert.equal(calls.length, 0);
-  assert.equal(result.skipped[0].reason, "NOT_A_BATTERY_OR_NO_FACTION");
+  assert.equal(result.skipped[0].reason, "NOT_A_BATTERY_OR_NO_SENTRY_GUN_FACTION");
   instance.tick({systemID: 30000144, scene, instances: INSTANCES});
   assert.equal(result.skipped.length, 1, "a known non-candidate is not retried");
 });

@@ -3434,3 +3434,9 @@ Why: site batteries get a real native sentry instead of inert scenery
 Detail: 6 new cases: a battery spawns exactly one native sentry of its own faction/size at its own position, the same battery is never spawned twice, an empty system spawns nothing, an unknown faction is skipped once with a reason, non-battery scenery is not a candidate, and a failed native spawn is not retried into a spawn storm. The variant-level sentry test is dropped with the mechanism it pinned.
 Where: tests/coop-site-sentry-spawn.test.mjs, tests/coop-site-variants.test.mjs
 Evidence: fork 134ef7e+; 6/6 sentry-spawn tests, 4/4 variants, 3/3 sentry decision; measured: batteries cat 23 with no weapon attributes, 229 native sentry profiles in the running container
+### 2026-11-04T20:07Z · b3001ce · L1 · test(campaigns,market): pin the truthful LP arm and the extracted P2P env guards
+
+Why: campaign LP row tells the truth; P2P env guards extracted from the stock market service
+Detail: The campaign page test now asserts the LP arm the client actually reads (amount 0, interval 1, a real militia issuer) instead of no_lp_reward, because the client draws the card either way and only a real interval avoids the unformatted placeholder. Three guard cases pin the exact P2P error names and their order after the checks moved out of the stock market service. The stock-char budget ratchets 
+Where: docs/WORKLOG.md, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, scripts/coop-engine-audit.cjs, tests/coop-fw-campaign-page.test.mjs, tests/coop-player-market-env-guards.test.mjs
+Evidence: fork a74c536; campaign page 10/10, env guards 3/3, AUDIT_OK with stockChars 65315 <= 65500
