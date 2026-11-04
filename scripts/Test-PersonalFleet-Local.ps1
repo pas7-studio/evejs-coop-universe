@@ -27,9 +27,9 @@ function Run-Command([string]$label,[string]$workdir,[string]$exe,[string[]]$com
     if ($LASTEXITCODE -ne 0) { throw "$label FAILED (exit $LASTEXITCODE)" }
   } finally { Pop-Location }
 }
-function Git-Output([string]$dir,[string[]]$args){
-  $out=& git -C $dir @args
-  if ($LASTEXITCODE -ne 0) { throw "git failed: $($args -join ' ')" }
+function Git-Output([string]$dir,[string[]]$gitArgs){
+  $out=& git -C $dir @gitArgs
+  if ($LASTEXITCODE -ne 0) { throw "git failed: $($gitArgs -join ' ')" }
   return (($out | Out-String).Trim())
 }
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw 'git is required' }
