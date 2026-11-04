@@ -426,3 +426,17 @@ Two correctness/security gaps found through review and patched in this PR:
 **Evidence:** 3 new negative tests check same ID/hash with changed shipItemID, changed operation type and changed native hire receipt. Current GitHub source/test files executed in isolated synchronous V8 test harness: **27/27 roster, 38/38 payroll, 12/12 integration PASS**; not Node CI nor native SQLite. Total Personal Fleet authored cases now **246**. Full suite was not re-run after PF-12.
 
 **Versioning:** this changes the shape of `processed` records by adding `commandSignature`. This reference has never been deployed, so no migration was applied. Any future runtime adapter must explicitly version/migrate stored receipts before enabling writes; treating old unbound receipts as safe duplicates is forbidden.
+
+## PF-13 (2026-11-05): real-command replay identity across intent, combat and salary
+
+A P0-class design error remained after PF-12: the `replay()` paths for PF-04 orders, PF-06 combat, and PF-08 payroll could return `DUPLICATE` when the same operation/invoice ID was presented with a previously used caller-provided `payloadHash` but different actual command parameters. A duplicate response does NOT dispatch native work, but it could falsely acknowledge and hide a forged request or misrepresent a previously paid invoice.
+
+**Fixes:**
+- `personal-fleet-intents.cjs#replay()` now compares all persisted request fields: operation ID/hash, fleet, pilot, native entity, system, issuer, assignment generation, fleet revision, command type/target and request creation/expiry timestamps. Incomplete requests fail closed.
+- `personal-fleet-combat.cjs#replay()` checks the exact actor, original assignment, target, owner, generation/fleet revision and expiry, in addition to the caller hash and operation ID.
+- `personal-fleet-payroll.cjs#replay()` checks the complete immutable invoice identity: original employer, pilot/contract, both native wallets, salary, arrears, total, period and contract revision. A changed amount with the same invoice ID is a conflict.
+- Added three negative replay tests to each module (9 regressions total). Their exact committed GitHub contents were executed under an isolated synchronous V8 harness: **PF-04 35/35 PASS, PF-06 29/29 PASS, PF-08 41/41 PASS**. No native Node process or SQLite was involved.
+
+**Release note:** These modules are not deployed, and replay equality is only an idempotency *consistency* check. It does not authenticate a caller or permit native dispatch/wallet mutation. A trusted server adapter must bind original authenticated identity, real inventory, native target legality and committed SQLite receipt. The prior payloadHash itself is NOT treated as trustworthy security proof.
+
+All Personal Fleet test files now contain **255 authored test cases** (246 before PF-13, nine new). The full 255-test suite and GitHub Actions CI have **not** been confirmed green. Continue to keep draft/default OFF, no engine fork or PLAY mutation.
