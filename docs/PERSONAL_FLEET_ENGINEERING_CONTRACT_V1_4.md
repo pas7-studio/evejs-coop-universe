@@ -1,3 +1,13 @@
+# CURRENT LOCAL HANDOFF STATUS — 2026-11-05
+
+**Authoritative local-sync/testing instructions:** [PERSONAL_FLEET_LOCAL_ACCEPTANCE.md](PERSONAL_FLEET_LOCAL_ACCEPTANCE.md) and `scripts/Test-PersonalFleet-Local.ps1`.
+
+**IMPORTANT CORRECTION:** This repository's `AGENTS.md` prohibits ALL GitHub Actions workflows. The PF contract GitHub Actions workflow introduced during earlier PF work was **deleted** from PR #350. Older sections below describing that workflow as present are historical notes and are superseded by this correction. All tests are local/manual only.
+
+**NOT GAMEPLAY-READY.** This PR has reference contracts, cross-module invariants and disposable/native-adapter-focused test scaffolding. The authoritative EveJS fork has no Personal Fleet runtime integration commit from this work because GitHub write operations returned 403. Passing these tests is not evidence of actual hire, native ship control, payments or gameplay E2E.
+
+---
+
 # PERSONAL NPC FLEET — Engineering Contract Freeze v1.4
 
 **Date:** 2026-11-04  
