@@ -3309,3 +3309,9 @@ Evidence: fork 55a60cf; node --check clean; tests/coop-war-occupation-renderable
 Why: All 17 'must be unicode, not str' tracebacks in the 2026-11-03 session carry text='SaSaNyah', a pilot from another corporation ([RAIH]; confirmed from the owner's Local/chat logs), so corp/alliance owner rows cannot be the source: the name reaches cfg.eveowners via charMgr.GetPublicInfo/GetPublicInfo3 where characterName was a py2 byte str, and the overview dies in PrimeDisplayName -> ExtractLocalizedTags.
 Where: fork services/character/charMgrService.js buildPublicInfoEntries (characterName, description, title as wstring).
 Evidence: fork faaefa4; node --check clean; tests/coop-client-rowset-and-owner-name.test.mjs 5/5 (rowset class, both owner registries, public info, and the marshal opcode difference 0x2e vs 0x13). Not deployed.
+
+### 2026-11-04T05:10Z · 3c69d22 · L1 · fix(mtu): use the local toReal helper when sizing ship cargo on scoop
+
+Why: The friend could not scoop his own MTU: the client flies to 0 m and the scoop action dies. Live server log 2026-11-04 11:59:32 shows the real reason - 'ERR ship MachoBindObject() toNumber is not defined'. scoopMobileTractorUnitToCargo -> returnHaulToShipCargo called toNumber(), which mobileTractorUnitRuntime never defines; because RealScoop runs as the nested MachoBindObject call, the ReferenceError nulled the whole bind response and the client raised 'TypeError: NoneType object is not iterable' at moniker.Bind.
+Where: fork services/ship/mobileTractorUnitRuntime.js returnHaulToShipCargo (toReal, the helper the module already defines).
+Evidence: fork 3c69d22; node --check clean; scanned the whole server tree for other undefined toNumber callers (0 files); tests/coop-mtu-scoop-capacity.test.mjs 2/2. Deployed by rebuilding evejs-local and recreating the play stack; needs the friend to scoop again for the in-game PASS.
