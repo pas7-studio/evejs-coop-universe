@@ -170,3 +170,11 @@ PF-11: full gate travel/logistics/performance/release gating.
 **Architecture: READY FOR PF-00 IMPLEMENTATION.**
 **Production/gameplay correctness: NOT YET VERIFIED.**
 This is a testable contract, not a guarantee that native APIs or live gameplay already work. Any native-source discovery conflict is an explicit change request against this document, not permission to silently invent a simulation.
+
+## PF-00 first executable code slice (in this PR)
+
+- `scripts/lib/personal-fleet-contract.cjs`: **pure, non-deployed, side-effect-free policy kernel** for unique pilot/ship assignments, external owner claim admission, revision/generation fences, physical evidence-gated transitions, ambiguous recovery fences, and operation replay checks. `admitAssignment` is advisory and MUST be revalidated transactionally.
+- `tests/coop-personal-fleet-contract.test.mjs`: deterministic isolated regression suite (19 test cases), including conflicting WAR/mining claims, duplicate assignment/pilot/ship, wrong native evidence, stale revision/generation, wreck identity, irreversible LOST, malformed external claims and ambiguous operation replay.
+- Run: `node --check scripts/lib/personal-fleet-contract.cjs && node --test tests/coop-personal-fleet-contract.test.mjs`.
+- Local detached policy fixture verification: **19/19 PASS** on Node.js; the PR's exact checked-in files still require execution in the owner's repository/WORK environment. No GameStore, SQLite, fork runtime, Docker or EVE client is exercised by this test.
+- This pure reference module is not the deployed implementation. Per `AGENTS.md`, production code belongs in `pas7-studio/EveJS` (`coop/pas7std`) and must use real native authority adapters. Do not import this orchestration-side helper as the live runtime without explicit extraction and source parity review.
