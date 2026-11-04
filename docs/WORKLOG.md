@@ -3279,3 +3279,21 @@ Evidence: fork 106f79f; node --check clean; tests/coop-death-loot-flag.test.mjs 
 Why: The co-op engine audit budget for co-op code inside stock files (67500 chars) is at its ceiling, and the drone/warp round had grown it with inline logging and multi-line call blocks.
 Where: fork: new space/coopDroneStateSync.js (absorbs the former space/coopDroneStateView.js: rows, tuples, launch telemetry, re-sync) and space/coopWarpLandingTrace.js; droneRuntime, movementSceneRefresh and runtime keep one destructured require plus one call each.
 Evidence: fork a8764c0; node --check clean on every touched file; tests/coop-drone-state-sync.test.mjs 3/3 after pointing it at coopDroneStateSync; coop-engine-audit now reports stockChars 67641 > 67500, and the baseline at 7d99164 was already 67504 > 67500, so the budget needs an extraction (marketProxyService 14224 chars, miningNpcOperations 10920) rather than more hooks.
+
+### 2026-11-04T03:50Z · 0e890d2 · L1 · fix(client): send rowsets as eve.common.script.sys.rowset.Rowset
+
+Why: Client traceback EXCEPTION #9 (live 2026-11-03 22:32:18, Neocom contracts blink): UnmarshalError 'module' object has no attribute 'Rowset' - the payload asked for util.Rowset, which V23.02/V24.01 does not have (mapService already documents this), so contractProxy state never unmarshalled.
+Where: fork services/_shared/serviceHelpers.js buildRowset default + the local builders in services/chat/chatHub.js and services/account/accountService.js.
+Evidence: fork 0e890d2; encoded a rowset with the real marshal encoder: payload contains eve.common.script.sys.rowset.Rowset and no util.Rowset; tests/coop-client-rowset-and-owner-name.test.mjs 4/4.
+
+### 2026-11-04T03:55Z · 17e3c78 · L1 · fix(overview): send cfg.eveowners names as unicode
+
+Why: Client traceback EXCEPTION #15/#16 (live 2026-11-03 22:32:19): overview PrimeDisplayName -> ExtractLocalizedTags TypeError 'must be unicode, not str' with text='SaSaNyah' - Handle_GetEveOwners marshalled ownerName as PyString (0x13) instead of unicode.
+Where: fork services/corporation/corpRegistryRuntime.js and allianceRegistryRuntime.js Handle_GetEveOwners (ownerName as {type:'wstring'}).
+Evidence: fork 17e3c78; marshal encode shows the name now uses opcode 0x2e (PyWStringUTF8) and a plain string still 0x13, covered by tests/coop-client-rowset-and-owner-name.test.mjs.
+
+### 2026-11-04T04:00Z · ddf6bbb · L1 · fix(loot): let Loot All move what fits instead of aborting the batch
+
+Why: Client traceback EXCEPTION #23 (live 2026-11-03 22:36:05): invLootAllBtn -> MultiAdd -> UserError NotEnoughCargoSpace {'available': 0.8175, 'volume': 388}. One item that did not fit threw and aborted the whole batch, so a hold with 0.8 m3 free looted nothing.
+Where: fork services/inventory/invBrokerService.js Handle_MultiAdd capacity branch (skip the unfitting item for multi-item batches, keep the error for a single-item request).
+Evidence: fork ddf6bbb; node --check clean; tests/coop-loot-all-partial-move.test.mjs 3/3 (clamp arithmetic via invMoveCapacity, 0.8 m3 free cannot take 388 m3, MultiAdd branch must continue instead of throwing).
