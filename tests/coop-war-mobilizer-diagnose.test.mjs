@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const source = fs.readFileSync(
-  path.join(here, "..", "integration", "coopVirtualWorldRuntime.cjs"), "utf8");
+  path.join(here, "..", "integration", "coopVirtualWorldRuntime.war.cjs"), "utf8");
 
 function body(name) {
   const start = source.indexOf(`function ${name}(`);

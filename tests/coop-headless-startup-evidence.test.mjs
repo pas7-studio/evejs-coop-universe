@@ -14,6 +14,8 @@ function initSandbox(env={EVEJS_COOP_VIRTUAL_WORLD:'1',EVEJS_COOP_HEADLESS_WORLD
   setInterval(){throw Error('unexpected live timer on failed initialization')},
   require(id){
    if(id==='./coopVirtualWorldRuntime.pure')return require('../integration/coopVirtualWorldRuntime.pure.cjs');
+   // the faction-war half of the runtime is its own module since 2026-11-04
+   if(id==='./coopVirtualWorldRuntime.war')return require('../integration/coopVirtualWorldRuntime.war.cjs');
    if(id==='./coopJsonFileCache')return require('../integration/coopJsonFileCache.cjs');
    if(id==='./coopRuntimeProbe')return {observe:(event,session,ship,extra)=>{evidence.push({event,extra});return true;}};
    if(id==='./coopVirtualWorld')return {createWorld(){throw Object.assign(Error('corrupt native state'),{code:'E_CORRUPT'})}};

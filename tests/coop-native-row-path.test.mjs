@@ -61,7 +61,7 @@ test("the war consumers read through the shared conversion",()=>{
    /const a=readRow\(gameStore,war\.TABLE,war\.KEY\)/],
   "coopWarFleetRegistry.cjs":[/readRow\(gameStore,TABLE,KEY\)/],
   "coopWarTransferLedger.cjs":[/readRow\(gameStore,fleet\.TABLE,fleet\.KEY\)/],
-  "coopVirtualWorldRuntime.cjs":[/nativeRows\.readRow\(gameStore,table,key,validate\)/],
+  "coopVirtualWorldRuntime.war.cjs":[/nativeRows\.readRow\(gameStore,table,key,validate\)/],
  };
  for(const [file,patterns] of Object.entries(files)){
   const source=fs.readFileSync(path.join(ROOT,"integration",file),"utf8");

@@ -7,7 +7,9 @@ import {readModuleText,functionText} from "./_support/coopSourceText.mjs";
 const require=createRequire(import.meta.url);
 const ROOT=path.join(import.meta.dirname,"..");
 const bridge=fs.readFileSync(path.join(ROOT,"integration","coopAdminBridge.cjs"),"utf8");
-const runtime=readModuleText("integration/coopVirtualWorldRuntime.cjs");
+// The faction-war half of the runtime lives in its own module since 2026-11-04
+// (docs/FORK_PATCH_AUDIT_20261028.md: the runtime file had to shrink).
+const runtime=readModuleText("integration/coopVirtualWorldRuntime.war.cjs");
 
 // The battle leg was silent after ASSAULT_BEGUN: a tick with no order looked
 // identical to a tick where every pair was ineligible. These guards prove the

@@ -106,13 +106,16 @@ export function moduleFiles(relPath, options = {}) {
 // Text of one top-level function, from its signature to its closing brace.
 // Wiring tests used to do `indexOf(nextFunction)` by hand; that breaks as soon
 // as the *next* function moves into a split module, which says nothing about the
-// function under test. This engine keeps top-level closing braces at column 0 and
-// nested ones indented, so `\n}` at line start ends the function - true both for
-// a single file and for text with split siblings inlined.
+// function under test. This engine keeps a function's closing brace at the
+// indentation of its own `function` line, so that rule ends the function - true
+// for a top-level function (brace at column 0), for a function inside a factory
+// whose body is indented, and for text with split siblings inlined.
 export function functionText(text, signature) {
   const start = text.indexOf(signature);
   if (start < 0) return "";
-  const close = /\r?\n\}[ \t]*(?=\r?\n|$)/g;
+  const lineStart = text.lastIndexOf("\n", start) + 1;
+  const indent = /^[ \t]*/.exec(text.slice(lineStart, start))[0];
+  const close = new RegExp(`\\r?\\n${indent}\\}[ \\t]*(?=\\r?\\n|$)`, "g");
   close.lastIndex = start + signature.length;
   const hit = close.exec(text);
   if (!hit) return text.slice(start);
