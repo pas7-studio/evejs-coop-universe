@@ -255,3 +255,20 @@ test('PF-13: identical invoice ID cannot replace payee wallet or pilot',()=>{
  assert.equal(p.replay(start(),input({pilotID:'coop-pilot-002'})).reason,
  'PF_PAYROLL_ID_REPLAY_CONFLICT');
 });
+
+
+test('PF-14: payroll cannot be PAID without native settlement identity',()=>{
+ const r=start();
+ assert.equal(p.replay({...r,phase:'PAID',revision:1,proofs:[
+ {id:'faked',type:'ORIGINAL_NATIVE_WALLET_ATOMIC_RECEIPT'}]},input()).reason,
+ 'PF_PAYROLL_RECORD_CORRUPT');
+});
+test('PF-14: payroll proof revision mismatch is corrupt',()=>{
+ assert.equal(p.replay({...start(),revision:2},input()).reason,
+ 'PF_PAYROLL_RECORD_CORRUPT');
+});
+test('PF-14: fabricated payroll receipt authority fails closed',()=>{
+ assert.equal(p.replay({...start(),phase:'SETTLING',revision:1,
+ proofs:[{id:'faked',type:'FREE_ISK'}]},input()).reason,
+ 'PF_PAYROLL_RECORD_CORRUPT');
+});
