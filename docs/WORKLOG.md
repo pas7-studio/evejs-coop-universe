@@ -3553,3 +3553,9 @@ Why: in-space teleports reach the pilot lane (MJD/Tr): lead-stamped owner delive
 Detail: Seven cases against the deployed fork module: a pilot-owned entity gets exactly one owner copy carrying the 4-tick pilot lead while watchers get the raw broadcast with the owner excluded (one position must never arrive twice on two stamps); the bundle is speed -> position -> stop -> velocity on a single stamp and carries the destination the caller already moved the ship to; an NPC or sessionless e
 Where: integration/coopAdminBridgeActions.cjs, scripts/overlay-spec.cjs, tests/coop-owner-teleport.test.mjs
 Evidence: fork 1b5cb47; 7 tests; AUDIT_OK (65488 chars, budget not raised); probe: 4383 -> microJumpDrive 12000ms 100000m; image evejs-local rebuilt; live client verification pending restart window
+### 2026-11-04T23:50Z · 2b9b8cd · L1 · test(pve): pin warp-into-the-sniper defence for site anomalies
+
+Why: anomaly/site NPCs did not react to a 150 km sniper: site defence flag was off and the far rule was a fixed 250 km
+Detail: Seven new cases on the deployed director: a defender that cannot lock a 150 km sniper is sent to him with a real warp and gets no attack order that could never reach; a hull whose own lock range covers the sniper keeps the native attack order and flies nowhere; the attack order waits for the SAME hull to be out of warp and inside reach, and arrival never triggers a second warp; without a warp capa
+Where: docs/PVE_SITE_DEFENSE.md, integration/coopNpcTactics.cjs, integration/coopPveNativeSiteDefense.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-pve-native-site-defense.test.mjs
+Evidence: fork 5ff9f9a; 19 site-defence tests + 40 tactics tests green; AUDIT_OK 65488 chars; new events NATIVE_SITE_DEFENSE_WARP_ISSUED/ORDER_ACCEPTED; image evejs-local rebuilt; live client proof pending restart window
