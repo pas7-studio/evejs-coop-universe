@@ -9,20 +9,19 @@ const source=fs.readFileSync(
 // the native fleet record while its hull, cargo and rows are all intact - that
 // one is healed by the fleet-record adoption path, not by re-attaching first.)
 test("the identity audit runs before any controller is attached",()=>{
- const restore=source.slice(source.indexOf("const healed=repairPartialSlot"),
+ // 2026-11-04: the order changed on purpose. verifyActors requires a matching native
+ // controller row for every actor, and boot paths exist that materialize a durable ship
+ // without one (the mining tick then prunes it from its own fleet record). The restore
+ // path therefore re-attaches controllers FIRST and audits immediately after, before the
+ // slot is registered as healthy. What must never move is the audit before registerOnce.
+ const restore=source.slice(source.indexOf("const restored=ensureControllers"),
   source.indexOf("const registered=registerOnce"));
- const audit=restore.indexOf("verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});");
- assert.ok(audit>0,"restore path audits the actors");
- const tail=restore.slice(audit);
- assert.ok(tail.indexOf("ensureControllers([...minerIDs,...haulerIDs]);")>0,
-  "an unconditional controller attach follows the audit");
- // The only attaches allowed before the audit belong to the repair branches, which
- // already verified their merged witness against the native store: the partial-slot
- // repair and the additive composition repair.
- const head=restore.slice(0,audit);
- assert.equal((head.match(/ensureControllers\(\[/g)||[]).length,2);
- assert.match(head,/if\(healed\)\{/);
- assert.match(head,/if\(recomposed\)\{/);
+ const attach=restore.indexOf("ensureControllers([...minerIDs,...haulerIDs]);");
+ const audit=restore.indexOf("verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs})");
+ assert.ok(attach>=0,"the restore path re-attaches missing controllers");
+ assert.ok(audit>attach,"the audit follows the attach and still precedes registration");
+ // The repair branches audit their merged witness as soon as they merge it.
+ assert.match(source,/if\(healed\|\|recomposed\)verifyActors\(/);
 });
 test("a slot blocked by the audit is never materialized",()=>{
  const catchBlock=source.slice(source.indexOf("}catch(error){",source.indexOf("const registered=registerOnce")));

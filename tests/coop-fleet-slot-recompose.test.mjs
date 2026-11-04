@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
@@ -8,10 +8,14 @@ const {createService,roleMarker,slotKey}=require("../integration/coopNativeMinin
 // miners were Hulks and Skiffs, so the strict transfer refused every stack as "full"
 // and ore never left the belt. The repair must be additive: the mis-roled hull keeps its
 // identity and becomes an extra miner, and a real hauler is spawned beside it.
-const SYSTEM=30000144;
+// Each fixture gets its own system: the module memoises verified slots per system:slot for a
+// short window (slotVerifiedAt), so two cases reusing one system would read the memo and
+// skip the store entirely - that is production behaviour, not a test convenience.
+let nextFixtureSystem=30000144;
 
 function fixture(t,{haulerProfile="ore_mining_venture",haulerCargo=0,spawnedHaulerProfile=null,
  composition=true}={}){
+ const SYSTEM=nextFixtureSystem++;
  const flags={EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE:"1",
   EVEJS_COOP_FLEET_COMPOSITION:composition?"1":"0"};
  const old={};
@@ -98,7 +102,7 @@ function fixture(t,{haulerProfile="ore_mining_venture",haulerCargo=0,spawnedHaul
  const log=[];
  const create=()=>createService({db,store,nativeService,ensureState:()=>{},spawn,register,
   getFleets:()=>fleets,log:s=>log.push(s)});
- return {world,scene,log,seed,
+ return {world,scene,log,seed,system:SYSTEM,
   start:()=>create().start({scene,fleetCount:1}),
   getSpawnCalls:()=>spawnCalls,
   setSpawnHook:fn=>spawnHook=fn,
@@ -127,8 +131,8 @@ test("a mining hull in the hauler role is demoted to an extra miner and a real h
  assert.deepEqual(slot.addedHaulerIDs,[77010]);
  assert.deepEqual(slot.keptMisroledHaulerIDs,[]);
  // The demoted hull keeps every row it owned; only its role marker changed.
- assert.equal(f.world.controllers.get(90003).operatorKind,roleMarker(SYSTEM,1,"miner"));
- assert.equal(f.world.entities.get(90003).operatorKind,roleMarker(SYSTEM,1,"miner"));
+ assert.equal(f.world.controllers.get(90003).operatorKind,roleMarker(f.system,1,"miner"));
+ assert.equal(f.world.entities.get(90003).operatorKind,roleMarker(f.system,1,"miner"));
  assert.ok(f.world.modules.get(900030),"the demoted hull keeps its fitted modules");
  assert.equal(f.world.entities.get(90003).entityID,90003);
  // The added hull is a real industrial hull, and the event names the change.
@@ -146,7 +150,7 @@ test("a mis-roled hull that already holds ore is never demoted",t=>{
  assert.deepEqual(slot.demotedHaulerIDs,[],"its cargo would be orphaned");
  assert.deepEqual(slot.keptMisroledHaulerIDs,[90003]);
  assert.deepEqual(slot.haulerEntityIDs,[90003,77010],"it stays a hauler and a real one is added");
- assert.equal(f.world.controllers.get(90003).operatorKind,roleMarker(SYSTEM,1,"hauler"));
+ assert.equal(f.world.controllers.get(90003).operatorKind,roleMarker(f.system,1,"hauler"));
  assert.equal(f.world.cargo.get(980001).quantity,1200,"the ore is still on the hull that holds it");
 });
 
@@ -185,10 +189,10 @@ test("the repair is idempotent: a recomposed slot is stable on the next start",t
 test("a real hauler left by an interrupted attempt is absorbed, not duplicated",t=>{
  const f=fixture(t);f.seed();
  // A real hauler that wears this slot"s marker but is missing from the witness.
- const marker=roleMarker(SYSTEM,1,"hauler");
- f.world.entities.set(90009,{entityID:90009,systemID:SYSTEM,ownerID:950,typeID:1,
+ const marker=roleMarker(f.system,1,"hauler");
+ f.world.entities.set(90009,{entityID:90009,systemID:f.system,ownerID:950,typeID:1,
   operatorKind:marker,nativeNpc:true,transient:false,profileID:"ore_mining_badger_hauler"});
- f.world.controllers.set(90009,{entityID:90009,systemID:SYSTEM,operatorKind:marker,
+ f.world.controllers.set(90009,{entityID:90009,systemID:f.system,operatorKind:marker,
   profileID:"ore_mining_badger_hauler",transient:false,startupRuleID:null});
  f.world.modules.set(900090,{moduleID:900090,entityID:90009,transient:false});
  const r=f.start();
@@ -204,10 +208,10 @@ test("a real hauler left by an interrupted attempt is absorbed, not duplicated",
 
 test("a witness that merely disagrees with the markers is reconciled without spawning",t=>{
  const f=fixture(t,{haulerProfile:"ore_mining_mammoth_hauler"});f.seed();
- const marker=roleMarker(SYSTEM,1,"hauler");
- f.world.entities.set(90019,{entityID:90019,systemID:SYSTEM,ownerID:950,typeID:1,
+ const marker=roleMarker(f.system,1,"hauler");
+ f.world.entities.set(90019,{entityID:90019,systemID:f.system,ownerID:950,typeID:1,
   operatorKind:marker,nativeNpc:true,transient:false,profileID:"ore_mining_mammoth_hauler"});
- f.world.controllers.set(90019,{entityID:90019,systemID:SYSTEM,operatorKind:marker,
+ f.world.controllers.set(90019,{entityID:90019,systemID:f.system,operatorKind:marker,
   profileID:"ore_mining_mammoth_hauler",transient:false,startupRuleID:null});
  const r=f.start();
  assert.equal(r.status,"OK");
