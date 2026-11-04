@@ -99,6 +99,16 @@ wholesale from `SetState(bag.droneState)`. Two server-side holes are now closed:
 The wire shape, launch telemetry and the re-sync live in `space/coopDroneStateSync.js`
 (`tests/coop-drone-state-sync.test.mjs` 3/3).
 
+## Client tracebacks: read them locally, not from guesses
+The launcher keeps the client's own console output under
+`C:\Games\EveCoop\upstream-evejs\Code\_local\diagnostics\`: `evejs-client-stdout-<id>.log`
+(full Python tracebacks with the exact client file/line, `session` locals and timestamps) and
+`evejs-client-crash-<id>.txt` (launch/exit metadata). Grep the stdout log for `EXCEPTION #`,
+`Traceback`, `Exception:`. Three bugs were root-caused from it on 2026-11-04:
+`util.Rowset` (contractProxy state, 0e890d2), byte-str owner names in cfg.eveowners
+(overview PrimeDisplayName, 17e3c78) and Loot All aborting on one item that did not fit
+(MultiAdd NotEnoughCargoSpace available 0.8175 volume 388, ddf6bbb).
+
 ## Still open
 1. Loot: confirm a real wreck/can drag now logs a reason; if the source is still
    unresolvable, materialize scene loot as real items (needs the new warn line live).
