@@ -153,7 +153,17 @@ test("Get describes the campaign in the set the client actually renders", () => 
   assert.equal(objective.attributes.career, 3, "CAREER_ENFORCER - the client maps only real careers");
   assert.equal(objective.attributes.target_progress, 309);
   assert.equal(objective.attributes.rewards.no_isk_reward, true);
-  assert.equal(objective.attributes.rewards.no_lp_reward, true);
+  // The client draws an LP card even for a zero total (FmtLP(0) is the string "0 LP"),
+  // and without an LP arm its interval size is None, which renders the raw
+  // UI/Campaigns/RewardsPerNumberContributions placeholders. So the arm exists, and it
+  // truthfully pays nothing.
+  assert.equal(objective.attributes.rewards.no_lp_reward, undefined);
+  assert.equal(objective.attributes.rewards.lp_reward.amount_per_interval.amount, 0,
+    "the war mints no LP");
+  assert.equal(objective.attributes.rewards.lp_reward.progress_interval, 1,
+    "a real interval, so the client renders '0 LP per contribution'");
+  assert.ok(objective.attributes.rewards.lp_reward.amount_per_interval
+    .associated_corporation.sequential > 0, "a real militia corporation issues it");
   assert.equal(objective.attributes.rewards.no_standing_reward, true);
   assert.equal(objective.attributes.rewards.isk_reward, undefined, "nothing is minted");
 });

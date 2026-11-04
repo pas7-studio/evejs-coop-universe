@@ -21,7 +21,8 @@ let warFleetRegistry=null,bridge=null,identityRegistry=null,
  economy=null,nativeGateTransfer=null,recognitionAnnouncer=null,nativeAmmoWitness=null;
 // Declared here because the extraction left them behind: every phase that
 // touched one threw ReferenceError, which froze that part of the world.
-let lossBridge=null,factionDirector=null,raidDirector=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,warpPointDirector=null,nativeGunRange=null,warGateHandoff=null,warRecoverySocket=null,nativeOrderBridge=null,lootCommerce=null,nativeAmmoSupply=null,warTreasuryInstance=null;
+let lossBridge=null,factionDirector=null,raidDirector=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,warpPointDirector=null,nativeGunRange=null,warGateHandoff=null,warRecoverySocket=null,nativeOrderBridge=null,lootCommerce=null,nativeAmmoSupply=null,warTreasuryInstance=null,
+ siteSentrySpawner=null;
 function bindWarRuntime(state){
  if(!state||typeof state!=="object")return false;
  if(state.bridge!==undefined)bridge=state.bridge||null;
@@ -1123,6 +1124,37 @@ function advanceNativePveSiteDefense(){
  }
 }
 
+function advanceSiteSentries(){
+ // A site battery is scenery with hit points and no weapon data, so it can never fire.
+ // The engine's own destructible sentries are native NPC profiles with weapons, ammo and a
+ // retail behaviour profile, so the bridge is one native sentry per battery, at the battery.
+ // Gated OFF: a live damage measurement is the only proof, and it needs a player in range.
+ if(process.env.EVEJS_COOP_SITE_SENTRIES!=="1"||!visitedSystems.size)return;
+ const runtime=require("./runtime"),dungeon=require("../services/dungeon/dungeonRuntime"),
+  authority=require("../services/dungeon/dungeonAuthority"),npc=require("./npc/npcService");
+ if(!(runtime.scenes instanceof Map))return;
+ if(!siteSentrySpawner){
+  siteSentrySpawner=require("./coopSiteSentrySpawn").createSentrySpawner({
+   listInstances:systemID=>dungeon.listActiveInstancesBySystem(systemID,{full:true}),
+   getTemplate:templateID=>{try{return authority.getTemplateByID(templateID)||null}catch(_error){return null}},
+   listProfiles:()=>npc.listNpcProfiles(),
+   spawn:(systemID,options)=>npc.spawnNpcBatchInSystem(systemID,options),
+   observe:(name,context,_session,payload)=>require("./coopObserve").observe(
+    require("./coopRuntimeProbe"),name,context,payload)
+  });
+ }
+ for(const systemID of [...visitedSystems].slice(0,12)){
+  const scene=runtime.scenes.get(systemID);
+  if(!scene||Number(scene.systemID)!==Number(systemID))continue;
+  const instances=dungeon.listActiveInstancesBySystem(systemID,{full:true});
+  const result=siteSentrySpawner.tick({systemID,scene,instances});
+  if(result.spawned.length)console.log(`[CoopLivingWorld] site sentries in ${systemID}: `+
+   result.spawned.map(entry=>`battery ${entry.batteryItemID} -> ${entry.typeName} #${entry.entityID}`).join(", "));
+  else if(result.skipped.length)require("./coopRuntimeProbe").observe("living-site-sentry-skip",
+   {systemID},null,{status:result.status,reason:result.skipped[0].reason});
+ }
+}
+
 function advanceNpcRecognition(){
  if(process.env.EVEJS_COOP_NPC_MEMORY!=="1"||!identityRegistry||!visitedSystems.size)return;
  const runtime=require("./runtime");
@@ -1221,4 +1253,4 @@ function releaseSpawnedIdentity({pilotID,entityID=0,reason=""}={}){
  return {...released,reason:String(reason||"IDENTITY_REASSIGNED")};
 }
 
-module.exports = {projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};
+module.exports = {projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceSiteSentries, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};

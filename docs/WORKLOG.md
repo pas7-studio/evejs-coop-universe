@@ -3428,3 +3428,9 @@ Evidence: fork <hash>; 4/4 notice tests; play stack redeployed healthy with coop
 Why: decide the real sentry type for inert site batteries
 Where: tests/coop-site-sentries.test.mjs
 Evidence: fork <hash>; 3/3 sentry tests; measured: batteries cat 23 zero weapon data, sentries cat 11 with real damage
+### 2026-11-04T20:04Z · c045d3c · L1 · test(sites): pin one native sentry per battery, and the market env guards
+
+Why: site batteries get a real native sentry instead of inert scenery
+Detail: 6 new cases: a battery spawns exactly one native sentry of its own faction/size at its own position, the same battery is never spawned twice, an empty system spawns nothing, an unknown faction is skipped once with a reason, non-battery scenery is not a candidate, and a failed native spawn is not retried into a spawn storm. The variant-level sentry test is dropped with the mechanism it pinned.
+Where: tests/coop-site-sentry-spawn.test.mjs, tests/coop-site-variants.test.mjs
+Evidence: fork 134ef7e+; 6/6 sentry-spawn tests, 4/4 variants, 3/3 sentry decision; measured: batteries cat 23 with no weapon attributes, 229 native sentry profiles in the running container
