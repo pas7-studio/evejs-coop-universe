@@ -86,9 +86,18 @@ function step(row,{to,expectedRevision,now,proof}={}){
  return {status:'APPLIED',intent:Object.freeze({...row,phase:to,revision:row.revision+1,
   receipts:[...row.receipts,{id:proof.id,type:evidence}]})};
 }
-function replay(row,{operationID,payloadHash}={}){
+function replay(row,command={}){
  if(!valid(row))return deny('PF_INTENT_RECORD_CORRUPT');
- if(row.operationID!==operationID||row.payloadHash!==payloadHash)
+ if(!object(command)||row.operationID!==command.operationID||
+  row.payloadHash!==command.payloadHash||
+  row.fleetID!==command.fleetID||row.pilotID!==command.pilotID||
+  row.nativeEntityID!==command.nativeEntityID||
+  row.systemID!==command.systemID||
+  row.issuerCharacterID!==command.issuerCharacterID||
+  row.assignmentGeneration!==command.assignmentGeneration||
+  row.fleetRevision!==command.fleetRevision||row.type!==command.type||
+  row.targetID!==command.targetID||
+  row.createdAt!==command.createdAt||row.expiresAt!==command.expiresAt)
   return deny('PF_INTENT_REPLAY_CONFLICT');
  // A retried request NEVER issues native work. Reconcile ISSUING/UNKNOWN
  // from original receipts; even a completed request is only a receipt.
