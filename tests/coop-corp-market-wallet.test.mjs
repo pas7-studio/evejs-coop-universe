@@ -24,6 +24,22 @@ function sellHandlerBody() {
   return marketSource.slice(start, end);
 }
 
+test("every coop require inside the market service resolves to a real file", () => {
+  // 2026-11-04: the corporate-market require used ../../integration/... , a directory
+  // that does not exist (src/integration), so the whole marketProxyService failed to
+  // load with "Cannot find module" as soon as it was enabled. Pin the resolution.
+  const marketDir = path.join(
+    forkRoot, "Code/server/src/services/market");
+  const pattern = /require\(path\.join\(__dirname,\s*"([^"]*coop[^"]*)"\)\)/g;
+  const found = [...marketSource.matchAll(pattern)].map((match) => match[1]);
+  assert.ok(found.length > 0, "the market service must still call the coop layer");
+  for (const relative of found) {
+    const resolved = path.resolve(marketDir, `${relative}.js`);
+    assert.equal(fs.existsSync(resolved), true, `${relative} does not resolve from services/market`);
+    assert.equal(resolved.endsWith("coopPlayerMiningCorporateMarketRuntime.js"), true);
+  }
+});
+
 test("an immediate corporation sale is no longer refused as 'not wired'", () => {
   const body = sellHandlerBody();
   assert.ok(!/assertPersonalMarketOnly\(useCorp\)/.test(body),
