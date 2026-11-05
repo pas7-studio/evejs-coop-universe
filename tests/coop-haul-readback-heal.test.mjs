@@ -1,0 +1,81 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {createRequire} from "node:module";
+import path from "node:path";
+
+// Measured live 2026-11-05 (three times: 12:15Z, 12:44Z, 13:14Z): a post-commit readback found no
+// destination row (`destination_rows=0`) and parked the whole mining fleet, because nothing in the
+// engine clears `coopHaulCargoNeedsOperatorRepair` - only a restart did. The transaction had
+// committed (the row and its receipt are written together); the readback reads the store's cache.
+// The doubt is now resolved by evidence: one row with that cargoID means the transfer really
+// happened. A missing row keeps the flag.
+const forkRoot = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
+const require = createRequire(import.meta.url);
+const {healReadbackRepair, READBACK_REPAIR} =
+  require(path.join(forkRoot, "Code/server/src/space/coopNativeHaulTransferAtomic.js"));
+
+const REASON = "ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED:destination_rows=0:cargo=980200387963";
+
+function actors() {
+  return {
+    miner: {itemID: 980000073502, coopHaulNeedsOperatorRepair: REASON,
+      coopHaulCargoNeedsOperatorRepair: REASON, coopMiningCargoNeedsOperatorRepair: REASON},
+    hauler: {itemID: 980000027001, coopHaulNeedsOperatorRepair: REASON,
+      coopHaulCargoNeedsOperatorRepair: REASON},
+    fleet: {fleetID: 960004610, coopHaulNeedsOperatorRepair: REASON,
+      coopHaulCargoNeedsOperatorRepair: REASON},
+  };
+}
+
+test("the readback reason carries the cargo it is about", () => {
+  const match = READBACK_REPAIR.exec(REASON);
+  assert.ok(match, "the reason is parseable");
+  assert.equal(Number(match[1]), 980200387963);
+});
+
+test("a row that exists exactly once clears the doubt on every actor", () => {
+  const a = actors();
+  const seen = [];
+  const nativeStore = {listNativeCargoForEntity: (id) => (Number(id) === 980000027001
+    ? [{cargoID: 980200387963, typeID: 1228, quantity: 1249}]
+    : [])};
+  const healed = healReadbackRepair({...a, nativeStore,
+    observe: (event, _id, _space, fields) => seen.push({event, fields})});
+  assert.equal(healed.status, "HEALED");
+  assert.equal(healed.cargoID, 980200387963);
+  for (const actor of [a.miner, a.hauler, a.fleet]) {
+    assert.equal(actor.coopHaulNeedsOperatorRepair, undefined);
+    assert.equal(actor.coopHaulCargoNeedsOperatorRepair, undefined);
+    assert.equal(actor.coopMiningCargoNeedsOperatorRepair, undefined);
+  }
+  const event = seen.find((e) => e.event === "living-haul-repair-healed");
+  assert.ok(event, seen.map((e) => e.event).join(","));
+  assert.equal(event.fields.proof, "DESTINATION_ROW_EXISTS_ONCE");
+});
+
+test("a row that is still missing keeps the fleet parked", () => {
+  const a = actors();
+  const healed = healReadbackRepair({...a, nativeStore: {listNativeCargoForEntity: () => []}});
+  assert.equal(healed, null);
+  assert.equal(a.fleet.coopHaulNeedsOperatorRepair, REASON, "no evidence, no repair");
+});
+
+test("an ambiguity (two rows with one cargo id) is not proof either", () => {
+  const a = actors();
+  const row = {cargoID: 980200387963, typeID: 1228, quantity: 1249};
+  const healed = healReadbackRepair({...a, nativeStore: {listNativeCargoForEntity: () => [row, row]}});
+  assert.equal(healed, null);
+  assert.equal(a.miner.coopHaulNeedsOperatorRepair, REASON);
+});
+
+test("a flag from any other failure is never healed by this path", () => {
+  const a = actors();
+  for (const actor of [a.miner, a.hauler, a.fleet]) {
+    actor.coopHaulNeedsOperatorRepair = "HAUL_SOURCE_MOVE_UNCERTAIN";
+    actor.coopHaulCargoNeedsOperatorRepair = "HAUL_SOURCE_MOVE_UNCERTAIN";
+  }
+  const healed = healReadbackRepair({...a,
+    nativeStore: {listNativeCargoForEntity: () => [{cargoID: 980200387963}]}});
+  assert.equal(healed, null);
+  assert.equal(a.miner.coopHaulNeedsOperatorRepair, "HAUL_SOURCE_MOVE_UNCERTAIN");
+});

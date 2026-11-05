@@ -196,7 +196,8 @@ function createAtomicHaulMover({gameStore,nativeStore,resolveType,clock=()=>Date
        String(afterHash||"").slice(0,8)
      :"ok";
    if(clause!=="ok")
-    return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED:"+clause);
+    return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED:"+clause+
+     ":cargo="+destinationID);
    if(typeof nativeStore.buildNativeCargoItems!=="function")
     return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CARGO_BUILDER_MISSING");
    const rebuilt=nativeStore.buildNativeCargoItems(haulerID);
@@ -226,4 +227,44 @@ function transfer(args){
  });
  return live.transfer(args);
 }
-module.exports={createAtomicHaulMover,transfer,receiptKey};
+// A post-commit readback that finds no destination row is a doubt, not a theft: the transaction
+// already committed (the receipt and the row were written together), and the readback reads the
+// store's CACHE. Measured live 2026-11-05 13:14Z: fleet 960004610 was parked by
+// READBACK_FAILED:destination_rows=0, and nothing in the engine clears
+// coopHaulCargoNeedsOperatorRepair, so a cache-visibility hiccup cost the fleet its whole shift
+// until the next restart. The doubt is now resolved by evidence on the next beat: if exactly one
+// row with that cargoID exists, the transfer really happened and the repair flag is cleared. A
+// row that is still missing keeps the flag - that is what "needs an operator" is for.
+const READBACK_REPAIR=/^ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED:.*:cargo=([0-9]+)$/;
+function healReadbackRepair({miner,hauler,fleet,nativeStore,observe=null}={}){
+  if(!nativeStore||typeof nativeStore.listNativeCargoForEntity!=="function")return null;
+  const noted=String((miner&&miner.coopHaulCargoNeedsOperatorRepair)||
+    (fleet&&fleet.coopHaulCargoNeedsOperatorRepair)||
+    (hauler&&hauler.coopHaulCargoNeedsOperatorRepair)||"");
+  const match=READBACK_REPAIR.exec(noted);
+  if(!match)return null;
+  const cargoID=pos(match[1]);
+  if(!cargoID)return null;
+  let rows=[];
+  try{
+    rows=[...(nativeStore.listNativeCargoForEntity(pos(hauler&&hauler.itemID))||[]),
+      ...(nativeStore.listNativeCargoForEntity(pos(miner&&miner.itemID))||[])];
+  }catch(_error){return null;}
+  const found=rows.filter(row=>pos(row&&row.cargoID)===cargoID);
+  if(found.length!==1)return null;
+  for(const actor of [miner,hauler,fleet]){
+    if(!actor||typeof actor!=="object")continue;
+    delete actor.coopHaulCargoNeedsOperatorRepair;
+    delete actor.coopHaulNeedsOperatorRepair;
+    delete actor.coopMiningCargoNeedsOperatorRepair;
+  }
+  try{
+    if(typeof observe==="function")
+      observe("living-haul-repair-healed",null,null,
+        {fleetID:pos(fleet&&fleet.fleetID),haulerID:pos(hauler&&hauler.itemID),
+         cargoID,reason:String(noted).slice(0,120),
+         proof:"DESTINATION_ROW_EXISTS_ONCE"});
+  }catch(_error){/* telemetry must never change the world */}
+  return {status:"HEALED",cargoID};
+}
+module.exports={createAtomicHaulMover,transfer,receiptKey,healReadbackRepair,READBACK_REPAIR};

@@ -21,6 +21,11 @@ const budgetApi = require("./coopRefineryBudget");
  */
 
 const FLAG = "EVEJS_COOP_NPC_REFINERY";
+// The corporation earns whenever its pilots trade, and that has nothing to do with ore.
+// The sweep lived only inside the refinery path, so with the refinery off (its default) a
+// pilot could earn millions and the corporation stayed at zero - measured 2026-11-05,
+// coop-pilot-101 held 1 387 521 ISK of real sale proceeds while corp 1000129 held 2 624.02.
+const SWEEP_FLAG = "EVEJS_COOP_CORP_TREASURY_SWEEP";
 const DIR_FLAG = "EVEJS_COOP_NPC_REFINERY_DIR";
 const CORP_FLAG = "EVEJS_COOP_FACTORY_CORP_ID";
 const DEFAULT_CORP_ID = 1000129;
@@ -383,9 +388,31 @@ function refineAtStation(options = {}, stationIDOverride = 0) {
 // refinery worked only at the fleet's own station (1 535 units there), so no Pyerite was
 // ever made from the stack the corporation actually owned. Both stations are proven - the
 // fleet's dock and the newest warehouse trip manifest - so both are refined, in that order.
+// Move the pilots' earned ISK into the corporation without touching a single ore stack. The
+// treasury authority is the same one the refinery path uses; nothing new is created, the debit
+// is the source. Default OFF, its own flag.
+function sweepOnly(options = {}) {
+  const env = options.env || process.env;
+  const ownerID = pos(env[CORP_FLAG]) || DEFAULT_CORP_ID;
+  const funded = fundTreasury({options, env, ownerID});
+  const moved = Number((funded && funded.moved) || 0);
+  if (funded && funded.status === "SWEPT" && moved > 0)
+    note(options, "living-corp-treasury-swept", {systemID: options.systemID, ownerID,
+      movedISK: moved, corporationISK: funded.balanceISK !== undefined ? funded.balanceISK : null});
+  else if (String(env.EVEJS_COOP_TREASURY_TRACE || "") === "1")
+    note(options, "living-corp-treasury-skipped", {systemID: options.systemID, ownerID,
+      status: String((funded && funded.status) || "NO_RESULT"),
+      reason: String((funded && (funded.reason || funded.error)) || "").slice(0, 120),
+      moved});
+  return {status: String((funded && funded.status) || "NO_RESULT"), refined: 0,
+    swept: moved, ownerID};
+}
+
 function run(options = {}) {
   const env = options.env || process.env;
-  if (String(env[FLAG] || "") !== "1") return {status: "DISABLED", refined: 0};
+  if (String(env[FLAG] || "") !== "1")
+    return String(env[SWEEP_FLAG] || "") === "1"
+      ? sweepOnly(options) : {status: "DISABLED", refined: 0};
   const explicit = pos(options.stationID);
   const first = refineAtStation(options, explicit);
   if (first.refined > 0) return first;
@@ -410,7 +437,9 @@ function run(options = {}) {
 
 function tick(options = {}) {
   const env = options.env || process.env;
-  if (String(env[FLAG] || "") !== "1") return {status: "DISABLED"};
+  // A sweep-only beat still needs its throttle: it moves money.
+  const sweepEnabled = String(env[SWEEP_FLAG] || "") === "1";
+  if (String(env[FLAG] || "") !== "1" && !sweepEnabled) return {status: "DISABLED"};
   const stationID = pos(options.stationID);
   const key = String(pos(options.systemID)) + ":" + stationID;
   const now = Number(options.now) || Date.now();
@@ -425,5 +454,5 @@ function resetForTests() {
   lastRun.clear();
 }
 
-module.exports = {FLAG, WAREHOUSE_FLAG, manifestStation, manifestStations, DIR_FLAG, CORP_FLAG, DEFAULT_CORP_ID, THROTTLE_MS, WAREHOUSE_TAG,
+module.exports = {FLAG, SWEEP_FLAG, sweepOnly, WAREHOUSE_FLAG, manifestStation, manifestStations, DIR_FLAG, CORP_FLAG, DEFAULT_CORP_ID, THROTTLE_MS, WAREHOUSE_TAG,
   candidates, payFee, refineAtStation, run, tick, resetForTests};

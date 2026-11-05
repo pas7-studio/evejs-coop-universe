@@ -1165,7 +1165,10 @@ function tick(options = {}) {
       note(options, phase, error);
     }
   };
-  run("refinery", String(env.EVEJS_COOP_NPC_REFINERY || "") === "1", () =>
+  // The refinery phase also owns the treasury sweep, and a pilot who sold ore has earned the
+  // corporation money whether or not a single stack is refined. Either switch runs the phase.
+  run("refinery", String(env.EVEJS_COOP_NPC_REFINERY || "") === "1" ||
+    String(env.EVEJS_COOP_CORP_TREASURY_SWEEP || "") === "1", () =>
     String(require("./coopNpcRefineryTick").tick({
       systemID: options.systemID, stationID: options.stationID, fleetID: options.fleetID,
       gameStore: options.gameStore, marketRoot: options.marketRoot, now: options.now,

@@ -131,6 +131,20 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
  if(miner?.kind!=="ship")return attest("not_a_ship");
  if(miner?.nativeNpc!==true)return attest("not_native_npc");
  if(miner.transient!==false)return attest("transient_miner");
+ // A repair flag set by a post-commit readback is a DOUBT, and a doubt can be resolved by
+ // evidence: if the destination cargo row exists exactly once, that transfer really happened and
+ // the fleet may work again. Without this, one cache-visibility hiccup parked a mining fleet until
+ // the next restart (measured live 2026-11-05: fleet 960004610, 12:15Z and 12:44Z and 13:14Z).
+ if((miner.coopHaulNeedsOperatorRepair||fleet.coopHaulNeedsOperatorRepair||
+   miner.coopHaulCargoNeedsOperatorRepair||fleet.coopHaulCargoNeedsOperatorRepair)){
+  try{
+   require("./coopNativeHaulTransferAtomic").healReadbackRepair({miner,
+    hauler:(fleet.haulerEntityIDs||[]).map(id=>scene.getEntityByID?.(Number(id)))
+      .find(x=>x&&x.kind==="ship"&&x.itemID!==miner.itemID)||null,
+    fleet,nativeStore:require("./npc/nativeNpcStore"),
+    observe:(event,_id,_space,fields)=>{try{require("./coopRuntimeProbe").observe(event,null,null,fields||{})}catch(_e){}}});
+  }catch(_error){/* a failed heal is not a new fault */}
+ }
  if(miner.coopHaulNeedsOperatorRepair)return attest("miner_needs_repair");
  if(fleet.coopHaulNeedsOperatorRepair)return attest("fleet_needs_repair");
  if(scene.getEntityByID?.(minerID)!==miner)return attest("scene_entity_mismatch");
