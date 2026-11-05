@@ -21,7 +21,7 @@ let warFleetRegistry=null,bridge=null,identityRegistry=null,
  economy=null,nativeGateTransfer=null,recognitionAnnouncer=null,nativeAmmoWitness=null;
 // Declared here because the extraction left them behind: every phase that
 // touched one threw ReferenceError, which froze that part of the world.
-let traderMaker=null,endowmentChecked=false,traderMakerBlockedUntilMs=0,lossBridge=null,factionDirector=null,raidDirector=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,warpPointDirector=null,nativeGunRange=null,warGateHandoff=null,warRecoverySocket=null,nativeOrderBridge=null,lootCommerce=null,nativeAmmoSupply=null,warTreasuryInstance=null,
+let traderMaker=null,relistWorker=null,endowmentChecked=false,traderMakerBlockedUntilMs=0,lossBridge=null,factionDirector=null,raidDirector=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,warpPointDirector=null,nativeGunRange=null,warGateHandoff=null,warRecoverySocket=null,nativeOrderBridge=null,lootCommerce=null,nativeAmmoSupply=null,warTreasuryInstance=null,
  siteSentrySpawner=null,siteSentryFireDirector=null,siteLootStructureFiller=null;
 function bindWarRuntime(state){
  if(!state||typeof state!=="object")return false;
@@ -1132,6 +1132,70 @@ function advanceNativePveSiteDefense(){
  }
 }
 
+async function relistBoughtStock(stationID){
+ if(!relistWorker){
+  const worldData=require("./worldData"),gameStore=require("../gameStore"),
+   items=require("../services/inventory/itemStore"),
+   marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
+  const journalFile=process.env.EVEJS_COOP_TRADER_JOURNAL||"/var/lib/evejs/coop-trader-maker.json";
+  const readSettled=()=>{
+   const rows=[];
+   try{
+    const state=JSON.parse(require("node:fs").readFileSync(journalFile,"utf8"));
+    for(const claim of Object.values(state.claims||{})){
+     if(!claim||claim.phase!=="SETTLED"||!Number.isSafeInteger(Number(claim.itemID)))continue;
+     if(claim.relisted===true)continue;
+     rows.push({itemID:Number(claim.itemID),typeID:Number(claim.typeID),
+      quantity:Number(claim.quantity),claimKey:String(claim.claimKey||"")});
+    }
+   }catch(_error){/* no journal yet: nothing was bought */}
+   return rows;
+  };
+  relistWorker=require("./coopNpcTraderRelist").createTraderRelist({
+   call:(method,params)=>marketClient.call(method,params),
+   gameStore,
+   getNativeItem:id=>{try{return items.findItemById(Number(id))||null}catch(_error){return null}},
+   getNativeEscrow:orderID=>{
+    const read=gameStore.read("marketEscrow","/"+orderID);
+    return read&&read.success===true?read.data:null;
+   },
+   verifyNativeCorporation:corpID=>{
+    const read=gameStore.read("corporations","/records/"+corpID);
+    const record=read&&read.success===true?read.data:null;
+    return Boolean(record&&Number(record.corporationID)===Number(corpID)&&record.isNPC===true);
+   },
+   verifyStation:(stationID,corpID)=>{
+    const station=worldData.getStationByID(stationID);
+    return Boolean(station&&Number(station.stationID)===Number(stationID)&&
+     Number(station.corporationID)>0);
+   },
+   readBoughtStacks:(corpID,hub)=>readSettled().map(row=>{
+    let item=null;
+    try{item=items.findItemById(row.itemID)||null}catch(_error){item=null}
+    if(!item||Number(item.ownerID)!==Number(corpID)||Number(item.locationID)!==Number(hub))
+     return null;
+    return {itemID:Number(item.itemID),typeID:Number(item.typeID),
+     quantity:Number(item.quantity)};
+   }).filter(Boolean),
+   resolvePriceCents:async(typeID,hub)=>{
+    const station=worldData.getStationByID(hub);
+    if(!station||!Number.isSafeInteger(Number(station.regionID)))return 0;
+    const book=await marketClient.call("GetOrders",
+     {region_id:station.regionID,type_id:typeID});
+    const asks=Array.isArray(book&&book.sells)?book.sells:[];
+    const reference=asks.filter(row=>row&&row.bid!==true&&
+     String(row.source)!=="player"&&Number(row.station_id)===Number(hub))
+     .map(row=>Math.round(Number(row.price)*100))
+     .filter(price=>Number.isSafeInteger(price)&&price>0);
+    return reference.length?Math.min(...reference):0;
+   },
+   clock:()=>Date.now(),
+   maxListingsPerTick:Math.max(1,Math.min(8,Number(process.env.EVEJS_COOP_TRADER_RELIST_PER_TICK||3)))});
+ }
+ return relistWorker.tick({corporationID:Number(process.env.EVEJS_COOP_TRADER_CORP_ID||0),
+  stationID:Number(stationID)});
+}
+
 function advanceTraderMaker(){
  // Owner rule 2026-11-05: "buy everything at 70-90 % of the market, resell at 105-140 %."
  // The driver reads the real book, plans with the bands and (only in live mode) lifts one whole
@@ -1211,6 +1275,11 @@ function advanceTraderMaker(){
     maxLotUnits:Math.max(1,Math.min(1000000,Number(process.env.EVEJS_COOP_TRADER_MAX_LOT_UNITS||50)))});
   }
   traderMaker.tick({stationID,typeIDs:types}).then(result=>{
+   if(result.status==="TRADER_MAKER_SETTLED"&&process.env.EVEJS_COOP_TRADER_RELIST==="1"){
+    // The other half of the owner's rule: sell what we bought at 105-140 % of the reference.
+    relistBoughtStock(stationID).catch(error=>console.warn(
+     "[CoopLivingWorld] trader relist failed: "+String(error&&error.message||error)));
+   }
    if(result.status==="TRADER_MAKER_SETTLED"){
     console.log(`[CoopLivingWorld] trader bought ${result.executions.map(x=>x.quantity+"x type "+x.typeID+" @"+x.buyUnitPriceCents+"c").join(", ")}`);
    }else if(result.status==="BLOCKED"){
