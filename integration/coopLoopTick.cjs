@@ -60,6 +60,20 @@ function observeLoop(event, detail) {
   try { require("./coopRuntimeProbe").observe(event, null, null, detail); }
   catch (_error) { /* telemetry only */ }
 }
+// One line per change of a phase's status: a phase that returns the same status every beat stays
+// quiet, and any real change is visible without reading a journal on another machine.
+function reportPhase(phase, status, options) {
+  const key = String(phase);
+  const value = String(status || "UNKNOWN");
+  if (lastPhaseStatus.get(key) === value) return;
+  lastPhaseStatus.set(key, value);
+  try {
+    const observe = options && typeof options.loopObserve === "function"
+      ? options.loopObserve : require("./coopRuntimeProbe").observe;
+    observe("living-coop-loop-phase", null, null, { phase: key, status: value });
+  } catch (_error) { /* telemetry only */ }
+}
+function resetPhaseStatusForTests() { lastPhaseStatus.clear(); }
 // Everything a freight run needs, built from the world itself: a real hull marker, the real
 // hangars, the real seeded book (read-only), real stations and a real reciprocal gate.
 function distributionRunAuthorities(options = {}) {
@@ -1152,18 +1166,27 @@ function distributionAuthorities(options = {}) {
 /**
  * Run every enabled phase once. Returns {statuses, failures} - never throws.
  */
+// A phase that runs and returns "REFINED" or "NO_WAREHOUSE_ORE" left NO trace at all: the beat
+// reported only its own OK, so a switch that was on but silently doing nothing looked exactly
+// like a working one (measured 2026-11-05: EVEJS_COOP_NPC_REFINERY=1 for four minutes, zero
+// refinery events - the status was computed and thrown away). One line per change of a phase
+// status is the same discipline the loop driver already applies to itself.
+const lastPhaseStatus = new Map();
 function tick(options = {}) {
   const env = options.env || process.env;
   const statuses = {};
   const failures = [];
   const run = (phase, enabled, call) => {
-    if (!enabled) { statuses[phase] = "DISABLED"; return; }
+    if (!enabled) { statuses[phase] = "DISABLED"; reportPhase(phase, "DISABLED", options); return; }
     try { statuses[phase] = call(); }
     catch (error) {
       statuses[phase] = "THREW";
       failures.push({ phase, reason: String((error && error.message) || error).slice(0, 90) });
       note(options, phase, error);
+      reportPhase(phase, "THREW", options);
+      return;
     }
+    reportPhase(phase, String(statuses[phase] || "UNKNOWN"), options);
   };
   // The refinery phase also owns the treasury sweep, and a pilot who sold ore has earned the
   // corporation money whether or not a single stack is refined. Either switch runs the phase.
@@ -1302,6 +1325,11 @@ function tick(options = {}) {
       }).status || "UNKNOWN");
     });
   }
+  // The phases that are not dispatched through run() (the asynchronous freight dispatch) still own
+  // a status; report them here so every phase in the beat is visible by name. reportPhase dedupes,
+  // so this is one line per change, not one per beat.
+  for (const [phase, status] of Object.entries(statuses))
+    reportPhase(phase, String(status || "UNKNOWN"), options);
   return { status: failures.length ? "PARTIAL" : "OK", statuses, failures };
 }
 
@@ -1318,4 +1346,4 @@ function advanceDistribution(options = {}) {
   });
 }
 
-module.exports = { PHASES, tick, advanceDistribution, distributionAuthorities, distributionRunAuthorities };
+module.exports = { PHASES, tick, advanceDistribution, distributionAuthorities, distributionRunAuthorities, resetPhaseStatusForTests };
