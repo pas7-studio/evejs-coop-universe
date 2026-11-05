@@ -3654,3 +3654,8 @@ Why: client cache: leaving for character select must drop the server-side cached
 Detail: Pins the fork contract behind fb63364: with EVEJS_COOP_CLIENT_CACHE_RESET off nothing is touched, and with it on every GetCachedMethodCallVersion answers 0 after the logout-to-character-select reset, so the client refetches instead of replaying its on-disk MachoNet cache.
 Where: tests/coop-client-cache-reset.test.mjs
 Evidence: fork fb63364 (space/coopClientCacheReset.js + objectCacheRuntime.invalidateAllCachedMethodCalls, hooks in Handle_Logout and disconnectCharacterSession, gate EVEJS_COOP_CLIENT_CACHE_RESET=1 default OFF); tests/coop-client-cache-reset.test.mjs 4/4 pass; FLAGS_OK 531/531; coop-engine-audit was already red before this change (stockChars 66162 > 65500, coopVirtualWorldRuntime 4110 > 4100, 4 integration diffs) and this change adds +167 chars; live deploy pending an owner restart window
+### 2026-11-05T20:35Z · 24c5de7 · L2 · docs(worklog): the client-cache reset on logout
+
+Why: militia service restored and made durable; FW window reads the war authority instead of the character-record cache; stale enlistments can no longer be clobbered by a phase write
+Where: docs/WORKLOG.md
+Evidence: fork 99361bb 4258c8d 5814660 fbc1072; war row ACTIVE faction 500001 enlistedAt 2026-10-28T23:13:48Z, character record repaired, standing 3.214, admin militia_sync reports status ACTIVE; measured cause of the ORIGINAL leave: fork 5a6db18 fixed the action-9 briefing bug at 2026-11-03T22:45Z, three hours after the enlistment was flipped at 19:50Z
