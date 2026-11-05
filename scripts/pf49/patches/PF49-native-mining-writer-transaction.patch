@@ -6,24 +6,35 @@ diff --git a/Code/server/src/space/coopNativeMiningAtomic.js b/Code/server/src/s
 +const PRE_MUTATION = /NATIVE_TRANSIENT_STATE_UNSAFE|NATIVE_GAMESTORE_TABLE_UNAVAILABLE|NATIVE_GAMESTORE_PERSISTENCE_NOT_QUIESCENT|NATIVE_GAMESTORE_ATOMIC_REENTRANT|ALIFE07_MINING_ATOMIC_DISABLED|NATIVE_GAMESTORE_ATOMIC_DISABLED|PF49_/;
 @@ -81 +81 @@
 -function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
-+function createAtomicMiningSettler({gameStore,nativeStore,resolveType,readMiningLease=null,finishMiningWrite=null}={}) {
-@@ -168,0 +169,5 @@
++function createAtomicMiningSettler({gameStore,nativeStore,resolveType,readMiningLease=null,beginMiningWrite=null,finishMiningWrite=null}={}) {
+@@ -168,0 +169,6 @@
 +    // PF-49: no read-then-write ownership check. The same SQLite commit that
 +    // debits the original asteroid must also validate the PF46 pending permit.
 +    const pfFence=process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_MINING_WRITE_FENCE==="1";
-+    if (pfFence && (typeof readMiningLease!=="function" || typeof finishMiningWrite!=="function"))
++    if (pfFence && (typeof readMiningLease!=="function" ||
++        typeof beginMiningWrite!=="function" || typeof finishMiningWrite!=="function"))
 +      return {success:false,stopReason:"ownership",reason:"PF49_NATIVE_HANDOFF_NOT_WIRED"};
-@@ -188 +193,5 @@
+@@ -174,0 +181,9 @@
++    // Claim PF46 durable intent BEFORE the native cargo allocator or SQLite ore
++    // commit. The permit remains PENDING after a crash until independently ACKed.
++    if(pfFence){
++      let admitted;
++      try{admitted=beginMiningWrite({systemID,shipID,opKey,writer:"mining_cycle"});}
++      catch(_error){return {success:false,stopReason:"ownership",reason:"PF49_PERMIT_ADMISSION_FAILED"};}
++      if(admitted?.status!=="PENDING"||admitted.operationID!==opKey)
++        return {success:false,stopReason:"ownership",reason:"PF49_PERMIT_ADMISSION_UNPROVEN"};
++    }
+@@ -188 +203,5 @@
 -      receipt=authority.transact(["miningRuntimeState","npcCargo"],tx=>{
 +      receipt=authority.transact(pfFence?
 +        ["miningRuntimeState","npcCargo","corporationRuntime"]:
 +        ["miningRuntimeState","npcCargo"],tx=>{
 +        if(pfFence)require("./coopPersonalFleetMiningTxnGuard")
 +          .assertMiningWriteAuthorized(tx,{systemID,shipID,opKey},readMiningLease);
-@@ -263 +272 @@
+@@ -263 +282 @@
 -      });
 +      },pfFence?{contract:"mining-cycle-pf"}:undefined);
-@@ -293 +302,8 @@
+@@ -293 +312,8 @@
 -      if (receipt.quantity===0) return {success:true,deltaResult,receipt};
 +      if (receipt.quantity===0) {
 +        if (pfFence) {
@@ -33,7 +44,7 @@ diff --git a/Code/server/src/space/coopNativeMiningAtomic.js b/Code/server/src/s
 +        }
 +        return {success:true,deltaResult,receipt};
 +      }
-@@ -315,0 +332,5 @@
+@@ -315,0 +342,5 @@
 +      if(pfFence){
 +        const ack=finishMiningWrite({systemID,shipID,opKey,receipt});
 +        if(ack?.status!=="ACKED"||ack.operationID!==opKey)
