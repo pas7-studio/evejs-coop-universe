@@ -3601,3 +3601,8 @@ Evidence: fork 295b1c4 + 4709cdd + df45e81 + f68c257; live book: type 34 ask 3.9
 Why: merge the M003 industrial-economy (L9-A) branch into coop/pas7std and main
 Where: docs/M003_INDUSTRIAL_ECONOMY_MERGE.md
 Evidence: fork c96dc66 (1 conflict, +6 modules, 3 distribution fixes), repo b8811574 (3 conflicts, flags 527, shims OK), AUDIT_OK 560 modules/65488 chars/0 drift, 257+15+31 checks green
+### 2026-11-05T11:50Z · 98d97a8 · TEST · state: overlay tails and mirror gaps closed after the M003 merge
+
+Why: adapt the refinery and reconcile fixtures to the budget and sale-attempt contracts after the M003 merge
+Where: .opencode/state.md
+Evidence: fork 4a47a95 (liquidating trip), repo 76c4a871 (overlay single list, 533 mirror parity), FLAGS_OK 529/529, SHIMS_OK, AUDIT_OK
