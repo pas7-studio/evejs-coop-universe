@@ -152,6 +152,12 @@ function planTrip({ haulerID, store, items, inventory, db, worldData, connectedG
     if (!quantity) continue;
     const typeID = pos(row.typeID);
     const meta = inventory.resolveItemByTypeID(typeID) || {};
+    // A BLUEPRINT is the factory's capital, never freight. Measured 2026-11-05: the three
+    // corporation blueprint copies were the densest thing in the hangar (1 700 ISK in 0.01 m3 is
+    // 170 000 ISK per m3), so every trip loaded them first and SOLD them - and the manufacturer
+    // then answered BLUEPRINT_MISSING for the rest of the session. Selling the tools to move the
+    // goods is not a business.
+    if (Number(meta.categoryID) === 9) continue;
     // What the corporation's own blueprints still need at this station stays home: the
     // factory and the merchant used to compete for the same Pyerite and the merchant won.
     const shippable = Math.max(0, quantity - takeReserve(stationID, typeID, quantity));

@@ -47,6 +47,12 @@ function fakes({rows = [mineral()], buys = [bid()], journal = [], now = 1_700_00
       items.splice(at, 1);
       return {success: true};
     },
+    // The real store has this: it is how a stow (and a failed-lift rollback) puts a stack back.
+    grantItemToOwnerLocation: (ownerID, locationID, flagID, typeID, quantity) => {
+      items.push({itemID: 900000 + items.length, ownerID, locationID, flagID, typeID,
+        quantity, stacksize: quantity, singleton: 0, customInfo: 'coop-refine:v1:x'});
+      return {success: true};
+    },
   };
   const observed = [];
   const options = {store, items: itemStore, corpID: CORP, clock: () => now,
@@ -145,4 +151,42 @@ test('recovery halts when stock and cargo disagree instead of guessing', () => {
   const report = engine.recover();
   assert.equal(report.status, 'NEEDS_OPERATOR_REPAIR');
   assert.equal(engine.status, 'NEEDS_OPERATOR_REPAIR');
+});
+
+test("the densest freight loads first, so a small dense line is not squeezed out", () => {
+  // Measured live 2026-11-05: 500 rounds of manufactured Iron Charge S (1 976 ISK per m3) were
+  // dropped from every trip because older Tritanium stacks (371 ISK per m3) filled the hold
+  // first - the loader walked the hangar in itemID order while the planner packed by density.
+  const stacks = [
+    mineral({ itemID: 1, typeID: 34, quantity: 400000, stacksize: 400000,
+      customInfo: 'coop-refine:v1:9988400103325:23111:mineral:34' }),
+    mineral({ itemID: 2, typeID: 215, quantity: 500, stacksize: 500, customInfo: '' }),
+  ];
+  const plan = lift.planLift({ stacks, buys: [], stationID: STATION, cap: 1e6,
+    demand: { 34: { price: 3.71, volume: 400000 }, 215: { price: 4.94, volume: 500 } },
+    capM3: 3100,
+    volumeOf: (typeID) => (Number(typeID) === 34 ? 0.01 : 0.0025) });
+  const byType = new Map(plan.map((row) => [Number(row.typeID), Number(row.quantity)]));
+  assert.equal(byType.get(215), 500, "the dense cargo rides even though its itemID is newer");
+  assert.ok(byType.get(34) > 0, "and the hold is still filled with ore");
+});
+
+test("a lift that cannot write the hold puts the whole stack back", async () => {
+  // Measured 2026-11-05: 500 manufactured Iron Charge S left the hangar and reached neither the
+  // hold nor the market. The failing step had already debited the hangar before its cargo row was
+  // written, and lift() returned a bare status while the rows it HAD lifted were thrown away.
+  const single = mineral({ itemID: 7, typeID: 215, quantity: 500, stacksize: 500,
+    customInfo: "coop-refine:v1:9988400103325:23111:mineral:215" });
+  const f = fakes({ rows: [single] });
+  f.options.store.upsertNativeCargo = () => ({success: false, errorMsg: "STORE_WRITE_FAILED"});
+  const liftTool = lift.createMineralLift({...f.options,
+    resolveType: (id) => ({typeID: id, groupID: 85, categoryID: 8, name: "Iron Charge S", volume: 0.0025})});
+  const answer = await liftTool.lift({ systemID: SYSTEM, stationID: STATION, haulerID: HAULER,
+    cap: 1e6, capM3: 3100, demand: { 215: {price: 4.94, volume: 500} },
+    volumeOf: () => 0.0025 });
+  assert.equal(answer.status, "NATIVE_CARGO_WRITE_FAILED");
+  assert.equal(answer.restored, true, "the hangar debit is put back");
+  assert.equal(answer.typeID, 215);
+  assert.equal(f.items.reduce((sum, row) => sum + Number(row.quantity || 0), 0), 500,
+    "no unit is lost");
 });

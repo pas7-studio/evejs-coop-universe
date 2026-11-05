@@ -125,3 +125,27 @@ test("a manufactured ship in the hangar is cargo, not invisible", () => {
   const units = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
   assert.equal(units, 2, "two ships are two units of cargo");
 });
+
+test("a blueprint is capital, never freight", () => {
+  // Measured 2026-11-05: three blueprint copies were the densest thing in the hangar (1 700 ISK in
+  // 0.01 m3 = 170 000 ISK per m3), so every trip loaded them first and sold them - and the
+  // manufacturer then answered BLUEPRINT_MISSING for the rest of the session.
+  const answer = plan.planTrip({
+    haulerID: HAULER, store,
+    inventory: { resolveItemByTypeID: (id) => (Number(id) === 12753
+      ? { capacity: 3000, volume: 400000 }
+      : Number(id) === 967 ? { volume: 0.01, categoryID: 9 } : { volume: 0.01, categoryID: 4 }) },
+    items: { listOwnedItems: () => [
+      { locationID: ORIGIN_STATION, flagID: 4, typeID: 967, quantity: 5 },
+      { locationID: ORIGIN_STATION, flagID: 4, typeID: 34, quantity: 200000 },
+    ] },
+    db: { prepare: () => ({ all: () => [
+      { solar_system_id: 30000142, station_id: DEST_STATION, type_id: 967, price: 1700.85, quantity: 5 },
+      { solar_system_id: 30000142, station_id: DEST_STATION, type_id: 34, price: 3.71, quantity: 400000 },
+    ] }) },
+    worldData: world(), scene, connectedGates, minIsk: 0 });
+  assert.equal(answer.status, "OK");
+  const types = (answer.trip.items || []).map((row) => row.typeID);
+  assert.ok(!types.includes(967), "the blueprint stays in the factory");
+  assert.ok(types.includes(34));
+});

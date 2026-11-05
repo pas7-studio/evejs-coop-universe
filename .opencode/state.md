@@ -431,3 +431,24 @@ instead of polling for ever (`aa601b8`). Jobs run at `EVEJS_COOP_INDUSTRY_TIME_S
 completion time; the grant/receipt/cargo all still happened inside the server.
 Counts at 15:12Z: 58 market trades, 238 refinery operations, 1 manufactured batch, treasury sweeps
 continuing (142 267.39 ISK at 15:06Z), corp wallet funded by sales.
+
+**2026-11-05 16:00-18:00Z — ammo line live, and three freight defects found by it.**
+`BOUGHT:1130` 16:26Z (Iron Charge S, 20 000 ISK) after exactly one `COOLDOWN` park; `STOWED` 16:31Z;
+job installed 16:34Z; `living-npc-manufactured` 500x215 16:39Z; a second line (2515 Inferno Rocket)
+bought and built the same way. Fixes that made it possible: `choose()` refuses a product that cannot
+fit the carrying hull (`WILL_NOT_FIT_THE_HOLD`), a retryable purchase answer parks the hull at the
+station for a bounded wait instead of burning the trip's only attempt, `sellOnArrival` reports
+`WORLD_NOT_READY` while the runtime has not wired its identity registry (every BLOCKED sale of the
+session was within a minute of a restart), the sale budget bounds a beat instead of the trip,
+`planLift` loads by value density (the ammo was being squeezed out by older ore stacks), a lift that
+cannot prove the hold now restores the hangar stack, and a blueprint is never freight (the copies
+were the densest cargo in the hangar and every trip sold them).
+OPEN, needs the next session: (1) the first two ammo batches (500x215, 200x2514) left the hangar
+with no sale event, no cargo row and no job that took them — `EVEJS_COOP_ITEM_AUDIT=1` is ON on the
+play stack and emits `living-item-audit {op,typeID,quantity,caller}` at every item-row removal,
+decrement and native-cargo removal, so the next batch names the caller; (2) the factory station is
+now pinned to 60000682 (where the copies are stowed and 18 M Tritanium sits) but that station holds
+zero Pyerite, so ammunition stalls on `MATERIALS_MISSING 35:28/0` until the input import trip buys
+Pyerite at Jita 4-4 — watch `IMPORTING_INPUTS` and the `35` rows at 60000682; (3) 10 manufactured
+Caldari Shuttles still cannot fit the 3 100 m3 hold (5 000 m3 each) and need a freighter or an
+operator decision. Counts at 18:00Z: 84 settled trades, 238 refinery ops, 3 manufactured batches.

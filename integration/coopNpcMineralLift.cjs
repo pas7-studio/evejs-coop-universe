@@ -85,7 +85,21 @@ function planLift({stacks, buys, stationID, cap = 1e6, demand = null, capM3 = 0,
   // the plan is bounded by the m3 that are really free.
   let leftM3 = num(capM3);
   const demandMap = demand && typeof demand === "object" ? demand : null;
-  for (const stack of Array.isArray(stacks) ? stacks : []) {
+  // A hold is scarce, so the DENSEST freight loads first. The planner already packs by value per
+  // cubic metre, and the loader used to undo it by walking the hangar in itemID order: measured
+  // 2026-11-05, 500 rounds of manufactured Iron Charge S (1 976 ISK per m3) were dropped from
+  // every trip because four older Tritanium stacks (371 ISK per m3) filled the 3 100 m3 hold
+  // first. Same rule as planBundle, applied where the cargo is actually chosen.
+  const densityOf = (stack) => {
+    const typeID = pos(stack && stack.typeID);
+    const target = demandMap ? demandMap[typeID] || demandMap[String(typeID)] : null;
+    const price = num(target && target.price);
+    const perUnit = typeof volumeOf === "function" ? Math.max(0, num(volumeOf(typeID))) : 0;
+    return perUnit > 0 ? price / perUnit : 0;
+  };
+  const ordered = (Array.isArray(stacks) ? stacks : []).slice()
+    .sort((left, right) => densityOf(right) - densityOf(left));
+  for (const stack of ordered) {
     const typeID = pos(stack.typeID);
     const raw = pos(stack.quantity !== undefined ? stack.quantity : stack.stacksize);
     if (!typeID || !raw) continue;
@@ -208,6 +222,11 @@ function createMineralLift({store, items, call, getStation, resolveType, corpID,
     const plan = planLift({stacks, buys, stationID: station, cap, demand, capM3, volumeOf, reserve});
     if (!plan.length) return {status: "NO_LOCAL_BID", stacks: stacks.length};
     const lifted = [];
+    // A lift that stops in the middle used to be reported as one status and the already-lifted
+    // rows were thrown away, and the FAILING step had already debited the hangar before its cargo
+    // row was written - so a failed lift destroyed inventory with no trace (measured 2026-11-05:
+    // 500 manufactured Iron Charge S left the hangar and reached neither the hold nor the market).
+    // Every step is now a unit: the hangar debit is put back if the hold cannot be proven.
     for (const step of plan) {
       const journalID = [corpID, hauler, step.itemID, clock()].join("-");
       const cargoTag = LIFT_TAG + ":" + journalID;
@@ -222,23 +241,47 @@ function createMineralLift({store, items, call, getStation, resolveType, corpID,
       atomic(journalFile(journalID), journal);
       const type = resolveType(step.typeID);
       if (!type) return {status: "UNKNOWN_MINERAL_TYPE", typeID: step.typeID};
+      // Put the exact quantity back where it came from. The journal stays PREPARED when the
+      // restore fails, so recover() can finish the job rather than just remembering it.
+      const restore = () => {
+        try {
+          if (afterQuantity === 0) {
+            const restored = items.grantItemToOwnerLocation(corpID, station, HANGAR,
+              step.typeID, step.quantity, {});
+            return restored && restored.success === true;
+          }
+          const restored = items.updateInventoryItem(step.itemID, (row) => ({...row,
+            quantity: beforeQuantity, stacksize: beforeQuantity}));
+          return restored && restored.success === true;
+        } catch (_error) { return false; }
+      };
       const updated = afterQuantity === 0
         ? items.removeInventoryItem(step.itemID, {removeContents: true})
         : items.updateInventoryItem(step.itemID, (row) => ({...row,
           quantity: afterQuantity, stacksize: afterQuantity, singleton: 0}));
       if (updated?.success !== true) return {status: "HANGAR_DEBIT_FAILED", itemID: step.itemID};
       const allocated = store.allocateCargoID({transient: false});
-      if (allocated?.success !== true || !pos(allocated.data))
-        return {status: "CARGO_ID_ALLOCATION_FAILED"};
+      if (allocated?.success !== true || !pos(allocated.data)) {
+        const back = restore();
+        return {status: "CARGO_ID_ALLOCATION_FAILED", itemID: step.itemID, typeID: step.typeID,
+          quantity: step.quantity, restored: back, lifted};
+      }
       const written = store.upsertNativeCargo({cargoID: pos(allocated.data),
         entityID: hauler, ownerID: pos(native.ownerID), moduleID: 0, typeID: step.typeID,
         groupID: pos(type.groupID), categoryID: pos(type.categoryID),
         itemName: String(type.name || ""), quantity: step.quantity, singleton: false,
         flagID: 5, customInfo: cargoTag}, {transient: false});
-      if (written?.success !== true) return {status: "NATIVE_CARGO_WRITE_FAILED"};
+      if (written?.success !== true) {
+        const back = restore();
+        return {status: "NATIVE_CARGO_WRITE_FAILED", itemID: step.itemID, typeID: step.typeID,
+          quantity: step.quantity, restored: back, lifted};
+      }
       const settled = findCargo(hauler, cargoTag);
-      if (!settled || pos(settled.quantity) !== step.quantity)
-        return {status: "NATIVE_CARGO_UNVERIFIED"};
+      if (!settled || pos(settled.quantity) !== step.quantity) {
+        const back = restore();
+        return {status: "NATIVE_CARGO_UNVERIFIED", itemID: step.itemID, typeID: step.typeID,
+          quantity: step.quantity, restored: back, lifted};
+      }
       atomic(receiptFile(journalID), {...journal, phase: "SETTLED",
         cargoID: pos(settled.cargoID), settledAt: new Date(clock()).toISOString()});
       fs.unlinkSync(journalFile(journalID));
