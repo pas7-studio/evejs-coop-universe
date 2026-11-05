@@ -3591,3 +3591,8 @@ Evidence: fork 77262ca; 6 relist tests + 6 endowment + 16 maker/bands; AUDIT_OK;
 Why: trader reads player asks from the escrow authority (public book is seeded stock only); market-maker bids enabled at 70-90 % with a numeric owner; economic beat started by the world tick
 Where: docs/NPC_MARKET_MAKER.md
 Evidence: fork 4291fa2 + 6ec1016 + 8a68af1 + 807f1d6; 24 trader/maker tests; AUDIT_OK; live: seed book has 0 player rows, 2 real escrow rows, maker bids rejected before with 'invalid type: string mk-trader-1 expected u64' and now place real orders (id 39/40/41)
+### 2026-11-05T11:33Z · 20baacf · L1 · docs(market-maker): bids are live and visible at 70-90 %, with the three defects that hid them
+
+Why: market-maker bids live and visible (Rust bid filter, quote depth, hub station), gone orders release money and type
+Where: docs/NPC_MARKET_MAKER.md
+Evidence: fork 295b1c4 + 4709cdd + df45e81 + f68c257; live book: type 34 ask 3.93 bids 3/3 (76 %), type 37 ask 187 bids 142/138, 16 bids of 1000 units; AUDIT_OK; 20 maker tests

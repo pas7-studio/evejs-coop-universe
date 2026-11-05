@@ -894,7 +894,8 @@ function start(){
   runPhase("native-pve-boss-wreck",advanceNativePveBossWreck);
   // The co-op loop beat used to start only from the mining think, so a world with a quiet fleet ran
   // the economic phases (market makers, refinery, manufacture) only when mining happened to wake up.
-  runPhase("coop-loop-driver",()=>require("./coopLoopDriver").ensure());
+  runPhase("coop-loop-driver",()=>require("./coopLoopDriver").ensure({
+   stationID:Number(process.env.EVEJS_COOP_TRADER_STATION_ID||60003760)}));
   runPhase("trader-maker",advanceTraderMaker);
   runPhase("native-pve-site-defense",advanceNativePveSiteDefense);
   runPhase("native-site-sentries",advanceSiteSentries);

@@ -135,9 +135,16 @@ async function runOnce({
   if (!enabled(env)) return { status: "DISABLED" };
   const market = client || marketClient();
   if (!market || typeof market.call !== "function") return { status: "NO_MARKET_CLIENT" };
+  // A maker must quote at ONE hub, not across the region: with station 0 readQuote takes the median of
+  // every ask in the region (measured 2026-11-05: a 16.03 ISK hub ask became a 20 ISK reference and the
+  // bid landed at 99 % of the market instead of inside the owner's 70-90 % band). Callers that do not
+  // name a station - the mining think hook passes a fleet record with no station - fall back to the
+  // configured hub instead of silently quoting nothing.
+  const homeStation = int(stationID) || int(env.EVEJS_COOP_MARKET_MAKER_STATION_ID) ||
+    int(env.EVEJS_COOP_TRADER_STATION_ID) || 0;
   const quoteMap = quotes instanceof Map
     ? quotes
-    : await prepareQuotes({ types, regionID, stationID, client: market, env });
+    : await prepareQuotes({ types, regionID, stationID: homeStation, client: market, env });
   return tick({
     traders,
     now,

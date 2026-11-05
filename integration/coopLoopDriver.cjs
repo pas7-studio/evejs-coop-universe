@@ -36,13 +36,15 @@ function note(event, fields) {
 /** Run one beat. Exported so a test can drive it without a timer. */
 function beat(options = {}) {
   const env = options.env || process.env;
+  // Everything the caller passed (stationID, marketMakerTypes, systemID...) reaches the phases: a maker
+  // quoting at station 0 reads the whole region and bids off the wrong price.
   if (String(env.EVEJS_COOP_LOOP_DRIVER || "") !== "1") return { status: "DISABLED" };
   beats += 1;
   lastBeatAt = Date.now();
   let status = "OK";
   try {
     // The beat is a scheduler, not an authority: the phases decide what is possible.
-    status = String(require("./coopLoopTick").tick({ env }).status || "OK");
+    status = String(require("./coopLoopTick").tick({ ...options, env }).status || "OK");
     lastError = null;
   } catch (error) {
     status = "THREW";
@@ -62,7 +64,7 @@ function ensure(options = {}) {
   if (String(env.EVEJS_COOP_LOOP_DRIVER || "") !== "1") return { status: "DISABLED" };
   if (timer) return { status: "ALREADY_RUNNING", beats };
   const ms = intervalMs(env);
-  timer = setInterval(() => { beat({ env }); }, ms);
+  timer = setInterval(() => { beat({ ...options, env }); }, ms);
   // A background phase must never hold the process open by itself.
   if (typeof timer.unref === "function") timer.unref();
   note("living-coop-loop-driver", { status: "STARTED", intervalMs: ms });
