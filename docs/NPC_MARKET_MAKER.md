@@ -140,6 +140,35 @@ ReserveNpcSellOrder  ->  one atomic GameStore txn (items + marketEscrow, escrow 
 * the escrow row records `coopSource: NATIVE_TRADE` and the exact price in cents;
 * three listings per tick, and an ambiguous native outcome stops the tick.
 
+## 7b. Bids are live and visible (2026-11-05)
+
+Measured on the running play stack after the fixes below — real maker bids in the public book, at the
+hub, inside the owner's band:
+
+| type | hub ask | bids | % of ask |
+|---|---|---|---|
+| 34 (Tritanium) | 3.93 | 3, 3 | 76 % |
+| 35 (Pyerite) | 16.03 | 14, 14 | 87 % |
+| 37 (Isogen) | 187 | 142, 138 | 76 %, 74 % |
+| 444 | 3 500 | 2 905, 2 495 | 83 %, 71 % |
+
+Each bid carries **1 000 units** of depth and is paid for by the endowed corporation, with the money
+reserved in the maker's own ledger before the order exists.
+
+Three defects stood between "the code exists" and "the owner can sell into a bid":
+
+1. the Rust book filtered real bids with `AND source = 'player'`, so **every** NPC bid was invisible
+   even though `GetOrder` showed it open (orders 39-43);
+2. a maker bid had `quantity 1` (the quote defaulted to one unit), so the book had no depth;
+3. the tick quoted `station 0` whenever the caller named no station (the mining think hook passes a
+   fleet record with none), so the reference was the **region median** — a 16.03 ISK hub ask became a
+   20 ISK reference and the bid landed at 99 % of the market. The hub now comes from
+   `EVEJS_COOP_MARKET_MAKER_STATION_ID` / `EVEJS_COOP_TRADER_STATION_ID` when a caller is silent.
+
+Also fixed: an order that the daemon no longer has open (cancelled outside the runtime, filled, expired
+there) now **releases both its money and its type** in the same tick. Before, 36 cancelled bids kept
+five types "held" for the whole 3 h TTL and the book stayed empty with no way back.
+
 ## 8. How to prove a purchase
 
 1. Put a sell order of your own on the book in **Jita 4-4** at ≤ 90 % of the seed ask — e.g. 50
