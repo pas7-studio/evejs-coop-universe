@@ -102,3 +102,26 @@ test("leftovers find the station that really bids for them", () => {
   assert.equal(none.status, "NO_BUYER_FOR_CARGO");
   assert.equal(plan.stationForTypes({ db: null, systemID: 30000142, typeIDs: [1] }).status, "UNKNOWN");
 });
+
+test("a manufactured ship in the hangar is cargo, not invisible", () => {
+  // Measured live 2026-11-05: five Caldari Shuttles sat at 60000682 and no trip ever asked for
+  // them, because a ship is stored as quantity -1 and the planner filtered on "quantity > 0".
+  const answer = plan.planTrip({
+    haulerID: HAULER, store,
+    // A hold that is empty and big enough for exactly the ships.
+    inventory: { resolveItemByTypeID: (id) => (Number(id) === 12753
+      ? { capacity: 30000, volume: 400000 } : Number(id) === 672 ? { volume: 5000 } : { volume: 0.01 }) },
+    items: { listOwnedItems: () => [
+      { locationID: ORIGIN_STATION, flagID: 4, typeID: 672, quantity: -1, singleton: 1 },
+      { locationID: ORIGIN_STATION, flagID: 4, typeID: 672, quantity: -1, singleton: 1 },
+    ] },
+    db: { prepare: () => ({ all: () => [
+      { solar_system_id: 30000142, station_id: DEST_STATION, type_id: 672, price: 11245.5, quantity: 10 },
+    ] }) },
+    worldData: world(), scene, connectedGates, minIsk: 0 });
+  assert.equal(answer.status, "OK", JSON.stringify(answer));
+  const rows = answer.trip.items || (answer.trip.stops || []).flatMap((stop) => stop.items || []);
+  assert.deepEqual([...new Set(rows.map((row) => row.typeID))], [672]);
+  const units = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+  assert.equal(units, 2, "two ships are two units of cargo");
+});

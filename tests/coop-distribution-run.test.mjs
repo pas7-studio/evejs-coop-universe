@@ -88,18 +88,19 @@ test("a sale the market refuses is bounded and then reported, never retried for 
     sellCalls: 0, isk: 0, toStationID: 60003760, toSystemID: 30000142 });
   let calls = 0;
   let last = null;
-  for (let i = 0; i < run.MAX_SELL_CALLS + 2; i += 1) {
+  // The bound is TIME, not a counter: the beat is bounded by its own poll budget, the trip by
+  // SALE_SETTLE_TIMEOUT_MS of a market that never settles. Measured live 2026-11-05: a counter
+  // that accumulated across beats parked a hull with 110 790 units aboard, twice.
+  for (let i = 0; i < 6; i += 1) {
     last = await run.tick(another, { distanceTo: () => 100,
-      // A market that keeps REFUSING is bounded by real settlements, then reported.
-      // A retryable refusal (a market that is away) is bounded by settled answers.
       sell: async () => { calls += 1; return { status: "NOT_SOLD", reason: "MARKET_UNAVAILABLE" }; },
       wait: async () => {}, saleSettlement: () => null,
-      now: 6000 + i * 1000 });
+      now: 6000 + i * (run.SALE_SETTLE_TIMEOUT_MS / 2) });
     if (last.status === "BLOCKED") break;
   }
   assert.equal(last.status, "BLOCKED");
-  assert.match(last.reason, /^SALE_STOPPED/);
-  assert.equal(calls, run.MAX_SELL_CALLS, "exactly the bounded number of real calls");
+  assert.match(last.reason, /^SALE_(NOT_SOLD|SETTLE_TIMEOUT)/);
+  assert.ok(calls > 0, "the market really was asked");
 });
 
 test("a settlement the market refused stops the run with its own words", async () => {

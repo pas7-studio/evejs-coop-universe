@@ -1034,7 +1034,13 @@ async function tick(haulerID, authorities = {}, env = process.env) {
     // grows with the load instead of stopping a real haul at a fixed number of calls.
     const load = Math.max(num(state.quantity), num(state.cargoUnits));
     const callBudget = Math.max(MAX_SELL_CALLS, Math.ceil(load / 100000) + 2);
-    let calls = num(state.sellCalls);
+    // The budget is per BEAT and per this beat only. It used to accumulate in the journal, and a
+    // trip that settled a dozen times entered the next beat with a spent counter - the poll loop
+    // was skipped entirely and the hull was parked SALE_STOPPED:CALL_LIMIT with real cargo aboard
+    // (measured live 2026-11-05: 110 790 units of Pyerite, twice). A trip that keeps failing is
+    // bounded by time below (SALE_SETTLE_TIMEOUT_MS), which is the honest bound: the market is
+    // slow, not the trip dead.
+    let calls = 0;
     let isk = num(state.isk);
     let settled = null;
     let soldThisBeat = 0;
@@ -1182,10 +1188,7 @@ async function tick(haulerID, authorities = {}, env = process.env) {
     }
     // A big load needs more than a fixed handful of settlements: the market fills at most
     // MAX_SELL_QTY per call, so the budget grows with the load. Exhausting it is a bound on the
-    // BEAT, never a verdict on the trip: measured live 2026-11-05 hull 980000093319 was parked
-    // SALE_STOPPED:CALL_LIMIT with 110 790 units still aboard after a beat whose every poll came
-    // back PENDING, i.e. the market was simply slow. Only a beat that made no sale AND saw no
-    // pending work at all is a stopped trip.
+    // BEAT, never a verdict on the trip, and the trip itself is bounded by SALE_SETTLE_TIMEOUT_MS.
     if (calls >= callBudget && soldThisBeat === 0 && pendingSeen === 0) {
       return finish(PHASE.BLOCKED, "SALE_STOPPED:CALL_LIMIT", {sellCalls: calls, isk, callBudget});
     }

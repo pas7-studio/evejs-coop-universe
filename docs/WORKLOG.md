@@ -3638,3 +3638,8 @@ Evidence: fork e4f3416 70a1026 3f929b9 b2eeb1f ce2e453 69298db; live: 168 stacks
 Why: freight: progress restarts the sale budget, slow polls are not a stopped trip, and a hold the market cannot buy goes home
 Where: .opencode/state.md, docs/M003_DEPLOY_20261105.md, docs/WORKLOG.md, docs/coop-flags.json, integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopNpcCorpTreasury.cjs, tests/coop-corp-treasury-float.test.mjs, tests/coop-distribution-run.test.mjs
 Evidence: fork 98a4c3e aa601b8; live: hull 980000093319 sold 49 668 Pyerite after the reset, non-sellable blueprint copies carried home and STOWED at 15:11Z; 48/48 distribution tests
+### 2026-11-05T15:13Z · 8775083 · L2 · state+worklog: first goods produced, and the freight defects the live beats exposed
+
+Why: freight: the sale budget bounds a beat, and a hangar ship is cargo
+Where: .opencode/state.md, docs/WORKLOG.md, integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, tests/coop-distribution-run.test.mjs
+Evidence: fork 22f4ccd 75c053a; live: 28 061 units sold after the reset, cargo 0, PLAN/HOME_AGAIN, 81 settled trades; 56/56 plan+run tests

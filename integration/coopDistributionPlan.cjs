@@ -142,12 +142,19 @@ function planTrip({ haulerID, store, items, inventory, db, worldData, connectedG
   for (const row of owned) {
     const stationID = pos(row.locationID);
     if (!stationID || !stations.has(stationID)) continue;
-    if (Number(row.flagID) !== 4 || !(num(row.quantity) > 0)) continue;
+    if (Number(row.flagID) !== 4) continue;
+    // A SHIP in the hangar is one unit stored as quantity -1 (the same convention blueprints
+    // use), and the old "quantity > 0" filter therefore made every manufactured hull invisible to
+    // the freight planner: measured 2026-11-05, five Caldari Shuttles sat at 60000682 and no trip
+    // ever asked for them. A ship is one unit of cargo, at its real volume.
+    const quantity = num(row.quantity) > 0 ? num(row.quantity)
+      : (Number(row.quantity) === -1 && Number(row.singleton) === 1 ? 1 : 0);
+    if (!quantity) continue;
     const typeID = pos(row.typeID);
     const meta = inventory.resolveItemByTypeID(typeID) || {};
     // What the corporation's own blueprints still need at this station stays home: the
     // factory and the merchant used to compete for the same Pyerite and the merchant won.
-    const shippable = Math.max(0, num(row.quantity) - takeReserve(stationID, typeID, num(row.quantity)));
+    const shippable = Math.max(0, quantity - takeReserve(stationID, typeID, quantity));
     if (!shippable) continue;
     stacks.push({ stationID, typeID, quantity: shippable,
       m3PerUnit: num(meta.volume) });
