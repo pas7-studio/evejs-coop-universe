@@ -5,11 +5,14 @@
 // runtime that does that must book every rouble in the trader's own ledger before the order exists,
 // because the Rust book accepts an order without any escrow check (audited 2026-11-03).
 //
-// Owner's rules (2026-11-03): buy at -30 %..+30 % of the reference, resell at +5 %..+40 % of what was
+// Owner's rules: buy at -30 %..+30 % of the reference (2026-11-03), resell at +5 %..+40 % of what was
 // paid, move the price against demand, rotate, keep caps.
+// Narrowed 2026-11-05 to the owner's own words: "buy everything, even what nobody buys, at 70-90 % of
+// the market, and try to resell at 105-140 %". So the bid band is 70 %..90 % of the reference - never
+// above it, or the maker would be the one holding the bag on every dead item.
 const DEFAULTS = Object.freeze({
   buyDiscountMin: 0.30,
-  buyPremiumMax: 0.30,
+  buyPremiumMax: -0.10,
   sellMarkupMin: 0.05,
   sellMarkupMax: 0.40,
   demandStep: 0.02,

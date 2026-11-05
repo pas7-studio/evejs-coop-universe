@@ -19,13 +19,19 @@ test("five traders, each with a large but booked bankroll", () => {
 });
 
 test("a bid stays inside the owner's corridor and never crosses the ask", () => {
+  // Owner rule 2026-11-05: "buy everything, even what nobody buys, at 70-90 % of the market".
   const cheap = maker.decideBuyPrice({referenceISK: 1000, random: 0});
-  assert.equal(cheap.priceISK, 700, "-30 % at the bottom of the band");
+  assert.equal(cheap.priceISK, 700, "70 % at the bottom of the band");
   const rich = maker.decideBuyPrice({referenceISK: 1000, random: 0.999999});
-  assert.equal(rich.priceISK, 1300, "+30 % at the top of the band");
+  assert.equal(rich.priceISK, 900, "90 % at the top: never at or above the market");
+  for (const random of [0, 0.25, 0.5, 0.75, 0.999999]) {
+    const bid = maker.decideBuyPrice({referenceISK: 1000, random});
+    assert.ok(bid.priceISK >= 700 && bid.priceISK <= 900,
+      "every bid sits in 70-90 % of the reference, got " + bid.priceISK);
+  }
 
-  const capped = maker.decideBuyPrice({referenceISK: 1000, bestAskISK: 1100, random: 0.999999});
-  assert.ok(capped.priceISK < 1100, "a bid above the ask would just fill: capped below it");
+  const capped = maker.decideBuyPrice({referenceISK: 1000, bestAskISK: 800, random: 0.999999});
+  assert.ok(capped.priceISK < 800, "a bid above the ask would just fill: capped below it");
   assert.equal(maker.decideBuyPrice({referenceISK: 0}).ok, false);
 });
 
