@@ -79,3 +79,24 @@ test("a blueprint is only credited with the units it can build and sell", () => 
   assert.equal(answer.blueprint.buildable, 7, "seven builds of material is not five thousand");
   assert.equal(answer.blueprint.profit, 7 * 5122);
 });
+
+test("a product that cannot fit the hull that must carry it is never bought", () => {
+  // Measured live 2026-11-05: a Caldari Shuttle blueprint was bought, five shuttles were built,
+  // and the only distribution hull has a 3 100 m3 hold while one shuttle is 5 000 m3 - the goods
+  // could never leave the factory. A cheap blueprint whose unit does not fit is not a bargain.
+  const asks = [
+    { typeID: 967, name: "Caldari Shuttle Blueprint", stationID: 60003760, price: 42500, quantity: 5 },
+    { typeID: 1130, name: "Iron Charge S Blueprint", stationID: 60003760, price: 20000, quantity: 5 },
+  ];
+  const demand = { 672: { volume: 10, price: 11245.5 }, 215: { volume: 499020, price: 4.94 } };
+  const productOf = { 967: 672, 1130: 215 };
+  // No hold information: the old behaviour, both are candidates.
+  const open = choose({ asks, demand, productOf, unitCostOf: { 967: 10306, 1130: 4.18 } });
+  assert.equal(open.status, "BUY");
+  // With the real hold, the shuttle is refused and the ammunition line wins.
+  const gated = choose({ asks, demand, productOf, unitCostOf: { 967: 10306, 1130: 4.18 },
+    productVolumeOf: { 967: 5000, 1130: 0.0025 }, holdCapacity: 3100 });
+  assert.equal(gated.status, "BUY");
+  assert.equal(gated.blueprint.typeID, 1130, "ammunition fits, a shuttle does not");
+  assert.ok(gated.refusals.some((row) => row.reason === "WILL_NOT_FIT_THE_HOLD" && row.typeID === 967));
+});

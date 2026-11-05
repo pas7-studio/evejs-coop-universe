@@ -902,3 +902,61 @@ test("a hold full of what the market will not buy goes home instead of asking fo
   assert.equal(result.reason, "NO_SELLABLE_CARGO");
   assert.equal(result.state.returnToSystemID, 30000145);
 });
+
+test("a pilot cooldown parks the hull at the station instead of burning its one chance", async () => {
+  // Measured live 2026-11-05: the hull sold and asked for a blueprint five seconds later; the
+  // native trader allows one merchant action per pilot per cooldown window, so the answer was
+  // COOLDOWN and - because one attempt per trip was the rule - that was the whole trip's chance.
+  const hull = 980000004198;
+  run.write({ version: 1, haulerID: hull, phase: "SELL", trip: TRIP, updatedAt: 25000,
+    sellCalls: 0, isk: 0, quantity: 1000, trips: 0,
+    fromStationID: 60000682, fromSystemID: 30000145,
+    toStationID: 60003760, toSystemID: 30000142 });
+  let asked = 0;
+  const parked = await run.tick(hull, { recycle: true, distanceTo: () => 100, now: 25001,
+    cargoUnits: () => 0,
+    buyBlueprint: async () => { asked += 1; return { status: "COOLDOWN" }; },
+    sell: async () => { throw new Error("an empty hold is asked for no sale"); } });
+  assert.equal(parked.status, "WAITING_FOR_CAPITAL");
+  assert.equal(parked.state.phase, "SELL");
+  assert.equal(parked.state.capitalTried, undefined, "the attempt is not spent");
+  // Next beat, the cooldown is over: the same station sells the copy and it goes home.
+  const landed = await run.tick(hull, { recycle: true, distanceTo: () => 100, now: 25002,
+    cargoUnits: () => 0,
+    buyBlueprint: async () => { asked += 1;
+      return { chosen: { typeID: 1130, price: 20000 }, bought: { status: "TRADE_SETTLED" } }; },
+    sell: async () => { throw new Error("no sale"); } });
+  assert.equal(asked, 2);
+  assert.equal(landed.status, "RETURN");
+  assert.deepEqual(landed.state.importTypes, [1130]);
+  // A decision is not a throttle: the hull does not idle over an answer it already has.
+  const refusedHull = 980000004199;
+  run.write({ version: 1, haulerID: refusedHull, phase: "SELL", trip: TRIP, updatedAt: 26000,
+    sellCalls: 0, isk: 0, quantity: 1000, trips: 0,
+    fromStationID: 60000682, fromSystemID: 30000145,
+    toStationID: 60003760, toSystemID: 30000142 });
+  const refused = await run.tick(refusedHull, { recycle: true, distanceTo: () => 100, now: 26001,
+    cargoUnits: () => 0, buyBlueprint: async () => ({ status: "NO_BLUEPRINT_WORTH_BUYING" }),
+    sell: async () => { throw new Error("no sale"); } });
+  assert.notEqual(refused.status, "WAITING_FOR_CAPITAL");
+  assert.equal(refused.state.capitalTried, true);
+});
+
+test("a sale that arrives before the world is ready waits instead of blocking", async () => {
+  // Measured 2026-11-05: hull 980000093319 was BLOCKED SALE_NOT_SOLD:HAULER_NOT_NAMED three
+  // times in one session, and every one of them was within a minute of a restart - the durable
+  // link was in the store and in its projection all along; the runtime had simply not wired its
+  // identity registry yet.
+  const hull = 980000004201;
+  run.write({ version: 1, haulerID: hull, phase: "SELL", trip: TRIP, updatedAt: 27000,
+    sellCalls: 0, isk: 0, quantity: 1000, trips: 0,
+    fromStationID: 60000682, fromSystemID: 30000145,
+    toStationID: 60003760, toSystemID: 30000142 });
+  const booting = await run.tick(hull, { recycle: true, distanceTo: () => 100, now: 27001,
+    cargoUnits: () => 1000,
+    sell: async () => ({ status: "NOT_SOLD", reason: "WORLD_NOT_READY" }),
+    wait: async () => {}, saleSettlement: () => null });
+  assert.equal(booting.status, "WAITING_FOR_SALE");
+  assert.equal(booting.state.phase, "SELL", "the cargo is real, the world is just starting");
+  assert.equal(booting.state.lastReason, "WAITING_FOR_SALE:WORLD_NOT_READY");
+});

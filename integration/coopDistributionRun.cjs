@@ -53,6 +53,11 @@ const MAX_POLLS_PER_BEAT = 4;
 // SALE_NOT_SOLD:NATIVE_NPC_BUSY and stopped carrying 20 255 units for good.
 const SALE_RETRYABLE = new Set(["NOT_AT_NATIVE_STATION", "SALE_TIMEOUT", "MARKET_UNAVAILABLE",
   "UNRESOLVED_MARKET_JOURNAL",
+  // A sale that arrives while the co-op runtime is still wiring its first scene has no identity
+  // registry yet - every BLOCKED sale measured on 2026-11-05 happened within a minute of a
+  // restart. That is "not yet", and so is a link that is briefly missing while the registry is
+  // rebuilt; both are bounded by SALE_SETTLE_TIMEOUT_MS.
+  "WORLD_NOT_READY", "HAULER_NOT_NAMED",
   "COOLDOWN", "NO_ELIGIBLE_STACK", "BOOK_UNREADABLE", "MARKET_PREFLIGHT_STALE"]);
 
 function num(x) { return Number.isFinite(Number(x)) ? Number(x) : 0; }
@@ -235,14 +240,37 @@ async function purchaseCapital({authorities, state, stationID, systemID, observe
   } catch (_error) { capital = null; }
   const landed = capital && capital.bought &&
     String(capital.bought.status) === "TRADE_SETTLED" ? capital : null;
+  const reason = String((capital && (capital.status || (capital.bought && capital.bought.status))) ||
+    "NO_ANSWER").slice(0, 90);
   if (observe) {
-    const reason = landed ? "BOUGHT:" + pos(capital.chosen && capital.chosen.typeID)
-      : String((capital && (capital.status ||
-        (capital.bought && capital.bought.status))) || "NO_ANSWER").slice(0, 100);
-    note(observe, "living-distribution-blueprint", state, {reason});
+    note(observe, "living-distribution-blueprint", state,
+      {reason: landed ? "BOUGHT:" + pos(capital.chosen && capital.chosen.typeID) : reason});
   }
-  return {tried: true, landed,
+  return {tried: true, landed, reason, retryable: CAPITAL_RETRYABLE.test(reason),
     typeID: pos(landed && capital.chosen && capital.chosen.typeID)};
+}
+// A purchase and the sale that precedes it are two merchant actions of the SAME pilot, and the
+// native trader allows one per cooldown window (5 min by default). Measured live 2026-11-05: the
+// hull sold, then asked for a blueprint five seconds later and got COOLDOWN - and because one
+// attempt per trip was the rule, that was the whole trip's only chance. Waiting at the station is
+// the honest answer: the hull is docked, the hold is empty, and the market has already said who it
+// is. Bounded, so a market that never opens cannot hold the ship for ever.
+const CAPITAL_WAIT_MS = 9 * 60 * 1000;
+const MAX_CAPITAL_WAITS = 10;
+// Waiting is only honest when the world says "not now". A refusal that names a decision
+// (NO_BUYER_FOR_ITS_PRODUCT, ABOVE_PRICE_CAP, WILL_NOT_FIT_THE_HOLD) is an answer, and the hull
+// goes home with it instead of idling at a station that has already said no.
+const CAPITAL_RETRYABLE = /^(COOLDOWN|MARKET_UNAVAILABLE|MARKET_UNREACHABLE)$|_BUSY$/;
+function capitalWait({state, now, reason, env, observe = null}) {
+  const waits = num(state && state.capitalWaits) + 1;
+  const since = num(state && state.capitalSince) || now;
+  if (waits > MAX_CAPITAL_WAITS || now - since > CAPITAL_WAIT_MS) return null;
+  const next = write({...state, phase: PHASE.SELL, sellCalls: 0, pendingSince: 0,
+    capitalWaits: waits, capitalSince: since,
+    lastReason: "WAITING_FOR_CAPITAL:" + String(reason || "COOLDOWN").slice(0, 50),
+    updatedAt: now}, env);
+  note(observe, "living-distribution-run", next, {reason: next.lastReason});
+  return {status: "WAITING_FOR_CAPITAL", reason: next.lastReason, state: next};
 }
 function list(env = process.env) {  try {
     return fs.readdirSync(root(env)).filter((n) => /\.json$/.test(n))
@@ -1006,7 +1034,12 @@ async function tick(haulerID, authorities = {}, env = process.env) {
           returnToSystemID: pos(state.fromSystemID),
           returnStationID: pos(state.fromStationID) });
       }
-      if (capital.tried) state = write({ ...state, capitalTried: true, updatedAt: now }, env);
+      if (capital.tried) {
+        const parked = capital.retryable
+          ? capitalWait({state, now, reason: capital.reason, env, observe}) : null;
+        if (parked) return parked;
+        state = write({ ...state, capitalTried: true, updatedAt: now }, env);
+      }
       if (typeof authorities.buyInputs === "function" &&
         num(state.supplyTries) < MAX_SUPPLY_TRIES) {
         const importing = write({ ...state, phase: PHASE.SUPPLY, supplyTries: 0, updatedAt: now,
@@ -1137,7 +1170,12 @@ async function tick(haulerID, authorities = {}, env = process.env) {
           returnToSystemID: pos(state.fromSystemID),
           returnStationID: pos(state.fromStationID) });
       }
-      if (capital.tried) state = write({ ...state, capitalTried: true, updatedAt: now }, env);
+      if (capital.tried) {
+        const parked = capital.retryable
+          ? capitalWait({state, now, reason: capital.reason, env, observe}) : null;
+        if (parked) return parked;
+        state = write({ ...state, capitalTried: true, updatedAt: now }, env);
+      }
       // A hull that sits in the buyer system with an empty hold is dead freight: it goes home
       // and takes another load, bounded by a trip count so a cycle cannot run for ever.
       // The corporation imports what this system cannot make: measured 2026-10-31 the refinery

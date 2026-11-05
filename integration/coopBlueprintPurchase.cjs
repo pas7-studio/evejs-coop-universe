@@ -26,7 +26,7 @@ const DEFAULT_BUDGET = 50000000;
  */
 function choose({asks = [], owned = [], demand = {}, productOf = {}, budget = DEFAULT_BUDGET,
   priceCap = DEFAULT_PRICE_CAP, alreadyBought = 0, maxOwned = 3, runsAtStation = {},
-  unitCostOf = {}} = {}) {
+  unitCostOf = {}, productVolumeOf = {}, holdCapacity = 0} = {}) {
   const have = new Set((Array.isArray(owned) ? owned : []).map(pos).filter(Boolean));
   const refusals = [];
   if (num(alreadyBought) >= num(maxOwned)) {
@@ -66,6 +66,17 @@ function choose({asks = [], owned = [], demand = {}, productOf = {}, budget = DE
       continue;
     }
     const runsHere = num(runsAtStation[typeID] || runsAtStation[String(typeID)] || 0);
+    // A product nobody can CARRY is not a product. Measured live 2026-11-05: the corporation
+    // bought a Caldari Shuttle blueprint, built five shuttles, and the only distribution hull has
+    // a 3 100 m3 hold while one shuttle is 5 000 m3 - so the goods could never leave the factory.
+    // The hull that must carry them is known at decision time, so its hold is the gate.
+    const unitVolume = num(productVolumeOf[typeID] !== undefined
+      ? productVolumeOf[typeID] : productVolumeOf[String(typeID)]);
+    const holdM3 = num(holdCapacity);
+    if (holdM3 > 0 && unitVolume > holdM3) {
+      refusals.push({typeID, productTypeID, reason: "WILL_NOT_FIT_THE_HOLD", unitVolume, holdM3});
+      continue;
+    }
     // What the corporation can really earn: only the units it can build AND the buyer absorbs,
     // each earning its own margin over the materials it eats.
     const buildable = Math.max(0, Math.min(runsHere > 0 ? runsHere : volume, volume));

@@ -3643,3 +3643,8 @@ Evidence: fork 98a4c3e aa601b8; live: hull 980000093319 sold 49 668 Pyerite afte
 Why: freight: the sale budget bounds a beat, and a hangar ship is cargo
 Where: .opencode/state.md, docs/WORKLOG.md, integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, tests/coop-distribution-run.test.mjs
 Evidence: fork 22f4ccd 75c053a; live: 28 061 units sold after the reset, cargo 0, PLAN/HOME_AGAIN, 81 settled trades; 56/56 plan+run tests
+### 2026-11-05T15:37Z · a4b48f4 · L2 · docs+test(deploy): the produced shuttles cannot fit the hull, and the sale budget is per beat
+
+Why: industrial loop: volume-gated blueprint choice, bounded cooldown wait, world-not-ready sale retry, one-action settlement
+Where: docs/M003_DEPLOY_20261105.md, docs/WORKLOG.md, integration/coopDistributionPlan.cjs, integration/coopDistributionRun.cjs, tests/coop-distribution-plan.test.mjs, tests/coop-distribution-run.test.mjs
+Evidence: fork 548d718 f68ff53 c43bdcd; live: BOUGHT:1130 16:26Z, STOWED 16:31Z, installed 1130->215 16:34Z, living-npc-manufactured 500x215 16:39Z, hangar row 215:500; tests 50/50 distribution, 8/8 blueprint purchase

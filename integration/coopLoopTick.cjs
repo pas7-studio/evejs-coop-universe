@@ -911,6 +911,7 @@ function distributionRunAuthorities(options = {}) {
           // a material nobody bids for here costs nothing to consume, which is exactly why the
           // corporation's own Tritanium is free to turn into something that does have a buyer.
           const unitCostOf = {};
+          const productVolumeOf = {};
           for (const typeID of Object.keys(productOf)) {
             const plan = blueprintRecipe(manufacture, Number(typeID));
             if (!plan || plan.status !== "READY") continue;
@@ -921,9 +922,22 @@ function distributionRunAuthorities(options = {}) {
             }
             unitCostOf[Number(typeID)] =
               cost / Math.max(1, Number(plan.productPerRun) || 1);
+            // One unit of the product, as volume: a blueprint whose unit does not fit the hull
+            // that must carry it is a purchase that can only rot in the hangar.
+            const productMeta = inventory.resolveItemByTypeID(Number(plan.productTypeID)) || {};
+            productVolumeOf[Number(typeID)] = Math.max(0, Number(productMeta.volume) || 0);
           }
+          // The hold of the hull that would carry the product home.
+          let holdCapacity = 0;
+          try {
+            const native = typeof store.getNativeEntity === "function"
+              ? store.getNativeEntity(haulerID) : null;
+            const hullMeta = inventory.resolveItemByTypeID(
+              Number((native && (native.shipTypeID || native.typeID)) || 0)) || {};
+            holdCapacity = Math.max(0, Number(hullMeta.capacity) || 0);
+          } catch (_error) { holdCapacity = 0; }
           const chosen = require("./coopBlueprintPurchase").choose({asks, owned, demand, productOf,
-            runsAtStation, unitCostOf,
+            runsAtStation, unitCostOf, productVolumeOf, holdCapacity,
             budget: Number(process.env.EVEJS_COOP_BLUEPRINT_BUDGET || 5000000),
             priceCap: Number(process.env.EVEJS_COOP_BLUEPRINT_PRICE_CAP || 500000)});
           if (chosen.status !== "BUY") return chosen;
