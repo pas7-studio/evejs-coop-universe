@@ -1001,6 +1001,7 @@ async function tick(haulerID, authorities = {}, env = process.env) {
     let calls = num(state.sellCalls);
     let isk = num(state.isk);
     let settled = null;
+    let soldThisBeat = 0;
     let lastReason = "PENDING";
     // A hold that is empty is the strongest proof there is: the goods really left the ship.
     const cargoNow = typeof authorities.cargoUnits === "function" ? authorities.cargoUnits(id) : null;
@@ -1024,6 +1025,7 @@ async function tick(haulerID, authorities = {}, env = process.env) {
       // blocked SALE_STOPPED:CALL_LIMIT with their cargo still aboard.
       if (status === "SOLD") {
         calls += 1;
+        soldThisBeat += 1;
         settled = { status: "SOLD", isk: num(answer && answer.isk) };
         break;
       }
@@ -1115,8 +1117,21 @@ async function tick(haulerID, authorities = {}, env = process.env) {
     }
     // A big load needs more than a fixed handful of settlements: the market fills at most
     // MAX_SELL_QTY per call, so the budget grows with the load.
-    if (calls >= callBudget) {
+    if (calls >= callBudget && soldThisBeat === 0) {
       return finish(PHASE.BLOCKED, "SALE_STOPPED:CALL_LIMIT", {sellCalls: calls, isk, callBudget});
+    }
+    if (calls >= callBudget) {
+      // Measured 2026-11-05 on the owner's stack: hull 980000093319 sold 12 times into Jita 4-4
+      // and then parked for half an hour with cargo still aboard, because exhausting the per-beat
+      // call budget was recorded as BLOCKED - and a blocked run waits BLOCKED_RETRY_MS (30 min)
+      // for one bounded retry. The budget is a bound on THIS beat, not a verdict on the trip: the
+      // hold still has goods, the next beat may sell the rest, and the market's own cooldown
+      // throttles it anyway. The run therefore stays in SELL with a fresh budget.
+      const next = write({ ...state, phase: PHASE.SELL, pendingSince: 0, sellCalls: 0,
+        isk, lastReason: "SALE_CONTINUING:call_budget=" + callBudget, updatedAt: now }, env);
+      note(observe, "living-distribution-run", next,
+        { reason: "SALE_CONTINUING", soldCalls: calls, callBudget });
+      return { status: "SALE_CONTINUING", reason: "CALL_BUDGET_REACHED", calls, state: next };
     }
     const since = num(state.pendingSince) || now;
     if (now - since > SALE_SETTLE_TIMEOUT_MS) {

@@ -3617,3 +3617,8 @@ Why: deploy the M003 merge to the play stack and verify it live
 Detail: Measured after the 11:59Z recreate: healthy stack, zero module errors, 16 maker bids of 1000 units, distribution journal valid; refinery/distribution/sweep off by config and the trader maker still has no player sell escrow to buy (211 TRADER_MAKER_NO_BARGAIN, cash unchanged). Agent-stack proof of the sale path hit NO_SEEDED_COUNTERPARTY because its hulls sat at 60000682 while the seeded buyers are
 Where: docs/M003_DEPLOY_20261105.md
 Evidence: image at fork 4a47a95, container files md5-identical, 0 module errors, 16 maker bids x1000, docs/M003_DEPLOY_20261105.md
+### 2026-11-05T13:08Z · 2c2530d · L2 · docs(economy): the loop traded — 15 settled sales, 1.38M ISK, and the two blockers that stopped it
+
+Why: make the merged M003 economy trade on the live stack: crossing ticker, per-beat sale budget, readback diagnostics
+Where: docs/M003_DEPLOY_20261105.md
+Evidence: fork 90b6930/4f8d397/1fc8512 + compose switch; live 16 settled sales, pilot-101 1.39M ISK, bid 4.0M->3.74M, sale-attempt ledger written; 54/54 distribution tests; AUDIT_OK

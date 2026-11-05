@@ -182,9 +182,21 @@ function createAtomicHaulMover({gameStore,nativeStore,resolveType,clock=()=>Date
    const sourceOk=partial?
      (still.length===1&&Number(still[0].quantity)===remaining&&sha(still[0])===sha(remainder)):
      still.length===0;
-   if(!Array.isArray(minerCargo)||moved.length!==1||!sourceOk||sha(moved[0])!==afterHash||
-      outcome?.cargoID!==destinationID||outcome?.afterHash!==afterHash)
-    return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED");
+   // Name the clause that failed: measured 2026-11-05, the blanket reason cost a live mining
+   // fleet its whole shift twice in 40 minutes (fleet 960004610, 12:15Z and 12:44Z) and nothing
+   // said whether the row was missing, stale or merely a different shape. The verdict is unchanged;
+   // only the reason now carries the exact condition (and the two short hashes when they differ).
+   const clause=!Array.isArray(minerCargo)?"miner_cargo_unreadable"
+     :moved.length!==1?"destination_rows="+moved.length
+     :!sourceOk?"source_state"
+     :sha(moved[0])!==afterHash?"destination_hash="+String(sha(moved[0])||"").slice(0,8)+"/"+
+       String(afterHash||"").slice(0,8)
+     :outcome?.cargoID!==destinationID?"outcome_cargo_id"
+     :outcome?.afterHash!==afterHash?"outcome_hash="+String(outcome?.afterHash||"").slice(0,8)+"/"+
+       String(afterHash||"").slice(0,8)
+     :"ok";
+   if(clause!=="ok")
+    return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED:"+clause);
    if(typeof nativeStore.buildNativeCargoItems!=="function")
     return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CARGO_BUILDER_MISSING");
    const rebuilt=nativeStore.buildNativeCargoItems(haulerID);
