@@ -76,20 +76,22 @@ test("plan mode never calls the executor", async () => {
 
 test("live mode buys ONE whole player ask and journals it as settled", async () => {
   const seen = [];
+  // A real market order id is a 64-bit integer and does not fit a JS number: it must survive as text.
+  const BIG_ORDER = "2257714186837032994";
   const f = fixture({ mode: "live",
-    playerAsks: [{ typeID: 34, orderID: 9001, remainingQuantity: 50, unitPriceCents: 850 }],
+    playerAsks: [{ typeID: 34, orderID: BIG_ORDER, remainingQuantity: 50, unitPriceCents: 850 }],
     executor: async (args) => { seen.push(args); return { status: "NPC_PURCHASED_PLAYER_GOODS", fillID: 12, itemID: 34 }; } });
   const result = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
   assert.equal(result.status, "TRADER_MAKER_SETTLED");
   assert.equal(seen.length, 1);
-  assert.equal(seen[0].orderID, 9001);
+  assert.equal(seen[0].orderID, BIG_ORDER, "the 64-bit order id is passed through untouched");
   assert.equal(seen[0].buyerCorpID, 1000035);
   assert.equal(seen[0].quantity, 50, "the whole ask, because the executor can only claim whole");
   assert.equal(seen[0].maxUnitPriceCents, 850, "never above the ask we planned on");
   assert.match(seen[0].claimKey, /^npc-corpbuy:[0-9a-f]{32}$/);
   const journal = JSON.parse(fs.readFileSync(f.journalFile, "utf8"));
-  assert.equal(journal.claims["9001"].phase, "SETTLED");
-  assert.equal(journal.claims["9001"].fillID, 12);
+  assert.equal(journal.claims[BIG_ORDER].phase, "SETTLED");
+  assert.equal(journal.claims[BIG_ORDER].fillID, 12);
   assert.equal(result.executions[0].settled, true);
   fs.rmSync(f.journalFile, { force: true });
 });

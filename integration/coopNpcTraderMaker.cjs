@@ -107,8 +107,8 @@ function createTraderMaker({
         continue;
       const priceCents = cents(row.price);
       const volume = pos(row.vol_remaining);
-      const orderID = pos(row.order_id);
-      if (priceCents === null || !volume || !orderID) continue;
+      const orderID = String(row.order_id === null || row.order_id === undefined ? "" : row.order_id);
+      if (priceCents === null || !volume || !/^[0-9]{1,20}$/.test(orderID)) continue;
       if (String(row.source) === "player") {
         playerAsks.push({ typeID, orderID, stationID, remainingQuantity: volume,
           unitPriceCents: priceCents, verifiedNative: true, state: "open" });

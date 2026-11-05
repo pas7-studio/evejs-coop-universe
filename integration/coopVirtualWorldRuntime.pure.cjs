@@ -1137,7 +1137,7 @@ function advanceTraderMaker(){
  // The driver reads the real book, plans with the bands and (only in live mode) lifts one whole
  // player ask per tick through the atomic corporate buyer. It never mints and never places an
  // order on its own: with no corporate ISK it reports NO_SPENDABLE_ISK and does nothing.
- if(process.env.EVEJS_COOP_TRADER_MAKER!=="1"||!bridge||!identityRegistry)return;
+ if(process.env.EVEJS_COOP_TRADER_MAKER!=="1")return;
  if(traderMakerBlockedUntilMs&&traderMakerBlockedUntilMs>Date.now())return;
  const stationID=Number(process.env.EVEJS_COOP_TRADER_STATION_ID||60003760);
  const types=nativeMarketAllowlist("EVEJS_COOP_TRADER_TYPES");

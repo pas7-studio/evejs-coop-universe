@@ -61,10 +61,35 @@ The rule needs a treasury. Three honest options:
 Until the owner picks one, the trader can operate with what a real NPC corp holds; the bands and the
 executors do not change either way.
 
-## 5. How to prove it live (once the driver is wired)
+## 5. Live state (2026-11-05, after `fc62484`)
 
-1. Put a sell order of your own on the book at ≤ 90 % of the reference (or wait for a cheap ask).
-2. Expect one small lot bought, then the same goods relisted by the trader at 140 %.
+```
+{"event":"space.trader-maker","status":"TRADER_MAKER_NO_BARGAIN","mode":"LIVE","hub":60003760,
+ "buyerCorpID":1000035,"cashCents":486700000,"typesRead":10,"typesWithPlayerAsks":0}
+```
+
+The driver runs on every living-world tick, reads the real book for the configured types and the
+corporation's real wallet (**4 867 000 ISK**, Caldari Navy), and refuses to invent anything: with no
+player ask on the book there is nothing to buy and it says so.
+
+Two measured defects were fixed on the way and are worth remembering:
+
+* a real market `order_id` is a **64-bit integer** (e.g. `"2257714186837032994"`) and does not fit a
+  JS number — numeric validation silently dropped **every** seed ask, so the driver reported "0
+  references" while the book plainly had them. Order ids are carried as decimal strings now;
+* the market maker buys as a **corporation**, not as a ship actor, so its phase must not require the
+  NPC bridge/identity registry: it was returning early for exactly that reason.
+
+Still open: the relist side (bought stock sits in the corporation's hangar until the native NPC
+seller lists it) and the buy-order placement for the 70 % bid band.
+
+## 6. How to prove a purchase
+
+1. Put ONE small sell order of your own on the book in Jita 4-4 at ≤ 90 % of the seed ask — e.g. 50
+   Tritanium at **≤ 3.53 ISK** while the seed ask is 3.93 ISK.
+2. Within one living-world tick expect `space.trader-maker` with `status: TRADER_MAKER_SETTLED` and
+   `executions[0].settled: true`, your wallet credited, the corporation's debited and the goods in
+   its hangar.
 3. Evidence: `space.teleport.delivery`-style records are not enough here — the buy must show
    `NPC_PLAYER_PURCHASE_SETTLED` with a `fillID`/`itemID`, the seller's wallet credited, the
    corporation's debited, and the item physically in the corporation's hangar. Anything less is

@@ -29,6 +29,12 @@ const money = (value) => (value === null || value === undefined)
 const pos = (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0
   ? Number(value)
   : 0;
+// Order ids are 64-bit on the real book ("2257714186837032994"), so they never fit a JS number:
+// they are carried as decimal strings and never used for arithmetic.
+const orderKey = (value) => {
+  const text = typeof value === "string" ? value.trim() : String(value === null || value === undefined ? "" : value);
+  return /^[0-9]{1,20}$/.test(text) && text !== "0" ? text : "";
+};
 
 function priceAt(referencePriceCents, pct) {
   return Math.max(1, Math.round(referencePriceCents * pct));
@@ -74,12 +80,13 @@ function planBargainBuys({
     const typeID = pos(ask.typeID);
     const remaining = pos(ask.remainingQuantity);
     const unitPriceCents = money(ask.unitPriceCents);
-    if (!typeID || !remaining || unitPriceCents === null || !(unitPriceCents > 0)) continue;
+    const orderID = orderKey(ask.orderID);
+    if (!typeID || !remaining || !orderID || unitPriceCents === null || !(unitPriceCents > 0)) continue;
     if (ask.verifiedNative !== true || String(ask.state || "open") !== "open") continue;
     if (alreadyOpen.has(typeID) || seen.has(typeID)) continue;
     if (unitPriceCents > buyCeiling) continue; // not a bargain: leave it alone
     seen.add(typeID);
-    candidates.push({ typeID, orderID: pos(ask.orderID), remaining, unitPriceCents,
+    candidates.push({ typeID, orderID, remaining, unitPriceCents,
       sellerOwnerID: pos(ask.sellerOwnerID), stationID: pos(ask.stationID) });
   }
   if (!candidates.length) {
@@ -229,6 +236,7 @@ function planResaleAsks({
 
 module.exports = {
   BID_PCT,
+  orderKey,
   BUY_MAX_PCT,
   DEFAULT_MAX_LOT_UNITS,
   DEFAULT_MIN_PROFIT_BPS,
