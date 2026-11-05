@@ -335,3 +335,16 @@ checks green.
 **NOT deployed**: the play stack still runs the old image. `EVEJS_COOP_NPC_REFINERY=0` stays off.
 Docs: `docs/M003_INDUSTRIAL_ECONOMY_MERGE.md`; engine evidence `Doc/L9A-*`, checker
 `Doc/tools/verify-l9a-world.js`.
+
+**M003 merge follow-up (same day):** the merge exposed an overlay-spec with two tails — the branch
+pushed 87 names AFTER `module.exports` unguarded, so the installer carried 539 entries for 524
+modules (15 duplicates) and four pinned overlay tests failed. Fixed in `76c4a871`: one guarded list
+before the export, plus nine modules that existed in `integration/` but were never listed, and eight
+listed modules with no `integration/` copy at all (site sentries, loot structures, militia session,
+war rewards, NPC buyer lots, owner teleport). `installer.names` == `integration/` == 533 names;
+`FLAGS_OK 529/529`, `SHIMS_OK`, `AUDIT_OK`.
+Engine follow-up `4a47a95`: a liquidating leg wrote a journal with no `trip`, which the branch's own
+validator rejects — the run reported LIQUIDATING and `read()` said INVALID.
+Two fixtures adapted to the stricter contracts (refinery budget file, sale-attempt row).
+Known-red, pre-existing and NOT from this merge: `coop-native-haul-transfer-physical`
+«forged/corrupt original cargo fields» (fails at `ed18182a` too).
