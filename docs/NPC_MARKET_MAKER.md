@@ -109,6 +109,19 @@ the hub from the GameStore and buys exactly those (up to 24 book reads a tick), 
 "interesting" goods is needed. Limits live in compose: 3 buys per tick, 2 B ISK per tick,
 1 000 000 units per lot, 1 M ISK reserve.
 
+## 6b. The public book is seeded stock only (measured 2026-11-05)
+
+`externalservices/market-server/src/state.rs` builds `get_order_book` from `seed_stock` alone, so a
+**real player order never appears in `GetOrders`** — not his sell orders, not even the two buy orders
+he really has (proved: two `marketEscrow` rows, zero of them in the book). That is the deeper reason
+"my things do not sell": there is nothing of his on the visible book at all, and no NPC could have
+found his asks there either.
+
+The trader therefore reads the player's asks from the **GameStore escrow authority**
+(`marketEscrow`, the same rows the atomic buyer validates before it pays), while the seed book stays
+the source of the **reference price**. Escrow prices are stored in ISK and converted to cents; order
+ids stay decimal text.
+
 ## 7. The resale half (live)
 
 `space/coopNpcTraderRelist.js` puts what the trader bought back on the book at **140 %** of the
