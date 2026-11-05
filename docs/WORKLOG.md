@@ -3648,3 +3648,9 @@ Evidence: fork 22f4ccd 75c053a; live: 28 061 units sold after the reset, cargo 0
 Why: industrial loop: volume-gated blueprint choice, bounded cooldown wait, world-not-ready sale retry, one-action settlement
 Where: docs/M003_DEPLOY_20261105.md, docs/WORKLOG.md, integration/coopDistributionPlan.cjs, integration/coopDistributionRun.cjs, tests/coop-distribution-plan.test.mjs, tests/coop-distribution-run.test.mjs
 Evidence: fork 548d718 f68ff53 c43bdcd; live: BOUGHT:1130 16:26Z, STOWED 16:31Z, installed 1130->215 16:34Z, living-npc-manufactured 500x215 16:39Z, hangar row 215:500; tests 50/50 distribution, 8/8 blueprint purchase
+### 2026-11-05T20:35Z · c5cf456 · L2 · test(client): logging out drops the cached method-call versions
+
+Why: client cache: leaving for character select must drop the server-side cached method-call versions, otherwise the client replays its on-disk MachoNet cache after the next login and the owner cannot see updates without restarting the whole client
+Detail: Pins the fork contract behind fb63364: with EVEJS_COOP_CLIENT_CACHE_RESET off nothing is touched, and with it on every GetCachedMethodCallVersion answers 0 after the logout-to-character-select reset, so the client refetches instead of replaying its on-disk MachoNet cache.
+Where: tests/coop-client-cache-reset.test.mjs
+Evidence: fork fb63364 (space/coopClientCacheReset.js + objectCacheRuntime.invalidateAllCachedMethodCalls, hooks in Handle_Logout and disconnectCharacterSession, gate EVEJS_COOP_CLIENT_CACHE_RESET=1 default OFF); tests/coop-client-cache-reset.test.mjs 4/4 pass; FLAGS_OK 531/531; coop-engine-audit was already red before this change (stockChars 66162 > 65500, coopVirtualWorldRuntime 4110 > 4100, 4 integration diffs) and this change adds +167 chars; live deploy pending an owner restart window
