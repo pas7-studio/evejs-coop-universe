@@ -3571,3 +3571,8 @@ Why: market-maker driver: real book, real corporate ISK, whole-ask buys at <=90 
 Detail: Six cases: only player asks under 90 % of the cheapest seed ask become candidates (85 % yes, 95 % no) with the 140 % resale target; plan mode never calls the executor; live mode buys exactly ONE whole player ask and journals it SETTLED with the fill/item ids; a settled order is never bought twice (the journal is the memory); an unresolved native outcome stays PREPARED and is never retried; no wall
 Where: integration/coopNpcBuyerNativeBindings.cjs, integration/coopNpcMarketMakerBands.cjs, integration/coopNpcTraderMaker.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-npc-trader-maker.test.mjs
 Evidence: fork 1750f34; 16 tests; AUDIT_OK 65488 chars; live reality: richest wallet 0.3 B, NPC corps ~5 M, 0 player asks on the Forge book
+### 2026-11-05T10:15Z · 4d34057 · L1 · docs(trader): the market maker is live on the tick - what it reads, what it refuses, what proves a buy
+
+Why: trader maker live on the tick: 64-bit order ids as strings, corporate-only phase guard
+Where: docs/NPC_MARKET_MAKER.md, integration/coopNpcMarketMakerBands.cjs, integration/coopNpcTraderMaker.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-npc-trader-maker.test.mjs
+Evidence: fork fc62484; live event space.trader-maker status=TRADER_MAKER_NO_BARGAIN mode=LIVE corp=1000035 cash=4.867M typesRead=10 typesWithPlayerAsks=0; 16 tests; AUDIT_OK
