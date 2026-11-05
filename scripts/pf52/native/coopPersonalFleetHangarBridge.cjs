@@ -185,6 +185,12 @@ function createPersonalFleetHangarBridge({gameStore, access, verifyPaidHire,
   ]);
   try{
    const result=transact([TABLE,ITEM_TABLE],tx=>{
+    // Repeat admission inside the original serialized transaction. A revoked
+    // session or an integration gate turning OFF after preflight never writes.
+    if(enabled()!==true)return deny('PF52_DISABLED_DURING_TX');
+    if(allWritersFenced()!==true)return deny('PF52_WRITER_FENCE_REVOKED');
+    if(access.isOwner(command.session,command.ownerCharacterID,tx)!==true)
+      return deny('PF52_ACCESS_REVOKED_DURING_TX');
     // Exact-null check: undefined is not a trustworthy absence witness.
     const ir=tx.get(TABLE,REGISTRY_KEY),rr=tx.get(TABLE,rosterKey(command.ownerCharacterID));
     if(ir===undefined||rr===undefined)return deny('PF52_READ_UNCERTAIN');
