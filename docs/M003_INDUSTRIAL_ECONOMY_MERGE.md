@@ -117,8 +117,10 @@ Two test fixtures were adapted to the new contract rather than the contract to t
 
 One known-red case remains and is **not** from this merge: `coop-native-haul-transfer-physical`
 «forged/corrupt original cargo fields» fails identically at `ed18182a` (pre-merge, verified in a
-worktree). Its `wrongQuantity` variant mutates a copy returned by `listNativeCargo()`, so the
-mutation never reaches the module under test.
+worktree). Its `wrongQuantity` variant forges the miner's *store* row (99 units) while the ship's
+own `nativeCargoItems` still say 13, and `coopNativeHaulCargo` compares the row only against
+itself, so the forged quantity moves 9.9 m3. The fix needs a decision about which snapshot is
+authoritative (scene entity vs store row) — it is a separate mission, not part of this merge.
 
 ## 5. Gates (all local, no CI)
 
@@ -127,9 +129,10 @@ mutation never reaches the module under test.
 | `node scripts/coop-engine-audit.cjs` | `AUDIT_OK` (560 co-op modules, 62 stock files touched, 65 488 chars, 0 integration drift) |
 | `node scripts/coop-flags.cjs --check` | `FLAGS_OK declared=529 read=529 stale=0` |
 | `node scripts/coop-integration-shims.cjs --check` | `SHIMS_OK` |
-| branch suites (`ie-*`, `review-*`, `coop-refinery-budget`, `coop-corporate-shipment`, `coop-issue-shipment`) | 257 checks, 251 pass → after the three fixes 257 pass |
+| branch suites (`ie-*`, `review-*`, `coop-refinery-budget`, `coop-corporate-shipment`, `coop-issue-shipment`) | 257/257 |
 | `coop-demand-map` + `coop-buyer-volume` | 15/15 |
 | market-maker / trader / endowment suites | 31/31 |
+| **sweep of every economy/market/native/overlay suite (337 files)** | **3 451 checks, 3 394 pass, 1 known-red (pre-existing), 56 skipped** |
 
 ## 6. What is NOT done (do not claim otherwise)
 
