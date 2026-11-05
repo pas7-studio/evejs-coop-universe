@@ -3611,3 +3611,9 @@ Evidence: fork 4a47a95 (liquidating trip), repo 76c4a871 (overlay single list, 5
 Why: make every fork-dependent suite default to the engine checkout instead of failing on an unset variable
 Where: docs/M003_INDUSTRIAL_ECONOMY_MERGE.md
 Evidence: 33+11 test files patched; sweep 3451 checks / 3394 pass / 1 known-red pre-existing; AUDIT_OK
+### 2026-11-05T12:05Z · 4779e88 · OPS · docs(deploy): M003 is live and byte-identical, but its economy phases stay gated until the owner trades
+
+Why: deploy the M003 merge to the play stack and verify it live
+Detail: Measured after the 11:59Z recreate: healthy stack, zero module errors, 16 maker bids of 1000 units, distribution journal valid; refinery/distribution/sweep off by config and the trader maker still has no player sell escrow to buy (211 TRADER_MAKER_NO_BARGAIN, cash unchanged). Agent-stack proof of the sale path hit NO_SEEDED_COUNTERPARTY because its hulls sat at 60000682 while the seeded buyers are
+Where: docs/M003_DEPLOY_20261105.md
+Evidence: image at fork 4a47a95, container files md5-identical, 0 module errors, 16 maker bids x1000, docs/M003_DEPLOY_20261105.md
