@@ -452,3 +452,41 @@ zero Pyerite, so ammunition stalls on `MATERIALS_MISSING 35:28/0` until the inpu
 Pyerite at Jita 4-4 — watch `IMPORTING_INPUTS` and the `35` rows at 60000682; (3) 10 manufactured
 Caldari Shuttles still cannot fit the 3 100 m3 hold (5 000 m3 each) and need a freighter or an
 operator decision. Counts at 18:00Z: 84 settled trades, 238 refinery ops, 3 manufactured batches.
+
+---
+## HANDOFF 2026-11-05 18:55Z (owner went to play)
+
+**Play stack is up and the client is launched correctly.** Relay public port is **55470** (ProtonVPN
+re-forwarded; the old 35386 is dead). Verified with `Start-Play-Stack.ps1 -Action Status`
+(`ssh banner on 55470 : OK`) and `Test-ClientLaunch.ps1` (`RESULT: PASS` - one exefile.exe, noconsole,
+launcher parent Play.bat, 5 H2 gateway requests).
+
+### Not finished (next session, in priority order)
+1. **Prove the ammunition sale end to end.** The line works up to production (blueprint bought ->
+   carried home -> stowed -> job installed -> `living-npc-manufactured` 500x215 and 200x2514). The
+   last mile is unproven: an ammo stack has never been recorded as `living-native-market-trade`
+   (settled by type so far: 34, 35, 36 only).
+2. **Two early ammo batches disappeared from the hangar** (500x215, 200x2514) between 16:46 and
+   17:06 with no sale event, no cargo row and no job that took them. `EVEJS_COOP_ITEM_AUDIT=1` is ON
+   on the play stack (`living-item-audit {op,typeID,quantity,caller}` on every item-row removal,
+   decrement and native-cargo removal) - the next batch names the caller. NOTE: out-of-process
+   probes of the store can lag the running server, so a stale read is NOT proof of loss; the durable
+   receipts in `coop-native-market/purchases/*.json` and `coop-native-industry/receipts/*.json` are.
+3. **Pyerite import.** The factory at 60000682 holds 18 M Tritanium and zero Pyerite. The import now
+   runs first (before capital) and bought 360 Pyerite into the hull's hold at Jita 4-4 (receipts
+   980200419877-980). It still has to be stowed at home and consumed by a job. Watch
+   `SUPPLIED:35xNN` -> stow -> `living-npc-manufacture-installed`.
+4. **10 manufactured Caldari Shuttles cannot be sold**: 5 000 m3 each against a 3 100 m3 hold. Needs
+   a bigger freighter hull or an operator decision. The blueprint chooser now refuses any product
+   that cannot fit, so no new ships will be built.
+5. **Trader maker** still `TRADER_MAKER_NO_BARGAIN` (needs a player sell escrow only the owner can
+   create) and the phase cycle lag (~1.3 s median) is unsolved.
+6. **Turn `EVEJS_COOP_ITEM_AUDIT` back to 0** once the ammo loss is explained (it costs one event per
+   removal).
+
+### What is verified working right now
+Refinery inside a durable budget (238 ops, ore -> 443 383 429 ISK of minerals at seeded bids), sales
+(84+ settled trades into Jita 4-4), treasury sweep with a 500 000 ISK pilot float (corp 1000129
+funded by those sales), capital purchases (`BOUGHT:1130`, `11870`, `2515`, `1817`), stow at home,
+manufacture (3+ batches), and the four freight fixes made today: cycle-safe sale budget, dense-first
+loading, lift rollback on a failed cargo write, and blueprints never sold as freight.

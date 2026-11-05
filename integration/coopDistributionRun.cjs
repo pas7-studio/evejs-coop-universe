@@ -1026,6 +1026,17 @@ async function tick(haulerID, authorities = {}, env = process.env) {
       // ...and the same hull is the one that can carry the factory's inputs home.
       // Capital first: a copy bought here goes home with the crew and is stowed at the next
       // loading stop (the SUPPLY handler shelves category 9 before it lifts anything).
+      // FEED THE FACTORY FIRST. A blueprint is an investment; a missing mineral is a stopped
+      // production line. Measured 2026-11-05: the ammunition blueprint answered
+      // MATERIALS_MISSING 35:28/0 on every beat for an hour because every trip spent its one
+      // merchant action at this station on a blueprint copy, so the import was never reached.
+      if (typeof authorities.buyInputs === "function" &&
+        num(state.supplyTries) < MAX_SUPPLY_TRIES) {
+        const importing = write({ ...state, phase: PHASE.SUPPLY, supplyTries: 0, updatedAt: now,
+          soldAt: now, lastReason: "IMPORTING_INPUTS", pendingSince: 0 }, env);
+        note(observe, "living-distribution-run", importing, { reason: importing.lastReason });
+        return { status: "IMPORTING", state: importing };
+      }
       const capital = await purchaseCapital({authorities, state, observe,
         stationID: state.toStationID, systemID: state.toSystemID});
       if (capital.landed) {
@@ -1039,13 +1050,6 @@ async function tick(haulerID, authorities = {}, env = process.env) {
           ? capitalWait({state, now, reason: capital.reason, env, observe}) : null;
         if (parked) return parked;
         state = write({ ...state, capitalTried: true, updatedAt: now }, env);
-      }
-      if (typeof authorities.buyInputs === "function" &&
-        num(state.supplyTries) < MAX_SUPPLY_TRIES) {
-        const importing = write({ ...state, phase: PHASE.SUPPLY, supplyTries: 0, updatedAt: now,
-          soldAt: now, lastReason: "IMPORTING_INPUTS", pendingSince: 0 }, env);
-        note(observe, "living-distribution-run", importing, { reason: importing.lastReason });
-        return { status: "IMPORTING", state: importing };
       }
       return finish(PHASE.DONE, "SOLD_VERIFIED_BY_HOLD", { soldAt: now, iskUnknown: true });
     }
@@ -1158,6 +1162,17 @@ async function tick(haulerID, authorities = {}, env = process.env) {
       const settlement = { quantity: num(settled.quantity), isk: num(settled.isk), at: now,
         status: "SOLD" };
       appendFreight(state, settlement, env);
+      // FEED THE FACTORY FIRST: a missing mineral stops the line, a blueprint only expands it.
+      // Measured 2026-11-05: the ammunition blueprint answered MATERIALS_MISSING 35:28/0 for an
+      // hour because every trip spent its one merchant action here on a blueprint copy.
+      if (typeof authorities.buyInputs === "function" &&
+        num(state.supplyTries) < MAX_SUPPLY_TRIES) {
+        const buying = write({ ...state, phase: PHASE.SUPPLY, sellCalls: 0, isk: paid, trips,
+          settlement, soldAt: now, pendingSince: 0, supplyTries: 0,
+          lastReason: "IMPORTING_INPUTS", updatedAt: now }, env);
+        note(observe, "living-distribution-run", buying, { reason: buying.lastReason });
+        return { status: "IMPORTING", state: buying };
+      }
       // CAPITAL. A hull that has just emptied its hold at the buyer's station is standing where
       // blueprints are really sold, and the next loading stop stows category 9 into the factory
       // hangar. One attempt per trip; a settled TRADE_SETTLED is the only success.
@@ -1178,18 +1193,6 @@ async function tick(haulerID, authorities = {}, env = process.env) {
       }
       // A hull that sits in the buyer system with an empty hold is dead freight: it goes home
       // and takes another load, bounded by a trip count so a cycle cannot run for ever.
-      // The corporation imports what this system cannot make: measured 2026-10-31 the refinery
-      // here only ever saw Veldspar (`refined 17471 -> 1 mineral`), so the Pyerite and Mexallon
-      // the factory needs exist only at a station that really sells them. A hull standing at the
-      // buyer's station with an empty hold is exactly the ship that can carry them home.
-      if (typeof authorities.buyInputs === "function" &&
-        num(state.supplyTries) < MAX_SUPPLY_TRIES) {
-        const buying = write({ ...state, phase: PHASE.SUPPLY, sellCalls: 0, isk: paid, trips,
-          settlement, soldAt: now, pendingSince: 0, supplyTries: 0,
-          lastReason: "IMPORTING_INPUTS", updatedAt: now }, env);
-        note(observe, "living-distribution-run", buying, { reason: buying.lastReason });
-        return { status: "IMPORTING", state: buying };
-      }
       if (authorities.recycle !== true || trips >= MAX_TRIPS) {
         return finish(PHASE.DONE, "SOLD", { isk: paid, sellCalls: calls, soldAt: now,
           trips, settlement });
