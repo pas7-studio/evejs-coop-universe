@@ -1265,6 +1265,25 @@ function advanceTraderMaker(){
      const scaled=Number(balance)*100;
      return Number.isFinite(scaled)&&Math.abs(scaled-Math.round(scaled))<=1e-6?Math.round(scaled):null;
     },
+    // Player asks never appear in the public book (it is seeded stock only), so they come from the
+    // GameStore escrow rows - the same authority the atomic buyer validates before it pays.
+    readPlayerAsks:(hub,typeID)=>{
+     const read=gameStore.read("marketEscrow","/");
+     const rows=read&&read.success===true&&read.data&&typeof read.data==="object"?read.data:{};
+     const out=[];
+     for(const row of Object.values(rows)){
+      if(!row||String(row.escrowType||"")!=="sell"||row.isCorp===true)continue;
+      if(Number(row.typeId)!==Number(typeID)||Number(row.stationId)!==Number(hub))continue;
+      const qty=Number(row.remainingQuantity);
+      if(!Number.isSafeInteger(qty)||qty<=0)continue;
+      // The escrow row prices in ISK; the maker works in cents.
+      const priceIsk=Number(row.price);
+      if(!Number.isFinite(priceIsk)||priceIsk<=0)continue;
+      out.push({orderID:String(row.orderId),remainingQuantity:qty,
+       unitPriceCents:Math.round(priceIsk*100)});
+     }
+     return out;
+    },
     buyAsk:args=>buyBindings.purchaseAsk(args),
     journalFile:process.env.EVEJS_COOP_TRADER_JOURNAL||"/var/lib/evejs/coop-trader-maker.json",
     clock:()=>Date.now(),

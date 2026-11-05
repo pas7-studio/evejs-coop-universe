@@ -3586,3 +3586,8 @@ Evidence: fork 3a2d747; live event space.trader-endowment ENDOWED 4867000 -> 500
 Why: trader resale half: native Reserve->escrow->Activate listing of bought stacks at 140 % (floor 105 %)
 Where: docs/NPC_MARKET_MAKER.md
 Evidence: fork 77262ca; 6 relist tests + 6 endowment + 16 maker/bands; AUDIT_OK; live: relist flag on, 3/tick, waiting for the first bought stack
+### 2026-11-05T11:06Z · d64a9e2 · L1 · docs(trader): the public book is seeded stock only - why his orders were invisible
+
+Why: trader reads player asks from the escrow authority (public book is seeded stock only); market-maker bids enabled at 70-90 % with a numeric owner; economic beat started by the world tick
+Where: docs/NPC_MARKET_MAKER.md
+Evidence: fork 4291fa2 + 6ec1016 + 8a68af1 + 807f1d6; 24 trader/maker tests; AUDIT_OK; live: seed book has 0 player rows, 2 real escrow rows, maker bids rejected before with 'invalid type: string mk-trader-1 expected u64' and now place real orders (id 39/40/41)

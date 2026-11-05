@@ -37,6 +37,7 @@ function createTraderMaker({
   call,
   getStation,
   readWalletCents,
+  readPlayerAsks = null,
   buyAsk = null,
   journalFile,
   clock = () => Date.now(),
@@ -50,7 +51,8 @@ function createTraderMaker({
   if (typeof call !== "function" || typeof getStation !== "function" ||
       typeof readWalletCents !== "function" || typeof clock !== "function" ||
       typeof journalFile !== "string" || !path.isAbsolute(journalFile) ||
-      (buyAsk !== null && typeof buyAsk !== "function"))
+      (buyAsk !== null && typeof buyAsk !== "function") ||
+      (readPlayerAsks !== null && typeof readPlayerAsks !== "function"))
     throw Error("TRADER_MAKER_DEPENDENCIES_REQUIRED");
   if (!Number.isSafeInteger(maxBuysPerTick) || maxBuysPerTick < 1 || maxBuysPerTick > 4 ||
       !Number.isSafeInteger(maxTypesPerTick) || maxTypesPerTick < 1 ||
@@ -120,6 +122,22 @@ function createTraderMaker({
     const reference = referenceAsks.length
       ? Math.min(...referenceAsks.map((ask) => ask.priceCents))
       : null;
+    // Ask rows the public book cannot show: read them from the escrow authority when the caller
+    // provides one, and never trust a row it would not name.
+    if (typeof readPlayerAsks === "function") {
+      const escrowed = await readPlayerAsks(stationID, typeID);
+      const known = new Set(playerAsks.map((ask) => String(ask.orderID)));
+      for (const row of Array.isArray(escrowed) ? escrowed : []) {
+        const orderID = String(row && row.orderID || "");
+        const priceCents = money(row && row.unitPriceCents);
+        const volume = pos(row && row.remainingQuantity);
+        if (!/^[0-9]{1,20}$/.test(orderID) || known.has(orderID)) continue;
+        if (priceCents === null || !(priceCents > 0) || !volume) continue;
+        playerAsks.push({ typeID, orderID, stationID, remainingQuantity: volume,
+          unitPriceCents: priceCents, verifiedNative: true, state: "open" });
+        known.add(orderID);
+      }
+    }
     return { referenceCents: reference, playerAsks, seedAsks: referenceAsks.length };
   }
 

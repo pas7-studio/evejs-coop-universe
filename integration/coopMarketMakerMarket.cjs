@@ -70,10 +70,13 @@ function noteFailure(reason, detail) {
   }
 }
 
-async function placeBuy(client, { ownerID, stationID, typeID, priceISK, quantity }) {
+async function placeBuy(client, { ownerID, isCorp = false, stationID, typeID, priceISK, quantity }) {
+  // owner_id must fit the daemon's u64: a string trader id ("mk-trader-1") is a hard decode error.
+  const owner = int(ownerID);
+  if (owner <= 0) return { ok: false, reason: "OWNER_NOT_NUMERIC" };
   const request = {
-    owner_id: ownerID,
-    is_corp: false,
+    owner_id: owner,
+    is_corp: isCorp === true,
     station_id: int(stationID),
     type_id: int(typeID),
     price: int(priceISK),
@@ -141,7 +144,12 @@ async function runOnce({
     env,
     types,
     book: typeID => quoteMap.get(int(typeID)) || null,
-    placeBuy: request => placeBuy(market, request),
+    placeBuy: request => {
+      // A real order must be owned by a real numeric entity: the configured trading corporation.
+      // The five makers still book their own money in the internal ledger.
+      const corp = int(env.EVEJS_COOP_MARKET_MAKER_OWNER_ID);
+      return placeBuy(market, corp > 0 ? { ...request, ownerID: corp, isCorp: true } : request);
+    },
     cancel: orderID => cancelOrder(market, orderID),
     observe,
   });
