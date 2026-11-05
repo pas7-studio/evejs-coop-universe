@@ -348,3 +348,22 @@ validator rejects — the run reported LIQUIDATING and `read()` said INVALID.
 Two fixtures adapted to the stricter contracts (refinery budget file, sale-attempt row).
 Known-red, pre-existing and NOT from this merge: `coop-native-haul-transfer-physical`
 «forged/corrupt original cargo fields» (fails at `ed18182a` too).
+
+## M003 deployed and verified — 2026-11-05 11:59Z
+Image rebuilt from fork `4a47a95`, play stack recreated; container files md5-identical to the
+checkout. Proven live: healthy stack, **0** module errors, telemetry growing, 16 maker bids ×
+1000 units (prices 3–2 905), distribution journal reads `OK`.
+Not exercised: `EVEJS_COOP_NPC_REFINERY=0` and `EVEJS_COOP_DISTRIBUTION_RUN` commented out
+(deliberate), and `space.trader-maker` has **no player sell escrow** → 211 `TRADER_MAKER_NO_BARGAIN`,
+cash unchanged at 5 000 486 700 000 cents. The owner still has to place one sell order below the
+hub ask for the buyer path to settle anything.
+Agent-stack proof (distribution enabled there only, `compose/compose.agents.yaml`): no exceptions,
+75 distribution events, but sales came back `NO_SEEDED_COUNTERPARTY` at station 60000682 while the
+seeded buyers are at 60003760; two hulls stuck `RETURN_NO_GATE:NO_RECIPROCAL_GATE`, sale-attempts 0.
+Lag on the new image: median 1293 ms per `living-world-phase-cycle` (max 3196 ms), one freeze per
+cycle, heap 92.5% of the 4288 MB limit; telemetry writes ruled out; `native-faction-war-opening`
+worst 687 ms; 21 phase names still unclassified. The tick is sync by design, so the fix is less work
+per cycle, not awaiting between phases.
+Also fixed: `tests/coop-native-haul-transfer-physical` no longer pins the refusal the engine
+deliberately removed (fork e2d259a): store-row corruption still refuses, a stale display copy is
+rebuilt from the durable row. That test was the last red in the economy/market/native sweep.
