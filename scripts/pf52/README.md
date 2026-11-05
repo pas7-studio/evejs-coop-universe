@@ -33,7 +33,7 @@ From this standalone ZIP root, run:
 
 The runner is read-only. Git blob pins are for the original unmodified stock engine sources; if PF49–51 have changed a source, the **source pin failing is expected** and requires reviewed re-baselining. No auto-patch or rollout.
 
-Local test evidence: **46/46 PASS** (Node 22.16.0, original SQLite APIs emulated through a `node:sqlite` isolated fixture; real `BEGIN IMMEDIATE`, `synchronous=FULL`, rollback and 4 actual child-process `SIGKILL` scenarios). Combined regression PF46–52 **234/234 PASS** when run locally in the same container, including all previous candidate tests. These are **not** WORK or two-player gameplay E2E.
+Local test evidence: **49/49 PASS** (Node 22.16.0, original SQLite APIs emulated through a `node:sqlite` isolated fixture; real `BEGIN IMMEDIATE`, `synchronous=FULL`, rollback and 4 actual child-process `SIGKILL` scenarios). Combined regression PF46–52 **237/237 PASS** when run locally in the same container, including all previous candidate tests. These are **not** WORK or two-player gameplay E2E.
 
 ## Deployment blockers
 
