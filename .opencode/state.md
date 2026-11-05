@@ -33,6 +33,16 @@ also falls back to the verified damage witness when the controller recorded no a
 `NATIVE_SITE_DEFENSE_WARP_ISSUED` → `NATIVE_SITE_DEFENSE_ORDER_ACCEPTED`; how to verify:
 `docs/PVE_SITE_DEFENSE.md`.
 
+**Trader market maker is live** (`1750f34`, `fc62484`): every living-world tick reads the real
+book for `EVEJS_COOP_TRADER_TYPES`, takes the cheapest **seed** ask as the reference price, plans one
+small lot per type at **≤ 90 %**, and in live mode lifts ONE whole player ask through the atomic
+corporate buyer (real wallet, Rust claim, write-ahead journal; an ambiguous outcome is never retried).
+Corporation **1000035** (Caldari Navy, **4 867 000 ISK**), hub Jita 4-4, mode LIVE. Evidence:
+`space.trader-maker` events every tick with `TRADER_MAKER_NO_BARGAIN` only because **no player ask
+exists on the book** — the moment one is placed at ≤ 90 % of the seed ask it gets bought. No mint:
+`money()` refuses to read an unreadable wallet as zero. Still open: relisting the bought stock
+(native NPC seller), the 70 % buy-order bid band, and a wider type list.
+
 Committed on the branch but **not deployed to the play stack** (one restart ships
 all of it):
 
