@@ -16,6 +16,17 @@ const { proveFill, reconcileJournals } = present ? require(modulePath) : {};
 // halted for good ("never repeat a possibly completed fill"). The market daemon
 // itself held the answer: order 4257762183096583224, state filled, vol_entered
 // 5000, vol_remaining 0, issued at the journal timestamp.
+// The sale-attempt row the seller writes before it asks the market (coopNativeSaleLedger).
+function saleAttempt(root, {cargoID, haulerID, typeID, stationID, systemID, declaredQuantity,
+  stationAt, fleetID = 960004609, corporationID = 1000129}) {
+  const dir = path.join(root, "sale-attempts");
+  fs.mkdirSync(dir, {recursive: true});
+  fs.writeFileSync(path.join(dir, String(cargoID) + ".json"), JSON.stringify({
+    version: 1, cargoID, phase: "REQUESTED", declaredQuantity, fills: [],
+    haulerID, typeID, stationID, systemID, fleetID, corporationID, at: stationAt,
+  }));
+}
+
 const JOURNAL = {
   version: 1,
   phase: "RPC_CALLING",
@@ -100,12 +111,16 @@ function fixture() {
   fs.mkdirSync(path.join(root, "tx"));
   fs.writeFileSync(path.join(root, "tx", "coop-pilot-012.json"), JSON.stringify(JOURNAL));
   fs.writeFileSync(path.join(root, "ledger.json"), JSON.stringify({ version: 1, pilots: {} }));
+  saleAttempt(root, {cargoID: JOURNAL.cargoID, haulerID: JOURNAL.entityID, typeID: JOURNAL.typeID,
+    stationID: JOURNAL.stationID, systemID: JOURNAL.systemID,
+    declaredQuantity: JOURNAL.quantity, stationAt: JOURNAL.at});
   return root;
 }
 
 test("a proven fill is settled once and the journal removed", { skip: !present }, async () => {
   const root = fixture();
-  const first = await reconcileJournals({ root, inspectOrder: () => ORDER, store: null });
+  const first = await reconcileJournals({ root, warehouseRoot: root, inspectOrder: () => ORDER,
+    store: null });
   assert.deepEqual(first.pending, []);
   assert.equal(first.settled.length, 1);
   assert.equal(first.settled[0].isk, 26018500);
@@ -260,13 +275,15 @@ test("the market's own count settles a sale it absorbed only partly", { skip: !p
     beforeQuantity: 5, afterQuantity: 0, beforeBalance: 0, afterBalance: 268500.4 };
   fs.writeFileSync(path.join(root, "tx", "coop-pilot-012.json"), JSON.stringify(journal));
   fs.writeFileSync(path.join(root, "ledger.json"), JSON.stringify({ version: 1, pilots: {} }));
+  saleAttempt(root, {cargoID: journal.cargoID, haulerID: journal.entityID, typeID: 444,
+    stationID: 60014935, systemID: JOURNAL.systemID, declaredQuantity: 5, stationAt: journal.at});
   const order = { is_corp: false, order_id: "4257762183096566204", owner_id: 0, source: "seed",
     state: "open",
     row: { bid: true, order_id: "4257762183096566204", price: 53700.08,
       station_id: 60014935, type_id: 444, vol_entered: 5000, vol_remaining: 4997,
       issued_at: new Date(journal.at + 30).toISOString() } };
   let stored = null;
-  const result = await reconcileJournals({ root, inspectOrder: () => order,
+  const result = await reconcileJournals({ root, warehouseRoot: root, inspectOrder: () => order,
     store: { listNativeCargoForEntity: () => [{ cargoID: journal.cargoID,
       entityID: journal.entityID, typeID: 444, quantity: 5 }],
       upsertNativeCargo: (row) => { stored = row; return { success: true }; } } });

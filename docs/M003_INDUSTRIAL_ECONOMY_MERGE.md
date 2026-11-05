@@ -65,7 +65,7 @@ Merged on 2026-11-05 into `coop/pas7std` (fork commit `c96dc66`) and into `main`
    budgeted fees); main had added a note-suppression window (48 identical records in two
    minutes). Resolution: the branch's file, with main's window reinstated.
 2. `docs/coop-flags.json` — regenerated from the merged code (`node scripts/coop-flags.cjs
-   --baseline`), not hand-merged: 527 keys declared, 527 read.
+   --baseline`), not hand-merged: 529 keys declared, 529 read.
 3. `integration/coopUniverseSites.cjs` (add/add) and `tests/coop-absent-state.test.mjs` —
    the engine file and the newer, stricter test from `main` respectively.
 4. `coopVirtualWorldRuntime.js` crossed the audit's 4 100-line ratchet (4 107). The ceiling is
@@ -75,8 +75,27 @@ Merged on 2026-11-05 into `coop/pas7std` (fork commit `c96dc66`) and into `main`
    requires it as `path.join(__dirname, …)`, so `coop-integration-shims.cjs --check` failed.
    The shim is now committed.
 
-Three real defects were found by the branch's own (independently written) suites once the code
-was merged, and fixed in the engine:
+Beyond the conflicts, the merge exposed a **second** class: `scripts/overlay-spec.cjs` had
+grown two incompatible tails. The branch appended its 87 module names **after** `module.exports`
+with an unconditional `names.push`, while main's require-graph loop above had already added the
+same names — 539 entries for 524 modules, so a fresh overlay would have deployed 15 modules
+twice. The list is now declared before the export and guarded by `names.includes`. Two further
+mirror gaps were closed in the same pass:
+
+- nine modules existed in `integration/` but were **never in the installer list** (the M003 set
+  plus `coopNpcTraderMaker`, `coopNpcTraderRelist`, `coopTraderEndowment`);
+- eight modules were in the installer list but had **no `integration/` copy** at all
+  (`coopSiteSentries`, `coopSiteSentrySpawn`, `coopSiteSentryFire`, `coopSiteLootStructures`,
+  `coopMilitiaSession`, `coopWarRewards`, `coopNpcBuyerLots`, `coopOwnerTeleport`) — the repo
+  could not have built a working overlay for them.
+
+`installer.names` and the tracked `integration/` set are now the same 533 names.
+
+Four real defects were found by the suites once the code was merged, and fixed in the engine:
+
+- the **liquidating leg** (`HOLD_ALREADY_FULL` → sell what is aboard) wrote a journal with no
+  `trip`, and the branch's new journal validator requires one for `SELL`/`CROSS`: the file was
+  there, `read()` called it `INVALID`, and the run looked finished with the freight still aboard;
 
 - `planTrip` wrote `trip.demand` **per stack**, so the last stack replaced the earlier ones:
   three 10 000-unit rows produced a 10 000-unit demand map and the loader was authorised for a
@@ -86,12 +105,27 @@ was merged, and fixed in the engine:
   now one budget per (station, type) spent across the stacks;
 - the same per-stack overwrite in the LOAD step of `coopDistributionRun`.
 
+Two test fixtures were adapted to the new contract rather than the contract to the fixtures
+(the branch's rules are stricter on purpose, and weakening them would be the wrong direction):
+
+- `tests/coop-npc-refinery-tick.test.mjs` now establishes an operator **budget file** before a
+  fee is paid — `coopRefineryBudget` makes the env flag a ceiling and the file the scope, and
+  without a file nothing is spent;
+- `tests/coop-npc-market-reconcile.test.mjs` now writes the **sale-attempt row** the seller
+  stores before it calls the market, because `coopNativeSaleProofSettlement` refuses to pay a
+  fill whose identity (fleet, corporation, hauler, type, station, system) it cannot prove.
+
+One known-red case remains and is **not** from this merge: `coop-native-haul-transfer-physical`
+«forged/corrupt original cargo fields» fails identically at `ed18182a` (pre-merge, verified in a
+worktree). Its `wrongQuantity` variant mutates a copy returned by `listNativeCargo()`, so the
+mutation never reaches the module under test.
+
 ## 5. Gates (all local, no CI)
 
 | gate | result |
 |---|---|
 | `node scripts/coop-engine-audit.cjs` | `AUDIT_OK` (560 co-op modules, 62 stock files touched, 65 488 chars, 0 integration drift) |
-| `node scripts/coop-flags.cjs --check` | `FLAGS_OK declared=527 read=527 stale=0` |
+| `node scripts/coop-flags.cjs --check` | `FLAGS_OK declared=529 read=529 stale=0` |
 | `node scripts/coop-integration-shims.cjs --check` | `SHIMS_OK` |
 | branch suites (`ie-*`, `review-*`, `coop-refinery-budget`, `coop-corporate-shipment`, `coop-issue-shipment`) | 257 checks, 251 pass → after the three fixes 257 pass |
 | `coop-demand-map` + `coop-buyer-volume` | 15/15 |

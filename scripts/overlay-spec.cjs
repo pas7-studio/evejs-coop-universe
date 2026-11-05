@@ -577,25 +577,22 @@ for(const name of ["coopMemoryMetrics","coopMemoSnapshot","coopWarMirror","coopE
  "coopMarketMakerRuntime","coopMarketMakerTraders"])
  if(!names.includes(name))names.push(name);
 
+
+// Mission 003: the NPC industrial economy package (74 modules plus the journal adapters) and the
+// modules the require graph already referenced without listing. Copy-only: every stage stays
+// behind its own flag and the write stages still need an owner attestation.
+// Declared BEFORE module.exports and guarded: these names reach the list from the require-graph
+// loop above as well, and the branch pushed them a second time unconditionally after the export -
+// 539 entries for 524 modules, so the installer would have deployed 15 modules twice.
+for(const name of [
+ "coopBlueprintPurchase", "coopDemandGap", "coopEconomyAutonomyScorecard", "coopEconomyAvailableToPromise", "coopEconomyBackpressure", "coopEconomyBaselineRecorder", "coopEconomyBudgetModel", "coopEconomyCalibration", "coopEconomyCapabilityIndex", "coopEconomyCarrierChoice", "coopEconomyClientE2E", "coopEconomyClosedLoop", "coopEconomyCompatMatrix", "coopEconomyConservationCoverage", "coopEconomyConsumptionFeedback", "coopEconomyContractBoard", "coopEconomyContractSettlement", "coopEconomyCrashWindows", "coopEconomyDecisions", "coopEconomyDeliveryAcceptance", "coopEconomyDemandReceipts", "coopEconomyDistress", "coopEconomyDistributionRun", "coopEconomyExecutionRegistry", "coopEconomyFeasibility", "coopEconomyFinalAcceptance", "coopEconomyFlagAudit", "coopEconomyFleetResupply", "coopEconomyFundsGateway", "coopEconomyGapReport", "coopEconomyHaulerReservation", "coopEconomyHealthReport", "coopEconomyHysteresis", "coopEconomyIdentityMap", "coopEconomyJobAdmission", "coopEconomyJournal", "coopEconomyJournalFile", "coopEconomyLiveReadiness", "coopEconomyMiningDispatch", "coopEconomyNativeOutcomes", "coopEconomyOfferSelection", "coopEconomyOperationGraph", "coopEconomyOrderCompetition", "coopEconomyOreCustody", "coopEconomyOutputDelivery", "coopEconomyPathComparator", "coopEconomyPerformanceGuard", "coopEconomyPlayerPurchase", "coopEconomyPnl", "coopEconomyProcurementContract", "coopEconomyQuarantine", "coopEconomyRaceMatrix", "coopEconomyReachability", "coopEconomyRecovery", "coopEconomyRefineryQuote", "coopEconomyReleaseEvidence", "coopEconomyRepairConsole", "coopEconomyReputation", "coopEconomyReservations", "coopEconomyRevalidate", "coopEconomyRiskPolicy", "coopEconomyRolloutManifest", "coopEconomyRouteComparison", "coopEconomyRouteDisruption", "coopEconomySaleSettlement", "coopEconomySellEscrow", "coopEconomyShadowLock", "coopEconomySnapshotAdapter", "coopEconomySnapshotSchema", "coopEconomySoak", "coopEconomySplitContract", "coopEconomyStationStockProof", "coopEconomyStrategyState", "coopEconomyUnload", "coopEconomyV2", "coopEconomyWarehouseTransfer", "coopEconomyWorkOrder", "coopEconomyWorldManifest", "coopFactionTaxIncome", "coopGateRoutes", "coopNpcCargoStow", "coopNpcInputSupply", "coopPilotPayroll", "coopWarRetirement", "coopWarTargetPriority", "coopUniverseSites", "coopWormholeEntrances"
+]) if(!names.includes(name))names.push(name);
+// Mirror parity: every integration/*.cjs is a module the overlay must deploy. These nine arrived
+// with the M003 merge and the trader work but were never listed, so a fresh overlay would have
+// installed modules that require files it never copied (caught by the drift gate).
+for(const name of ["coopCorporateShipment","coopNativeSaleLedger","coopNativeSaleProofSettlement",
+ "coopNativeSaleRefusalWindow","coopRefineryBudget","coopSaleAmount","coopNpcTraderMaker",
+ "coopNpcTraderRelist","coopTraderEndowment"]) if(!names.includes(name))names.push(name);
+
 module.exports={PIN,names,ORE_PATCH_PATHS,STRUCTURE_PATCH_PATHS,SOCIAL_PATCH_PATHS,specs,oldLines,lootOld,lootNew,slimBroadcastOld,slimBroadcastNew};
 
-// Mission 003: the NPC industrial economy package (74 modules plus the journal adapters) and the
-// modules the require graph already referenced without listing. Copy-only: every stage stays
-// behind its own flag and the write stages still need an owner attestation.
-names.push(
-"coopBlueprintPurchase", "coopDemandGap", "coopEconomyAutonomyScorecard", "coopEconomyAvailableToPromise", "coopEconomyBackpressure", "coopEconomyBaselineRecorder", "coopEconomyBudgetModel", "coopEconomyCalibration", "coopEconomyCapabilityIndex", "coopEconomyCarrierChoice", "coopEconomyClientE2E", "coopEconomyClosedLoop", "coopEconomyCompatMatrix", "coopEconomyConservationCoverage", "coopEconomyConsumptionFeedback", "coopEconomyContractBoard", "coopEconomyContractSettlement", "coopEconomyCrashWindows", "coopEconomyDecisions", "coopEconomyDeliveryAcceptance", "coopEconomyDemandReceipts", "coopEconomyDistress", "coopEconomyDistributionRun", "coopEconomyExecutionRegistry", "coopEconomyFeasibility", "coopEconomyFinalAcceptance", "coopEconomyFlagAudit", "coopEconomyFleetResupply", "coopEconomyFundsGateway", "coopEconomyGapReport", "coopEconomyHaulerReservation", "coopEconomyHealthReport", "coopEconomyHysteresis", "coopEconomyIdentityMap", "coopEconomyJobAdmission", "coopEconomyJournal", "coopEconomyJournalFile", "coopEconomyLiveReadiness", "coopEconomyMiningDispatch", "coopEconomyNativeOutcomes", "coopEconomyOfferSelection", "coopEconomyOperationGraph", "coopEconomyOrderCompetition", "coopEconomyOreCustody", "coopEconomyOutputDelivery", "coopEconomyPathComparator", "coopEconomyPerformanceGuard", "coopEconomyPlayerPurchase", "coopEconomyPnl", "coopEconomyProcurementContract", "coopEconomyQuarantine", "coopEconomyRaceMatrix", "coopEconomyReachability", "coopEconomyRecovery", "coopEconomyRefineryQuote", "coopEconomyReleaseEvidence", "coopEconomyRepairConsole", "coopEconomyReputation", "coopEconomyReservations", "coopEconomyRevalidate", "coopEconomyRiskPolicy", "coopEconomyRolloutManifest", "coopEconomyRouteComparison", "coopEconomyRouteDisruption", "coopEconomySaleSettlement", "coopEconomySellEscrow", "coopEconomyShadowLock", "coopEconomySnapshotAdapter", "coopEconomySnapshotSchema", "coopEconomySoak", "coopEconomySplitContract", "coopEconomyStationStockProof", "coopEconomyStrategyState", "coopEconomyUnload", "coopEconomyV2", "coopEconomyWarehouseTransfer", "coopEconomyWorkOrder", "coopEconomyWorldManifest", "coopFactionTaxIncome", "coopGateRoutes", "coopNpcCargoStow", "coopNpcInputSupply", "coopPilotPayroll", "coopWarRetirement", "coopWarTargetPriority"
-);
-
-// Mission 003: the NPC industrial economy package (74 modules plus the journal adapters) and the
-// modules the require graph already referenced without listing. Copy-only: every stage stays
-// behind its own flag and the write stages still need an owner attestation.
-names.push(
-"coopUniverseSites"
-);
-
-// Mission 003: the NPC industrial economy package (74 modules plus the journal adapters) and the
-// modules the require graph already referenced without listing. Copy-only: every stage stays
-// behind its own flag and the write stages still need an owner attestation.
-names.push(
-"coopWormholeEntrances"
-);

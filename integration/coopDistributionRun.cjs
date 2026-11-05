@@ -469,6 +469,7 @@ async function tick(haulerID, authorities = {}, env = process.env) {
           // This path runs before any state exists, so the journal is created here.
           const sell = write({ version: 1, ...(state || {}), haulerID: id, phase: PHASE.SELL,
             updatedAt: now, toStationID: stationID, toSystemID: hereSystemID,
+            trip: (state && state.trip) || { demand: {}, items: [], stops: [] },
             sellCalls: 0, pendingSince: 0, lastReason: "LIQUIDATING_LEFTOVERS" }, env);
           note(observe, "living-distribution-run", sell, { reason: sell.lastReason });
           return { status: "LIQUIDATING", state: sell };
@@ -494,6 +495,7 @@ async function tick(haulerID, authorities = {}, env = process.env) {
           if (planned) {
             const moving = write({ version: 1, ...(state || {}), haulerID: id, phase: PHASE.CROSS,
               updatedAt: now, toStationID: Number(buyer.stationID), toSystemID: buyerSystemID,
+              trip: (state && state.trip) || { demand: {}, items: [], stops: [] },
               sellCalls: 0, pendingSince: 0, lastReason: "LIQUIDATING_ACROSS:" + buyerSystemID },
               env);
             note(observe, "living-distribution-run", moving, { reason: moving.lastReason });

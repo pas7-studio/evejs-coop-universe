@@ -25,6 +25,17 @@ function items(rows, {fail = false} = {}) {
   };
 }
 
+// A fee is only ever paid inside an operator budget (fork coopRefineryBudget.js): the env flag is a
+// ceiling, the budget FILE is the scope, and without a file the limit is 0 and nothing is spent.
+// That is the safety property, so these two cases establish the budget instead of bypassing it.
+function withRefineryBudget(root, limitISK = 100000) {
+  fsApi.mkdirSync(root, {recursive: true});
+  fsApi.writeFileSync(path.join(root, 'refinery-budget.json'),
+    JSON.stringify({limitISK, sinceAt: 0, corporationID: 1000129, stationID: 60000358}));
+  process.env.EVEJS_COOP_REFINERY_SPEND_LIMIT_ISK = String(limitISK);
+  return () => { delete process.env.EVEJS_COOP_REFINERY_SPEND_LIMIT_ISK; };
+}
+
 const warehouseOre = (overrides = {}) => ({
   itemID: ORE, typeID: 17470, quantity: 54999, ownerID: 1000129, locationID: 60000358,
   flagID: HANGAR, stacksize: 54999, singleton: 0, customInfo: 'coop-warehouse:v1:cargo:' + ORE,
@@ -124,6 +135,7 @@ test('no known station means no refine, never a guess', () => {
 // own wallet and hand the refinery a durable receipt, then refine for real.
 test('the corporation pays the real station fee before the ore is refined', () => {
   const root = fsApi.mkdtempSync(path.join(os.tmpdir(), 'coop-refinery-fee-'));
+  const dropBudget = withRefineryBudget(root);
   try {
     const wallet = {divisions: {1000: {balance: 5000}}};
     const store = {
@@ -155,7 +167,7 @@ test('the corporation pays the real station fee before the ore is refined', () =
     assert.equal(receipt.corporationID, 1000129);
     assert.equal(receipt.afterISK, 3765.5);
     assert.equal(log.seen[0].event, 'living-npc-refined');
-  } finally { fsApi.rmSync(root, {recursive: true, force: true}); }
+  } finally { dropBudget(); fsApi.rmSync(root, {recursive: true, force: true}); }
 });
 
 // Ore cannot be refined for free, and the fee is the corporation's bill: the fleet's own
@@ -163,6 +175,7 @@ test('the corporation pays the real station fee before the ore is refined', () =
 test('pilot earnings fund the corporation that pays the station fee', () => {
   tick.resetForTests(); // events are de-duplicated per process by station and item
   const root = fsApi.mkdtempSync(path.join(os.tmpdir(), 'coop-refinery-treasury-'));
+  const dropBudget = withRefineryBudget(path.join(root, 'refinery'));
   try {
     fsApi.writeFileSync(path.join(root, 'ledger.json'),
       JSON.stringify({pilots: {'coop-pilot-001': {balance: 33714.25}}}));
@@ -193,7 +206,7 @@ test('pilot earnings fund the corporation that pays the station fee', () => {
     assert.ok(named.includes('living-corp-treasury-swept'), named.join(','));
     assert.ok(named.includes('living-npc-refined'), named.join(','));
     assert.equal(log.seen.find((e) => e.event === 'living-corp-treasury-swept').fields.movedISK, 33714.25);
-  } finally { fsApi.rmSync(root, {recursive: true, force: true}); }
+  } finally { dropBudget(); fsApi.rmSync(root, {recursive: true, force: true}); }
 });
 
 // The mining fleet docks no hull, so the caller often has no station. The newest warehouse

@@ -3596,3 +3596,8 @@ Evidence: fork 4291fa2 + 6ec1016 + 8a68af1 + 807f1d6; 24 trader/maker tests; AUD
 Why: market-maker bids live and visible (Rust bid filter, quote depth, hub station), gone orders release money and type
 Where: docs/NPC_MARKET_MAKER.md
 Evidence: fork 295b1c4 + 4709cdd + df45e81 + f68c257; live book: type 34 ask 3.93 bids 3/3 (76 %), type 37 ask 187 bids 142/138, 16 bids of 1000 units; AUDIT_OK; 20 maker tests
+### 2026-11-05T11:44Z · 07975a3 · L2 · docs(m003): what the industrial-economy branch really contained, how it was merged and what was adapted
+
+Why: merge the M003 industrial-economy (L9-A) branch into coop/pas7std and main
+Where: docs/M003_INDUSTRIAL_ECONOMY_MERGE.md
+Evidence: fork c96dc66 (1 conflict, +6 modules, 3 distribution fixes), repo b8811574 (3 conflicts, flags 527, shims OK), AUDIT_OK 560 modules/65488 chars/0 drift, 257+15+31 checks green
