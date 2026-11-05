@@ -312,3 +312,26 @@ window is reopened; it is not a lost fitting.
 II, Gist A-Type Large SB, DG multispec, CN BCS), Faction Arty Sniper (3x 1400mm II +
 2x HML II), Faction Cruise Fleet (6x Cruise II, 3x CN BCS), Armor Brick T2 (Imp Navy
 1600mm plate, 2x EANM II, 3x Trimark II). 25 TFI fittings total, all PG/CPU/cal legal.
+
+## M003 industrial economy (L9-A) merged into main and the fork — 2026-11-05
+The owner's «масштабний ALIFE 2.0 десь у гілках» *is* the M003 branch, not a PR:
+engine `mission/003-industrial-economy` (131 ahead of `coop/pas7std`) + this repo's
+`origin/mission-003-industrial-economy` (53 ahead of `main`). PR #350 is a different,
+explicitly-incomplete Personal Fleet contract.
+**92 of the branch's 120 "new" files already existed on `coop/pas7std` byte-identical**, so the
+real delta was 6 new modules + 1 tool + 8 modified modules (+21 Doc files).
+Merged: fork `c96dc66`, repo `b8811574` (fast-forwarded; both checkouts now carry it).
+Conflicts 1 + 3. Adaptations:
+- `coopNpcRefineryTick.js`: branch file + main's note-suppression window (48 dup records/2 min);
+- `docs/coop-flags.json` regenerated (`FLAGS_OK 527/527`), not hand-merged;
+- `coopVirtualWorldRuntime.js` hit the 4 100-line ratchet (4 107) → sale-refusal wiring moved to
+  `coopVirtualWorldRuntime.pure.js` (4 097);
+- `integration/coopNpcMarketMakerBands.js` shim was missing on main → `SHIMS_OK` now;
+- engine fixes found by the branch's own suites: `trip.demand` per type (3 stacks → 10 000 not
+  30 000), factory reserve as one budget per (station,type) instead of per row (shipped nothing
+  with 20 000 reserved), same overwrite in the LOAD step of `coopDistributionRun`.
+Gates: `AUDIT_OK` (560 modules, 65 488 chars, 0 drift), `FLAGS_OK`, `SHIMS_OK`, 257 + 15 + 31
+checks green.
+**NOT deployed**: the play stack still runs the old image. `EVEJS_COOP_NPC_REFINERY=0` stays off.
+Docs: `docs/M003_INDUSTRIAL_ECONOMY_MERGE.md`; engine evidence `Doc/L9A-*`, checker
+`Doc/tools/verify-l9a-world.js`.
