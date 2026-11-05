@@ -3622,3 +3622,8 @@ Evidence: image at fork 4a47a95, container files md5-identical, 0 module errors,
 Why: make the merged M003 economy trade on the live stack: crossing ticker, per-beat sale budget, readback diagnostics
 Where: docs/M003_DEPLOY_20261105.md
 Evidence: fork 90b6930/4f8d397/1fc8512 + compose switch; live 16 settled sales, pilot-101 1.39M ISK, bid 4.0M->3.74M, sale-attempt ledger written; 54/54 distribution tests; AUDIT_OK
+### 2026-11-05T13:27Z · f161581 · L2 · docs(deploy): the sweep moved 2.57M ISK to the corporation and the fleet heals itself
+
+Why: treasury sweep without the refinery, and a self-healing readback repair
+Where: docs/M003_DEPLOY_20261105.md
+Evidence: fork c2f05c0 + d0d27b7 + compose switch; live sweeps 1422807.39 and 1150096.29 ISK (corp 961.48 -> 2573865.16), 16 settled sales, 0 readback failures since deploy; 38/38 + 54/54 tests; AUDIT_OK, FLAGS_OK 530/530, SHIMS_OK
