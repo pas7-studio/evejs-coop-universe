@@ -83,10 +83,37 @@ Two measured defects were fixed on the way and are worth remembering:
 Still open: the relist side (bought stock sits in the corporation's hangar until the native NPC
 seller lists it) and the buy-order placement for the 70 % bid band.
 
-## 6. How to prove a purchase
+## 6. The owner's endowment (applied 2026-11-05)
 
-1. Put ONE small sell order of your own on the book in Jita 4-4 at ≤ 90 % of the seed ask — e.g. 50
-   Tritanium at **≤ 3.53 ISK** while the seed ask is 3.93 ISK.
+Owner statement: *"I wanted to give the traders that much because I cannot sell my own things — this
+is my way to play, have fun and earn; it is not my fault the economy here is complex and we have not
+implemented it yet."*
+
+`space/coopTraderEndowment.js` credits the trading corporation **once**, through the same native
+corporate wallet API every other ISK movement uses, with a durable receipt and a loud coop event:
+
+```
+{"event":"space.trader-endowment","status":"ENDOWED","reason":"OWNER_ENDOWMENT",
+ "corporationID":1000035,"amountISK":50000000000,
+ "beforeISK":4867000,"afterISK":50004867000}
+```
+
+This is the **only** place in the fork that puts new ISK into the world. It is one-shot: the receipt
+(`/var/lib/evejs/coop-trader-endowment.json`) makes every later run answer `ALREADY_ENDOWED`, a
+corrupt receipt blocks instead of re-endowing, and no receipt is written for money that did not move.
+To change the amount later: stop the server, delete the receipt, set
+`EVEJS_COOP_TRADER_ENDOWMENT_ISK`, start it again — an owner act, by hand, by design.
+
+The trader already reads his goods: it collects the type ids of every open **player** sell escrow at
+the hub from the GameStore and buys exactly those (up to 24 book reads a tick), so no fixed list of
+"interesting" goods is needed. Limits live in compose: 3 buys per tick, 2 B ISK per tick,
+1 000 000 units per lot, 1 M ISK reserve.
+
+## 7. How to prove a purchase
+
+1. Put a sell order of your own on the book in **Jita 4-4** at ≤ 90 % of the seed ask — e.g. 50
+   Tritanium at **≤ 3.53 ISK** while the seed ask is 3.93 ISK (any type, any stack up to 1 000 000
+   units: the trader discovers the type from your escrow).
 2. Within one living-world tick expect `space.trader-maker` with `status: TRADER_MAKER_SETTLED` and
    `executions[0].settled: true`, your wallet credited, the corporation's debited and the goods in
    its hangar.
