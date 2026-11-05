@@ -13,7 +13,7 @@ import path from "node:path";
 // it covers the OFF case too - a flag that leaks writes is the worst failure mode here.
 const require = createRequire(import.meta.url);
 if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
-const space = path.join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space");
+const space = path.join((process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim(), "Code/server/src/space");
 const Warehouse = require(path.join(space, "coopNativeWarehouse.js"));
 const V2_PATH = path.join(space, "coopEconomyV2.js");
 

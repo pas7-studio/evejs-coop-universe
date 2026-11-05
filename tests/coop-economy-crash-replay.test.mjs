@@ -8,7 +8,7 @@ import { join } from "node:path";
 // this pins every declared window.
 const require = createRequire(import.meta.url);
 if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
-const C = require(join(process.env.EVEJS_FORK_ROOT.trim(),
+const C = require(join((process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim(),
   "Code/server/src/space/coopEconomyCrashWindows.js"));
 
 const steps = Object.fromEntries(C.STEPS.map((s) => [s, () => ({ ok: true, receiptID: s.toLowerCase() })]));

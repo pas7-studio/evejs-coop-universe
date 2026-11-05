@@ -9,7 +9,7 @@ import { join } from "node:path";
 // honest way: drop the module from the require cache and require it again.
 const require = createRequire(import.meta.url);
 if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
-const MODULE = join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space/coopEconomySaleSettlement.js");
+const MODULE = join((process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim(), "Code/server/src/space/coopEconomySaleSettlement.js");
 
 function reload() {
   delete require.cache[require.resolve(MODULE)];

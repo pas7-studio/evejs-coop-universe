@@ -11,7 +11,7 @@ import { join } from "node:path";
 // one effect.
 const require = createRequire(import.meta.url);
 if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
-const SPACE = join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space");
+const SPACE = join((process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim(), "Code/server/src/space");
 
 function reload(name) {
   const p = join(SPACE, name + ".js");

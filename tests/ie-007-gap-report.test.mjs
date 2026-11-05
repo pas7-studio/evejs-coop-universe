@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
 if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
-const fork = process.env.EVEJS_FORK_ROOT.trim();
+const fork = (process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim();
 const M = require(join(fork, "Code/server/src/space/coopEconomyGapReport.js"));
 
 test("every stage reachable is READY", () => {

@@ -3,7 +3,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { createRequire } from "node:module"
 const require = createRequire(import.meta.url)
-const M = require(join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space/coopEconomyRaceMatrix.js"))
+const M = require(join((process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim(), "Code/server/src/space/coopEconomyRaceMatrix.js"))
 const C = M.C || M
 const { createLeases, RACE_CODE } = C
 

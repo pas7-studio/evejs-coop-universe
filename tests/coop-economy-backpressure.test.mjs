@@ -8,7 +8,7 @@ import { join } from "node:path";
 // work must return the capacity it occupied.
 const require = createRequire(import.meta.url);
 if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
-const C = require(join(process.env.EVEJS_FORK_ROOT.trim(),
+const C = require(join((process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim(),
   "Code/server/src/space/coopEconomyBackpressure.js"));
 
 test("the active limit and the queue limit are both respected", () => {

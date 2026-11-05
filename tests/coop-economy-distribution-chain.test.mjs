@@ -4,7 +4,7 @@ import { createRequire } from "node:module"
 import { join } from "node:path"
 
 const require = createRequire(import.meta.url)
-const space = join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space")
+const space = join((process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim(), "Code/server/src/space")
 const Run = require(join(space, "coopEconomyDistributionRun.js"))
 const Pool = require(join(space, "coopEconomyHaulerReservation.js"))
 const Unload = require(join(space, "coopEconomyUnload.js"))

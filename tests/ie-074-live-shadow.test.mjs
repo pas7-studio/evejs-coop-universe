@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 
 const require = createRequire(import.meta.url);
 if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
-const fork = process.env.EVEJS_FORK_ROOT.trim();
+const fork = (process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim();
 const space = join(fork, "Code/server/src/space");
 
 // the live module reads its file paths at require time, so point them at a temp dir first

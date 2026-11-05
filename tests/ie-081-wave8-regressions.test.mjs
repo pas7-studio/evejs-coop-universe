@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
 if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
-const sp = (n) => join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space", n);
+const sp = (n) => join((process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim(), "Code/server/src/space", n);
 const Refinery = require(sp("coopEconomyRefineryQuote.js"));
 const Competition = require(sp("coopEconomyOrderCompetition.js"));
 

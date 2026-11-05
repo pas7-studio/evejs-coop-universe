@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
 if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
-const fork = process.env.EVEJS_FORK_ROOT.trim();
+const fork = (process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim();
 
 function run(script, args) {
   const result = spawnSync(process.execPath, [join(fork, "Code/server/scripts", script), ...args], {
