@@ -3581,3 +3581,8 @@ Evidence: fork fc62484; live event space.trader-maker status=TRADER_MAKER_NO_BAR
 Why: owner-endowed trading corporation (50 B ISK, one shot, durable receipt) + trader discovers the player's own escrow types
 Where: docs/NPC_MARKET_MAKER.md
 Evidence: fork 3a2d747; live event space.trader-endowment ENDOWED 4867000 -> 50004867000; trader maker cashCents 5000486700000 mode LIVE; 6 endowment tests + 16 maker/bands tests; AUDIT_OK
+### 2026-11-05T10:37Z · 6b9534d · L1 · docs(trader): the resale half is live - native escrow, trade provenance, 140 % / 105 % band
+
+Why: trader resale half: native Reserve->escrow->Activate listing of bought stacks at 140 % (floor 105 %)
+Where: docs/NPC_MARKET_MAKER.md
+Evidence: fork 77262ca; 6 relist tests + 6 endowment + 16 maker/bands; AUDIT_OK; live: relist flag on, 3/tick, waiting for the first bought stack
