@@ -96,6 +96,8 @@ test('PF49 git-apply patch smoke check on exact local excerpts; no PLAY',()=>{
    assert.match(source,/corporationRuntime"\]:/);
    assert.match(source,/pfFence\?\{contract:"mining-cycle-pf"\}/);
    assert.match(source,/PF49_POSTCOMMIT_ACK_UNPROVEN/);
+   assert.match(source,/PF49_PERMIT_ADMISSION_UNPROVEN/);
+   assert.ok(source.indexOf('beginMiningWrite(')<source.indexOf('Reserve the original native cargo ID'));
    assert.match(cargo,/PF49_OWNERSHIP_ROWS_READ_ONLY/);
    assert.match(cargo,/MINING_CYCLE_PF/);
    execFileSync('node',['--check',path.join(temp,'Code/server/src/space/coopPersonalFleetMiningTxnGuard.js')]);
