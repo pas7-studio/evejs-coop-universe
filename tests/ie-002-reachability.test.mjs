@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const root = process.env.EVEJS_FORK_ROOT;
+const root = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
 if (!root) {
   throw new Error("EVEJS_FORK_ROOT is unset");
 }

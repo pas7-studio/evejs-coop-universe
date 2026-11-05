@@ -10,7 +10,7 @@ import path from "node:path";
 // the process still shares its memory, its file handles and its clock. This one runs the operation in
 // a CHILD PROCESS, twice, over the same journal file - a real process boundary.
 const require = createRequire(import.meta.url);
-if (!process.env.EVEJS_FORK_ROOT) throw new Error("EVEJS_FORK_ROOT is unset");
+if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
 const SPACE = path.join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space");
 const RUNNER = path.join(import.meta.dirname, "fixtures", "settle-once.cjs");
 

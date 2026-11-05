@@ -12,7 +12,7 @@ import path from "node:path";
 // This drives the real deposit() path with injected ports and a fixed clock: milliseconds, and
 // it covers the OFF case too - a flag that leaks writes is the worst failure mode here.
 const require = createRequire(import.meta.url);
-if (!process.env.EVEJS_FORK_ROOT) throw new Error("EVEJS_FORK_ROOT is unset");
+if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
 const space = path.join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space");
 const Warehouse = require(path.join(space, "coopNativeWarehouse.js"));
 const V2_PATH = path.join(space, "coopEconomyV2.js");

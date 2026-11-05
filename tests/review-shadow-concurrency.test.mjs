@@ -10,8 +10,7 @@ import { spawnSync } from "node:child_process";
 // no cross-process serialisation. Two writers can both read the same version and the second rename
 // erases the first. A conflicting cargoID is resolved by whichever copy is in memory.
 const require = createRequire(import.meta.url);
-const root = process.env.EVEJS_FORK_ROOT;
-if (!root) throw new Error("EVEJS_FORK_ROOT is unset");
+const root = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
 const MODULE_PATH = path.join(root, "Code/server/src/space/coopEconomyV2.js");
 
 function sandbox() {

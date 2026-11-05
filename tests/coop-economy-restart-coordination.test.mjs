@@ -7,7 +7,7 @@ import { join } from "node:path";
 // ties a hull to a cargo, and an escrow hold promises units will not be sold twice. All three were
 // process-local, so a restart silently released them (measured 2026-11-01).
 const require = createRequire(import.meta.url);
-if (!process.env.EVEJS_FORK_ROOT) throw new Error("EVEJS_FORK_ROOT is unset");
+if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
 const SPACE = join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space");
 
 function reload(name) {

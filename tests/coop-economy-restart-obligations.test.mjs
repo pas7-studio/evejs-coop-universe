@@ -7,7 +7,7 @@ import { join } from "node:path";
 // resupply. Each of these holds an obligation to the outside world, and each was process-local, so
 // a restart either paid twice, handed the same units out twice or forgot a contract entirely.
 const require = createRequire(import.meta.url);
-if (!process.env.EVEJS_FORK_ROOT) throw new Error("EVEJS_FORK_ROOT is unset");
+if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
 const SPACE = join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space");
 
 function reload(name) {

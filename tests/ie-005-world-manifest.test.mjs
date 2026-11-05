@@ -8,7 +8,7 @@ const {
   MAX_BOOTSTRAP_CASH_CENTS,
   validateWorldManifest,
   createWorldManifest,
-} = require(require("node:path").join(process.env.EVEJS_FORK_ROOT || (() => { throw new Error("EVEJS_FORK_ROOT is unset"); })(), "Code/server/src/space/coopEconomyWorldManifest.js"));
+} = require(require("node:path").join((process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs"), "Code/server/src/space/coopEconomyWorldManifest.js"));
 
 const BASE = {
   worldSeed: "w1",

@@ -7,10 +7,8 @@ import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
 
-if (!process.env.EVEJS_FORK_ROOT) {
-  throw new Error("EVEJS_FORK_ROOT is unset");
-}
-const forkRoot = process.env.EVEJS_FORK_ROOT.trim();
+// Default to the engine checkout: an unset variable must not read as a failing suite.
+const forkRoot = (process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim();
 
 const enginePath = join(forkRoot, "Code", "server", "src", "space", "coopEconomyFlagAudit.js");
 const mod = require(enginePath);

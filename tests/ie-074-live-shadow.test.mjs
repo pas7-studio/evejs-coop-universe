@@ -6,7 +6,7 @@ import { mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync } from "no
 import { tmpdir } from "node:os";
 
 const require = createRequire(import.meta.url);
-if (!process.env.EVEJS_FORK_ROOT) throw new Error("EVEJS_FORK_ROOT is unset");
+if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
 const fork = process.env.EVEJS_FORK_ROOT.trim();
 const space = join(fork, "Code/server/src/space");
 

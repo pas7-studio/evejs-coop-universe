@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const FORK_ROOT = process.env.EVEJS_FORK_ROOT;
+const FORK_ROOT = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
 if (!FORK_ROOT) {
   throw new Error('EVEJS_FORK_ROOT is unset');
 }

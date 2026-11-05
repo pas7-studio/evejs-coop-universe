@@ -8,7 +8,7 @@ import { join } from "node:path";
 // "one settlement per fill" promise only held inside one process. A restart is simulated the only
 // honest way: drop the module from the require cache and require it again.
 const require = createRequire(import.meta.url);
-if (!process.env.EVEJS_FORK_ROOT) throw new Error("EVEJS_FORK_ROOT is unset");
+if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
 const MODULE = join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space/coopEconomySaleSettlement.js");
 
 function reload() {

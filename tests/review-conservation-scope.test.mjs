@@ -6,8 +6,7 @@ import { createRequire } from "node:module";
 // Finding 3 (independent review of 15c374a): audit({}) has no measured scope at all, and returns
 // BALANCED. An audit that measured nothing must never be evidence that nothing is missing.
 const require = createRequire(import.meta.url);
-const root = process.env.EVEJS_FORK_ROOT;
-if (!root) throw new Error("EVEJS_FORK_ROOT is unset");
+const root = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
 const Coverage = require(path.join(root, "Code/server/src/space/coopEconomyConservationCoverage.js"));
 
 const s = (units, id) => ({ units, sourceReceiptID: id || "src-" + units });

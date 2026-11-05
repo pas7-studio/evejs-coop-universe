@@ -12,10 +12,8 @@ import { join } from "node:path";
 const require = createRequire(import.meta.url);
 
 // Throw if the engine fork root is unset, as required.
-const forkRoot = process.env.EVEJS_FORK_ROOT;
-if (typeof forkRoot !== "string" || forkRoot.length === 0) {
-  throw new Error("EVEJS_FORK_ROOT is unset");
-}
+// Default to the engine checkout: an unset variable must not read as a failing suite.
+const forkRoot = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
 
 // Load the CommonJS module under test.
 const mod = require(join(forkRoot, "Code/server/src/space/coopEconomyCapabilityIndex.js"));

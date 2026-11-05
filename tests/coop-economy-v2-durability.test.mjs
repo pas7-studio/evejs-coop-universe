@@ -10,8 +10,7 @@ import { createRequire } from "node:module";
 // file is refused instead of inventing receipts, the ring stays bounded, and a replay never
 // double-counts a delivery.
 const require = createRequire(import.meta.url);
-const root = process.env.EVEJS_FORK_ROOT;
-if (!root) throw new Error("EVEJS_FORK_ROOT is unset");
+const root = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
 const MODULE_PATH = path.join(root, "Code/server/src/space/coopEconomyV2.js");
 
 function sandbox() {

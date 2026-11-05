@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
-if (!process.env.EVEJS_FORK_ROOT) throw new Error("EVEJS_FORK_ROOT is unset");
+if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
 const Escrow = require(join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space/coopEconomySellEscrow.js"));
 
 // Found by adversarial wave 7 (module interaction). `reserve` only ever incremented the counter:

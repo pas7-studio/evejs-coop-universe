@@ -7,8 +7,7 @@ import { spawnSync } from "node:child_process";
 
 // Finding 4 (independent review of 15c374a): both audit and crosscheck count malformed receipt
 // files and then decide success without them. A directory of unreadable receipts reports ok:true.
-const root = process.env.EVEJS_FORK_ROOT;
-if (!root) throw new Error("EVEJS_FORK_ROOT is unset");
+const root = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
 const AUDIT = path.join(root, "Code/server/scripts/coop-economy-v2-audit.js");
 const CROSSCHECK = path.join(root, "Code/server/scripts/coop-economy-v2-crosscheck.js");
 

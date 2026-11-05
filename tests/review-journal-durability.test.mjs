@@ -10,8 +10,7 @@ import { createRequire } from "node:module";
 // error, keeps the value in memory only, and createFileJournal renames a corrupt file away and
 // continues with an empty map. A money module then returns "SETTLED" with nothing on disk.
 const require = createRequire(import.meta.url);
-const root = process.env.EVEJS_FORK_ROOT;
-if (!root) throw new Error("EVEJS_FORK_ROOT is unset");
+const root = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs";
 const SP = path.join(root, "Code/server/src/space");
 const load = (name) => {
   const file = path.join(SP, name);

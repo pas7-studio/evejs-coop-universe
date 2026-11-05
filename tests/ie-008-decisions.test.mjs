@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 
 // The environment value may carry a trailing space (cmd `set` appends one);
 // trim it so the resolved path is exact.
-const EVEJS_FORK_ROOT = process.env.EVEJS_FORK_ROOT.trim();
+const EVEJS_FORK_ROOT = (process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs").trim();
 assert.equal(typeof EVEJS_FORK_ROOT, 'string', 'EVEJS_FORK_ROOT must be set');
 
 const modPath = join(EVEJS_FORK_ROOT, 'Code', 'server', 'src', 'space', 'coopEconomyDecisions.js');

@@ -10,7 +10,7 @@ import { join } from "node:path";
 // behaviour is unchanged. These tests replay through a restart WITH a journal and expect exactly
 // one effect.
 const require = createRequire(import.meta.url);
-if (!process.env.EVEJS_FORK_ROOT) throw new Error("EVEJS_FORK_ROOT is unset");
+if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
 const SPACE = join(process.env.EVEJS_FORK_ROOT.trim(), "Code/server/src/space");
 
 function reload(name) {

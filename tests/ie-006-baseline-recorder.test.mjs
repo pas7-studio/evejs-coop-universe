@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { recordBaseline, compareBaselines, UNKNOWN, UNAVAILABLE } = require(require("node:path").join(process.env.EVEJS_FORK_ROOT || (() => { throw new Error("EVEJS_FORK_ROOT is unset"); })(), "Code/server/src/space/coopEconomyBaselineRecorder.js"));
+const { recordBaseline, compareBaselines, UNKNOWN, UNAVAILABLE } = require(require("node:path").join((process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs"), "Code/server/src/space/coopEconomyBaselineRecorder.js"));
 
 test("recordBaseline with clock () => 7 returns recordedAt 7; a reader returning 5 gives { id, status: OK, value: 5 }; ok is true when every source is OK", () => {
   const result = recordBaseline({ sources: [{ id: "a", read: () => 5 }], clock: () => 7 });

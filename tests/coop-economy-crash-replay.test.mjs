@@ -7,7 +7,7 @@ import { join } from "node:path";
 // recovery must re-run the window without applying a step twice. Wave 1 checked the happy path;
 // this pins every declared window.
 const require = createRequire(import.meta.url);
-if (!process.env.EVEJS_FORK_ROOT) throw new Error("EVEJS_FORK_ROOT is unset");
+if (!process.env.EVEJS_FORK_ROOT) process.env.EVEJS_FORK_ROOT = "C:/Games/EveCoop/upstream-evejs";
 const C = require(join(process.env.EVEJS_FORK_ROOT.trim(),
   "Code/server/src/space/coopEconomyCrashWindows.js"));
 
