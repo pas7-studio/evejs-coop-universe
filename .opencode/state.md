@@ -367,3 +367,25 @@ per cycle, not awaiting between phases.
 Also fixed: `tests/coop-native-haul-transfer-physical` no longer pins the refusal the engine
 deliberately removed (fork e2d259a): store-row corruption still refuses, a stale display copy is
 rebuilt from the durable row. That test was the last red in the economy/market/native sweep.
+
+**2026-11-05 13:0x-13:3xZ — the economy actually trades (owner: «ти сам роби що треба»).**
+Turned on deliberately, with the numbers written in `compose.coop-probe.yaml`:
+`EVEJS_COOP_DISTRIBUTION_RUN=1`, `EVEJS_COOP_DISTRIBUTION=1`, `EVEJS_COOP_CORP_TREASURY_SWEEP=1`.
+Three blockers found and fixed while watching:
+1. the crossing ticker is the other half of the distribution switch — without it hull 980000093319
+   re-planned the same home crossing every 56 s for six beats (fork `90b6930`);
+2. a per-beat sale budget was treated as a verdict, so a hull that had sold 12 times parked for
+   `BLOCKED_RETRY_MS` (30 min) with cargo aboard; it now continues when the beat really sold
+   something, while a beat of pure refusals still ends BLOCKED after MAX_SELL_CALLS (`4f8d397`);
+3. the treasury sweep only lived inside the refinery path, so pilot earnings never reached the
+   corporation; `EVEJS_COOP_CORP_TREASURY_SWEEP=1` runs the same authority without refining (`c2f05c0`).
+Live result: 16 settled sales into the Jita 4-4 seeded bid, hull sold 137 717 → 0 units and cycled
+to a new trip, corp 1000129 went 961.48 → **2 573 865.16 ISK** (sweeps of 1 422 807.39 and
+1 150 096.29), bid order 4257714186837032994 fell 4 000 000 → 3 743 714 units, `sale-attempts/`
+carries the L9-A identity rows.
+Also fixed: `POSTCOMMIT_CUSTODY_READBACK_FAILED` parked a mining fleet until restart three times
+(12:15Z, 12:44Z, 13:14Z). The clause naming showed `destination_rows=0` — a cache-visibility read,
+not corruption — so `healReadbackRepair()` now clears the flag on miner, hauler and fleet when
+exactly one row with that cargoID exists, and leaves a missing/duplicated row to an operator (`d0d27b7`).
+Still open: the trader maker has nothing to buy without a player sell escrow (owner declined to
+trade for now), lag unchanged (median 1.29 s per phase cycle), and the refinery stays off.
