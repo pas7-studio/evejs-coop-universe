@@ -17,9 +17,13 @@ Status: **SOURCE CANDIDATE / NOT INTEGRATED** — November 5, 2026.
 ### Strong failure semantics
 
 1. PF50 optional flag defaults OFF and missing native callback returns `BLOCKED_OWNERSHIP` before any cargo allocation.
-2. A durable `PENDING` permit must be committed ahead of the possible partial cargoID allocation. After SIGKILL, repeated op IDs **must not** attempt another physical transfer.
+2. A durable `PENDING` permit must be committed ahead of the possible partial cargoID allocation; it is keyed by the canonical original cargo preimage hash to disambiguate later legitimate partial transfers. A prior unacknowledged haul in the same system blocks new haul transfers. After SIGKILL, repeated op IDs **must not** attempt another physical transfer.
 3. In the same `BEGIN IMMEDIATE`, validate both physical actor IDs, original WAR/PF claim projections, exact PF44 ACTIVE lease and PF46 ACTIVE gate+matching pending permit. `corpora­tionRuntime` is read-only for this transaction.
 4. Commit original `npcCargo` root and immutable original ALIFE10 receipt in the same transaction. Unknown outcome -> needs operator repair; do not repair by manufacturing a replacement cargoID.
 5. ACK pending permit only after verifying the original miner and hauler cargo records. PF46 release refuses any outstanding permits.
 
 **Do not enable the feature based solely on contract tests.** No original WORK runtime has been modified from this session.
+
+### Crash fixture
+
+`tests/pf50-sqlite-sigkill.test.cjs` kills a real child Node process immediately after a FULL-synchronous SQLite commit: (a) PENDING permit without cargo motion, and (b) original cargo+receipt committed before permit ACK. The test verifies exactly one original cargo row, no duplicated cargo and persistent pending fence after reopen. This fixture **does not** kill the real WORK EveJS process.
