@@ -170,10 +170,10 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
 // filler section
 // filler section
 // filler section
-// filler section
-// filler section
-// filler section
-// filler section
+    if (!authority || typeof authority.transact!=="function")
+      return blocked(entity,"ALIFE07_GAMESTORE_BRIDGE_UNAVAILABLE");
+
+    // Reserve the original native cargo ID via the ORIGINAL allocator, never a
 // filler section
 // filler section
 // filler section
