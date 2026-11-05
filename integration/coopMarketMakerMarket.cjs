@@ -151,6 +151,15 @@ async function runOnce({
       return placeBuy(market, corp > 0 ? { ...request, ownerID: corp, isCorp: true } : request);
     },
     cancel: orderID => cancelOrder(market, orderID),
+    // The daemon is the authority on whether our order still exists.
+    inspect: async orderID => {
+      try {
+        const order = await market.call("GetOrder", { order_id: int(orderID) || orderID });
+        return String((order && order.state) || "missing");
+      } catch (_error) {
+        return "missing";
+      }
+    },
     observe,
   });
 }
@@ -162,9 +171,12 @@ async function prepareQuotes({ types = [], regionID = 10000002, stationID = 0, c
   const market = client || marketClient();
   if (!market || typeof market.call !== "function") return new Map();
   const quotes = new Map();
+  // A real bid needs real depth: EVEJS_COOP_MARKET_MAKER_QUANTITY (default 1000 units). The trader's
+  // ledger reserves price x quantity before the order exists, so depth is bounded by real money.
+  const quantity = Math.max(1, int(env.EVEJS_COOP_MARKET_MAKER_QUANTITY) || 1000);
   for (const typeID of Array.isArray(types) ? types : []) {
     try {
-      quotes.set(int(typeID), await readQuote(market, { typeID, regionID, stationID }));
+      quotes.set(int(typeID), await readQuote(market, { typeID, regionID, stationID, quantity }));
     } catch (_error) {
       /* an unreadable type is simply not quoted this pass */
     }

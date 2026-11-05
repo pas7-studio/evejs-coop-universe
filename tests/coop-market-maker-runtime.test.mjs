@@ -102,3 +102,34 @@ test("an empty book still gives a maker a reference: the seeder fallback", () =>
   const expected = Math.max(10000 + (34 % 250) * 250, 1000);
   assert.equal(expected, 18500);
 });
+
+// Measured 2026-11-05: 36 cancelled bids kept five types "held" for ever, because a cancelled order
+// stayed in the trader record and the maker therefore believed it still quoted that type.
+test("an order the daemon no longer has open releases its money AND the type", async () => {
+  const file = path.join(os.tmpdir(), `mm-release-${process.pid}-${Date.now()}.json`);
+  const traders = createTraders({ file, clock: () => 1_000 });
+  const reserved = traders.reserve({ traderID: "mk-trader-1", amountISK: 4_000, kind: "BUY",
+    meta: { typeID: 34, stationID: 60003760, priceISK: 3, quantity: 1000 } });
+  traders.bind(reserved.operationID, { order_id: 39, type_id: 34, station_id: 60003760,
+    price: 3, quantity: 1000 });
+  const placed = [];
+  const report = await tick({
+    traders,
+    now: 2_000,
+    types: [34],
+    env: { EVEJS_COOP_MARKET_MAKERS: "1" },
+    book: () => ({ typeID: 34, stationID: 60003760, referenceISK: 4, bestAskISK: 4, quantity: 10 }),
+    placeBuy: async (request) => { placed.push(request); return { ok: true, order: { order_id: "77" } }; },
+    cancel: async () => ({ ok: true }),
+    inspect: async (orderID) => (String(orderID) === "39" ? "cancelled" : "open"),
+  });
+  assert.equal(report.released.length, 1);
+  assert.equal(report.released[0].orderID, "39");
+  assert.equal(report.released[0].state, "cancelled");
+  assert.equal(placed.length, 1, "the freed type is quoted again in the same tick");
+  assert.equal(placed[0].typeID, 34);
+  const snapshot = traders.snapshot();
+  assert.equal(Object.keys(snapshot.traders["mk-trader-1"].orders).includes("39"), false,
+    "the gone order is no longer held");
+  fs.rmSync(file, { force: true });
+});

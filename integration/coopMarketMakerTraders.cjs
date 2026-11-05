@@ -176,6 +176,34 @@ function createTraders({ file, clock = () => Date.now(), writeFile = null } = {}
     return { status: "REFUNDED", amountISK: operation.amountISK };
   }
 
+  // An order that is provably gone (cancelled by an operator, expired in the daemon or filled) must
+  // free BOTH the money and the type it was quoting: leaving the row in record.orders made the maker
+  // believe it still held that type, so it never quoted it again (measured 2026-11-05: 36 cancelled
+  // bids kept five types held and the book looked empty).
+  function release({ orderID, reason = "ORDER_GONE" } = {}) {
+    const id = String(orderID || "");
+    if (!/^[1-9][0-9]*$/.test(id)) return { status: "ORDER_ID_REQUIRED" };
+    const state = read();
+    for (const record of Object.values(state.traders)) {
+      const order = record && record.orders ? record.orders[id] : null;
+      if (!order) continue;
+      let refund = { status: "NOT_REFUNDABLE" };
+      const operation = state.operations[String(order.operationID || "")];
+      if (operation && operation.phase !== "REFUNDED") {
+        operation.phase = "REFUNDED";
+        operation.refundedAt = clock();
+        operation.reason = String(reason || "");
+        record.balanceISK += pos(operation.amountISK);
+        record.spentTodayISK = Math.max(0, int(record.spentTodayISK) - pos(operation.amountISK));
+        refund = { status: "REFUNDED", amountISK: pos(operation.amountISK) };
+      }
+      delete record.orders[id];
+      write(state);
+      return { status: "RELEASED", orderID: id, refund };
+    }
+    return { status: "NOT_FOUND" };
+  }
+
   // One reservation whose outcome never resolved (a thrown placement) must not hold money for
   // ever. After staleMs with no live order pointing at it, the money goes back and the row is
   // settled with an explicit reason; settled rows are pruned after the retention window and the
@@ -248,7 +276,7 @@ function createTraders({ file, clock = () => Date.now(), writeFile = null } = {}
       : JSON.parse(JSON.stringify(state));
   }
 
-  const api = Object.freeze({ reserve, bind, refund, reconcile, snapshot, filePath });
+  const api = Object.freeze({ reserve, bind, refund, release, reconcile, snapshot, filePath });
   if (writeFile === null) instancesByPath.set(filePath, api);
   return api;
 }

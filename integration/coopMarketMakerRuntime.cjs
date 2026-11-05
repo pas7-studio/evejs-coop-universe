@@ -23,6 +23,7 @@ async function tick({
   book = null,
   placeBuy = null,
   cancel = null,
+  inspect = null,
   types = [],
   now = Date.now(),
   env = process.env,
@@ -66,8 +67,35 @@ async function tick({
   }
 
   for (const trader of activeTraders) {
-    const record = state.traders[trader.traderID] || null;
-    const live = liveOrders(record, now);
+    let record = state.traders[trader.traderID] || null;
+    let live = liveOrders(record, now);
+
+    // 0. An order the daemon no longer has open (cancelled by an operator, filled, expired there) must
+    // release BOTH its money and the type it held; otherwise the maker never quotes that type again.
+    let releasedAny = false;
+    if (typeof inspect === "function") {
+      for (const order of Object.values((record && record.orders) || {})) {
+        if (!order || int(order.expiresAt) <= now) continue;
+        let state = "missing";
+        try {
+          state = String((await inspect(order.orderID)) || "missing");
+        } catch (_error) {
+          continue; // an unreadable order is not proof that it is gone
+        }
+        if (state === "open") continue;
+        const released = store.release({ orderID: order.orderID, reason: "ORDER_GONE:" + state });
+        releasedAny = true;
+        report.released = report.released || [];
+        report.released.push({ traderID: trader.traderID, orderID: order.orderID, state,
+          status: released.status });
+      }
+    }
+
+    if (releasedAny) {
+      const fresh = store.snapshot();
+      record = (fresh.traders && fresh.traders[trader.traderID]) || null;
+      live = liveOrders(record, now);
+    }
 
     // 1. Expired orders are cancelled and their money returned before anything new is bought.
     if (typeof cancel === "function") {
