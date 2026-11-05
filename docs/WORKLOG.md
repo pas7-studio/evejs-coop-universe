@@ -3627,3 +3627,9 @@ Evidence: fork 90b6930/4f8d397/1fc8512 + compose switch; live 16 settled sales, 
 Why: treasury sweep without the refinery, and a self-healing readback repair
 Where: docs/M003_DEPLOY_20261105.md
 Evidence: fork c2f05c0 + d0d27b7 + compose switch; live sweeps 1422807.39 and 1150096.29 ISK (corp 961.48 -> 2573865.16), 16 settled sales, 0 readback failures since deploy; 38/38 + 54/54 tests; AUDIT_OK, FLAGS_OK 530/530, SHIMS_OK
+### 2026-11-05T13:46Z · 08660a4 · L2 · test(loop): pin the phase-status telemetry, and enable the refinery inside a durable budget
+
+Why: the industrial half runs live: refinery under a durable budget, pilot float, pinned factory, capital bought at the buyer station, no inputs for a loss-making recipe, phase telemetry
+Detail: Live 2026-11-05: EVEJS_COOP_NPC_REFINERY=1 produced no event for four minutes because the phase status was discarded. The beat now emits living-coop-loop-phase {phase,status} once per change; coop-loop-phase-telemetry pins that a status is reported once, not once per beat, and that every phase is named. The play stack turns the refinery on with EVEJS_COOP_REFINERY_SPEND_LIMIT_ISK=5000000 against r
+Where: integration/coopLoopTick.cjs, tests/coop-loop-phase-telemetry.test.mjs
+Evidence: fork e4f3416 70a1026 3f929b9 b2eeb1f ce2e453 69298db; live: 168 stacks refined -> 443 383 429 ISK of minerals, 16 -> 25 settled sales, corp 961.48 -> ~2.5M and back to 438k after fees, living-npc-manufactured 5x672 at 14:47Z; tests 1928/1922 pass 0 fail, AUDIT_OK, FLAGS_OK 531/531, SHIMS_OK

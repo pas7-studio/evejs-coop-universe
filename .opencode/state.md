@@ -389,3 +389,30 @@ not corruption — so `healReadbackRepair()` now clears the flag on miner, haule
 exactly one row with that cargoID exists, and leaves a missing/duplicated row to an operator (`d0d27b7`).
 Still open: the trader maker has nothing to buy without a player sell escrow (owner declined to
 trade for now), lag unchanged (median 1.29 s per phase cycle), and the refinery stays off.
+
+**2026-11-05 13:35-14:35Z — the industrial half is switched on (owner: «дороблюй щоб все працювало»).**
+Four blockers, each measured before it was changed:
+1. a phase computed its status and threw it away — `EVEJS_COOP_NPC_REFINERY=1` ran four minutes with
+   zero events. The beat now writes `living-coop-loop-phase {phase,status}` once per change
+   (fork `e4f3416`, `70a1026`);
+2. the refinery had no budget and had been frozen since the 2026-11-02 252 058.47 ISK incident. It
+   now pays only inside `refinery-budget.json` (limit 5 000 000 ISK) **and** under
+   `EVEJS_COOP_REFINERY_SPEND_LIMIT_ISK`, from a wallet funded by 16 settled sales. Live: 168
+   warehouse-tagged stacks refined at 60000682; the corporation's ore became **443 383 429 ISK of
+   minerals at the seeded bids** (41.7 M Tritanium, 2.6 M Pyerite, plus Scordite/Veldspar grades);
+3. the treasury swept every pilot to zero, and the trader pays for a blueprint from the PILOT's
+   balance. `EVEJS_COOP_TREASURY_KEEP_ISK=500000` keeps a bounded float (default 0 = old behaviour);
+4. `factoryStation()` derives home from blueprint receipts, which a copy in transit rewrites to
+   `MOVED` — the factory is pinned with `EVEJS_COOP_INDUSTRY_STATION=60000358`.
+Production flags (compose: `Code/compose.coop-probe.yaml`): manufacture 1 / runs 5, blueprint shop
+trip 1, blueprint purchase 1 (cap 500 000, budget 5 000 000), input import trip 1, runs 1,
+`LIFT_ANY_TYPE=1`, sell list led by 672 Caldari Shuttle, 207 Mjolnir Heavy Missile, 215 Iron Charge S
+and 1816 Inferno Auto-Targeting Light Missile — the products the seeded book really bids for.
+Two engine fixes came out of the first live beats: capital is bought at the buyer's station on BOTH
+sell paths (`purchaseCapital()`, one attempt per trip, only a settled `TRADE_SETTLED` counts,
+`b2eeb1f`/`ce2e453`), and `factorySupply` no longer plans inputs for a recipe the manufacturer will
+refuse `NO_MARGIN` (it bought 20 Mexallon per beat for a Merlin that costs 409 000 ISK of inputs and
+bids 97 240). Live status at 14:28Z: manufacturer running every beat, factory correctly refusing the
+one loss-making blueprint it owns, hull cycling PLAN → LOAD → CROSS → SELL → RETURN; the capital
+purchase is armed for the next sell stop. Still open: the first settled blueprint purchase + job
+completion + sale of a manufactured good, the ammo line (needs Nocxium imported), and lag.

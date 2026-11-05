@@ -146,11 +146,32 @@ function distributionRunAuthorities(options = {}) {
           if (!plan || plan.status !== "READY") continue;
           let bid = null;
           try {
-            bid = db ? db.prepare("select sum(quantity) as volume from seed_buy_orders " +
-              "where type_id=? and quantity>0 and solar_system_id in (30000142,30000144,30000145)")
+            bid = db ? db.prepare("select sum(quantity) as volume, max(price) as price " +
+              "from seed_buy_orders where type_id=? and quantity>0 " +
+              "and solar_system_id in (30000142,30000144,30000145)")
               .get(Number(plan.productTypeID)) : null;
           } catch (_error) { bid = null; }
           if (!bid || Number(bid.volume) <= 0) continue;
+          // Demand is not profit. The manufacturer refuses a recipe whose materials are worth more
+          // than the bid (NO_MARGIN), so supplying that recipe buys minerals for a job that will
+          // never be installed: measured 2026-11-05 the hull bought 20 Mexallon per beat for a
+          // Merlin that costs ~409 000 ISK of inputs and bids 97 240. The supply plan uses the same
+          // test the manufacturer does, at the same seeded prices.
+          let materialValue = 0;
+          let priced = true;
+          for (const material of plan.materials || []) {
+            let quote = null;
+            try {
+              quote = db ? db.prepare("select max(price) as price from seed_buy_orders " +
+                "where type_id=? and quantity>0").get(Number(material.typeID)) : null;
+            } catch (_error) { quote = null; }
+            if (!quote || !(Number(quote.price) > 0)) { priced = false; break; }
+            materialValue += Number(material.quantity) * Number(quote.price);
+          }
+          const perRun = Math.max(1, Number(plan.productPerRun) || 1);
+          const unitCost = priced ? materialValue / perRun : null;
+          const sell = Number(bid.price) || 0;
+          if (unitCost !== null && sell > 0 && unitCost >= sell) continue;
           wanted.push({...row, productTypeID: Number(plan.productTypeID)});
         }
         if (!wanted.length) return keep(null);

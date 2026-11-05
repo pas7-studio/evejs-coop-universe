@@ -22,6 +22,12 @@ const path = require("node:path");
 const FLAG = "EVEJS_COOP_CORP_TREASURY";
 const DIR_FLAG = "EVEJS_COOP_NPC_MARKET_DIR";
 const CORPORATION_FLAG = "EVEJS_COOP_FACTORY_CORP_ID";
+// Working capital that stays with the pilots. The treasury sweep used to zero every pilot after
+// each sale, which left the manufacturer unable to buy the blueprint or the missing mineral it
+// needs: the native trader pays for a purchase from the PILOT's earned balance, not from the
+// corporation's wallet. A zero default keeps the old behaviour exactly; a positive value is an
+// operator decision about how much cash the crew may keep to do its job.
+const KEEP_FLAG = "EVEJS_COOP_TREASURY_KEEP_ISK";
 const DEFAULT_CORP = 1000129;
 const DIVISION = 1000;
 
@@ -100,7 +106,17 @@ function run(options = {}) {
   if (!earnings.length)
     return {status: skippedForeign ? "NO_EARNINGS_FOR_THIS_CORPORATION" : "NO_PILOT_EARNINGS",
       moved: 0, skippedForeign};
-  const total = Math.round(earnings.reduce((sum, entry) => sum + cents(entry.isk), 0)) / 100;
+  // Only the part above the pilot's float moves: a crew with no ISK cannot buy the blueprint or
+  // the mineral the factory is short of, and the native trader pays from the pilot's balance.
+  const keep = Math.max(0, Number(env[KEEP_FLAG] || 0) || 0);
+  const sweepable = keep > 0
+    ? earnings.map((entry) => ({...entry, isk: Math.round(Math.max(0, entry.isk - keep) * 100) / 100}))
+      .filter((entry) => entry.isk > 0)
+    : earnings;
+  if (!sweepable.length)
+    return {status: "PILOT_FLOAT_HELD", moved: 0, keepISK: keep,
+      heldISK: Math.round(earnings.reduce((sum, entry) => sum + cents(entry.isk), 0)) / 100};
+  const total = Math.round(sweepable.reduce((sum, entry) => sum + cents(entry.isk), 0)) / 100;
   if (!(total > 0)) return {status: "NO_PILOT_EARNINGS", moved: 0};
 
   const gameStore = options.gameStore || require("../gameStore");
@@ -118,9 +134,12 @@ function run(options = {}) {
   // Debit the pilots first: if the credit then fails we put every cent back, so ISK can
   // never be lost or created by a half-applied sweep.
   const debited = ledger.pilots;
-  for (const entry of earnings) {
+  const originals = new Map();
+  for (const entry of sweepable) {
     const record = debited[entry.pilotID] || {};
-    debited[entry.pilotID] = {...record, balance: 0,
+    originals.set(entry.pilotID, record);
+    const held = Math.max(0, Number(record.balance) - Number(entry.isk));
+    debited[entry.pilotID] = {...record, balance: Math.round(held * 100) / 100,
       lastCorpSweepAt: Number(options.now) || Date.now()};
   }
   try { atomicWrite(ledgerFile, ledger, fsApi); }
@@ -129,10 +148,9 @@ function run(options = {}) {
   const written = loadWallet().applyDelta({corporationState: options.corporationState,
     gameStore, corporationID, division: DIVISION, delta: total});
   if (!written || written.status !== "OK") {
-    for (const entry of earnings) {
-      const record = debited[entry.pilotID] || {};
-      debited[entry.pilotID] = {...record, balance: entry.isk};
-    }
+    // Put the exact pre-sweep record back on every swept pilot: with a float in play, "the swept
+    // amount" is no longer the pilot's whole balance.
+    for (const [pilotID, record] of originals) debited[pilotID] = record;
     try { atomicWrite(ledgerFile, ledger, fsApi); } catch (_error) { /* reported below */ }
     return {status: String((written && written.status) || "CORP_CREDIT_FAILED"), moved: 0,
       reason: String((written && (written.reason || written.status)) || "UNKNOWN").slice(0, 80)};

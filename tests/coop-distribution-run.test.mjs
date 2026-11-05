@@ -815,3 +815,57 @@ test("a copy that could not be loaded is reported, not counted as delivered", as
   assert.match(refused.reason, /^BLUEPRINT_CARRY_FAILED:NOTHING_TO_LIFT/);
   assert.equal(refused.state.importBought, 0, "nothing is waiting to be unloaded");
 });
+
+test("a hull at the buyer's station buys one blueprint and carries it home", async () => {
+  // Measured 2026-11-05: with 443 M ISK of minerals to ship the freight planner never idles, so
+  // the only "nothing worth shipping" shopping moment never arrives - the factory kept exactly
+  // one loss-making blueprint while Jita 4-4 sold five profitable copies. A hull that has just
+  // emptied its hold at the buyer's station is the ship that can carry one home.
+  const hull = 980000004193;
+  run.write({ version: 1, haulerID: hull, phase: "SELL", trip: TRIP, updatedAt: 20000,
+    sellCalls: 0, isk: 0, quantity: 1, trips: 0,
+    fromStationID: 60000682, fromSystemID: 30000145,
+    toStationID: 60003760, toSystemID: 30000142 });
+  const asked = [];
+  const sold = await run.tick(hull, { recycle: true, distanceTo: () => 100, now: 20001,
+    buyBlueprint: async (args) => { asked.push(args);
+      return { chosen: { typeID: 1130, price: 20000 }, bought: { status: "TRADE_SETTLED" } }; },
+    sell: async () => ({ status: "SOLD", isk: 560000 }) });
+  assert.equal(sold.status, "RETURN");
+  assert.equal(sold.state.returnToSystemID, 30000145, "the copy goes home");
+  assert.deepEqual(sold.state.importTypes, [1130]);
+  assert.equal(asked.length, 1, "one purchase attempt per trip");
+  assert.equal(asked[0].stationID, 60003760, "bought where the hull really stands");
+  // A refused purchase is not an error: the hull still goes home with nothing extra.
+  const second = 980000004194;
+  run.write({ version: 1, haulerID: second, phase: "SELL", trip: TRIP, updatedAt: 21000,
+    sellCalls: 0, isk: 0, quantity: 1, trips: 0,
+    fromStationID: 60000682, fromSystemID: 30000145,
+    toStationID: 60003760, toSystemID: 30000142 });
+  const refused = await run.tick(second, { recycle: true, distanceTo: () => 100, now: 21001,
+    buyBlueprint: async () => ({ status: "NO_BUYER_FOR_ITS_PRODUCT" }),
+    sell: async () => ({ status: "SOLD", isk: 100 }) });
+  assert.equal(refused.status, "RETURN");
+  assert.equal(refused.state.importTypes, undefined);
+});
+
+test("an already-empty hold at the buyer's station still buys capital", async () => {
+  // The empty hold takes a different branch (SOLD_VERIFIED_BY_HOLD) than a settled sale, and the
+  // measured case on 2026-11-05 went through it: the hull had already emptied, so nothing asked
+  // the buyer's station for a blueprint at all.
+  const hull = 980000004195;
+  run.write({ version: 1, haulerID: hull, phase: "SELL", trip: TRIP, updatedAt: 22000,
+    sellCalls: 0, isk: 0, quantity: 1000, iskKnown: 1, trips: 0,
+    fromStationID: 60000682, fromSystemID: 30000145,
+    toStationID: 60003760, toSystemID: 30000142 });
+  let asked = 0;
+  const result = await run.tick(hull, { recycle: true, distanceTo: () => 100, now: 22001,
+    cargoUnits: () => 0,
+    buyBlueprint: async () => { asked += 1;
+      return { chosen: { typeID: 1817, price: 160000 }, bought: { status: "TRADE_SETTLED" } }; },
+    sell: async () => { throw new Error("an empty hold is asked for no sale"); } });
+  assert.equal(asked, 1);
+  assert.equal(result.status, "RETURN");
+  assert.equal(result.reason, "CAPITAL_CARRIED");
+  assert.deepEqual(result.state.importTypes, [1817]);
+});

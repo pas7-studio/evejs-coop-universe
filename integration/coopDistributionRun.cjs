@@ -218,8 +218,33 @@ function appendFreight(state, settlement, env = process.env) {
     return true;
   } catch (_error) { return false; }
 }
-function list(env = process.env) {
+// CAPITAL. A hull standing at the buyer's station with an empty hold is the one ship that can buy
+// a blueprint where blueprints are really sold and carry it home where the materials are. Without
+// this the only shopping moment is "nothing worth shipping", which in a world with 443 M ISK of
+// minerals never arrives (measured 2026-11-05: five profitable copies on sale at Jita 4-4 - Iron
+// Charge S 20 000 ISK, product bid 4.94 x 499 020 - and the factory owned exactly one loss-making
+// blueprint). One attempt per trip; a settled TRADE_SETTLED is the only success, and a refusal
+// never blocks the trip.
+async function purchaseCapital({authorities, state, stationID, systemID, observe = null}) {
+  if (!state || state.capitalTried === true) return {tried: false, landed: null};
+  if (typeof authorities.buyBlueprint !== "function") return {tried: false, landed: null};
+  let capital = null;
   try {
+    capital = await authorities.buyBlueprint({haulerID: pos(state.haulerID),
+      stationID: pos(stationID), systemID: pos(systemID)});
+  } catch (_error) { capital = null; }
+  const landed = capital && capital.bought &&
+    String(capital.bought.status) === "TRADE_SETTLED" ? capital : null;
+  if (observe) {
+    const reason = landed ? "BOUGHT:" + pos(capital.chosen && capital.chosen.typeID)
+      : String((capital && (capital.status ||
+        (capital.bought && capital.bought.status))) || "NO_ANSWER").slice(0, 100);
+    note(observe, "living-distribution-blueprint", state, {reason});
+  }
+  return {tried: true, landed,
+    typeID: pos(landed && capital.chosen && capital.chosen.typeID)};
+}
+function list(env = process.env) {  try {
     return fs.readdirSync(root(env)).filter((n) => /\.json$/.test(n))
       .map((n) => { try { return JSON.parse(fs.readFileSync(path.join(root(env), n), "utf8")); }
         catch (_error) { return null; } }).filter(Boolean);
@@ -971,6 +996,17 @@ async function tick(haulerID, authorities = {}, env = process.env) {
       // rows from here that no settlement could ever back, and the cross-check called it out.
       // The run records the delivery in its own journal instead.
       // ...and the same hull is the one that can carry the factory's inputs home.
+      // Capital first: a copy bought here goes home with the crew and is stowed at the next
+      // loading stop (the SUPPLY handler shelves category 9 before it lifts anything).
+      const capital = await purchaseCapital({authorities, state, observe,
+        stationID: state.toStationID, systemID: state.toSystemID});
+      if (capital.landed) {
+        return finish(PHASE.RETURN, "CAPITAL_CARRIED", { sellCalls: 0, trips: num(state.trips),
+          capitalTried: true, importTypes: [capital.typeID].filter(Boolean),
+          returnToSystemID: pos(state.fromSystemID),
+          returnStationID: pos(state.fromStationID) });
+      }
+      if (capital.tried) state = write({ ...state, capitalTried: true, updatedAt: now }, env);
       if (typeof authorities.buyInputs === "function" &&
         num(state.supplyTries) < MAX_SUPPLY_TRIES) {
         const importing = write({ ...state, phase: PHASE.SUPPLY, supplyTries: 0, updatedAt: now,
@@ -1067,6 +1103,19 @@ async function tick(haulerID, authorities = {}, env = process.env) {
       const settlement = { quantity: num(settled.quantity), isk: num(settled.isk), at: now,
         status: "SOLD" };
       appendFreight(state, settlement, env);
+      // CAPITAL. A hull that has just emptied its hold at the buyer's station is standing where
+      // blueprints are really sold, and the next loading stop stows category 9 into the factory
+      // hangar. One attempt per trip; a settled TRADE_SETTLED is the only success.
+      const capital = await purchaseCapital({authorities, state, observe,
+        stationID: state.toStationID, systemID: state.toSystemID});
+      if (capital.landed) {
+        return finish(PHASE.RETURN, "CAPITAL_CARRIED", { sellCalls: 0, isk: paid, trips,
+          settlement, pendingSince: 0, crossAt: 0, capitalTried: true,
+          importTypes: [capital.typeID].filter(Boolean),
+          returnToSystemID: pos(state.fromSystemID),
+          returnStationID: pos(state.fromStationID) });
+      }
+      if (capital.tried) state = write({ ...state, capitalTried: true, updatedAt: now }, env);
       // A hull that sits in the buyer system with an empty hold is dead freight: it goes home
       // and takes another load, bounded by a trip count so a cycle cannot run for ever.
       // The corporation imports what this system cannot make: measured 2026-10-31 the refinery
