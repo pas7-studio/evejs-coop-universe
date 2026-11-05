@@ -1,0 +1,107 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {createNpcRuntimeExecutor}=require('../native/coopPersonalFleetNpcRuntimeExecutor.cjs');
+const F=require('./fixture.cjs');
+function setup(action='FOLLOW',override={}){
+ const c=F.command({action,operationID:'pf55-native-1',...override});
+ const row={...c,session:undefined};
+ if(action==='HOLD')row.followRangeMeters=null;
+ if(action==='ATTACK'||action==='WARP')row.followRangeMeters=null;
+ const scene={systemID:F.SYSTEM,getEntityByID(id){return id===F.SHIP?entity:
+  id===F.TARGET?target:null;}};
+ const entity={kind:'ship',nativeNpc:true,itemID:F.SHIP,mode:'STOP',session:null};
+ const controller={entityID:F.SHIP,systemID:F.SYSTEM,manualOrder:null};
+ const target={itemID:F.TARGET,kind:'ship',ownerID:F.OWNER};
+ const nativeCalls=[];const bridgeCalls=[];
+ const npcRuntime={issueOrder(...a){nativeCalls.push(['issueOrder',...a]);return {success:true}},
+  issueAttackOrder(...a){nativeCalls.push(['attack',...a]);return {success:true}},
+  stop(...a){nativeCalls.push(['stop',...a]);return {success:true}},
+  warpToEntity(...a){nativeCalls.push(['warp',...a]);return {success:true}}};
+ const bridge={issue(opts){bridgeCalls.push(opts);return opts.execute()}};
+ let trusted=true,allowed=true,enabled=true;
+ const executor=createNpcRuntimeExecutor({npcRuntime,orderBridge:bridge,
+  sceneForSystem:()=>scene,getController:()=>controller,
+  verifyPersonalClaim:()=>trusted,authorizeTarget:()=>allowed,enabled:()=>enabled});
+ return {row,scene,entity,controller,target,nativeCalls,bridgeCalls,npcRuntime,bridge,
+  executor,setTrusted:v=>trusted=v,setAllowed:v=>allowed=v,setEnabled:v=>enabled=v};
+}
+test('FOLLOW uses original issueOrder with movement-only manual order and PF bridge ownership',()=>{
+ const f=setup(),result=f.executor.execute(f.row);
+ assert.equal(result.success,true);assert.equal(f.bridgeCalls.length,1);
+ assert.equal(f.bridgeCalls[0].owner,'PERSONAL_FLEET');
+ assert.equal(f.bridgeCalls[0].action,'pf-follow');
+ assert.deepEqual(f.nativeCalls[0],["issueOrder",F.SHIP,{type:'follow',targetID:F.TARGET,
+  movementMode:'follow',followRangeMeters:1500,allowWeapons:false,keepLock:false,allowPodKill:false}]);
+});
+test('ATTACK uses original issueAttackOrder, never allows pod-kill',()=>{
+ const f=setup('ATTACK');assert.equal(f.executor.execute(f.row).success,true);
+ assert.deepEqual(f.nativeCalls[0],['attack',F.SHIP,F.TARGET,
+  {allowWeapons:true,keepLock:true,allowPodKill:false}]);
+});
+test('HOLD uses original stop with no sessionless warp-abort',()=>{
+ const f=setup('HOLD');assert.equal(f.executor.execute(f.row).success,true);
+ assert.deepEqual(f.nativeCalls[0],['stop',F.SHIP,{reason:'pf55-personal-fleet',
+  allowSessionlessWarpAbort:false,issueStopOrder:true}]);
+});
+test('WARP uses native warpToEntity with warp notification',()=>{
+ const f=setup('WARP');assert.equal(f.executor.execute(f.row).success,true);
+ assert.deepEqual(f.nativeCalls[0],['warp',F.SHIP,F.TARGET,
+  {forceImmediateStart:true,broadcastWarpStartToVisibleSessions:true}]);
+});
+test('DEFEND fails closed unless native defensive combat policy is integrated',()=>{
+ const f=setup('DEFEND');const result=f.executor.execute(f.row);
+ assert.equal(result.success,false);assert.equal(result.errorMsg,'PF55_DEFEND_COMBAT_POLICY_NOT_WIRED');
+ assert.equal(f.nativeCalls.length,0);
+});
+test('DEFEND calls explicit verified native combat policy when provided',()=>{
+ const f=setup('DEFEND');let invoked=0;
+ const ex=createNpcRuntimeExecutor({npcRuntime:f.npcRuntime,orderBridge:f.bridge,
+  sceneForSystem:()=>f.scene,getController:()=>f.controller,
+  verifyPersonalClaim:()=>true,authorizeTarget:()=>true,enabled:()=>true,
+  defensiveEscort(row,{target,npcRuntime}){invoked++;assert.equal(target.itemID,F.TARGET);
+   return npcRuntime.issueOrder(row.shipItemID,{type:'follow',targetID:row.targetEntityID,
+    allowWeapons:false,keepLock:false});}});
+ assert.equal(ex.execute(f.row).success,true);assert.equal(invoked,1);
+});
+test('untrusted PF claim blocks before arbiter',()=>{
+ const f=setup();f.setTrusted(false);const r=f.executor.execute(f.row);
+ assert.equal(r.errorMsg,'PF55_NATIVE_ACTOR_OR_TARGET_UNVERIFIED');
+ assert.equal(f.bridgeCalls.length,0);
+});
+test('unknown target blocks',()=>{
+ const f=setup('ATTACK');f.setAllowed(false);
+ assert.equal(f.executor.execute(f.row).success,false);assert.equal(f.bridgeCalls.length,0);
+});
+test('real original entityID mismatch blocks',()=>{
+ const f=setup();f.entity.itemID++;
+ assert.equal(f.executor.execute(f.row).success,false);
+});
+test('controller mismatch blocks',()=>{
+ const f=setup();f.controller.entityID++;
+ assert.equal(f.executor.execute(f.row).success,false);
+});
+test('logged-in player ship cannot be used as sessionless NPC',()=>{
+ const f=setup();f.entity.session={characterID:F.OWNER};
+ assert.equal(f.executor.execute(f.row).success,false);
+});
+test('in-flight warp cannot be overridden',()=>{
+ for(const v of ['WARP','STOP']){
+ const f=setup();if(v==='WARP')f.entity.mode='WARP';else f.entity.pendingWarp={};
+ assert.equal(f.executor.execute(f.row).success,false);
+ }
+});
+test('disabling before execution blocks native and bridge',()=>{
+ const f=setup();f.setEnabled(false);assert.equal(f.executor.execute(f.row).success,false);
+ assert.equal(f.bridgeCalls.length,0);
+});
+test('bridge failure is not magically elevated to success',()=>{
+ const f=setup();f.bridge.issue=()=>({success:false,errorMsg:'ORIGINAL_ARBITER_REFUSED'});
+ const r=f.executor.execute(f.row);
+ assert.equal(r.success,false);assert.equal(r.errorMsg,'ORIGINAL_ARBITER_REFUSED');
+ assert.equal(f.nativeCalls.length,0);
+});
+test('native identity is revalidated inside arbiter execute callback',()=>{
+ const f=setup();f.bridge.issue=opts=>{f.entity.itemID=9999;return opts.execute()};
+ const r=f.executor.execute(f.row);assert.equal(r.success,false);
+ assert.equal(r.errorMsg,'PF55_NATIVE_SOURCE_CHANGED');assert.equal(f.nativeCalls.length,0);
+});
