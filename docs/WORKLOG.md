@@ -3606,3 +3606,8 @@ Evidence: fork c96dc66 (1 conflict, +6 modules, 3 distribution fixes), repo b881
 Why: adapt the refinery and reconcile fixtures to the budget and sale-attempt contracts after the M003 merge
 Where: .opencode/state.md
 Evidence: fork 4a47a95 (liquidating trip), repo 76c4a871 (overlay single list, 533 mirror parity), FLAGS_OK 529/529, SHIMS_OK, AUDIT_OK
+### 2026-11-05T11:56Z · 5462059 · TEST · docs(m003): final sweep numbers and the exact shape of the one known-red case
+
+Why: make every fork-dependent suite default to the engine checkout instead of failing on an unset variable
+Where: docs/M003_INDUSTRIAL_ECONOMY_MERGE.md
+Evidence: 33+11 test files patched; sweep 3451 checks / 3394 pass / 1 known-red pre-existing; AUDIT_OK
