@@ -10,7 +10,7 @@ diff --git a/Code/server/src/space/coopNativeHaulTransferAtomic.js b/Code/server
 +  // PF-50: create a stable durable write reservation BEFORE a partial cargoID
 +  // allocation. No stock behavior changes with the flag OFF.
 +  const pfFence=process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_HAUL_WRITE_FENCE==="1";
-+  const pfOpKey="pf-haul:"+sha([systemID,fleetID,minerID,haulerID,id,movedQuantity,partial]);
++  const pfOpKey="pf-haul:"+sha([systemID,fleetID,minerID,haulerID,id,sha(before),movedQuantity,partial]);
 +  if(pfFence){
 +   if(typeof readMiningLease!=="function"||typeof beginHaulWrite!=="function"||
 +      typeof finishHaulWrite!=="function")
@@ -74,7 +74,7 @@ diff --git a/Code/server/src/space/coopPersonalFleetHaulTxnGuard.js b/Code/serve
 new file mode 100644
 --- /dev/null
 +++ b/Code/server/src/space/coopPersonalFleetHaulTxnGuard.js
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,97 @@
 +"use strict";
 +// PF-50. Read-only native GameStore ownership check. Never creates an actor,
 +// issues an order or transfers a cargo item. Must run IN the same original
@@ -145,6 +145,17 @@ new file mode 100644
 + const row=rowGet(tx,SHUTDOWN+systemID);
 + need(ROW(row)&&row.version===1&&row.systemID===systemID&&
 +    ROW(row.gate)&&ROW(row.permits)&&Object.keys(row.permits).length<=8192,"SHUTDOWN_UNPROVEN");
++ // A crash after the original cargo commit but before ACK leaves a PENDING
++ // permit. Do not start another haul in that system until the original source
++ // receipt is reconciled; a changed cargo preimage would create a new opKey.
++ for(const [key,other] of Object.entries(row.permits)){
++   need(typeof key==="string"&&key.length>=8&&key.length<=160&&ROW(other)&&
++     other.operationID===key&&other.systemID===systemID&&
++     tokenOK(other.leaseToken)&&["PENDING","ACKED"].includes(other.state)&&
++     typeof other.writer==="string","PERMIT_LEDGER_CORRUPT");
++   if(key!==opKey&&other.writer==="haul_transfer"&&other.state==="PENDING")
++     bail("PRIOR_HAUL_OUTCOME_UNRESOLVED");
++ }
 + const gate=row.gate;
 + need(gate.systemID===systemID&&gate.state==="ACTIVE"&&gate.stopPhase==="NONE"&&
 +    tokenOK(gate.leaseToken)&&Array.isArray(gate.writerNames)&&
