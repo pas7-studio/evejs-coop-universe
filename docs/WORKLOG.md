@@ -3559,3 +3559,9 @@ Why: anomaly/site NPCs did not react to a 150 km sniper: site defence flag was o
 Detail: Seven new cases on the deployed director: a defender that cannot lock a 150 km sniper is sent to him with a real warp and gets no attack order that could never reach; a hull whose own lock range covers the sniper keeps the native attack order and flies nowhere; the attack order waits for the SAME hull to be out of warp and inside reach, and arrival never triggers a second warp; without a warp capa
 Where: docs/PVE_SITE_DEFENSE.md, integration/coopNpcTactics.cjs, integration/coopPveNativeSiteDefense.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-pve-native-site-defense.test.mjs
 Evidence: fork 5ff9f9a; 19 site-defence tests + 40 tactics tests green; AUDIT_OK 65488 chars; new events NATIVE_SITE_DEFENSE_WARP_ISSUED/ORDER_ACCEPTED; image evejs-local rebuilt; live client proof pending restart window
+### 2026-11-05T09:45Z · 392e276 · L1 · test(trader): pin the market-maker bands (buy <=90 %, bid 70 %, sell 105-140 %)
+
+Why: market-maker bands for the NPC trader: buy <=90% of reference, bid 70% on dead types, resell 105-140%
+Detail: Ten cases on the deployed fork module: the owner's four numbers; only asks at or below 90 % of the reference are lifted (a 95 % ask and a 120 % ask are not bargains); a lot is refused when the resale floor cannot clear the demanded gross spread; the cash reserve is held and the per-tick budget respected, cheapest first; a lot never eats a whole stack and one type is bought once per tick; only atte
+Where: scripts/overlay-spec.cjs, tests/coop-npc-market-maker-bands.test.mjs
+Evidence: fork fcc57c8; 10 tests; AUDIT_OK (65488 chars, 551 coop modules); live measurement: richest wallet in the world is 0.3 B ISK, every NPC corp ~5 M, zero NPC purchases ever, zero player sell orders on the The Forge book
