@@ -21,7 +21,7 @@ let warFleetRegistry=null,bridge=null,identityRegistry=null,
  economy=null,nativeGateTransfer=null,recognitionAnnouncer=null,nativeAmmoWitness=null;
 // Declared here because the extraction left them behind: every phase that
 // touched one threw ReferenceError, which froze that part of the world.
-let traderMaker=null,traderMakerBlockedUntilMs=0,lossBridge=null,factionDirector=null,raidDirector=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,warpPointDirector=null,nativeGunRange=null,warGateHandoff=null,warRecoverySocket=null,nativeOrderBridge=null,lootCommerce=null,nativeAmmoSupply=null,warTreasuryInstance=null,
+let traderMaker=null,endowmentChecked=false,traderMakerBlockedUntilMs=0,lossBridge=null,factionDirector=null,raidDirector=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,warpPointDirector=null,nativeGunRange=null,warGateHandoff=null,warRecoverySocket=null,nativeOrderBridge=null,lootCommerce=null,nativeAmmoSupply=null,warTreasuryInstance=null,
  siteSentrySpawner=null,siteSentryFireDirector=null,siteLootStructureFiller=null;
 function bindWarRuntime(state){
  if(!state||typeof state!=="object")return false;
@@ -1140,12 +1140,47 @@ function advanceTraderMaker(){
  if(process.env.EVEJS_COOP_TRADER_MAKER!=="1")return;
  if(traderMakerBlockedUntilMs&&traderMakerBlockedUntilMs>Date.now())return;
  const stationID=Number(process.env.EVEJS_COOP_TRADER_STATION_ID||60003760);
- const types=nativeMarketAllowlist("EVEJS_COOP_TRADER_TYPES");
- if(!stationID||!types.length)return;
+ if(!stationID)return;
  try{
   const worldData=require("./worldData"),gameStore=require("../gameStore"),
    items=require("../services/inventory/itemStore"),
    marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
+  // Owner decision 2026-11-05: an explicit, one-shot endowment so the corporation can really buy
+  // his goods ("this is my way to play, have fun and earn"). Applied once, with a durable receipt.
+  if(!endowmentChecked){
+   endowmentChecked=true;
+   try{
+    const outcome=require("./coopTraderEndowment").createEndowment({
+     file:process.env.EVEJS_COOP_TRADER_ENDOWMENT_RECEIPT||"/var/lib/evejs/coop-trader-endowment.json",
+     amountISK:Number(process.env.EVEJS_COOP_TRADER_ENDOWMENT_ISK||0),
+     corporationID:Number(process.env.EVEJS_COOP_TRADER_CORP_ID||0),
+     gameStore,now:()=>Date.now()}).apply();
+    if(outcome.status==="ENDOWED")
+     console.log("[CoopLivingWorld] trader endowment: "+outcome.amountISK+" ISK -> corp "+
+      outcome.corporationID+" ("+outcome.beforeISK+" -> "+outcome.afterISK+")");
+    else if(!["DISABLED","ALREADY_ENDOWED"].includes(outcome.status))
+     console.warn("[CoopLivingWorld] trader endowment refused: "+outcome.status+" "+(outcome.reason||""));
+   }catch(error){
+    console.warn("[CoopLivingWorld] trader endowment failed: "+String(error&&error.message||error));
+   }
+  }
+  // Buy whatever the PLAYER really offers at the hub: his open sell escrows name the types, so the
+  // trader needs no fixed list of "interesting" goods (max 24 types = 24 book reads a tick).
+  const offeredTypes=[];
+  try{
+   const escrows=gameStore.read("marketEscrow","/");
+   const rows=escrows&&escrows.success===true&&escrows.data&&typeof escrows.data==="object"?escrows.data:{};
+   for(const row of Object.values(rows)){
+    const typeID=Number(row&&row.typeId);
+    if(!Number.isSafeInteger(typeID)||typeID<=0)continue;
+    if(String(row.escrowType||"")!=="sell"||row.isCorp===true)continue;
+    if(Number(row.stationId)!==stationID)continue;
+    if(!Number.isSafeInteger(Number(row.remainingQuantity))||Number(row.remainingQuantity)<=0)continue;
+    offeredTypes.push(typeID);
+   }
+  }catch(_error){/* the configured list still works without the escrow table */}
+  const types=[...new Set([...offeredTypes,...nativeMarketAllowlist("EVEJS_COOP_TRADER_TYPES")])].slice(0,24);
+  if(!types.length)return;
   if(!traderMaker){
    const buyBindings=require("./coopNpcBuyerNativeBindings").createNativeNpcBuyerBindings({
     gameStore,itemStore:items,marketClient,
@@ -1168,7 +1203,12 @@ function advanceTraderMaker(){
     },
     buyAsk:args=>buyBindings.purchaseAsk(args),
     journalFile:process.env.EVEJS_COOP_TRADER_JOURNAL||"/var/lib/evejs/coop-trader-maker.json",
-    clock:()=>Date.now()});
+    clock:()=>Date.now(),
+    // The owner's scale: a tick may buy several lots and spend real money, bounded by env.
+    maxBuysPerTick:Math.max(1,Math.min(4,Number(process.env.EVEJS_COOP_TRADER_MAX_BUYS_PER_TICK||1))),
+    minReserveCents:Math.max(0,Math.round(Number(process.env.EVEJS_COOP_TRADER_RESERVE_ISK||10000)*100)),
+    maxSpendPerTickCents:Math.max(1,Math.round(Number(process.env.EVEJS_COOP_TRADER_TICK_BUDGET_ISK||1000000)*100)),
+    maxLotUnits:Math.max(1,Math.min(1000000,Number(process.env.EVEJS_COOP_TRADER_MAX_LOT_UNITS||50)))});
   }
   traderMaker.tick({stationID,typeIDs:types}).then(result=>{
    if(result.status==="TRADER_MAKER_SETTLED"){
