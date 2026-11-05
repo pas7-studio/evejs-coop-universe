@@ -63,7 +63,30 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   return Math.max(0,distance(ship.position,point.position)-
     Math.max(0,Number(ship.radius)||0)-point.radius)<=MAX_SURFACE_GAP_METERS;
  };
- const arrivals=new Map(),activeNativeEscortWarps=new Map();
+ const arrivals=new Map(),activeNativeEscortWarps=new Map(),saleJournals=new Map();
+ // The refusal window belongs to this arrival instance and reads THIS clock: a world that
+ // runs on a driven clock (the pinned suites) must expire a window on the same time the
+ // ticks use, never on the process's wall clock.
+ // The resolver deploys as .js next to this file, but is stored as .cjs in the orchestration
+ // repo under a sandbox that already appends its own .cjs to a bare request, so try bare first
+ // and only add the extension when a direct Node require (no such sandbox) rejects it.
+ const loadSaleRefusalWindow=()=>{
+  try{return require("./coopNativeSaleRefusalWindow");}
+  catch(_error){return require("./coopNativeSaleRefusalWindow.cjs");}
+ };
+ const saleRefusalWindow=loadSaleRefusalWindow().createSaleRefusalWindow({clock});
+ // A manifested trip journals every sale attempt before the market is asked, so a restart can
+ // tell a fill that settled from a fill that never happened. Lazy and per root: a trip without a
+ // manifest has nothing to prove and never writes one.
+ function saleJournalFor(){
+  if(typeof root!=="string"||!root)return null;
+  if(saleJournals.has(root))return saleJournals.get(root);
+  let ledger=null;
+  try{ledger=require("./coopNativeSaleLedger").createSaleLedger({root,clock})}
+  catch(_error){ledger=null}
+  saleJournals.set(root,ledger);
+  return ledger;
+ }
  // The same native warp the departure used, re-issued to a hull the trip still
  // owns. Never a teleport: the ship really flies, and the arrival gate below still
  // demands a physical arrival plus dwell before anything is deposited.
@@ -98,7 +121,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
 // same receipts directory, naming the exact cargo row and the exact quantity the
 // market paid for in that settled trade.
 function recordSaleReceipt({root,probe,systemID,cargoID,haulerID,typeID,quantity,
- stationID,corporationID,fleetID,marketQuantity,isk,at}={}){
+ stationID,corporationID,fleetID,marketQuantity,isk,at,orderID}={}){
  const id=pos(cargoID);
  if(typeof root!=="string"||!path.isAbsolute(root)||!id||!pos(haulerID)||
     !pos(typeID)||!pos(quantity)||!pos(stationID)||!pos(corporationID)||
@@ -113,21 +136,48 @@ function recordSaleReceipt({root,probe,systemID,cargoID,haulerID,typeID,quantity
  if(prior&&(Number(prior.haulerID)!==pos(haulerID)||Number(prior.typeID)!==pos(typeID)||
     Number(prior.fleetID)!==pos(fleetID)||Number(prior.corporationID)!==pos(corporationID)))
   return {status:"SALE_RECEIPT_IDENTITY_CONFLICT"};
+ // The market's own order is a finite resource shared by every journal that can quote it.
+ // The arrival holds a SETTLED answer, so it claims those units first (the receipt is
+ // still written after the claim); a boot reconciler later quoting the same bid finds it
+ // spent. Measured live 2026-11-03 (m003s4): hauler 026 sold 5000 of bid
+ // 4257762183096583224, while hauler 029's RPC_CALLING journal expected the same 5000
+ // from the same row - the exact double payment of m003s2.
+ const marketOrderID=String(orderID||"");
+ if(marketOrderID){
+  try{
+   require("./coopNativeSaleProofSettlement").claimOrderFill({io:fs,
+    dir:path.join(root,"order-claims"),orderID:marketOrderID,orderFilled:pos(quantity),
+    raiseToClaimed:true,cargoID:id,quantity:pos(quantity),at:Number(at)||0});
+  }catch(_error){/* the receipt below is still the authority; a refused claim is reported by the reconciler */}
+ }
  // Fills are attributed to the station that paid for them: a route can only prove the
  // units that left the hull during ITS visit, so the receipt keeps one entry per fill
  // instead of a single running total.
  const priorFills=Array.isArray(prior&&prior.fills)?prior.fills.filter(x=>
   pos(x&&x.stationID)&&pos(x&&x.quantity)).map(x=>({stationID:pos(x.stationID),
-  quantity:pos(x.quantity),at:Number(x.at)||0})):[];
+  quantity:pos(x.quantity),isk:Number.isFinite(Number(x.isk))?Number(x.isk):0,
+  at:Number(x.at)||0})):[];
+ // The receipt states the settlement it records in its own fields and keeps the row's
+ // history in `fills`. Measured live 2026-11-04 (m003s14): a row sold 5 000 at each of
+ // five stations carried ONE receipt whose quantity (25 000) and isk (45 748 550) were
+ // the sum of all five, while stationID and marketOrderID named only the last - the
+ // artifact claimed 45.7M was paid at one station by one order, and the per-fill isk was
+ // not recorded at all. Cumulative totals now live in totalQuantity/totalISK.
+ const fill={stationID:pos(stationID),quantity:pos(quantity),
+  isk:Number.isFinite(Number(isk))?Number(isk):0,at:Number(at)||0};
+ const fills=[...priorFills,fill];
  const record={version:1,phase:"COMMITTED",source:"NPC_MARKET_FILL",
   sequence:(Number(prior&&prior.sequence)||0)+1,
   cargoID:id,haulerID:pos(haulerID),typeID:pos(typeID),
-  quantity:(Number(prior&&prior.quantity)||0)+pos(quantity),
-  fills:[...priorFills,{stationID:pos(stationID),quantity:pos(quantity),at:Number(at)||0}],
-  systemID:pos(systemID),fleetID:pos(fleetID),stationID:pos(stationID),
+  quantity:fill.quantity,
+  isk:fill.isk,
+  totalQuantity:fills.reduce((sum,x)=>sum+Number(x.quantity||0),0),
+  totalISK:fills.reduce((sum,x)=>sum+Number(x.isk||0),0),
+  fills,
+  systemID:pos(systemID),fleetID:pos(fleetID),stationID:fill.stationID,
   corporationID:pos(corporationID),marketQuantity:Number(marketQuantity),
-  isk:(Number(prior&&prior.isk)||0)+(Number.isFinite(Number(isk))?Number(isk):0),
-  at:Number(at)};
+  ...(marketOrderID?{marketOrderID}:{}),
+  at:fill.at};
  try{
   fs.mkdirSync(dir,{recursive:true});
   const tmp=file+".tmp-"+process.pid;
@@ -147,6 +197,13 @@ const warehouseBlockedAt=new Map();
 // cargoID -> quantity BEFORE the fill was requested, per station:hauler. The sale
 // settles asynchronously, so the tick that reads SOLD already sees an emptied hull.
 const saleBaseline=new Map();
+// station:hauler -> true while the market has not answered a request it already owns.
+// The sale is asynchronous: without this the resume tick cannot tell an in-flight offer
+// from a fresh one, and the sold stacks are already gone from the hull when it answers.
+const marketSalePending=new Map();
+// A batch the market refused is not re-offered on the next native tick: measured live
+// 2026-11-04 (m003s14), 1312 offers for 19 rows at a 5 s cadence because the station could
+// not clear the row. The window is the shared retry policy of a refusal, one per batch.
   const saleSkippedNoted=new Set();
  const strictMotion=()=>escortEnabled&&
   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
@@ -1022,8 +1079,22 @@ const saleBaseline=new Map();
     arrivals.set(id,{fleetID:trip.fleetID,stationID:trip.stationID,arrivedAt:now});
     return pause("ARRIVAL_DWELL_PENDING");}
    if(now-arrival.arrivedAt<ARRIVAL_DWELL_MS)return pause("ARRIVAL_DWELL_PENDING");
-   const cargo=(store.listNativeCargoForEntity(id)||[]).filter(row=>
-    pos(row.cargoID)&&Number(row.coopHaulFleetID)===trip.fleetID&&Number(row.moduleID||0)===0);
+   const haulerRows=(store.listNativeCargoForEntity(id)||[]).filter(row=>
+    pos(row.cargoID)&&Number(row.moduleID||0)===0);
+   const cargo=haulerRows.filter(row=>Number(row.coopHaulFleetID)===trip.fleetID);
+   // A station-hangar lift is a real cargo row of the same hull, tagged by
+   // `coopNpcMineralLift` and never declared by the trip. The market sells it in the same
+   // batch and pays for it, so it is offered and reconciled together with the trip's own
+   // rows: without it a paid lift makes the whole batch unreconciled (live defect
+   // 2026-11-04, m003s13 11:34:58Z: 20 000 units paid, no receipt for any of the four
+   // rows; decision of record `Doc/L9A-DECISION-LIFT-SALE.md`).
+   const liftedRows=haulerRows.filter(row=>!pos(row.coopHaulFleetID)&&
+    /^coop-mineral-lift:/.test(String(row.customInfo||"")));
+   const saleCargo=cargo.concat(liftedRows);
+   // The hull is the authority on how many units a sale may declare. Measured live
+   // 2026-11-03: a row declared 7495 while the hull held 2875 after a 4620-unit fill, and
+   // the old number travelled into the next attempt. Nothing here invents units.
+   const hullQuantity=new Map(saleCargo.map(row=>[Number(row.cargoID),Number(row.quantity)||0]));
    if(manifestDirector&&(!trip.manifestID||!Array.isArray(trip.expectedCargoIDs)))
     return pause("MANIFEST_TRIP_CONTEXT_MISSING");
    if(manifestDirector&&cargo.some(item=>!trip.expectedCargoIDs.includes(Number(item.cargoID))))
@@ -1038,17 +1109,97 @@ const saleBaseline=new Map();
    // defined" threw out of the whole native mining tick and no ore was ever
    // deposited, which kept the fleet in "loaded" and the belt empty.
    const baselineKey=Number(trip.stationID)+":"+Number(id);
-   if(typeof beforeDeposit==="function"&&cargo.length){
+   const saleJournal=manifestDirector?saleJournalFor():null;
+   // The market answers asynchronously: the first tick gets PENDING, every later tick with
+   // the same station+hauler gets the settled fill. Two facts deadlocked the clean world on
+   // 2026-11-03: intend() refuses a row that is already REQUESTED (the resume died at
+   // SALE_ATTEMPT_UNRESOLVED before the answer was ever read), and the sold stacks are gone
+   // from the hull by then, so a `cargo.length` guard skipped the resume completely. The
+   // offer is therefore remembered per station:hauler and kept alive until the market answers.
+   let offered=[];
+   const resumed=marketSalePending.has(baselineKey);
+   // The window belongs to the batch (station, hauler, cargoIDs), never to the fleet:
+   // a row that lands while another batch waits is a different batch, offered at once.
+   const refusalKey=Number(trip.stationID)+":"+Number(id)+":"+
+    saleCargo.map(row=>Number(row.cargoID)).sort((a,b)=>a-b).join(",");
+   const refusal=resumed?null:saleRefusalWindow.hold(refusalKey);
+   const refusalWaiting=!!refusal;
+   if(typeof beforeDeposit==="function"&&(saleCargo.length||resumed)&&!refusalWaiting){
     if(!saleBaseline.has(baselineKey))
-     saleBaseline.set(baselineKey,new Map(cargo.map(row=>
-      [Number(row.cargoID),Number(row.quantity)])));
-    try{sale=beforeDeposit({scene,systemID:trip.systemID,stationID:trip.stationID,
+     saleBaseline.set(baselineKey,saleCargo.map(row=>({cargoID:Number(row.cargoID),
+      typeID:Number(row.typeID),quantity:Number(row.quantity),
+      ownerID:Number(row.ownerID)})));
+    offered=saleBaseline.get(baselineKey)||[];
+    // An UNKNOWN row is not a life sentence. When the haulers hold exactly the quantity the
+    // attempt declared and the market call is older than its grace window, the row is a
+    // proven no-sale: a fill removes the stack, so an intact stack cannot have been sold.
+    // It closes as VOID and is never re-offered; the deposit below may store it. Anything
+    // less than the full stack stays a doubt and keeps blocking the trip.
+    const saleRows=offered.length?offered:saleCargo;
+    const doubts=new Set();
+    const voided=new Set();
+    if(saleJournal)for(const row of saleRows){
+     const known=saleJournal.read(Number(row.cargoID));
+     const record=known.status==="SALE_ATTEMPT_READY"?known.record:null;
+     if(!record||record.phase!=="UNKNOWN")continue;
+     const hull=Number(hullQuantity.get(Number(row.cargoID))||0);
+     const closed=saleJournal.resolveNoFill({cargoID:Number(row.cargoID),
+      proof:{status:"NO_FILL_PROVEN_BY_INTACT_HULL",hullQuantity:hull},
+      at:Number(clock())});
+     if(closed.status!=="SALE_NO_FILL_RESOLVED"){doubts.add(Number(row.cargoID));continue;}
+     voided.add(Number(row.cargoID));
+     probe.observe("living-npc-station-sale-voided",null,
+      {spaceState:{systemID:trip.systemID}},{fleetID:trip.fleetID,haulerID:id,
+       cargoID:Number(row.cargoID),quantity:hull,reason:closed.status});
+    }
+    // A row is declared in the units the hull HOLDS now, never in the number an earlier
+    // attempt remembered: a partial fill leaves the residue aboard and the next trip
+    // declares that residue (the ledger keeps the row's total obligation internally).
+    const declaredQuantity=row=>{
+     const live=hullQuantity.get(Number(row.cargoID));
+     if(pos(live))return live;
+     if(!saleJournal)return Number(row.quantity);
+     const known=saleJournal.read(Number(row.cargoID));
+     const record=known.status==="SALE_ATTEMPT_READY"?known.record:null;
+     return record&&Number(record.haulerID)===Number(id)&&
+      Number(record.typeID)===Number(row.typeID)?
+      Number(record.hullQuantity||record.declaredQuantity):Number(row.quantity);
+    };
+    // The intent is written BEFORE the market is asked, and a row whose outcome is already
+    // unknown is never sold again: a duplicate sale is worse than a named doubt. A row still
+    // REQUESTED under this exact identity is already declared, so this tick resumes it
+    // instead of manufacturing a second intent the journal would refuse.
+    const inFlight=new Set();
+    if(saleJournal)for(const row of cargo){
+     const known=saleJournal.read(Number(row.cargoID));
+     const record=known.status==="SALE_ATTEMPT_READY"?known.record:null;
+     if(record&&record.phase==="REQUESTED"&&Number(record.haulerID)===Number(id)&&
+      Number(record.typeID)===Number(row.typeID)&&
+      Number(record.declaredQuantity)===Number(row.quantity))
+      inFlight.add(Number(row.cargoID));
+    }
+    if(saleJournal&&!resumed&&!inFlight.size)for(const row of saleRows){
+     if(doubts.has(Number(row.cargoID))||voided.has(Number(row.cargoID)))continue;
+     const intent=saleJournal.intend({cargoID:Number(row.cargoID),haulerID:Number(id),
+      typeID:Number(row.typeID),quantity:declaredQuantity(row),
+      hullQuantity:Number(hullQuantity.get(Number(row.cargoID)))||0,
+      stationID:trip.stationID,
+      corporationID:pos(row.ownerID)||trip.corporationID,fleetID:trip.fleetID,
+      systemID:trip.systemID,at:Number(clock())});
+     if(intent.status!=="SALE_INTENT_RECORDED")
+      return pause(intent.status||"SALE_INTENT_UNWRITTEN");
+    }
+    const offer=saleRows.filter(row=>!doubts.has(Number(row.cargoID))&&
+     !voided.has(Number(row.cargoID)));
+    if(offer.length)try{sale=beforeDeposit({scene,systemID:trip.systemID,stationID:trip.stationID,
      fleetID:trip.fleetID,haulerID:id,corporationID:trip.corporationID,
-     cargoIDs:cargo.map(row=>Number(row.cargoID)),
-     types:[...new Set(cargo.map(row=>Number(row.typeID)))]});}
+     cargoIDs:offer.map(row=>Number(row.cargoID)),
+     types:[...new Set(offer.map(row=>Number(row.typeID)))]});}
     catch(error){sale={status:"SALE_ERROR",
      reason:String(error?.message||error).slice(0,90)};}
-    if(sale?.status==="PENDING")return pause("MARKET_SALE_PENDING");
+    if(sale?.status==="PENDING"){marketSalePending.set(baselineKey,true);
+     return pause("MARKET_SALE_PENDING");}
+    marketSalePending.delete(baselineKey);
     if(sale?.status==="SOLD")
      probe.observe("living-npc-station-sold",null,{spaceState:{systemID:trip.systemID}},
       {fleetID:trip.fleetID,haulerID:id,stationID:trip.stationID,
@@ -1066,12 +1217,52 @@ const saleBaseline=new Map();
        cargoIDs:cargo.map(row=>Number(row.cargoID)).slice(0,32),
        depositOnly:true});
     }
+    // Anything the market did not answer DEFINITIVELY may have moved money: a timeout, a
+    // thrown RPC, an unreadable journal (RPC_OUTCOME_UNKNOWN / RPC_ACK_NOT_VERIFIABLE) and
+    // a repair request are all doubts. Measured live 2026-11-03: status RPC_OUTCOME_UNKNOWN
+    // was journalled REFUSED and the ore was deposited while its RPC was still in calling.
+    // A resume whose units ALREADY left the hull cannot be a refusal: the fill may have
+    // completed while its answer was lost. That is a named doubt, never a second sale.
+    const saleReason=sale&&sale.status!=="SOLD"?
+     String(sale.reason||sale.status||"NO_SALE"):"";
+    const saleAmbiguous=!!sale&&sale.status!=="SOLD"&&
+     (/SALE_(TIMEOUT|ERROR)|RPC_|OUTCOME_UNKNOWN|UNVERIFIABLE|NEEDS_MARKET_REPAIR/
+      .test(saleReason)||String(sale.status)==="SALE_ERROR");
+    const saleMovedWhilePending=!!sale&&sale.status!=="SOLD"&&resumed&&offer.some(row=>{
+     const live=(store.listNativeCargoForEntity(id)||[])
+      .find(item=>Number(item.cargoID)===Number(row.cargoID));
+     return Number(live?.quantity||0)<Number(row.quantity);
+    });
+    if(saleJournal&&sale&&sale.status!=="SOLD")
+     for(const row of offer){
+      const at=Number(clock());
+      if(saleAmbiguous||saleMovedWhilePending)
+       saleJournal.unknown({cargoID:Number(row.cargoID),
+        reason:saleMovedWhilePending?"SALE_MOVED_WITHOUT_ANSWER":saleReason,at});
+      else saleJournal.refuse({cargoID:Number(row.cargoID),reason:saleReason,at});
+     }
+    // A definite refusal is a fact, not an invitation to ask again on the next native tick:
+    // measured live 2026-11-04 (m003s14), 1312 offers for 19 rows at a 5 s cadence because
+    // the station could not clear the row. The window belongs to the batch, doubles on
+    // every repeat, and is capped, so a stuck row costs one offer per window, not per tick.
+    if(sale&&sale.status!=="SOLD"&&!saleAmbiguous&&!saleMovedWhilePending){
+     const opened=saleRefusalWindow.refuse(refusalKey,saleReason);
+     const wait=Number(opened.retryInMs)||60000;
+     try{probe.observe("living-npc-station-sale-backoff",null,
+      {spaceState:{systemID:trip.systemID}},
+      {fleetID:trip.fleetID,haulerID:id,stationID:trip.stationID,reason:saleReason,
+       retryInMs:wait,cargoIDs:offer.map(row=>Number(row.cargoID)).slice(0,32)});}
+     catch(_error){/* telemetry must never break the route */}
+    }
    }
-   // Re-read: a settled sale really removed the sold stacks from the hull.
-   const deliverable=sale?.status==="SOLD"?
+   // Re-read: a settled sale really removed the sold stacks from the hull. Deposit work
+   // stays limited to the trip's own rows (a lifted stack belongs to the hangar it came
+   // from, not to this trip), but the sale reconciliation reads EVERY row of the hull:
+   // a lift that the market moved is owed a receipt exactly like the declared ore.
+   const afterRows=sale?.status==="SOLD"?
     (store.listNativeCargoForEntity(id)||[]).filter(row=>
-     pos(row.cargoID)&&Number(row.coopHaulFleetID)===trip.fleetID&&
-     Number(row.moduleID||0)===0):cargo;
+     pos(row.cargoID)&&Number(row.moduleID||0)===0):haulerRows;
+   const deliverable=afterRows.filter(row=>Number(row.coopHaulFleetID)===trip.fleetID);
    if(sale?.status==="SOLD"){
     // The market paid for exactly the quantity that left the hull. A row counts as
     // sold only when its own decrease equals a settled quantity of its own type: no
@@ -1082,50 +1273,86 @@ const saleBaseline=new Map();
      if(typeID&&quantity)soldByType.set(typeID,(soldByType.get(typeID)||0)+quantity);
     }
     const remaining=new Map();
-    for(const row of deliverable)remaining.set(Number(row.cargoID),Number(row.quantity));
-    // Prefer the snapshot taken when the fill was requested; the hull may already be
-    // empty by the time the asynchronous settlement is readable.
-    const beforeMap=saleBaseline.get(baselineKey)||null;
-    const sourceRows=beforeMap?cargo.filter(row=>beforeMap.has(Number(row.cargoID)))
-     .map(row=>({...row,quantity:beforeMap.get(Number(row.cargoID))})):cargo;
+    for(const row of afterRows)remaining.set(Number(row.cargoID),Number(row.quantity));
+    // The offer taken when the fill was requested, not the hull: an asynchronous
+    // settlement removes the sold stacks before the answer is read, so a source row read
+    // from the hull is already empty and could never match the settled quantity.
+    const sourceRows=offered.length?offered:saleCargo;
     const moved=sourceRows.map(row=>({row,left:Number(row.quantity)-
      (remaining.has(Number(row.cargoID))?remaining.get(Number(row.cargoID)):0)}))
      .filter(entry=>entry.left>0);
-    // A sale receipt is the proof that a row is GONE. A partly sold row is still on
-    // the hull, so it must never get a receipt: the next trip will declare it.
-    const fullySold=moved.filter(entry=>entry.left===Number(entry.row.quantity));
     const movedByType=new Map();
     for(const entry of moved)movedByType.set(Number(entry.row.typeID),
      (movedByType.get(Number(entry.row.typeID))||0)+entry.left);
+    // Every unit the hull lost must be accounted for by the market's own sold quantity of
+    // the SAME type: a mismatch is a named doubt, never an invented receipt.
     let reconciled=soldByType.size>0;
     for(const [typeID,quantity] of soldByType)
      if((movedByType.get(typeID)||0)!==quantity)reconciled=false;
-    if(reconciled&&fullySold.length){
-     const ownerCorporationID=pos(moved[0].row.ownerID);
-     for(const entry of fullySold){
-      if(pos(entry.row.ownerID)!==ownerCorporationID)continue;
+    // A sale receipt is the proof of the units that actually LEFT the hull. A partial fill
+    // is still a fill: the money moved for those units, so a receipt naming exactly them is
+    // written and the residue stays aboard as PARTIAL. Measured live 2026-11-03 (m003s2):
+    // a 5000-unit fill left `sale-attempts/...` PARTIAL and `receipts/...` absent, i.e.
+    // money without the artefact that proves it (decision-of-record, run 5).
+    // One fill may name rows of more than one owner; a receipt can only be written for a
+    // provable owner, so a mixed batch is a named doubt (UNKNOWN), never a guess.
+    const ownerOfRow=row=>pos(row.ownerID)||Number(trip.corporationID);
+    const ownerCorporationID=moved.length?ownerOfRow(moved[0].row):0;
+    if(moved.length&&!moved.every(entry=>ownerOfRow(entry.row)===ownerCorporationID))
+     reconciled=false;
+    if(reconciled&&moved.length){
+     for(const entry of moved){
+      const at=Number(clock());
+      const soldEntry=sale.sold.find(x=>Number(x.typeID)===Number(entry.row.typeID))||{};
+      const isk=Number(soldEntry.isk)||0;
       const receipt=recordSaleReceipt({root,probe,systemID:trip.systemID,
        cargoID:entry.row.cargoID,haulerID:id,typeID:entry.row.typeID,
        quantity:entry.left,stationID:trip.stationID,
        corporationID:ownerCorporationID,fleetID:trip.fleetID,
-       marketQuantity:entry.left,
-       isk:sale.sold.find(x=>Number(x.typeID)===Number(entry.row.typeID))?.isk||0,
-       at:Number(clock())});
-      if(receipt.status!=="SALE_RECEIPT_WRITTEN"&&
-         receipt.status!=="SALE_RECEIPT_ALREADY_PRESENT")continue;
+       marketQuantity:entry.left,isk,at,
+       orderID:String(soldEntry.orderID||soldEntry.marketOrderID||"")});
+      // Without the receipt the journal is not told the row settled: a doubt, never a
+      // receipt-less sale.
+      if(receipt.status!=="SALE_RECEIPT_WRITTEN")continue;
+      if(saleJournal)saleJournal.settle({cargoID:Number(entry.row.cargoID),at,
+       fills:[{stationID:Number(trip.stationID),quantity:entry.left,at,isk}]});
      }
-    }else if(fullySold.length){
+    }else if(moved.length){
      const key=trip.fleetID+":"+trip.stationID+":SALE_NOT_RECONCILED";
      observeGuard().noteOnce(saleSkippedNoted,key,probe,
-      "living-npc-station-sale-unreconciled",{systemID:trip.systemID},
+      "living-npc-station-sale-unreconciled",{spaceState:{systemID:trip.systemID}},
       {fleetID:trip.fleetID,stationID:trip.stationID,
        soldByType:[...soldByType.entries()].slice(0,8),
        movedByType:[...movedByType.entries()].slice(0,8)});
+     if(saleJournal)for(const entry of moved){
+      saleJournal.unknown({cargoID:Number(entry.row.cargoID),
+       reason:"SALE_NOT_RECONCILED",at:Number(clock())});
+     }
     }
    }
+   // The sale block answered: the offer is closed even when the hull is empty, so a later
+   // tick never re-offers rows the market has already paid for.
+   if(sale?.status)saleBaseline.delete(baselineKey);
+   if(sale?.status==="SOLD")saleRefusalWindow.clear(refusalKey);
+   if(sale?.status)marketSalePending.delete(baselineKey);
    for(const item of deliverable){
     // The settled fill is fully recorded: the next visit starts its own snapshot.
     saleBaseline.delete(baselineKey);
+    if(saleJournal){
+     const attempt=saleJournal.read(Number(item.cargoID));
+     const phase=attempt.status==="SALE_ATTEMPT_READY"?String(attempt.record.phase):"";
+     if(phase==="PARTIAL"||phase==="UNKNOWN"){
+      const key=trip.fleetID+":"+Number(item.cargoID)+":SALE_"+phase;
+      const nowBlocked=Date.now();
+      if(nowBlocked-(warehouseBlockedAt.get(key)||0)>=120000){
+       warehouseBlockedAt.set(key,nowBlocked);
+       probe.observe("living-npc-warehouse-blocked",null,
+        {spaceState:{systemID:trip.systemID}},
+        {fleetID:trip.fleetID,cargoID:Number(item.cargoID),reason:"SALE_"+phase});
+      }
+      continue;
+     }
+    }
     // The ore belongs to the fleet corporation (the seller), not to the station
     // operator. Crediting the station would claim title to cargo it never owned, so
     // the deposit goes into the OWNER’s own hangar at that station: the receipt

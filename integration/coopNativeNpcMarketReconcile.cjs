@@ -114,7 +114,9 @@ function proveFill(tx, order, { toleranceMs = PROOF_TOLERANCE_MS } = {}) {
   };
 }
 
-async function reconcileJournals({ root = "/var/lib/evejs/coop-native-market", inspectOrder, store, sceneForSystem,
+async function reconcileJournals({ root = "/var/lib/evejs/coop-native-market",
+  warehouseRoot = "/var/lib/evejs/coop-native-warehouse",
+  inspectOrder, store, sceneForSystem,
   resolveType, toleranceMs = PROOF_TOLERANCE_MS, now = () => Date.now(), dryRun = false } = {}) {
   if (typeof inspectOrder !== "function") throw Error("RECONCILE_INSPECTOR_REQUIRED");
   const dir = path.join(root, "tx");
@@ -201,6 +203,7 @@ async function reconcileJournals({ root = "/var/lib/evejs/coop-native-market", i
       : [];
     const cargo = cargoRows.find((row) => Number(row.cargoID) === Number(tx.cargoID)) || null;
     let cargoState = "ABSENT_SINCE";
+    let applyCargo = null;
     // A journal whose order never existed can still not be closed on hope. It is closed
     // WITHOUT EFFECT only when three independent facts agree: the market says it has no
     // order with this id, the declared stack is still exactly where it was in exactly the
@@ -267,22 +270,60 @@ async function reconcileJournals({ root = "/var/lib/evejs/coop-native-market", i
         cargoState = "ALREADY_APPLIED";
       } else if (Number(cargo.quantity) === Number(tx.beforeQuantity)) {
         cargoState = "APPLIED_NOW";
-        if (targetQuantity === 0) {
-          const removed = store.removeNativeCargo(tx.cargoID);
-          if (removed?.success !== true) {
-            pending.push({ file, reason: "NPC_MARKET_CARGO_REMOVE_FAILED" });
-            continue;
-          }
-        } else {
-          const written = store.upsertNativeCargo({ ...cargo, quantity: targetQuantity },
+        // The hull is only written AFTER the sale ledger accepted the receipt. Measured
+        // 2026-11-03: the cargo was removed before the money gate, so a refused settlement
+        // would have destroyed the goods while paying nobody. The market's proof is what
+        // authorises the write, never the other way round.
+        applyCargo = () => targetQuantity === 0
+          ? store.removeNativeCargo(tx.cargoID)
+          : store.upsertNativeCargo({ ...cargo, quantity: targetQuantity },
             { transient: cargo.transient === true });
-          if (written?.success !== true) {
-            pending.push({ file, reason: "NPC_MARKET_CARGO_WRITE_FAILED" });
-            continue;
-          }
-        }
       } else {
         pending.push({ file, reason: "NPC_MARKET_CARGO_CONFLICT" });
+        continue;
+      }
+    }
+    // The pilot's money may only move THROUGH the L9-A sale ledger: a warehouse receipt for
+    // what left the hull, then a settled sale attempt covering it. Measured live 2026-11-03:
+    // this function paid 24 041 094 ISK and took 4620 units while the sale journal still said
+    // UNKNOWN with no fills and no receipt existed. If the receipt cannot be written, the
+    // ledger is not touched and the journal stays pending - a doubt, never a silent payment.
+    const saleRow = (() => {
+      try {
+        const read = require("./coopNativeSaleLedger")
+          .createSaleLedger({root: warehouseRoot, clock: now}).read(Number(tx.cargoID));
+        return read.status === "SALE_ATTEMPT_READY" ? read.record : null;
+      } catch (_error) { return null; }
+    })();
+    const settlement = require("./coopNativeSaleProofSettlement").settleMarketProofSale({
+      root: warehouseRoot, clock: now,
+      sale: {
+        cargoID: Number(tx.cargoID), haulerID: Number(tx.entityID),
+        typeID: Number(tx.typeID), stationID: Number(tx.stationID),
+        systemID: Number(tx.systemID),
+        fleetID: Number(saleRow && saleRow.fleetID),
+        corporationID: Number(saleRow && saleRow.corporationID),
+        // The row's own obligation is what the attempt declared; the market may have taken
+        // less, and a fill larger than the row is a proof this journal cannot honour.
+        declaredQuantity: Math.max(Number(tx.quantity), filled),
+        // ONE BID PAYS ONCE: the order's own volume is the ceiling every claiming pilot
+        // shares, so a second journal quoting the same bid cannot spend it again.
+        orderID: String(proof.proof && proof.proof.orderID || tx.marketOrderID),
+        orderFilled: Number(proof.proof && proof.proof.volEntered) -
+          Number(proof.proof && proof.proof.volRemaining),
+        quantity: filled, isk, at: Number(tx.at),
+      },
+    });
+    if (settlement.status !== "SALE_PROOF_SETTLED" &&
+        settlement.status !== "SALE_ALREADY_COMMITTED") {
+      pending.push({ file, reason: settlement.status || "SALE_RECEIPT_UNWRITTEN" });
+      continue;
+    }
+    if (applyCargo) {
+      const written = applyCargo();
+      if (written?.success !== true) {
+        pending.push({ file, reason: targetQuantity === 0
+          ? "NPC_MARKET_CARGO_REMOVE_FAILED" : "NPC_MARKET_CARGO_WRITE_FAILED" });
         continue;
       }
     }

@@ -118,6 +118,27 @@ function planTrip({ haulerID, store, items, inventory, db, worldData, connectedG
   const stations = new Map(stationRowsOfSystem(worldData, systemID, scene)
     .map((row) => [row.stationID, row.station]));
   const stacks = [];
+  // The reserve is one budget per (station, type), not a per-row deduction: subtracting the whole
+  // reserve from every stack emptied the hangar instead of protecting the factory's ore. Measured
+  // 2026-11-05 against the branch's own L7-A suite: three 10 000-unit rows with a 20 000 reserve
+  // shipped NOTHING (NO_STOCK_IN_SYSTEM) instead of the remaining 10 000.
+  const reserveLeft = new Map();
+  const reserveKey = (stationID, typeID) => stationID + ":" + typeID;
+  const takeReserve = (stationID, typeID, quantity) => {
+    const key = reserveKey(stationID, typeID);
+    if (!reserveLeft.has(key)) {
+      // The reserve may be a plain map or a resolver, because only the caller knows which
+      // stations it must ask about (the factory's own station is the only one that answers).
+      const held = (typeof reserve === "function" ? (reserve(stationID) || {})
+        : (reserve && (reserve[stationID] || reserve[String(stationID)]))) || {};
+      const needed = num(held[typeID] !== undefined ? held[typeID] : held[String(typeID)]);
+      reserveLeft.set(key, Math.max(0, Math.round(needed)));
+    }
+    const left = reserveLeft.get(key);
+    const used = Math.min(left, quantity);
+    reserveLeft.set(key, left - used);
+    return used;
+  };
   for (const row of owned) {
     const stationID = pos(row.locationID);
     if (!stationID || !stations.has(stationID)) continue;
@@ -126,12 +147,7 @@ function planTrip({ haulerID, store, items, inventory, db, worldData, connectedG
     const meta = inventory.resolveItemByTypeID(typeID) || {};
     // What the corporation's own blueprints still need at this station stays home: the
     // factory and the merchant used to compete for the same Pyerite and the merchant won.
-    // The reserve may be a plain map or a resolver, because only the caller knows which
-    // stations it must ask about (the factory's own station is the only one that answers).
-    const held = (typeof reserve === "function" ? (reserve(stationID) || {})
-      : (reserve && (reserve[stationID] || reserve[String(stationID)]))) || {};
-    const needed = num(held[typeID] !== undefined ? held[typeID] : held[String(typeID)]);
-    const shippable = Math.max(0, num(row.quantity) - Math.max(0, Math.round(needed)));
+    const shippable = Math.max(0, num(row.quantity) - takeReserve(stationID, typeID, num(row.quantity)));
     if (!shippable) continue;
     stacks.push({ stationID, typeID, quantity: shippable,
       m3PerUnit: num(meta.volume) });
@@ -168,9 +184,21 @@ function planTrip({ haulerID, store, items, inventory, db, worldData, connectedG
     if (answer && answer.status === "TRIP" && answer.items.length) {
       const total = num(answer.totalIsk);
       if (!best || total > best.expectedIsk) {
+        // One entry per type: two stacks of the same ore are one demand, not the last stack's
+        // quantity. Measured 2026-11-05 against the branch's own L7-A suite: three 10 000-unit
+        // stacks produced a 10 000-unit demand map, so the loader shipped a third of the trip.
         const demand = {};
-        for (const item of answer.items) demand[pos(item.typeID)] = { price: num(item.price),
-          volume: num(item.quantity) };
+        for (const item of answer.items) {
+          const typeID = pos(item.typeID);
+          const volume = num(item.quantity);
+          const entry = demand[typeID];
+          if (entry) {
+            entry.volume += volume;
+            entry.price = Math.max(entry.price, num(item.price));
+          } else {
+            demand[typeID] = { price: num(item.price), volume };
+          }
+        }
         const first = answer.items[0] || {};
         best = { ...first, items: answer.items, demand, expectedIsk: total,
           fromSystemID: systemID, fromStationID: pos(first.stationID || stationID),

@@ -122,9 +122,20 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
    amount(tx.beforeBalance)===null||amount(tx.afterBalance)===null||
    !tx.ack||Number(tx.ack.station_id||tx.ack.stationID)!==tx.stationID)
    throw Error("NPC_MARKET_ACK_INVALID");
-  const acc=account(tx.pilotID);
-  if(acc.balance!==tx.beforeBalance&&acc.balance!==tx.afterBalance)
-   throw Error("NPC_MARKET_BALANCE_CONFLICT");
+  // Settle against the ledger as it is on disk now, not as this process saw it
+  // at boot or at prepare time: a treasury sweep may have landed between the
+  // RPC and this ack. A sell is rebased onto the real balance so the sale is
+  // paid once; a buy that no longer has its ISK is a conflict and is refused.
+  reloadLedger();
+  let acc=account(tx.pilotID);
+  if(acc.balance!==tx.beforeBalance&&acc.balance!==tx.afterBalance){
+   if(tx.side!=="sell")throw Error("NPC_MARKET_BALANCE_CONFLICT");
+   const delta=total(tx.price,tx.quantity);
+   const rebased=amount(acc.balance+delta);
+   if(rebased===null||rebased<0)throw Error("NPC_MARKET_BALANCE_CONFLICT");
+   tx.beforeBalance=acc.balance;tx.afterBalance=rebased;
+   atomic(txPath(tx.pilotID),tx);
+  }
   if(tx.side==="sell"){
    const cargo=(store.listNativeCargoForEntity(tx.entityID)||[])
     .find(c=>Number(c.cargoID)===tx.cargoID)||null;
@@ -286,6 +297,11 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
    try{verified=verifyCargo(chosen[0])===true;}catch(_){}
    if(!verified)return status("NATIVE_LOOT_CARGO_NOT_VERIFIED");
   }
+  // The pilot ledger is written by two owners: this market and the corporation
+  // treasury sweep. A cached copy from boot would resurrect ISK the treasury
+  // already moved (measured live 2026-11-03: a 22 960 476 sweep came back as a
+  // 22 960 476 balance on the next sale). Every quote reads the file.
+  reloadLedger();
   const balance=account(pilotID).balance;
   return {status:"ELIGIBLE",pilotID,entityID:id,stationID:station,
    systemID:Number(scene.systemID),side,typeID:type,

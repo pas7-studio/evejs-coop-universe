@@ -1,7 +1,7 @@
 "use strict";
 
 // Pure helpers live in space\coopVirtualWorldRuntime.pure.js (split by scripts/coop-split-module.cjs).
-const { observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, pickFundingCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceTraderMaker, advanceSiteSentries, advanceSiteSentryFire, advanceSiteLootStructures, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity } = require("./coopVirtualWorldRuntime.pure");
+const { observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, pickFundingCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceTraderMaker, advanceSiteSentries, advanceSiteSentryFire, advanceSiteLootStructures, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity, saleRefusalWindow } = require("./coopVirtualWorldRuntime.pure");
 const jsonFileCache = require("./coopJsonFileCache");
 // Does a native NPC ship exist in that system right now? This is a read-only
 // question, and it must never load a scene: ensureScene() builds belts, statics,
@@ -2021,6 +2021,12 @@ function ensureMineralLift(){
 let journalBootReconciler=null;
 const reconcileMarketJournalsAtBoot=(force=false)=>(journalBootReconciler||
  (journalBootReconciler=require("./coopMarketJournalBoot").createFromEnvironment()))(force);
+// The economic phases (refinery, manufacture, distribution) have no clock of their own.
+// Measured 2026-11-03 in m003s5: EVEJS_COOP_NPC_REFINERY=1 with no beat produced zero
+// `living-*refin*` events and no corp treasury, because nothing ever called the loop
+// driver. It is env-gated and default OFF, exactly like the journal reconciler above.
+try{if(process.env.EVEJS_COOP_LOOP_DRIVER==="1")
+ require("./coopLoopDriver").ensure({env:process.env});}catch(_loopError){}
 // The co-op loop advances an operator-journaled gate crossing with the same verified
 // adapter the war layer uses; nothing else may reach it.
 const nativeGateTransferAdapter=()=>nativeGateTransfer;
@@ -3703,6 +3709,11 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
  if(!sellTypes.length)return {status:"NO_SELL_TYPES"};
 
  const key=Number(stationID)+":"+Number(haulerID);
+ // A definitive refusal already answered for this batch: replay it instead of asking the
+ // market again on every poll. No job, no settlement event, no offer storm.
+ const refused=saleRefusalWindow.hold(key);
+ if(refused)return {status:"NOT_SOLD",reason:refused.reason,retryInMs:refused.retryInMs,
+  refusalWindow:true};
  const running=arrivalSales.get(key);
  if(running){
   if(running.settled)return running.settled;
@@ -3954,7 +3965,14 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
      }
      settlements++;
      sold.push({typeID,quantity:result.quantity,price:result.price,
-      isk:Math.round(result.price*result.quantity),balance:result.balance});
+      // The money the market actually pays: whole ISK cents. Rounding this to whole ISK
+      // overstates the journal against the wallet (measured 0.36 ISK in m003s8), so the
+      // one rule lives in coopSaleAmount.
+      isk:require("./coopSaleAmount").saleAmountISK(result.price,result.quantity),balance:result.balance,
+      // The order the market itself paid from. Without it the arrival cannot claim the
+      // bid, and a later boot reconciler proved the SAME order row for a second pilot -
+      // measured live 2026-11-03 in m003s4 (026 sold, 029's journal expected the same 5000).
+      orderID:String(result.marketOrderID||"")});
     }
     if(hardFail)break;
    }
@@ -3964,6 +3982,18 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
     quantity:sold.reduce((sum,entry)=>sum+entry.quantity,0),
     isk:sold.reduce((sum,entry)=>sum+entry.isk,0)}:
    {status:"NOT_SOLD",reason:last};
+ // The window is opened where the market really answered, so every caller of this
+ // function - the loop driver, the station drain, the arrival - shares one retry policy.
+ if(job.settled.status==="SOLD")saleRefusalWindow.clear(key);
+ else{
+  const opened=saleRefusalWindow.refuse(key,job.settled.reason||"NOT_SOLD");
+  try{require("./coopRuntimeProbe").observe("living-npc-sale-refusal-window",null,
+   {spaceState:{systemID:Number(systemID)}},
+   {stationID:Number(stationID),haulerID:Number(haulerID),
+    reason:String(job.settled.reason||"NOT_SOLD").slice(0,90),
+    retryInMs:opened.retryInMs,strikes:opened.strikes});}
+  catch(_error){/* telemetry must never stop a sale */}
+ }
  // One line per settled sale: a refusal used to exist only for the five seconds the map
  // keeps it, which is why a distribution run could call all day and learn nothing.
  try{require("./coopRuntimeProbe").observe("living-npc-sale-settlement",null,null,{systemID:Number(systemID),stationID:Number(stationID),haulerID:Number(haulerID),status:String(job.settled&&job.settled.status||""),reason:String(job.settled&&(job.settled.reason||job.settled.lastStatus)||"").slice(0,60),quantity:Number(job.settled&&job.settled.quantity||0),isk:Number(job.settled&&job.settled.isk||0)});}catch(_coopSaleError){}

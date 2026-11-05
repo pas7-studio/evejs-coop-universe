@@ -11,6 +11,7 @@
 // every authority is injected, so this module owns no world state of its own.
 function createJournalBootReconciler({
   root,
+  warehouseRoot,
   store,
   sceneForSystem,
   resolveType,
@@ -37,7 +38,7 @@ function createJournalBootReconciler({
     void (async () => {
       try {
         const result = await require("./coopNativeNpcMarketReconcile").reconcileJournals({
-          root, inspectOrder, store, sceneForSystem, resolveType,
+          root, warehouseRoot, inspectOrder, store, sceneForSystem, resolveType,
         });
         note("living-npc-market-journal-reconciled", {
           settled: result.settled.length,
@@ -63,6 +64,7 @@ function createFromEnvironment({env = process.env} = {}) {
   const inventory = require("../services/inventory/itemTypeRegistry");
   return createJournalBootReconciler({
     root: env.EVEJS_COOP_NPC_MARKET_ROOT || "/var/lib/evejs/coop-native-market",
+    warehouseRoot: env.EVEJS_COOP_NPC_WAREHOUSE_DIR || "/var/lib/evejs/coop-native-warehouse",
     inspectOrder: (orderID) => marketClient.call("GetOrder", { order_id: String(orderID) }),
     store: require("./npc/nativeNpcStore"),
     sceneForSystem: (systemID) => {

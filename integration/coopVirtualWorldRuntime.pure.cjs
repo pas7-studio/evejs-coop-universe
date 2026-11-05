@@ -1497,6 +1497,16 @@ function witnessedNativeBossWreck(wreckID){
  return pveNativeBossDirector?.witnessedWreck(Number(wreckID))||null;
 }
 
+// The refusal window every caller of sellOnArrival shares. Measured live 2026-11-04
+// (m003s14): the same batch was offered 1390 times at a 5 s cadence because a settled
+// answer expires after 5 s and the next poll starts a fresh job. One window per
+// (station, hauler): a refusal is a fact, and the next ask waits it out.
+const loadSaleRefusalWindow=()=>{
+ try{return require("./coopNativeSaleRefusalWindow");}
+ catch(_error){return require("./coopNativeSaleRefusalWindow.cjs");}
+};
+const saleRefusalWindow=loadSaleRefusalWindow().createSaleRefusalWindow();
+
 function releaseSpawnedIdentity({pilotID,entityID=0,reason=""}={}){
  if(!identityRegistry)return {status:"IDENTITY_REGISTRY_UNAVAILABLE"};
  const pilotId=String(pilotID||"").trim();
@@ -1515,4 +1525,4 @@ function releaseSpawnedIdentity({pilotID,entityID=0,reason=""}={}){
  return {...released,reason:String(reason||"IDENTITY_REASSIGNED")};
 }
 
-module.exports = {projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceTraderMaker, advanceSiteSentries, advanceSiteSentryFire, advanceSiteLootStructures, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};
+module.exports = {saleRefusalWindow, projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceTraderMaker, advanceSiteSentries, advanceSiteSentryFire, advanceSiteLootStructures, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};

@@ -1,4 +1,7 @@
 "use strict";
+// L7-D: the fee path is bounded by a durable budget. This module owns the commitments, never the
+// wallet, and never a second ledger of money.
+const budgetApi = require("./coopRefineryBudget");
 /**
  * ALIFE-16. The refinery had no caller.
  *
@@ -86,23 +89,51 @@ function candidates({items, ownerID, stationID, limit = 8}) {
   return out.slice(0, limit);
 }
 
-// Read the station a fleet really docked at from its newest warehouse trip manifest.
-// Returns null (never a guess) when there is no readable manifest for this fleet.
-function manifestStation({env, options}) {
+
+// Every dock the warehouse's manifests name, newest first. A fleet's newest manifest is
+// not the only place the corporation keeps ore: measured 2026-11-03 (m003s5) four deposits
+// sat at 60000358 (system 30000144) while the newest manifest was a 30000145 sale trip at
+// 60014935, so the refinery reported NO_WAREHOUSE_ORE with the stock one system away.
+function manifestStations({env, options}) {
+  // An injected reader may name one dock (manifestStation) or a list (manifestStations),
+  // as numbers or as {stationID}; the runtime and the tests both use this door.
+  const norm = (entry) => {
+    if (entry === null || entry === undefined) return null;
+    const stationID = pos(typeof entry === "object" ? entry.stationID : entry);
+    return stationID ? {stationID, manifest: String((entry && entry.manifest) || "")} : null;
+  };
   try {
-    if (typeof options.manifestStation === "function") return options.manifestStation();
+    if (typeof options.manifestStations === "function")
+      return (options.manifestStations() || []).map(norm).filter(Boolean);
+    if (typeof options.manifestStation === "function")
+      return [norm(options.manifestStation())].filter(Boolean);
     const root = options.warehouseRoot || env[WAREHOUSE_FLAG];
-    if (typeof root !== "string" || !require("node:path").isAbsolute(root)) return null;
+    if (typeof root !== "string" || !require("node:path").isAbsolute(root)) return [];
     const dir = require("node:path").join(root, "trip-manifests");
-    const prefix = String(pos(options.systemID)) + "-" + String(pos(options.fleetID)) + "-";
-    const newest = require("node:fs").readdirSync(dir)
-      .filter((name) => name.endsWith(".json") && name.startsWith(prefix)).sort().pop();
-    if (!newest) return null;
-    const row = JSON.parse(require("node:fs").readFileSync(
-      require("node:path").join(dir, newest), "utf8"));
-    const stationID = pos(row && row.stationID);
-    return stationID ? {stationID, manifest: newest} : null;
-  } catch (_error) { return null; }
+    // A fleet-scoped beat is strict: only its own system+fleet manifests, so a fleet never
+    // refines at another fleet's station. A beat with no fleet id sees every proven dock.
+    const hasFleet = pos(options.systemID) && pos(options.fleetID);
+    const prefix = hasFleet ?
+      String(pos(options.systemID)) + "-" + String(pos(options.fleetID)) + "-" : "";
+    const out = [];
+    const names = require("node:fs").readdirSync(dir)
+      .filter((n) => n.endsWith(".json") && n.startsWith(prefix)).sort().reverse();
+    for (const name of names.slice(0, 16)) {
+      try {
+        const row = JSON.parse(require("node:fs").readFileSync(
+          require("node:path").join(dir, name), "utf8"));
+        const stationID = pos(row && (row.stationID || row.station));
+        if (stationID && !out.some((x) => x.stationID === stationID))
+          out.push({stationID, manifest: name});
+      } catch (_error) { /* one unreadable manifest never hides the others */ }
+    }
+    return out;
+  } catch (_error) { return []; }
+}
+
+function manifestStation({env, options}) {
+  const all = manifestStations({env, options});
+  return all.length ? all[0] : null;
 }
 
 // Move the fleet's own earnings into the corporation that pays the station bill.
@@ -149,9 +180,21 @@ function fundTreasury({options, env, ownerID}) {
 
 // Pay a real station fee from the corporation's own wallet and leave a durable
 // receipt the refinery can verify by name. Never creates ISK: the debit is the source.
-function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now, corporationState, fsApi = require("node:fs")}) {
+function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now, corporationState, operationID, quantity, fsApi = require("node:fs")}) {
   const amount = Math.round(Number(amountISK) * 100) / 100;
   if (!(amount > 0)) return {status: "FEE_INVALID"};
+  // L7-D: a fee is only ever paid inside an operator-set scope, and the charge is identified before
+  // the money moves. The flag is an additional ceiling, never the authority: without a budget file
+  // the limit is 0 and nothing is spent, whatever the flag says.
+  const env = process.env;
+  const flag = Number(env.EVEJS_COOP_REFINERY_SPEND_LIMIT_ISK || 0) || 0;
+  const budget = budgetApi.readBudget(root, {fsApi});
+  if (budget.status === "BUDGET_UNREADABLE")
+    return {status: "BUDGET_UNREADABLE", reason: String(budget.reason || "").slice(0, 80)};
+  const limitISK = Math.min(flag, budget.status === "OK" ? Number(budget.budget.limitISK) : 0);
+  const sinceAt = budget.status === "OK" ? Number(budget.budget.sinceAt) : 0;
+  const chargeID = String(operationID || ("coop-refine:v1:" + pos(oreItemID) + ":" +
+    (pos(quantity) || pos(oreItemID))));
   const wallet = loadWallet().readWallet({corporationState, gameStore,
     corporationID: ownerID});
   if (wallet.status !== "OK") return {status: wallet.status};
@@ -159,6 +202,14 @@ function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now,
   const before = Number(divisions[1000] && divisions[1000].balance);
   if (!Number.isFinite(before) || before < 0) return {status: "CORP_WALLET_INVALID"};
   if (before < amount) return {status: "CORP_WALLET_INSUFFICIENT", iskCost: amount, balanceISK: before};
+  // The reservation is durable and counts against the cap even if the process dies before the debit.
+  const reserved = budgetApi.reserve(root, {operationID: chargeID, amountISK: amount,
+    corporationID: pos(ownerID), stationID: pos(stationID), balanceBefore: before,
+    limitISK, sinceAt, now, fsApi});
+  if (reserved.status === "SPEND_SCOPE_EXHAUSTED" || reserved.status === "OPERATION_ALREADY_COMMITTED")
+    return {status: reserved.status, iskCost: amount, limitISK, chargeID, balanceISK: before};
+  if (reserved.status !== "RESERVED")
+    return {status: String(reserved.status || "RESERVE_FAILED"), chargeID};
   const written = loadWallet().applyDelta({corporationState, gameStore,
     corporationID: ownerID, division: 1000, delta: -amount});
   if (!written || written.status !== "OK") return {status: String((written && written.status) || "CORP_DEBIT_FAILED")};
@@ -166,6 +217,11 @@ function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now,
     const flushed = gameStore.flushTableSync("corporationRuntime", {log: false});
     if (!flushed || flushed.success !== true) return {status: "CORP_DEBIT_FLUSH_UNCERTAIN"};
   }
+  // The money left the wallet: the reservation becomes a confirmed commitment. Only after this is the
+  // receipt written, so a crash in between is recoverable from the balance (review/L8-SPECS.md).
+  const debitAfter = Number.isFinite(Number(written.balance))
+    ? Number(written.balance) : Math.round((before - amount) * 100) / 100;
+  budgetApi.commit(root, {operationID: chargeID, balanceAfter: debitAfter, now, fsApi});
   const receiptID = pos(oreItemID);
   const after = Number.isFinite(Number(written.balance))
     ? Number(written.balance) : Math.round((before - amount) * 100) / 100;
@@ -208,6 +264,21 @@ function refineAtStation(options = {}, stationIDOverride = 0) {
     return {status, refined: 0};
   };
   if (!stationID) return skip("NO_STATION");
+  // The corporation earns whenever its pilots do, so the sweep does not wait for ore to
+  // refine. It runs once per beat (first station only), never once per candidate station.
+  const funded = options.sweep === false ? null : fundTreasury({options, env, ownerID});
+  if (options.sweep !== false) {
+    if (String(env.EVEJS_COOP_TREASURY_TRACE || "") === "1" &&
+      !(funded && funded.status === "SWEPT" && Number(funded.moved) > 0))
+      note(options, "living-corp-treasury-skipped", {systemID: options.systemID, ownerID,
+        status: String((funded && funded.status) || "NO_RESULT"),
+        reason: String((funded && (funded.reason || funded.error)) || "").slice(0, 120),
+        moved: Number((funded && funded.moved) || 0)});
+    if (funded && funded.status === "SWEPT" && Number(funded.moved) > 0)
+      note(options, "living-corp-treasury-swept", {systemID: options.systemID, ownerID,
+        movedISK: Number(funded.moved),
+        corporationISK: funded.balanceISK !== undefined ? funded.balanceISK : null});
+  }
   let refinery;
   try {
     const factory = options.refinery ||
@@ -233,23 +304,6 @@ function refineAtStation(options = {}, stationIDOverride = 0) {
   if (!rows.length) return skip("NO_WAREHOUSE_ORE");
   let refined = 0;
   const statuses = [];
-  // The station bills its fee to the corporation, so the corporation has to hold the ISK
-  // its pilots actually earned. Sweep pilot earnings into the corp wallet first; the
-  // pilot-ledger debit is the only source of the credit, so nothing is minted.
-  const funded = fundTreasury({options, env, ownerID});
-  // Say what the sweep decided instead of failing silently: a corporation that never
-  // receives its pilots' ISK keeps the refinery blocked forever, and "moved 0" with no
-  // reason is indistinguishable from a missing wallet authority.
-  if (String(env.EVEJS_COOP_TREASURY_TRACE || "") === "1" &&
-    !(funded && funded.status === "SWEPT" && Number(funded.moved) > 0))
-    note(options, "living-corp-treasury-skipped", {systemID: options.systemID, ownerID,
-      status: String((funded && funded.status) || "NO_RESULT"),
-      reason: String((funded && (funded.reason || funded.error)) || "").slice(0, 120),
-      moved: Number((funded && funded.moved) || 0)});
-  if (funded && funded.status === "SWEPT" && Number(funded.moved) > 0)
-    note(options, "living-corp-treasury-swept", {systemID: options.systemID, ownerID,
-      movedISK: Number(funded.moved),
-      corporationISK: funded.balanceISK !== undefined ? funded.balanceISK : null});
   for (const row of rows) {
     let outcome;
     try {
@@ -305,13 +359,20 @@ function refineAtStation(options = {}, stationIDOverride = 0) {
           oreTypeID: Number(row.typeID), quantity: Number(row.quantity)});
       continue;
     }
-    // A fee is a real economic fact, not an error to swallow: report the exact cost.
+    // A fee is a real economic fact, not an error to swallow: report the exact cost, and
+    // report WHY it was not settled. Measured live 2026-11-03 (m003s5): the refinery found
+    // two real warehouse stacks and stalled on NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED
+    // with every field null, so the world could not tell a missing budget from an unreadable
+    // wallet - the exact stall this event exists to explain.
+    const fee = outcome && outcome.feePayment !== undefined ? String(outcome.feePayment) : "";
+    const walletISK = outcome && outcome.walletISK !== undefined ? outcome.walletISK : null;
     const key = "blocked:" + stationID + ":" + row.itemID + ":" + status;
-    if (once(options, key, status + ":" + String(outcome && outcome.iskCost))) {
+    if (once(options, key, status + ":" + String(outcome && outcome.iskCost) + ":" + fee)) {
       note(options, "living-npc-refinery-blocked", {systemID: options.systemID,
         ownerID, stationID, status, oreItemID: Number(row.itemID),
         oreTypeID: Number(row.typeID), iskCost: outcome && outcome.iskCost !== undefined ? outcome.iskCost : null,
-        reason: outcome && outcome.reason ? String(outcome.reason).slice(0, 90) : null});
+        feePayment: fee || null, walletISK,
+        reason: outcome && outcome.reason ? String(outcome.reason).slice(0, 90) : (fee || null)});
     }
   }
   return {status: refined ? "REFINED" : "BLOCKED", refined, statuses};
@@ -325,16 +386,26 @@ function refineAtStation(options = {}, stationIDOverride = 0) {
 function run(options = {}) {
   const env = options.env || process.env;
   if (String(env[FLAG] || "") !== "1") return {status: "DISABLED", refined: 0};
-  const first = refineAtStation(options, pos(options.stationID));
+  const explicit = pos(options.stationID);
+  const first = refineAtStation(options, explicit);
   if (first.refined > 0) return first;
-  if (!["NO_WAREHOUSE_ORE", "NO_STATION", "STOCK_UNREADABLE"].includes(String(first.status)))
-    return first;
-  const proved = manifestStation({env, options});
-  if (!proved || proved.stationID === pos(options.stationID)) return first;
-  const second = refineAtStation(options, proved.stationID);
-  return second.refined > 0 || second.status !== "NO_WAREHOUSE_ORE"
-    ? {...second, firstStation: pos(options.stationID)}
-    : {...first, triedStations: [pos(options.stationID), proved.stationID]};
+  const retryable = ["NO_WAREHOUSE_ORE", "NO_STATION", "STOCK_UNREADABLE"];
+  if (!retryable.includes(String(first.status))) return first;
+  // Ore belongs to a station, not to a fleet id. Try every dock the warehouse can prove,
+  // newest first, and stop at the first station that actually holds tagged ore: measured
+  // live in m003s5 (2026-11-03), the newest manifest pointed at an empty dock while two
+  // committed warehouse receipts held ore at another proven dock, so nothing ever refined.
+  const tried = explicit ? [explicit] : [];
+  let last = first;
+  for (const dock of manifestStations({env, options})) {
+    if (dock.stationID === explicit) continue;
+    tried.push(dock.stationID);
+    const next = refineAtStation({...options, sweep: false}, dock.stationID);
+    if (next.refined > 0) return {...next, triedStations: tried};
+    if (!retryable.includes(String(next.status))) return next;
+    last = next;
+  }
+  return {...last, triedStations: tried};
 }
 
 function tick(options = {}) {
@@ -354,6 +425,5 @@ function resetForTests() {
   lastRun.clear();
 }
 
-module.exports = {FLAG, WAREHOUSE_FLAG, manifestStation, DIR_FLAG, CORP_FLAG, DEFAULT_CORP_ID, THROTTLE_MS, WAREHOUSE_TAG,
+module.exports = {FLAG, WAREHOUSE_FLAG, manifestStation, manifestStations, DIR_FLAG, CORP_FLAG, DEFAULT_CORP_ID, THROTTLE_MS, WAREHOUSE_TAG,
   candidates, payFee, refineAtStation, run, tick, resetForTests};
-

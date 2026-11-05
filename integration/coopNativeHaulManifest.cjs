@@ -116,16 +116,18 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
  }
  // A market fill leaves no station item, so it proves a row only through its own
  // recorded fills for THIS manifest's station. Receipts written before the breakdown
- // existed carry a single quantity and one station.
- function saleFillCoversRow(receipt,row,mSpec){
+ // existed carry a single quantity and one station. The return value is the number of
+ // this row's units the receipt actually paid for: a partial fill covers less than the
+ // row, which is the fact SALE_PARTIAL_FILL_REMAINS names - not a conflict.
+ function saleFillCoveredQuantity(receipt,row,mSpec){
   const fills=Array.isArray(receipt.fills)?receipt.fills:null;
   if(fills)
    return fills.filter(x=>id(x&&x.stationID)===id(mSpec.stationID)&&
     Number(x&&x.at)>=Number(mSpec.startedAt))
-    .reduce((sum,x)=>sum+(id(x.quantity)||0),0)===id(row.quantity);
-  return id(receipt.stationID)===id(mSpec.stationID)&&
-   id(receipt.quantity)===id(row.quantity)&&
-   Number(receipt.quantity)===Number(receipt.marketQuantity);
+    .reduce((sum,x)=>sum+(id(x.quantity)||0),0);
+  if(id(receipt.stationID)!==id(mSpec.stationID))return 0;
+  if(Number(receipt.quantity)!==Number(receipt.marketQuantity))return 0;
+  return id(receipt.quantity);
  }
  function verify({key,systemID,fleetID,stationID,corporationID,haulerIDs}={}){
   const loaded=read(key);if(loaded.status!=="READY")return loaded;
@@ -135,6 +137,8 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
    !Array.isArray(haulerIDs)||haulerIDs.length!==m.haulerIDs.length||
    haulerIDs.some(x=>!m.haulerIDs.includes(id(x))))
    return {status:"MANIFEST_ROUTE_IDENTITY_CONFLICT"};
+   const soldStacks=[],warehousedStacks=[];
+   let soldQuantity=0,warehousedQuantity=0,saleISK=0;
   try{
    for(const haulerID of m.haulerIDs){
     const native=getNativeEntity(haulerID);
@@ -143,17 +147,30 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
      return {status:"MANIFEST_HAULER_NO_LONGER_DURABLE"};
     const current=store.listNativeCargoForEntity(haulerID);
     if(!Array.isArray(current))return {status:"MANIFEST_CARGO_UNAVAILABLE"};
-    // A newly loaded or undelivered cargo stack prevents a blanket success.
-    if(current.some(x=>id(x.coopHaulFleetID)===m.fleetID||
-      m.cargo.some(y=>y.cargoID===id(x.cargoID))))
+    // A declared row still aboard prevents a blanket success. Cargo that ANOTHER manifest
+    // declared - the same fleet's next trip, which carries the same `coopHaulFleetID` - is
+    // that manifest's proof, not this one's. Measured live 2026-11-04 on m003s14: the old
+    // rule ("any cargo of this fleet aboard") kept a fully sold, fully receipted manifest
+    // trip-manifests/30000145-960004642-1793810716462.json OPEN for ever, and the residue was
+    // re-declared under a later manifest. The hull still outranks the paper for our own rows.
+    if(current.some(x=>m.cargo.some(y=>y.cargoID===id(x.cargoID))))
      return {status:"MANIFEST_SOURCE_CARGO_STILL_PRESENT"};
    }
    for(const row of m.cargo){
     let receipt;
     try{receipt=JSON.parse(io.readFileSync(
      path.join(root,"receipts",row.cargoID+".json"),"utf8"))}
-    catch(e){return {status:e?.code==="ENOENT"?"MANIFEST_WAREHOUSE_RECEIPT_MISSING":
-     "MANIFEST_WAREHOUSE_RECEIPT_INVALID"}}
+    catch(e){
+     if(e?.code==="ENOENT"){
+      const sale=require("./coopNativeSaleLedger").createSaleLedger({root,io}).classify({cargoID:row.cargoID,declaredQuantity:row.quantity,stationID:m.stationID,startedAt:m.startedAt});
+      if(sale==="SALE_RECEIPT_MISSING")return {status:"SALE_RECEIPT_MISSING",cargoID:row.cargoID,quantity:row.quantity};
+      if(sale==="SALE_PARTIAL_FILL_REMAINS")return {status:"SALE_PARTIAL_FILL_REMAINS",cargoID:row.cargoID};
+      if(sale==="SALE_OUTCOME_UNKNOWN")return {status:"SALE_OUTCOME_UNKNOWN",cargoID:row.cargoID};
+      if(sale==="SALE_ATTEMPT_INVALID")return {status:"SALE_ATTEMPT_INVALID",cargoID:row.cargoID};
+      return {status:"MANIFEST_WAREHOUSE_RECEIPT_MISSING"};
+     }
+     return {status:"MANIFEST_WAREHOUSE_RECEIPT_INVALID"};
+    }
     // Two kinds of receipt can close a declared row: a WAREHOUSE deposit, which leaves
     // the exact stack in the corporation hangar, and a MARKET FILL, which sold the
     // units outright. A fill never creates a station item, so it is proven by its own
@@ -167,16 +184,26 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
     // row when it recorded one, and otherwise from the physical stack the receipt
     // names - which the native itemStore check below must still prove exists.
     const ownerCorporationID=valid(row.ownerID)?row.ownerID:id(receipt&&receipt.corporationID);
+    const saleFillCovered=saleFill?saleFillCoveredQuantity(receipt,row,m):0;
     if(receipt?.version!==1||receipt.phase!=="COMMITTED"||
      id(receipt.cargoID)!==row.cargoID||id(receipt.haulerID)!==row.haulerID||
      id(receipt.typeID)!==row.typeID||
      id(receipt.stationID)!==m.stationID||
      (!saleFill&&(id(receipt.corporationID)!==ownerCorporationID))||
      id(receipt.systemID)!==m.systemID||id(receipt.fleetID)!==m.fleetID||
-     (saleFill?!saleFillCoversRow(receipt,row,m):
+     (saleFill?saleFillCovered<=0:
       (id(receipt.quantity)!==row.quantity||!valid(receipt.itemID))))
      return {status:"MANIFEST_WAREHOUSE_RECEIPT_CONFLICT",cargoID:row.cargoID};
-    if(saleFill)continue;
+    if(saleFill){
+     // A receipt that paid for fewer units than the row declared proves a PARTIAL sale:
+     // the residue is still aboard and the manifest must not close over it.
+     if(saleFillCovered<id(row.quantity))
+      return {status:"SALE_PARTIAL_FILL_REMAINS",cargoID:row.cargoID};
+     if(saleFillCovered>id(row.quantity))
+      return {status:"MANIFEST_WAREHOUSE_RECEIPT_CONFLICT",cargoID:row.cargoID};
+     soldStacks.push(row);soldQuantity+=row.quantity;saleISK+=Math.max(0,Number(receipt.isk)||0);
+     continue;
+    }
     const stock=items.findWarehouseItem({ownerID:ownerCorporationID,
      stationID:m.stationID,cargoID:row.cargoID});
     if(!stock||id(stock.itemID)!==id(receipt.itemID)||
@@ -184,13 +211,16 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
      id(stock.ownerID)!==ownerCorporationID||id(stock.locationID)!==m.stationID||
      String(stock.customInfo)!==marker(row.cargoID))
      return {status:"MANIFEST_NATIVE_ITEMSTORE_STOCK_CONFLICT",cargoID:row.cargoID};
+    warehousedStacks.push(row);warehousedQuantity+=row.quantity;
    }
   }catch{return {status:"MANIFEST_EVIDENCE_UNAVAILABLE"}}
-  return {status:"FULL_NATIVE_CARGO_DELIVERY_VERIFIED",key,stationID:m.stationID,
-   haulerIDs:m.haulerIDs.slice(),cargoIDs:m.cargo.map(x=>x.cargoID),
-   stacks:m.cargo.length,quantity:m.cargo.reduce((n,x)=>n+x.quantity,0),
-   convoySaved:false,paidReward:false};
- }
- return {prepare,verify,read};
+   return {status:"FULL_NATIVE_CARGO_DELIVERY_VERIFIED",key,stationID:m.stationID,
+    haulerIDs:m.haulerIDs.slice(),cargoIDs:m.cargo.map(x=>x.cargoID),
+    stacks:m.cargo.length,quantity:m.cargo.reduce((n,x)=>n+x.quantity,0),
+    soldStacks:soldStacks.length,soldQuantity:soldQuantity,saleISK:saleISK,
+    warehousedStacks:warehousedStacks.length,warehousedQuantity:warehousedQuantity,
+    convoySaved:false,paidReward:false};
+  }
+  return {prepare,verify,read};
 }
 module.exports={createManifest};
