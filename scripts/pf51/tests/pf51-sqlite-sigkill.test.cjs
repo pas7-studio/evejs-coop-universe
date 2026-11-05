@@ -16,7 +16,7 @@ function database(filename){
  const set=(key,value)=>transact(['corporationRuntime'],t=>t.put('corporationRuntime',key,value));
  return {db,set,get:k=>tx.get('corporationRuntime',k),store:{coopAtomicNativeRows:{transact,isPoisoned:()=>false}}};
 }
-function seed(file){const c=database(file);c.set(CLAIMS,{version:1,claims:{},generations:{},processed:{}});c.set(WAR,{version:1,ships:{},transfers:{},processed:{},history:[]});c.set(KEY,{version:1,systemID:SYSTEM,state:'STARTING',token:TOKEN});c.set(SHUTDOWN+SYSTEM,{version:1,systemID:SYSTEM,gate:{state:'STARTING',systemID:SYSTEM,stopPhase:'NONE',leaseToken:TOKEN,writerNames:['mining_startup']},permits:{}});c.db.close();}
+function seed(file){const c=database(file);c.set(CLAIMS,{version:1,claims:{},generations:{},processed:{}});c.set(WAR,{version:1,ships:{},transfers:{},processed:{},history:[]});c.set(KEY,{version:1,systemID:SYSTEM,state:'STARTING',token:TOKEN});c.set(SHUTDOWN+SYSTEM,{version:1,systemID:SYSTEM,gate:null,permits:{}});c.db.close();}
 function fence(c,{preflight=true,proof=PROOF}={}){
  return createStartupFence({gameStore:c.store,readMiningLease:(tx)=>tx.get('corporationRuntime',KEY),verifyOriginalPreflight:()=>preflight,
   verifyNativeStartup:()=>proof,enabled:()=>true,writersIntegrated:()=>true,clock:()=>1700000000000});
