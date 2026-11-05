@@ -3576,3 +3576,8 @@ Evidence: fork 1750f34; 16 tests; AUDIT_OK 65488 chars; live reality: richest wa
 Why: trader maker live on the tick: 64-bit order ids as strings, corporate-only phase guard
 Where: docs/NPC_MARKET_MAKER.md, integration/coopNpcMarketMakerBands.cjs, integration/coopNpcTraderMaker.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-npc-trader-maker.test.mjs
 Evidence: fork fc62484; live event space.trader-maker status=TRADER_MAKER_NO_BARGAIN mode=LIVE corp=1000035 cash=4.867M typesRead=10 typesWithPlayerAsks=0; 16 tests; AUDIT_OK
+### 2026-11-05T10:29Z · 6f9dd07 · L1 · docs(trader): the owner's endowment is live (50 B ISK), one-shot and loud
+
+Why: owner-endowed trading corporation (50 B ISK, one shot, durable receipt) + trader discovers the player's own escrow types
+Where: docs/NPC_MARKET_MAKER.md
+Evidence: fork 3a2d747; live event space.trader-endowment ENDOWED 4867000 -> 50004867000; trader maker cashCents 5000486700000 mode LIVE; 6 endowment tests + 16 maker/bands tests; AUDIT_OK
