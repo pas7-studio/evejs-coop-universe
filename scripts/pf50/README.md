@@ -9,12 +9,12 @@
 - `native/coopPersonalFleetHaulTxnGuard.js` — pure read-only `corporationRuntime` ownership check in original atomic cargo transaction, covering miner + hauler, PF claims, WAR, active PF44 lease, active PF46 shutdown gate and specific `PENDING` haul-transfer permit.
 - `patches/PF50-native-haul-writer.patch` — changes original `coopNativeHaulTransferAtomic.js`, registers `haul-transfer-pf` mixed-transient contract in `coopNativeCargoTransientIsolation.js`, creates native guard. Only exact `EVEJS_COOP_PERSONAL_FLEET_NATIVE_HAUL_WRITE_FENCE=1` enters new path. OFF follows stock path.
 - `Test-PF50-NativePatch.ps1` — read-only branch/source/patch verification; **does not apply or deploy**.
-- `tests/` — negative guard tests, SQLite `BEGIN IMMEDIATE` rollback/reopen, synthetically pinned patch smoke.
+- `tests/` — negative guard tests, SQLite `BEGIN IMMEDIATE` rollback/reopen, **real Node SIGKILL** crash points on a disposable SQLite file, synthetically pinned patch smoke.
 
 ## Local test
 
 ```powershell
-node --test .\tests\pf50-guard.test.cjs .\tests\pf50-sqlite.test.cjs
+node --test .\tests\pf50-guard.test.cjs .\tests\pf50-sqlite.test.cjs .\tests\pf50-sqlite-sigkill.test.cjs
 node .\tests\patch-smoke.cjs
 .\Test-PF50-NativePatch.ps1 -ForkRoot 'C:\Games\EveCoop\upstream-evejs'
 ```
