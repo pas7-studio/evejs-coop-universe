@@ -97,19 +97,40 @@ test('no cargo capacity, unknown SDE volume or oversized stack: cannot teleport 
  }
 });
 test('forged/corrupt original cargo fields fail preflight without native mutation',()=>{
- for(const variant of ['wrongOwner','wrongType','wrongQuantity','badModule','oldFleet','transient','missingCache']){
+ // Store-row identity is the durable truth and every corruption of it still refuses, with the
+ // exact clause named and no native mutation at all.
+ for(const variant of ['wrongOwner','wrongType','badModule','oldFleet','transient']){
   const f=fixture();
   const orig=f.rows()[0];
   if(variant==='wrongOwner')orig.ownerID=999;
   if(variant==='wrongType')orig.typeID=123;
-  if(variant==='wrongQuantity')orig.quantity=99;
   if(variant==='badModule')orig.moduleID=555;
   if(variant==='oldFleet')orig.coopHaulFleetID=88;
   if(variant==='transient')orig.transient=true;
-  if(variant==='missingCache')f.miner.nativeCargoItems=[];
   assert.equal(f.run(),0,variant);
   assert.equal(f.actions.length,0,variant);
  }
+});
+
+// The other half of this case was decided live on 2026-11-05 (fork e2d259a): the miner entity's
+// nativeCargoItems is a DISPLAY copy, and on the owner's stack it went stale after a partially
+// rolled-back transfer - the strict check then refused every attempt (16 536 events, ore loop
+// dead) with 'cached_quantity_differs'. The durable native cargo ROW is the authority, so a stale
+// or missing copy is rebuilt from it and the transfer proceeds; nothing is invented, because the
+// quantity that moves is the quantity the durable row holds.
+test('a stale or missing entity cargo copy is rebuilt from the durable row, never refused',()=>{
+ const staleCount=fixture();
+ staleCount.rows()[0].quantity=99;                  // durable row: 99 units
+ staleCount.miner.nativeCargoItems[0].quantity=13;  // display copy: 13 units
+ assert.equal(staleCount.run(),9.9,'the durable row decides the quantity');
+ assert.ok(staleCount.events.some((e)=>e.event==='living-haul-cache-repaired'),
+  'the repair is announced, never silent');
+
+ // A second fleet-wide announcement inside the same window is suppressed by design, so only the
+ // quantity is asserted here; the announce-once rule is covered by the stall gate's own suite.
+ const missing=fixture();
+ missing.miner.nativeCargoItems=[];
+ assert.equal(missing.run(),1.3,'a missing copy is rebuilt, not refused');
 });
 test('flush failure marks both native actors for operator reconciliation, no retry',()=>{
  const f=fixture({failFlush:true});
