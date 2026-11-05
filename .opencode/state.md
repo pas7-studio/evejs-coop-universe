@@ -416,3 +416,18 @@ bids 97 240). Live status at 14:28Z: manufacturer running every beat, factory co
 one loss-making blueprint it owns, hull cycling PLAN → LOAD → CROSS → SELL → RETURN; the capital
 purchase is armed for the next sell stop. Still open: the first settled blueprint purchase + job
 completion + sale of a manufactured good, the ammo line (needs Nocxium imported), and lag.
+
+**2026-11-05 14:28-15:12Z — first goods produced, and three freight defects fixed on the way.**
+Live chain on the play stack: `living-distribution-blueprint TRADE_SETTLED` (14:30Z, a Caldari
+Shuttle copy bought at a loading stop) → `living-npc-manufacture-installed` (14:34Z, 967, 5 runs,
+13 890 Tritanium taken) → `living-npc-manufactured` (14:47Z, **5 × 672 in the hangar**, real
+singleton ship rows) → the same copies ride home and are stowed at the factory (`STOWED:…` 15:11Z).
+Fixes forced by the live beats: capital is now bought at the buyer's station on both sell paths
+(`b2eeb1f`, `ce2e453`); `factorySupply` no longer plans inputs for a recipe the manufacturer refuses
+`NO_MARGIN` (`ce2e453`); a settlement restarts the sale budget and a beat of PENDING polls is
+"waiting", not "stopped" (`98a4c3e`); and a hold carrying only what the market cannot buy goes home
+instead of polling for ever (`aa601b8`). Jobs run at `EVEJS_COOP_INDUSTRY_TIME_SCALE=0.02`
+(10 minutes per 5-run job) and the one installed at native pace was accelerated by rewriting its
+completion time; the grant/receipt/cargo all still happened inside the server.
+Counts at 15:12Z: 58 market trades, 238 refinery operations, 1 manufactured batch, treasury sweeps
+continuing (142 267.39 ISK at 15:06Z), corp wallet funded by sales.

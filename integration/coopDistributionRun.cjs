@@ -1038,9 +1038,20 @@ async function tick(haulerID, authorities = {}, env = process.env) {
     let isk = num(state.isk);
     let settled = null;
     let soldThisBeat = 0;
+    let pendingSeen = 0;
     let lastReason = "PENDING";
     // A hold that is empty is the strongest proof there is: the goods really left the ship.
     const cargoNow = typeof authorities.cargoUnits === "function" ? authorities.cargoUnits(id) : null;
+    // A hold can be full of things this market will never buy (a blueprint copy carried home is
+    // the measured case). That is not a reason to keep asking: it is a reason to go home and put
+    // it on a shelf, where the factory can use it.
+    const sellable = typeof authorities.sellableUnits === "function"
+      ? authorities.sellableUnits(id) : null;
+    if (Number.isFinite(sellable) && Number.isFinite(cargoNow) && cargoNow > 0 && sellable === 0) {
+      return finish(PHASE.RETURN, "NO_SELLABLE_CARGO", { sellCalls: 0,
+        returnToSystemID: pos(state.fromSystemID),
+        returnStationID: pos(state.fromStationID) });
+    }
     if (Number.isFinite(cargoNow) && cargoNow === 0 && (num(state.quantity) > 0 || num(state.isk) > 0)) {
       // The empty hold proves the goods left; it does NOT prove the amount paid, so the ISK is
       // recorded as unknown rather than as a misleading zero.
@@ -1081,7 +1092,7 @@ async function tick(haulerID, authorities = {}, env = process.env) {
           ? authorities.saleSettlement(id, state.toStationID) : null;
         if (proof && proof.status) settled = proof;
       }
-      if (!settled) lastReason = "SALE_PENDING";
+      if (!settled) { lastReason = "SALE_PENDING"; pendingSeen += 1; }
     }
     if (settled && settled.status === "SOLD") {
       const paid = isk + num(settled.isk);
@@ -1094,7 +1105,12 @@ async function tick(haulerID, authorities = {}, env = process.env) {
       // with them. A trip ends when the HOLD is empty, not when one settlement says SOLD.
       const leftAboard = typeof authorities.cargoUnits === "function" ? authorities.cargoUnits(id) : null;
       if (Number.isFinite(leftAboard) && leftAboard > 0) {
-        const next = write({ ...state, phase: PHASE.SELL, sellCalls: calls, isk: paid,
+        // A settlement is progress, and progress restarts the call budget: the budget exists to
+        // bound calls that produce NOTHING, not to stop a trip that is really selling. Measured
+        // live 2026-11-05: hull 980000093319 carried 110 790 units, had settled 12+ times, and the
+        // accumulated counter skipped the whole poll loop next beat - SALE_STOPPED:CALL_LIMIT with
+        // real cargo aboard.
+        const next = write({ ...state, phase: PHASE.SELL, sellCalls: 0, isk: paid,
           pendingSince: 0, lastReason: "PARTIALLY_SOLD:" + leftAboard, updatedAt: now }, env);
         note(observe, "living-distribution-run", next, { reason: next.lastReason });
         return { status: "PARTIALLY_SOLD", state: next };
@@ -1165,8 +1181,12 @@ async function tick(haulerID, authorities = {}, env = process.env) {
       return { status: "WAITING_FOR_SALE", reason: why, state: next };
     }
     // A big load needs more than a fixed handful of settlements: the market fills at most
-    // MAX_SELL_QTY per call, so the budget grows with the load.
-    if (calls >= callBudget && soldThisBeat === 0) {
+    // MAX_SELL_QTY per call, so the budget grows with the load. Exhausting it is a bound on the
+    // BEAT, never a verdict on the trip: measured live 2026-11-05 hull 980000093319 was parked
+    // SALE_STOPPED:CALL_LIMIT with 110 790 units still aboard after a beat whose every poll came
+    // back PENDING, i.e. the market was simply slow. Only a beat that made no sale AND saw no
+    // pending work at all is a stopped trip.
+    if (calls >= callBudget && soldThisBeat === 0 && pendingSeen === 0) {
       return finish(PHASE.BLOCKED, "SALE_STOPPED:CALL_LIMIT", {sellCalls: calls, isk, callBudget});
     }
     if (calls >= callBudget) {

@@ -1053,6 +1053,22 @@ function distributionRunAuthorities(options = {}) {
             .reduce((sum, row) => sum + Math.max(0, Number(row.quantity) || 0), 0);
         } catch (_error) { return null; }
       },
+      // How much of the hold the arrival sale can actually trade. A hull can legally carry what
+      // the market will not buy - a blueprint copy bought at the buyer's station, for instance -
+      // and then "the hold is not empty" keeps the run in SELL for ever, asking a market that has
+      // no allowlisted type to bid for. Measured 2026-11-05: five blueprint copies aboard, every
+      // beat WAITING_FOR_SALE:COOLDOWN, the minerals already sold.
+      sellableUnits: (haulerID) => {
+        try {
+          const allowed = new Set(require("./coopVirtualWorldRuntime.pure")
+            .nativeMarketAllowlist("EVEJS_COOP_NPC_MARKET_SELL_TYPES"));
+          let units = 0;
+          for (const row of store.listNativeCargoForEntity(haulerID) || [])
+            if (allowed.has(Number(row.typeID)))
+              units += Math.max(0, Number(row.quantity) || 0);
+          return units;
+        } catch (_error) { return null; }
+      },
       wait: (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(1, Number(ms) || 1))),
       // The station in this hull's system that holds the most corporation stock: that is where
       // a blueprint is worth buying and where its materials already are.

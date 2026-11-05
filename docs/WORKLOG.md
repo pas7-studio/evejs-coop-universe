@@ -3633,3 +3633,8 @@ Why: the industrial half runs live: refinery under a durable budget, pilot float
 Detail: Live 2026-11-05: EVEJS_COOP_NPC_REFINERY=1 produced no event for four minutes because the phase status was discarded. The beat now emits living-coop-loop-phase {phase,status} once per change; coop-loop-phase-telemetry pins that a status is reported once, not once per beat, and that every phase is named. The play stack turns the refinery on with EVEJS_COOP_REFINERY_SPEND_LIMIT_ISK=5000000 against r
 Where: integration/coopLoopTick.cjs, tests/coop-loop-phase-telemetry.test.mjs
 Evidence: fork e4f3416 70a1026 3f929b9 b2eeb1f ce2e453 69298db; live: 168 stacks refined -> 443 383 429 ISK of minerals, 16 -> 25 settled sales, corp 961.48 -> ~2.5M and back to 438k after fees, living-npc-manufactured 5x672 at 14:47Z; tests 1928/1922 pass 0 fail, AUDIT_OK, FLAGS_OK 531/531, SHIMS_OK
+### 2026-11-05T14:52Z · bde5b2f · L2 · docs(deploy): the first goods this world produced, and the four flags that were in the way
+
+Why: freight: progress restarts the sale budget, slow polls are not a stopped trip, and a hold the market cannot buy goes home
+Where: .opencode/state.md, docs/M003_DEPLOY_20261105.md, docs/WORKLOG.md, docs/coop-flags.json, integration/coopDistributionRun.cjs, integration/coopLoopTick.cjs, integration/coopNpcCorpTreasury.cjs, tests/coop-corp-treasury-float.test.mjs, tests/coop-distribution-run.test.mjs
+Evidence: fork 98a4c3e aa601b8; live: hull 980000093319 sold 49 668 Pyerite after the reset, non-sellable blueprint copies carried home and STOWED at 15:11Z; 48/48 distribution tests

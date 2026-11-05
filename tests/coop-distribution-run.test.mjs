@@ -869,3 +869,35 @@ test("an already-empty hold at the buyer's station still buys capital", async ()
   assert.equal(result.reason, "CAPITAL_CARRIED");
   assert.deepEqual(result.state.importTypes, [1817]);
 });
+
+test("a beat of slow polls is not a stopped trip", async () => {
+  // Measured live 2026-11-05: hull 980000093319 was parked SALE_STOPPED:CALL_LIMIT for half an
+  // hour with 110 790 units of Pyerite aboard, because a beat whose every poll came back PENDING
+  // counted as "no progress". The budget bounds the beat, not the trip.
+  const hull = 980000004196;
+  run.write({ version: 1, haulerID: hull, phase: "SELL", trip: TRIP, updatedAt: 23000,
+    sellCalls: 0, isk: 0, quantity: 100000, toStationID: 60003760, toSystemID: 30000142 });
+  const result = await run.tick(hull, { recycle: true, distanceTo: () => 100, now: 23001,
+    cargoUnits: () => 110790, wait: async () => {},
+    sell: async () => ({ status: "PENDING" }),
+    saleSettlement: () => null });
+  assert.notEqual(result.status, "BLOCKED");
+  assert.equal(result.state.phase, "SELL", "the hull keeps trying to sell what it holds");
+});
+
+test("a hold full of what the market will not buy goes home instead of asking for ever", async () => {
+  // Measured live 2026-11-05: after the minerals sold, five blueprint copies stayed aboard and
+  // every beat answered WAITING_FOR_SALE:COOLDOWN - a market that never had that type on its
+  // allowlist. The hull must carry them home, where the factory can shelf them.
+  const hull = 980000004197;
+  run.write({ version: 1, haulerID: hull, phase: "SELL", trip: TRIP, updatedAt: 24000,
+    sellCalls: 0, isk: 0, quantity: 1000, trips: 0,
+    fromStationID: 60000682, fromSystemID: 30000145,
+    toStationID: 60003760, toSystemID: 30000142 });
+  const result = await run.tick(hull, { recycle: true, distanceTo: () => 100, now: 24001,
+    cargoUnits: () => 5, sellableUnits: () => 0,
+    sell: async () => { throw new Error("nothing sellable aboard"); } });
+  assert.equal(result.status, "RETURN");
+  assert.equal(result.reason, "NO_SELLABLE_CARGO");
+  assert.equal(result.state.returnToSystemID, 30000145);
+});
