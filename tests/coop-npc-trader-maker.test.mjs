@@ -149,3 +149,64 @@ test("no wallet, no hub or a missing flag refuses instead of trading", async () 
     "TRADER_MAKER_EXECUTOR_NOT_WIRED");
   fs.rmSync(liveNoExecutor.journalFile, { force: true });
 });
+
+// Measured 2026-11-05 (externalservices/market-server/src/state.rs): the public book is built from
+// the seed_stock table only, so a real player order never appears in GetOrders. The player's asks
+// therefore come from the GameStore escrow authority, merged into the same plan.
+test("player asks come from the escrow authority, because the public book cannot show them", async () => {
+  const journalFile = path.join(os.tmpdir(), `trader-escrow-${process.pid}-${Date.now()}.json`);
+  const seenTypes = [];
+  const maker = createTraderMaker({
+    call: async (method, params) => {
+      if (method !== "GetOrders") throw new Error("unexpected " + method);
+      // The book: the seed ask is the reference, and it contains NO player rows at all.
+      return { sells: [{ order_id: 5001, type_id: params.type_id, station_id: STATION,
+        price: 10, vol_remaining: 1000, source: "seed", bid: false }] };
+    },
+    getStation: () => HUB,
+    readWalletCents: () => 5_000_000_000_000,
+    readPlayerAsks: (hub, typeID) => {
+      seenTypes.push({ hub, typeID });
+      if (Number(typeID) !== 34) return [];
+      // The escrow row as the GameStore really stores it: price in ISK, order id as text.
+      return [{ orderID: "2257714186837032994", remainingQuantity: 100, unitPriceCents: 800 }];
+    },
+    journalFile,
+    clock: () => 1_000_000,
+    env: { EVEJS_COOP_TRADER_MAKER: "1", EVEJS_COOP_TRADER_MAKER_MODE: "plan",
+      EVEJS_COOP_TRADER_CORP_ID: "1000035" },
+    minReserveCents: 0,
+  });
+  const result = await maker.tick({ stationID: STATION, typeIDs: [34, 35] });
+  assert.equal(result.typesWithPlayerAsks, 1, "only the type the escrow authority names");
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].typeID, 34);
+  assert.equal(result.candidates[0].lot.sourceOrderID, "2257714186837032994");
+  assert.equal(result.candidates[0].referenceCents, 1000, "the seed ask is still the reference");
+  assert.equal(result.candidates[0].lot.buyUnitPriceCents, 800, "the escrowed price, in cents");
+  assert.ok(seenTypes.every((row) => row.hub === STATION));
+  fs.rmSync(journalFile, { force: true });
+});
+
+test("an escrowed ask outside the band is read but not bought", async () => {
+  const journalFile = path.join(os.tmpdir(), `trader-band-${process.pid}-${Date.now()}.json`);
+  const maker = createTraderMaker({
+    call: async (method, params) => (method === "GetOrders"
+      ? { sells: [{ order_id: 5001, type_id: params.type_id, station_id: STATION,
+        price: 10, vol_remaining: 1000, source: "seed", bid: false }] }
+      : null),
+    getStation: () => HUB,
+    readWalletCents: () => 5_000_000_000_000,
+    readPlayerAsks: () => [{ orderID: "7", remainingQuantity: 10, unitPriceCents: 950 }],
+    journalFile,
+    clock: () => 1_000_000,
+    env: { EVEJS_COOP_TRADER_MAKER: "1", EVEJS_COOP_TRADER_MAKER_MODE: "plan",
+      EVEJS_COOP_TRADER_CORP_ID: "1000035" },
+    minReserveCents: 0,
+  });
+  const result = await maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(result.status, "TRADER_MAKER_NO_BARGAIN", "95 % of the market is not a bargain");
+  assert.equal(result.typesWithPlayerAsks, 1);
+  assert.equal(result.candidates.length, 0);
+  fs.rmSync(journalFile, { force: true });
+});
