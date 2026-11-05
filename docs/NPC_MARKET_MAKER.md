@@ -109,7 +109,25 @@ the hub from the GameStore and buys exactly those (up to 24 book reads a tick), 
 "interesting" goods is needed. Limits live in compose: 3 buys per tick, 2 B ISK per tick,
 1 000 000 units per lot, 1 M ISK reserve.
 
-## 7. How to prove a purchase
+## 7. The resale half (live)
+
+`space/coopNpcTraderRelist.js` puts what the trader bought back on the book at **140 %** of the
+cheapest seed ask, never below **105 %**, and never with a bare `PlaceOrder`:
+
+```
+ReserveNpcSellOrder  ->  one atomic GameStore txn (items + marketEscrow, escrow at 9200000000+orderID)
+                     ->  ActivateNpcSellOrder
+```
+
+* provenance is the trade: only a `SETTLED` row in the maker's journal (its own `itemID`) may be
+  listed, the stack must still be whole (`stacksize === quantity`, singleton 0, flag 4) and owned by
+  the corporation at the hub;
+* the operation id is a pure function of the stack (`npc-trade:<sha256 prefix>`), so a retry after a
+  crash is idempotent instead of creating a second order for one stack;
+* the escrow row records `coopSource: NATIVE_TRADE` and the exact price in cents;
+* three listings per tick, and an ambiguous native outcome stops the tick.
+
+## 8. How to prove a purchase
 
 1. Put a sell order of your own on the book in **Jita 4-4** at ≤ 90 % of the seed ask — e.g. 50
    Tritanium at **≤ 3.53 ISK** while the seed ask is 3.93 ISK (any type, any stack up to 1 000 000
