@@ -59,15 +59,25 @@ function assertWar(v,systemID){
   }
 }
 function assertGate(v,systemID,lease){
+ // PF44 STARTING is acquired BEFORE the first original NPC spawn. PF46's
+ // shutdown gate is only activated AFTER PF44 moves to ACTIVE. Thus requiring
+ // a fictitious PF46 STARTING state would deadlock legitimate startup.
+ if(lease.state==="STARTING"){
+  if(v===null)return; // original GameStore confirms absence, not undefined
+  if(!obj(v)||v.version!==1||v.systemID!==systemID||
+     v.gate!==null||!obj(v.permits)||Object.keys(v.permits).length!==0)
+   throw Error("STARTING_HAS_FOREIGN_SHUTDOWN_GATE");
+  return;
+ }
  if(!obj(v)||v.version!==1||v.systemID!==systemID||
     !obj(v.gate)||v.gate.systemID!==systemID||
-    !["ACTIVE","STARTING"].includes(v.gate.state)||
-    v.gate.state!==lease.state||v.gate.stopPhase!=="NONE"||
+    v.gate.state!=="ACTIVE"||v.gate.stopPhase!=="NONE"||
     !token(v.gate.leaseToken)||v.gate.leaseToken!==lease.token||
     !Array.isArray(v.gate.writerNames)||
     !v.gate.writerNames.includes("mining_startup")||
     new Set(v.gate.writerNames).size!==v.gate.writerNames.length||
-    !obj(v.permits)||Object.keys(v.permits).length>8192)throw Error("STARTUP_GATE_UNVERIFIED");
+    !obj(v.permits)||Object.keys(v.permits).length>8192)
+  throw Error("STARTUP_GATE_UNVERIFIED");
  // An unacknowledged cargo/hauling receipt means boot must not touch actors.
  for(const [id,p] of Object.entries(v.permits)){
   if(!obj(p)||p.operationID!==id||p.systemID!==systemID||
