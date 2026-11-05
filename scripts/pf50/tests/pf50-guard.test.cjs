@@ -48,6 +48,14 @@ fails('permit ACKED',f=>f.rows.set(PERMIT+opKey,{...permit,state:'ACKED'}));
 fails('permit attempt differs from null',f=>f.rows.set(PERMIT+opKey,{...permit,attemptID:'shutdown-00003'}));
 fails('permit wrong writer',f=>f.rows.set(PERMIT+opKey,{...permit,writer:'mining_cycle'}));
 fails('permit wrong ship system',f=>f.rows.set(PERMIT+opKey,{...permit,systemID:30000142}));
+fails('another pending haul blocks new cargo custody',f=>{
+ const prior='pf-haul:'+'f'.repeat(64);let s=f.rows.get(SHUTDOWN+SYSTEM);
+ s.permits[prior]={...permit,operationID:prior};f.rows.set(SHUTDOWN+SYSTEM,s);
+});
+fails('corrupt unrelated permit is not ignored',f=>{
+ let s=f.rows.get(SHUTDOWN+SYSTEM);s.permits['malformed']={writer:'haul_transfer'};
+ f.rows.set(SHUTDOWN+SYSTEM,s);
+});
 fails('gate permit and indexed permit disagree',f=>{let s=f.rows.get(SHUTDOWN+SYSTEM);s.permits={[opKey]:{...permit,state:'ACKED'}};f.rows.set(SHUTDOWN+SYSTEM,s)});
 fails('permit ledger over cap',f=>{let s=f.rows.get(SHUTDOWN+SYSTEM);for(let i=0;i<8193;i++)s.permits['k'+i]=permit;f.rows.set(SHUTDOWN+SYSTEM,s)});
 test('invalid command params reject',()=>{let f=fixture();assert.throws(()=>guard(f.tx,{...params,opKey:'bad'},f.reader),/PF50_SCOPE_INVALID/);assert.throws(()=>guard(f.tx,{...params,haulerID:MINER},f.reader),/PF50_SCOPE_INVALID/)});
