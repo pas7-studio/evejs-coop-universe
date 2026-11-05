@@ -68,6 +68,17 @@ function assertHaulWriteAuthorized(tx,{systemID,minerID,haulerID,opKey}={},readL
  const row=rowGet(tx,SHUTDOWN+systemID);
  need(ROW(row)&&row.version===1&&row.systemID===systemID&&
     ROW(row.gate)&&ROW(row.permits)&&Object.keys(row.permits).length<=8192,"SHUTDOWN_UNPROVEN");
+ // A crash after the original cargo commit but before ACK leaves a PENDING
+ // permit. Do not start another haul in that system until the original source
+ // receipt is reconciled; a changed cargo preimage would create a new opKey.
+ for(const [key,other] of Object.entries(row.permits)){
+   need(typeof key==="string"&&key.length>=8&&key.length<=160&&ROW(other)&&
+     other.operationID===key&&other.systemID===systemID&&
+     tokenOK(other.leaseToken)&&["PENDING","ACKED"].includes(other.state)&&
+     typeof other.writer==="string","PERMIT_LEDGER_CORRUPT");
+   if(key!==opKey&&other.writer==="haul_transfer"&&other.state==="PENDING")
+     bail("PRIOR_HAUL_OUTCOME_UNRESOLVED");
+ }
  const gate=row.gate;
  need(gate.systemID===systemID&&gate.state==="ACTIVE"&&gate.stopPhase==="NONE"&&
     tokenOK(gate.leaseToken)&&Array.isArray(gate.writerNames)&&
