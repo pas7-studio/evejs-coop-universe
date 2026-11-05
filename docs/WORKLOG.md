@@ -3659,3 +3659,8 @@ Evidence: fork fb63364 (space/coopClientCacheReset.js + objectCacheRuntime.inval
 Why: militia service restored and made durable; FW window reads the war authority instead of the character-record cache; stale enlistments can no longer be clobbered by a phase write
 Where: docs/WORKLOG.md
 Evidence: fork 99361bb 4258c8d 5814660 fbc1072; war row ACTIVE faction 500001 enlistedAt 2026-10-28T23:13:48Z, character record repaired, standing 3.214, admin militia_sync reports status ACTIVE; measured cause of the ORIGINAL leave: fork 5a6db18 fixed the action-9 briefing bug at 2026-11-03T22:45Z, three hours after the enlistment was flipped at 19:50Z
+### 2026-11-05T20:40Z · 0e5f464 · OPS · docs(militia): why the owner lost his militia and the four fixes that give it back
+
+Why: market data repairs so the owner can sell loot: penny bids, consumed bids, two-sided book, restored asks, rebuilt summaries
+Where: docs/M003_DEPLOY_20261105.md, docs/WORKLOG.md
+Evidence: 3773+8222+6718 seed_buy_orders rows repriced, 21 empty bids refilled, 55338 region + 352135 system summaries rebuilt, 0 bids >= ask; verified through market-daemon GetOrders (e.g. 23809 ask 126M / bid 113.4M, 23795 ask 14.84M / bid 13.356M)
