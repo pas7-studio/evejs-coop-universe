@@ -23,7 +23,7 @@ section(native,[
   // PF-50: create a stable durable write reservation BEFORE a partial cargoID
   // allocation. No stock behavior changes with the flag OFF.
   const pfFence=process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_HAUL_WRITE_FENCE==="1";
-  const pfOpKey="pf-haul:"+sha([systemID,fleetID,minerID,haulerID,id,movedQuantity,partial]);
+  const pfOpKey="pf-haul:"+sha([systemID,fleetID,minerID,haulerID,id,sha(before),movedQuantity,partial]);
   if(pfFence){
    if(typeof readMiningLease!=="function"||typeof beginHaulWrite!=="function"||
       typeof finishHaulWrite!=="function")
