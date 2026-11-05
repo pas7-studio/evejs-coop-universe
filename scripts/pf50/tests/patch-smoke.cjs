@@ -29,6 +29,7 @@ try {
  }
  const src=readFileSync(join(root,haul),'utf8');
  assert(src.indexOf('beginHaulWrite(')<src.indexOf('let destinationID=id;'));
+ assert(src.includes('id,sha(before),movedQuantity,partial')); 
  assert(src.indexOf('assertHaulWriteAuthorized(')<src.indexOf('const old=tx.get('));
  assert(src.indexOf('finishHaulWrite(')>src.indexOf('hauler.nativeCargoItems=rebuilt;'));
  assert(src.includes('pfFence?["npcCargo","corporationRuntime"]:["npcCargo"]'));
