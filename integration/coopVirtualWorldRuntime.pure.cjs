@@ -21,7 +21,7 @@ let warFleetRegistry=null,bridge=null,identityRegistry=null,
  economy=null,nativeGateTransfer=null,recognitionAnnouncer=null,nativeAmmoWitness=null;
 // Declared here because the extraction left them behind: every phase that
 // touched one threw ReferenceError, which froze that part of the world.
-let lossBridge=null,factionDirector=null,raidDirector=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,warpPointDirector=null,nativeGunRange=null,warGateHandoff=null,warRecoverySocket=null,nativeOrderBridge=null,lootCommerce=null,nativeAmmoSupply=null,warTreasuryInstance=null,
+let traderMaker=null,traderMakerBlockedUntilMs=0,lossBridge=null,factionDirector=null,raidDirector=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,warpPointDirector=null,nativeGunRange=null,warGateHandoff=null,warRecoverySocket=null,nativeOrderBridge=null,lootCommerce=null,nativeAmmoSupply=null,warTreasuryInstance=null,
  siteSentrySpawner=null,siteSentryFireDirector=null,siteLootStructureFiller=null;
 function bindWarRuntime(state){
  if(!state||typeof state!=="object")return false;
@@ -1132,6 +1132,61 @@ function advanceNativePveSiteDefense(){
  }
 }
 
+function advanceTraderMaker(){
+ // Owner rule 2026-11-05: "buy everything at 70-90 % of the market, resell at 105-140 %."
+ // The driver reads the real book, plans with the bands and (only in live mode) lifts one whole
+ // player ask per tick through the atomic corporate buyer. It never mints and never places an
+ // order on its own: with no corporate ISK it reports NO_SPENDABLE_ISK and does nothing.
+ if(process.env.EVEJS_COOP_TRADER_MAKER!=="1"||!bridge||!identityRegistry)return;
+ if(traderMakerBlockedUntilMs&&traderMakerBlockedUntilMs>Date.now())return;
+ const stationID=Number(process.env.EVEJS_COOP_TRADER_STATION_ID||60003760);
+ const types=nativeMarketAllowlist("EVEJS_COOP_TRADER_TYPES");
+ if(!stationID||!types.length)return;
+ try{
+  const worldData=require("./worldData"),gameStore=require("../gameStore"),
+   items=require("../services/inventory/itemStore"),
+   marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
+  if(!traderMaker){
+   const buyBindings=require("./coopNpcBuyerNativeBindings").createNativeNpcBuyerBindings({
+    gameStore,itemStore:items,marketClient,
+    getStation:id=>worldData.getStationByID(id),
+    // The market maker buys as a corporation, not as a ship actor, so these two authorities are
+    // never called on this path; the buyer verifies the corporation and the seller itself.
+    resolveActor:()=>null,readNeeds:()=>null,
+    file:process.env.EVEJS_COOP_TRADER_JOURNAL||"/var/lib/evejs/coop-trader-maker.json",
+    marketRules:require("../services/market/marketRules"),
+    clock:()=>Date.now()});
+   traderMaker=require("./coopNpcTraderMaker").createTraderMaker({
+    call:(method,params)=>marketClient.call(method,params),
+    getStation:id=>worldData.getStationByID(id),
+    readWalletCents:corpID=>{
+     const read=gameStore.read("corporationRuntime","/corporations/"+corpID);
+     const runtime=read&&read.success===true?read.data:null;
+     const balance=runtime?.wallet?.divisions?.["1000"]?.balance;
+     const scaled=Number(balance)*100;
+     return Number.isFinite(scaled)&&Math.abs(scaled-Math.round(scaled))<=1e-6?Math.round(scaled):null;
+    },
+    buyAsk:args=>buyBindings.purchaseAsk(args),
+    journalFile:process.env.EVEJS_COOP_TRADER_JOURNAL||"/var/lib/evejs/coop-trader-maker.json",
+    clock:()=>Date.now()});
+  }
+  traderMaker.tick({stationID,typeIDs:types}).then(result=>{
+   if(result.status==="TRADER_MAKER_SETTLED"){
+    console.log(`[CoopLivingWorld] trader bought ${result.executions.map(x=>x.quantity+"x type "+x.typeID+" @"+x.buyUnitPriceCents+"c").join(", ")}`);
+   }else if(result.status==="BLOCKED"){
+    console.warn(`[CoopLivingWorld] trader blocked: ${result.reason||"unknown"}`);
+   }
+  }).catch(error=>{
+   traderMakerBlockedUntilMs=Date.now()+60000;
+   console.warn("[CoopLivingWorld] trader tick failed: "+String(error&&error.message||error));
+  });
+ }catch(error){
+  traderMakerBlockedUntilMs=Date.now()+60000;
+  console.warn("[CoopLivingWorld] trader wiring failed: "+String(error&&error.message||error));
+ }
+}
+
+
 function advanceSiteSentries(){
  // A site battery is scenery with hit points and no weapon data, so it can never fire.
  // The engine's own destructible sentries are native NPC profiles with weapons, ammo and a
@@ -1332,4 +1387,4 @@ function releaseSpawnedIdentity({pilotID,entityID=0,reason=""}={}){
  return {...released,reason:String(reason||"IDENTITY_REASSIGNED")};
 }
 
-module.exports = {projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceSiteSentries, advanceSiteSentryFire, advanceSiteLootStructures, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};
+module.exports = {projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceTraderMaker, advanceSiteSentries, advanceSiteSentryFire, advanceSiteLootStructures, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};

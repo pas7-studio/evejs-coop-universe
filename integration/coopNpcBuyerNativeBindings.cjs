@@ -234,6 +234,13 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
   return {...result,notification:sent?.status||"NOT_SENT"};
  }
  return Object.freeze({
+  // COOP-MMD: the market maker buys ONE whole verified player ask through the same atomic buyer the
+  // A-Life path uses (real corporate ISK, real item, Rust claim + GameStore receipt). It does not go
+  // through the coordinator, because that one is fenced to an attested *material deficit* proof while
+  // a bargain purchase is justified by the price band, not by a shortage. The caller owns the
+  // pre-claim journal and passes its own claimKey.
+  purchaseAsk:args=>buyer.purchaseOnce(args).then(r=>
+   withSellerNotification(r,"NPC_PURCHASED_PLAYER_GOODS")),
   tick:args=>coordinator.tick(args).then(r=>
    withSellerNotification(r,"NPC_PLAYER_PURCHASE_SETTLED")),
   // Operator API is never called by the A-Life scheduler. Requires a
