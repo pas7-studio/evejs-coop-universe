@@ -3565,3 +3565,9 @@ Why: market-maker bands for the NPC trader: buy <=90% of reference, bid 70% on d
 Detail: Ten cases on the deployed fork module: the owner's four numbers; only asks at or below 90 % of the reference are lifted (a 95 % ask and a 120 % ask are not bargains); a lot is refused when the resale floor cannot clear the demanded gross spread; the cash reserve is held and the per-tick budget respected, cheapest first; a lot never eats a whole stack and one type is bought once per tick; only atte
 Where: scripts/overlay-spec.cjs, tests/coop-npc-market-maker-bands.test.mjs
 Evidence: fork fcc57c8; 10 tests; AUDIT_OK (65488 chars, 551 coop modules); live measurement: richest wallet in the world is 0.3 B ISK, every NPC corp ~5 M, zero NPC purchases ever, zero player sell orders on the The Forge book
+### 2026-11-05T10:09Z · 4ef9c19 · L1 · test(trader): pin the market-maker driver and mirror the changed modules
+
+Why: market-maker driver: real book, real corporate ISK, whole-ask buys at <=90 % of the seed reference, write-ahead journal
+Detail: Six cases: only player asks under 90 % of the cheapest seed ask become candidates (85 % yes, 95 % no) with the 140 % resale target; plan mode never calls the executor; live mode buys exactly ONE whole player ask and journals it SETTLED with the fill/item ids; a settled order is never bought twice (the journal is the memory); an unresolved native outcome stays PREPARED and is never retried; no wall
+Where: integration/coopNpcBuyerNativeBindings.cjs, integration/coopNpcMarketMakerBands.cjs, integration/coopNpcTraderMaker.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-npc-trader-maker.test.mjs
+Evidence: fork 1750f34; 16 tests; AUDIT_OK 65488 chars; live reality: richest wallet 0.3 B, NPC corps ~5 M, 0 player asks on the Forge book
