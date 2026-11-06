@@ -220,7 +220,9 @@ function createNativeBootstrap({gameStore,pf52,originalItemStore,nativeNpcStore,
  return Object.freeze({executeOriginalHandoff:handoff.execute,
   inspectHandoff:handoff.inspect,
   verifyNativePermit:verifier.verify,
-  checkForeignWriterWithinTransaction:foreignWriterFence.inTransaction});
+  checkForeignWriterWithinTransaction:foreignWriterFence.inTransaction,
+  mutateForeignOriginalItemsWithinTransaction:
+   foreignWriterFence.mutateOriginalItemsInTransaction});
 }
 module.exports={createNativeBootstrap,createSourceBoundNativeBootstrap,
  createOriginalPresenceReaders,moveOriginalShipToSpaceAtomically};
