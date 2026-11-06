@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   exact-native-worktree:
-    name: 19-file source-pinned native WORK gate (no deploy)
+    name: 21-file source-pinned native WORK gate (no deploy)
     if: >-
       (github.event_name == 'push' &&
        github.ref == 'refs/heads/docs/personal-fleet-contract-freeze-v1-4-20261104') ||
@@ -83,6 +83,35 @@ jobs:
           node --check "$RUNNER_TEMP/pf74-native-work/Code/server/src/space/npc/nativeNpcStore.js"
           test "$(python3 -c 'import json,os; p=os.path.join(os.environ["RUNNER_TEMP"],"pf74-native-review","PF62-MANIFEST.json");m=json.load(open(p));print(len(m["files"])-1)')" = 19
 
+      - name: PF55 original command arbiter and claim ownership patch (WORK only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/pf55/build_native_owner_patch.py \
+            --native-worktree "$RUNNER_TEMP/pf74-original-evejs" \
+            --output "$RUNNER_TEMP/pf74-native-review/PF55-NATIVE-OWNER.patch"
+          git -C "$RUNNER_TEMP/pf74-original-evejs" apply --check \
+            "$RUNNER_TEMP/pf74-native-review/PF55-NATIVE-OWNER.patch"
+          git -C "$RUNNER_TEMP/pf74-native-work" apply --check \
+            "$RUNNER_TEMP/pf74-native-review/PF55-NATIVE-OWNER.patch"
+          git -C "$RUNNER_TEMP/pf74-native-work" apply \
+            "$RUNNER_TEMP/pf74-native-review/PF55-NATIVE-OWNER.patch"
+          node --check "$RUNNER_TEMP/pf74-native-work/Code/server/src/space/coopNpcOrderArbiter.js"
+          node --check "$RUNNER_TEMP/pf74-native-work/Code/server/src/space/coopNpcOrderBridge.js"
+          test -z "$(git -C "$RUNNER_TEMP/pf74-original-evejs" status --porcelain)"
+          git -C "$RUNNER_TEMP/pf74-native-work" diff --check
+
+      - name: PF55 real runtime executor object to durable orders end-to-end contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test --test-concurrency=1 \
+            scripts/pf55/tests/pf55-orders.test.cjs \
+            scripts/pf55/tests/pf55-native-executor.test.cjs \
+            scripts/pf55/tests/pf55-sqlite-sigkill.test.cjs \
+            scripts/pf55/tests/pf75-runtime-durable-contract.test.cjs
+          python3 scripts/pf55/tests/pf55-patch-builder.test.py
+
       - name: PF58 original handoff and PF69-PF73 cross-contract tests
         shell: bash
         run: |
@@ -113,5 +142,6 @@ jobs:
           path: |
             ${{ runner.temp }}/pf74-native-review/PF62-MANIFEST.json
             ${{ runner.temp }}/pf74-native-review/PF62-NATIVE-REVIEW.patch
+            ${{ runner.temp }}/pf74-native-review/PF55-NATIVE-OWNER.patch
           if-no-files-found: ignore
           retention-days: 7
