@@ -46,7 +46,7 @@ const vm=require('node:vm');
 const fs=require('node:fs');
 const code=fs.readFileSync(process.argv[2],'utf8');
 const base={entityID:1001,systemID:300,ownerID:202,profileID:'p',loadoutID:'l',
- behaviorProfileID:'b',entityType:'personalFleet',selectionID:'job-9',personalFleetOriginal:true,operatorKind:'PERSONAL_FLEET',
+ behaviorProfileID:'b',entityType:'personalFleet',selectionKind:'PERSONAL_FLEET',selectionID:'job-9',personalFleetOriginal:true,operatorKind:'PERSONAL_FLEET',
  personalFleetGeneration:2,personalFleetAssignmentID:'job-9',
  personalFleetPilotID:'coop-pilot-123'};
 function check(entity,controller,{flag='1',binding=true,issuing=false}={}){
@@ -73,6 +73,8 @@ assert.equal(check(expectedEntity,{...expectedController,personalFleetPilotID:'c
 assert.equal(check(expectedEntity,{...expectedController,profileID:'other'}).success,false);
 assert.equal(check(expectedEntity,{...expectedController,entityType:'nativeAmbient'}).success,false);
 assert.equal(check(expectedEntity,{...expectedController,selectionID:'wrong'}).success,false);
+assert.equal(check({...expectedEntity,selectionKind:'other'},expectedController).success,false);
+assert.equal(check(expectedEntity,{...expectedController,selectionKind:'other'}).success,false);
 assert.equal(check({...expectedEntity,profileID:undefined},{...expectedController,profileID:undefined}).success,false);
 assert.equal(check(expectedEntity,{...expectedController,loadoutID:'other'}).success,false);
 assert.equal(check(expectedEntity,{...expectedController,behaviorProfileID:'other'}).success,false);
@@ -92,7 +94,7 @@ assert.equal(ordinary.success,true);assert.equal(ordinary.authorizations,0);
 // Invalid pair must not touch the original durable permit reader.
 const corrupt=check(unmarked,expectedController);
 assert.equal(corrupt.authorizations,0);
-console.log('PF69 VM: 26 scenario assertions PASS');
+console.log('PF69/PF70 VM: 28 scenario assertions PASS');
 '''
 
 class NativePairAdmissionTests(unittest.TestCase):
@@ -113,7 +115,7 @@ class NativePairAdmissionTests(unittest.TestCase):
             result=subprocess.run(['node',str(root/'check.cjs'),str(root/'patched.js')],
                 capture_output=True,text=True,timeout=15)
             self.assertEqual(result.returncode,0,result.stderr)
-            self.assertIn('26 scenario assertions PASS',result.stdout)
+            self.assertIn('28 scenario assertions PASS',result.stdout)
 
     def test_patch_rejects_source_anchor_drift_and_double_injection(self):
         with self.assertRaisesRegex(ValueError,'ANCHOR_DRIFT'):
