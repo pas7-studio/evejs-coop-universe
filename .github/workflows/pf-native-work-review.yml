@@ -101,6 +101,15 @@ jobs:
           test -z "$(git -C "$RUNNER_TEMP/pf74-original-evejs" status --porcelain)"
           git -C "$RUNNER_TEMP/pf74-native-work" diff --check
 
+      - name: PF77 actual native WORK arbiter and ship-claim bridge regression
+        shell: bash
+        env:
+          PF77_NATIVE_WORKTREE: ${{ runner.temp }}/pf74-native-work
+        run: |
+          set -euo pipefail
+          node --test --test-concurrency=1 \
+            scripts/pf55/integration/pf77-native-work-arbiter.test.cjs
+
       - name: PF55 real runtime executor object to durable orders end-to-end contract
         shell: bash
         run: |
