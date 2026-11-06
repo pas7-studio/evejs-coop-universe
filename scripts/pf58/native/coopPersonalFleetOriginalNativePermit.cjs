@@ -542,7 +542,9 @@ function createOriginalPlayerShipActivation({
     return block('PF91_PLAYER_ACTIVATION_DISABLED');
    // Live native session evidence is NOT a durable row. The actual stock
    // character owner must supply a source-bound witness on every call.
-   if(verifyOriginalDockedPlayerSession({session,characterID,stationID},tx)!==true)
+   if(!verifyOriginalWitnessCannotWrite(tx,
+      verifyOriginalDockedPlayerSession,
+      Object.freeze({session,characterID,stationID})))
     return block('PF91_ORIGINAL_PLAYER_SESSION_UNVERIFIED');
    const original=tx.get('characters',String(characterID));
    if(!obj(original)||original.characterID!==undefined&&
@@ -572,7 +574,9 @@ function createOriginalPlayerShipActivation({
     const currentFence=fence.inTransaction({tx,writer:'PLAYER',shipItemID:oldID});
     if(currentFence.mayCommit!==true)return block(currentFence.reason);
    }
-   if(verifyOriginalDockedPlayerSession({session,characterID,stationID},tx)!==true)
+   if(!verifyOriginalWitnessCannotWrite(tx,
+      verifyOriginalDockedPlayerSession,
+      Object.freeze({session,characterID,stationID})))
     return block('PF91_ORIGINAL_PLAYER_SESSION_REVOKED');
    const updated=structuredClone(original);
    updated.shipID=target.itemID;
@@ -662,14 +666,11 @@ function createOriginalCharacterRecordWriteBarrier({pf52,
      nextShipItemID:next.id,session});
     // The verifier receives a READ-ONLY view: never lend an original
     // SQLite writer's put/del capability to a session/session-lease probe.
-    const reader=Object.freeze({
-     get:(table,key)=>structuredClone(tx.get(table,key)),
-     scan:(table)=>typeof tx.scan==='function'?
-      structuredClone(tx.scan(table)):null
-    });
+    // The witness is invoked ONLY through PF93's read-only facade with
+    // a complete original SQLite rowset mutation check.
     const items=tx.get('items','items');
     if(!obj(items))return fail('PF92_ORIGINAL_ITEMS_UNAVAILABLE');
-    const firstLease=verifyOriginalSessionLease(witness,reader);
+    const firstLease=verifyOriginalWitnessCannotWrite(tx,verifyOriginalSessionLease,witness);
     // Callback closures can capture the outer tx despite receiving a
     // read-only view. A failed witness after any direct put must THROW
     // to roll back the transaction rather than return a BLOCKED result.
@@ -709,7 +710,7 @@ function createOriginalCharacterRecordWriteBarrier({pf52,
       allowOwnerAlreadyActive:true});
      if(scan.verified!==true)return fail(scan.reason);
     }
-    const finalLease=verifyOriginalSessionLease(witness,reader);
+    const finalLease=verifyOriginalWitnessCannotWrite(tx,verifyOriginalSessionLease,witness);
     if(!isDeepStrictEqual(tx.get('items','items'),items)||
        !isDeepStrictEqual(tx.get('characters',String(characterID)),before))
      throw Error('PF92_ORIGINAL_OWNER_CHANGED_BY_SESSION_WITNESS_ROLLBACK');
