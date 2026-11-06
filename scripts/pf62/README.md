@@ -161,3 +161,13 @@ preflight adds PF88 regression tests, but it does not install those
 original EveJS writer hooks. Original writer audit and 2-client
 gameplay acceptance remain blocked; see
 `scripts/pf88/PF88_RECIPROCAL_WRITER_CONTRACT.md`.
+
+## PF89 actual stock inventory delta gate (2026-11-07)
+
+The source-bundled original PF58 permit module gained the guarded
+`mutateOriginalItemsInTransaction` API: it checks **all actual changed**
+original item row IDs and module/cargo parent chains under the same
+GameStore transaction. The manual PF80 preflight tests this API, but
+original EveJS writer hook installation, ItemStore owner refactoring
+and WORK gameplay remain blocked. Full PF89 contract:
+`scripts/pf89/PF89_ACTUAL_ORIGINAL_ITEMS_DELTA_GATE.md`.

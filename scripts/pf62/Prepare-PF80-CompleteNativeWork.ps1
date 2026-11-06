@@ -61,6 +61,10 @@ if ($ApplyToWork.IsPresent) {
     }
     & $node --test --test-concurrency=1 @pf88Tests
     if ($LASTEXITCODE -ne 0) { throw 'PF88_RECIPROCAL_WRITER_GATE_FAILED' }
+    $pf89Test = Join-Path $repo 'scripts/pf58/tests/pf89-actual-item-delta.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf89Test -PathType Leaf)) { throw 'PF89_ORIGINAL_ITEMS_DELTA_TEST_MISSING' }
+    & $node --test --test-concurrency=1 $pf89Test
+    if ($LASTEXITCODE -ne 0) { throw 'PF89_ACTUAL_ITEMS_DELTA_GATE_FAILED' }
     $pf86Source = Join-Path $repo 'scripts/pf58/tests/pf86-original-source-pins.test.cjs'
     if (-not (Test-Path -LiteralPath $pf86Source -PathType Leaf)) { throw 'PF86_ORIGINAL_SOURCE_PINS_MISSING' }
     $oldPf86SourceRoot = [Environment]::GetEnvironmentVariable('PF86_NATIVE_WORKTREE', 'Process')

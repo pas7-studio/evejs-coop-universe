@@ -5,6 +5,7 @@
  * claims NEVER count as empty (including an unrelated corrupt row).
  */
 const crypto=require('node:crypto');
+const {isDeepStrictEqual}=require('node:util');
 const T='corporationRuntime',SEP='\u001f';
 const prefix='coop-personal-fleet'+SEP;
 const pos=x=>Number.isSafeInteger(x)&&x>0;
@@ -223,7 +224,109 @@ function createReciprocalWriterFence({pf52}={}){
     mayCommit:true,originalShipIDs:Object.freeze([...touched].sort((a,b)=>a-b))});
   }catch{return fail('PF88_ORIGINAL_CUSTODY_READ_FAILED');}
  }
- return Object.freeze({inTransaction});
+ /**
+  * PF89: transaction-scoped original ItemStore *root* mutation gateway.
+  *
+  * A foreign writer is not allowed to claim it will touch item A while
+  * actually changing reserved ship B, an in-ship module, or its cargo.
+  * Inspect the COMPLETE actual before/after stock item diff, against both
+  * the old parent chains and the proposed new parent chains, before the
+  * single physical inventory tx.put.
+  *
+  * The builder receives only an isolated clone and MUST return literal true.
+  * The API is not callable after the parent tx commits and cannot certify
+  * writers that bypass this function. Real original ItemStore integration
+  * is a separate P0, not a property of this module alone.
+  */
+ function mutateOriginalItemsInTransaction({tx,writer,buildNext,
+                                            declaredItemIDs=null}={}){
+  if(!writerKinds.has(writer)||typeof tx?.get!=='function'||
+     typeof tx?.put!=='function'||typeof buildNext!=='function')
+    return fail('PF89_STOCK_WRITER_TRANSACTION_AND_BUILDER_REQUIRED');
+  if(declaredItemIDs!==null&&(!Array.isArray(declaredItemIDs)||
+      declaredItemIDs.length>1024||
+      declaredItemIDs.some(id=>!pos(id))||
+      new Set(declaredItemIDs).size!==declaredItemIDs.length))
+    return fail('PF89_DECLARED_ITEMS_INVALID');
+  let before;
+  try{before=tx.get('items','items');}
+  catch{return fail('PF89_ORIGINAL_ITEMS_READ_FAILED');}
+  if(!rootItem(before))return fail('PF89_ORIGINAL_ITEMS_UNAVAILABLE');
+  // The original ItemStore also serializes the full 'items' root; cap
+  // accidental oversized batch writers rather than silently skipping diffs.
+  const beforeKeys=Object.keys(before);
+  if(beforeKeys.length>250000)return fail('PF89_ORIGINAL_ITEMS_AUDIT_CAP');
+  let next;
+  try{next=structuredClone(before);}
+  catch{return fail('PF89_ORIGINAL_ITEMS_CLONE_FAILED');}
+  // Intentionally DO NOT swallow a throwing builder: the enclosing original
+  // SQLite transaction must abort, even if the closure mutated the tx.
+  const ack=buildNext(next);
+  // A builder capturing tx must NEVER sneak a stock write into the same
+  // transaction and then return BLOCKED/NOOP. Throw to rollback any such
+  // write, including when the builder failed to acknowledge synchronously.
+  if(!isDeepStrictEqual(before,tx.get('items','items')))
+   throw Error('PF89_STOCK_ITEMS_CHANGED_DURING_BUILDER_ROLLBACK');
+  if(ack!==true)return fail('PF89_BUILDER_NOT_SYNCHRONOUSLY_ACKED');
+  if(!rootItem(next))return fail('PF89_INVALID_NEXT_ITEMS_ROOT');
+  try{
+   const roundtrip=JSON.parse(JSON.stringify(next));
+   if(!isDeepStrictEqual(next,roundtrip))
+    return fail('PF89_NON_JSON_INVENTORY_MUTATION');
+  }catch{return fail('PF89_NON_JSON_INVENTORY_MUTATION');}
+  const nextKeys=Object.keys(next);
+  if(nextKeys.length>250000)return fail('PF89_NEXT_ITEMS_AUDIT_CAP');
+  const keys=new Set([...beforeKeys,...nextKeys]),changed=[];
+  for(const key of keys){
+   // Original item IDs are strictly canonical positive safe integer keys.
+   if(!/^[1-9][0-9]*$/.test(key)||!pos(Number(key))||
+      String(Number(key))!==key)
+    return fail('PF89_NONCANONICAL_ORIGINAL_ITEM_KEY');
+   const a=Object.prototype.hasOwnProperty.call(before,key)?before[key]:null;
+   const z=Object.prototype.hasOwnProperty.call(next,key)?next[key]:null;
+   if(!isDeepStrictEqual(a,z))changed.push(Number(key));
+   if(changed.length>1024)return fail('PF89_MUTATION_SIZE_EXCEEDS_CAP');
+  }
+  changed.sort((a,b)=>a-b);
+  if(declaredItemIDs!==null&&
+     !isDeepStrictEqual([...declaredItemIDs].sort((a,b)=>a-b),changed))
+    return fail('PF89_UNDECLARED_STOCK_ITEM_MUTATION');
+  if(changed.length===0)
+   return Object.freeze({status:'NOOP_IN_SAME_TRANSACTION',
+    mayCommit:true,changedItemIDs:Object.freeze([])});
+  const guardedShips=new Set();
+  for(const id of changed){
+   const current=before[String(id)],candidate=next[String(id)];
+   if(current!==undefined&&current!==null){
+    const oldParent=containingShip(before,id);
+    if(oldParent.unresolved)return fail('PF89_EXISTING_ITEM_PARENT_UNVERIFIED');
+    if(oldParent.ship!==null)guardedShips.add(oldParent.ship);
+   }
+   if(candidate!==undefined&&candidate!==null){
+    if(current===undefined&&candidate.categoryID===6)
+     return fail('PF89_SHIP_CREATION_REQUIRES_ORIGINAL_ITEMSTORE');
+    const newParent=containingShip(next,id);
+    if(newParent.unresolved)return fail('PF89_NEW_ITEM_PARENT_UNVERIFIED');
+    if(newParent.ship!==null)guardedShips.add(newParent.ship);
+   }
+  }
+  // Validate every ship actually reached, not just any caller-declared
+  // ship or itemID. Reservation and actor claims are read INSIDE this tx.
+  for(const ship of [...guardedShips].sort((a,b)=>a-b)){
+   const status=inTransaction({tx,writer,shipItemID:ship});
+   if(status.mayCommit!==true)return status;
+  }
+  // A builder that independently changed GameStore while we inspected its
+  // clone requires a THROW, not a "blocked" return: roll back its side effects.
+  const live=tx.get('items','items');
+  if(!isDeepStrictEqual(before,live))
+   throw Error('PF89_STOCK_ITEMS_CHANGED_DURING_BUILDER_ROLLBACK');
+  tx.put('items','items',next);
+  return Object.freeze({status:'APPLIED_WITH_RECIPROCAL_CUSTODY',
+   mayCommit:true,changedItemIDs:Object.freeze(changed),
+   originalShipIDs:Object.freeze([...guardedShips].sort((a,b)=>a-b))});
+ }
+ return Object.freeze({inTransaction,mutateOriginalItemsInTransaction});
 }
 
 module.exports={createPermitVerifier,validateOriginalClaimsIndex,
