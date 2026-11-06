@@ -198,3 +198,14 @@ against the genuine native checkout before WORK review staging.
 These are candidate tests and schema corrections; actual original
 player/Mining/WAR/Exploration source hooks are **not installed**,
 and native WORK gameplay remains unproven. See the PF91 contract.
+
+## PF92 generic owner write review gate (2026-11-07)
+
+The existing PF58 native permit module now supports original generic
+character record before/after protection. No second production module
+or patch-installer has been added. Before any PF80 `-ApplyToWork` review
+assembly, PowerShell runs 26 PF92 Node/SQLite fixture scenarios,
+the PF88 disabled-sourcebound regression and four original
+source-pinned owner route checks. All tests are manual, and a
+good WORK *review* gate does not activate or install original EveJS
+character owner hooks. See `scripts/pf92/PF92_ORIGINAL_CHARACTER_GENERIC_WRITE_FENCE.md`.
