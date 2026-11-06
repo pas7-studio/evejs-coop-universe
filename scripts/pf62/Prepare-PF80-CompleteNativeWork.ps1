@@ -46,6 +46,20 @@ if ($ApplyToWork.IsPresent) {
     $env:PF85_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
     & $node --test --test-concurrency=1 $pf85Test
     if ($LASTEXITCODE -ne 0) { throw 'PF85_ORIGINAL_RUNTIME_SOURCE_GATE_FAILED' }
+    $pf86Test = Join-Path $repo 'scripts\pf58\tests\pf86-presence-and-prewrite.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf86Test -PathType Leaf)) { throw 'PF86_PRESENCE_TEST_MISSING' }
+    & $node --test --test-concurrency=1 $pf86Test
+    if ($LASTEXITCODE -ne 0) { throw 'PF86_ORIGINAL_PRESENCE_GATE_FAILED' }
+    $pf86Source = Join-Path $repo 'scripts/pf58/tests/pf86-original-source-pins.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf86Source -PathType Leaf)) { throw 'PF86_ORIGINAL_SOURCE_PINS_MISSING' }
+    $oldPf86SourceRoot = [Environment]::GetEnvironmentVariable('PF86_NATIVE_WORKTREE', 'Process')
+    try {
+      $env:PF86_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf86Source
+      if ($LASTEXITCODE -ne 0) { throw 'PF86_ORIGINAL_PROVIDER_SOURCE_DRIFT' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF86_NATIVE_WORKTREE', $oldPf86SourceRoot, 'Process')
+    }
   } finally {
     [Environment]::SetEnvironmentVariable('PF85_NATIVE_WORKTREE', $previousPf85Root, 'Process')
   }

@@ -13,7 +13,9 @@ if ($IsWindows -or $env:OS -eq 'Windows_NT') {
 }
 $pf73 = Join-Path $root 'tests/pf73-docking-restart-permit.test.cjs'
 if (-not (Test-Path -LiteralPath $pf73 -PathType Leaf)) { throw 'PF73_DOCK_RESTART_TEST_MISSING' }
-$allNodeTests = @($tests.FullName) + @($pf73)
+$pf86 = Join-Path $root 'tests/pf86-presence-and-prewrite.test.cjs'
+if (-not (Test-Path -LiteralPath $pf86 -PathType Leaf)) { throw 'PF86_PRESENCE_GATE_MISSING' }
+$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86)
 & $node --test '--test-concurrency=1' @allNodeTests
 if ($LASTEXITCODE -ne 0) { throw 'PF58_NODE_REGRESSION_FAILED' }
 $python = (Get-Command python -ErrorAction Stop).Source
@@ -28,5 +30,15 @@ if ($NativeCheckout) {
   & $git -C $native apply --check $patch
   if ($LASTEXITCODE -ne 0) { throw 'PF58_GIT_APPLY_CHECK_FAILED' }
   Write-Host "Review-only patch at $patch (NOT applied)"
+  $pf86SourceTest = Join-Path $root 'tests/pf86-original-source-pins.test.cjs'
+  if (-not (Test-Path -LiteralPath $pf86SourceTest -PathType Leaf)) { throw 'PF86_ORIGINAL_PROVIDER_TEST_MISSING' }
+  $oldPf86NativeRoot = [Environment]::GetEnvironmentVariable('PF86_NATIVE_WORKTREE', 'Process')
+  try {
+    $env:PF86_NATIVE_WORKTREE = $native
+    & $node --test '--test-concurrency=1' $pf86SourceTest
+    if ($LASTEXITCODE -ne 0) { throw 'PF86_ORIGINAL_PROVIDER_SOURCE_DRIFT' }
+  } finally {
+    [Environment]::SetEnvironmentVariable('PF86_NATIVE_WORKTREE', $oldPf86NativeRoot, 'Process')
+  }
 }
 Write-Host 'PF58 local PASS. Original WORK server and PLAY NOT RUN; feature remains OFF.'
