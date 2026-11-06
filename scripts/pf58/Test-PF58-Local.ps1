@@ -30,5 +30,15 @@ if ($NativeCheckout) {
   & $git -C $native apply --check $patch
   if ($LASTEXITCODE -ne 0) { throw 'PF58_GIT_APPLY_CHECK_FAILED' }
   Write-Host "Review-only patch at $patch (NOT applied)"
+  $pf86SourceTest = Join-Path $root 'tests/pf86-original-source-pins.test.cjs'
+  if (-not (Test-Path -LiteralPath $pf86SourceTest -PathType Leaf)) { throw 'PF86_ORIGINAL_PROVIDER_TEST_MISSING' }
+  $oldPf86NativeRoot = [Environment]::GetEnvironmentVariable('PF86_NATIVE_WORKTREE', 'Process')
+  try {
+    $env:PF86_NATIVE_WORKTREE = $native
+    & $node --test '--test-concurrency=1' $pf86SourceTest
+    if ($LASTEXITCODE -ne 0) { throw 'PF86_ORIGINAL_PROVIDER_SOURCE_DRIFT' }
+  } finally {
+    [Environment]::SetEnvironmentVariable('PF86_NATIVE_WORKTREE', $oldPf86NativeRoot, 'Process')
+  }
 }
 Write-Host 'PF58 local PASS. Original WORK server and PLAY NOT RUN; feature remains OFF.'
