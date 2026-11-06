@@ -213,6 +213,17 @@ instances, 428 wrecks) - that is heap churn, not a leak. Per-phase retained memo
 (universe-sites) at the top, ~150 MB in total, so the heap is world state, not phases. Profiling the
 46-phase tick is the next real performance task.
 
+**The heap ceiling was the stall amplifier** (fork `a03a801`, compose only). The process's V8
+old-space limit was **4 288 MB** while the live world heap reached ~5 GB, so the worst stalls
+coincided with heap 4.4-5.0 GB and every registry flat - back-to-back GC, not a leak. The host has
+96 GB and the container has no cgroup memory limit, so the play stack runs with
+`--max-old-space-size=6144` (a ceiling, not a reservation; the limit reported inside the container is
+now 6 336 MB).
+
+Measured after the restart (9 samples, 6 min): p50 **813 ms**, p90 **1 422 ms**, worst **1 422 ms**,
+RSS **2.82 GB** - against p50 1 289 ms, p90 5 043 ms, worst 8 592 ms and RSS 5.4 GB in the same
+shape of window before it.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
