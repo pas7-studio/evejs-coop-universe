@@ -86,6 +86,15 @@ The manual PF80 `-ApplyToWork` PowerShell preflight now:
 
 Tests on a local Windows agent (Node 22+, Python):
 
+The combined launcher also verifies the PF90 SHA256 archive and preserves the
+native checkout unchanged:
+
+```powershell
+./scripts/pf90/Test-PF90-Local.ps1 -NativeCheckout 'C:\Games\EveCoop\upstream-evejs'
+```
+
+Individual commands:
+
 ```powershell
 node --test --test-concurrency=1 scripts/pf58/tests/pf90-owner-snapshot.test.cjs
 $env:PF90_NATIVE_WORKTREE = 'C:\Games\EveCoop\upstream-evejs'
