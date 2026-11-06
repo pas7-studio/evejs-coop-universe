@@ -133,6 +133,24 @@ changing what the diff compares against - correctness-sensitive, so it stays a s
 Also closed in the same pass: the ammo "loss" (sold, receipted) and the client rendering check are
 in the blocks above; `state/NOW.md` is still the 2026-11-04 snapshot and needs a republish.
 
+**ALIFE status, 2026-11-06 15:15Z** (fork `78e6a32`). Alive and working: 5 547 life events in the
+sampled window, **31 settled trades** (a `TRADE_SETTLED` about every minute), 1 delivery, 100 fleet
+pilots across 5 systems (Perimeter 23 + 36, Tama 15, Sasta 13, Jita 13) with miners, haulers,
+patrols, traders and pirates, 31 systems carrying ore/goods/demand/security/losses, the refinery
+back from the dead, manufacturing running (`BUYER_ELSEWHERE` is the manufacturer deciding to build
+for the Jita buyer one gate away - informational, not a refusal).
+
+One real defect is open and now instrumented: **fleet 960004610 (system 30000144) was parked for
+two days** - `HAUL_MINER_NOT_PHYSICALLY_ATTESTED:miner_needs_repair` / `:fleet_needs_repair` from
+2026-11-04 19:27 to 2026-11-06 15:03 (639 attestation events, 9 344 `living-haul-empty-retry`),
+and nothing in the engine clears `coopHaulNeedsOperatorRepair`. The history starts with 1 378
+`HAUL_SOURCE_CARGO_IDENTITY_CONFLICT` events (04.11 19:27-21:05), so a cargo-identity conflict
+parked the fleet and the flag was never resolved. The event stream never said WHICH failure set it,
+so the attestation event now carries `repairReason` (the stored reason string); the next occurrence
+names the real cause. The flag did not survive the 15:10 restart - the fleet is not blocked right
+now - but the class of bug (a doubt with no way back) is still there and is the next thing to fix:
+an evidence-based repair for every reason that can be proven resolved, not only the readback one.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
