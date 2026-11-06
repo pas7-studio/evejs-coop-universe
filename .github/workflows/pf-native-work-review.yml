@@ -1,6 +1,12 @@
 name: Personal Fleet native WORK source integration
 
 on:
+  push:
+    branches:
+      - docs/personal-fleet-contract-freeze-v1-4-20261104
+    paths:
+      - '.github/workflows/pf-native-work-review.yml'
+      - 'scripts/pf*/**'
   pull_request:
     paths:
       - '.github/workflows/pf-native-work-review.yml'
@@ -17,8 +23,11 @@ jobs:
   exact-native-worktree:
     name: 19-file source-pinned native WORK gate (no deploy)
     if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'docs/personal-fleet-contract-freeze-v1-4-20261104'
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/docs/personal-fleet-contract-freeze-v1-4-20261104') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'docs/personal-fleet-contract-freeze-v1-4-20261104')
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -34,7 +43,7 @@ jobs:
 
       - name: Reject stale or unexpected PR head
         env:
-          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           test "$(git branch --show-current)" = 'docs/personal-fleet-contract-freeze-v1-4-20261104'
