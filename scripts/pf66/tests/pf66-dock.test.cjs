@@ -119,3 +119,29 @@ test('PF66 writer revoked immediately after durable commit prevents any stock mo
  assert.equal(f.get('corporationRuntime',f.pf.attemptKey(f.c.assignmentID)).status,'CONSUMED');
  assert.equal(a.execute(f.c).errorMsg,'PF66_LOCAL_ALREADY_ATTEMPTED');
 }));
+
+test('PF67 scene sub-attempt is committed before scoped native removal',()=>withDb(f=>{
+ let sceneTokenAtSideEffect=null;
+ f.nativeNpcService.detachScopedPersonalFleetDockSceneActor=(request)=>{
+  const authority=f.nativeNpcService.rawAuthorize();
+  assert.equal(authority.authorize(request.row),true);
+  assert.equal(authority.consumeSceneDetach(request.row),true);
+  sceneTokenAtSideEffect=f.get('corporationRuntime',f.pf.sceneAttemptKey(f.c.assignmentID));
+  return {success:true};
+ };
+ const api=f.build();assert.equal(api.execute(f.c).success,true);
+ assert.equal(sceneTokenAtSideEffect.status,'CONSUMED');
+ assert.equal(sceneTokenAtSideEffect.shipItemID,f.c.shipItemID);
+ assert.equal(sceneTokenAtSideEffect.dockAttemptSignature,f.pf.signature(f.c));
+ const authority=f.nativeNpcService.rawAuthorize();
+ assert.equal(authority.authorize(f.c),false);
+ assert.equal(authority.consumeSceneDetach(f.c),false);
+}));
+test('PF67 prior corrupt scene token blocks repeat native scene detach',()=>withDb(f=>{
+ f.put('corporationRuntime',f.pf.sceneAttemptKey(f.c.assignmentID),{version:99,status:'UNKNOWN'});
+ const api=f.build();
+ assert.equal(api.execute(f.c).errorMsg,'PF66_NATIVE_SCENE_DETACH_UNKNOWN');
+ assert.equal(f.state.stockMoves,1);
+ assert.equal(f.state.sceneRemovals,0);
+ assert.deepEqual(f.get('corporationRuntime',f.pf.sceneAttemptKey(f.c.assignmentID)),{version:99,status:'UNKNOWN'});
+}));
