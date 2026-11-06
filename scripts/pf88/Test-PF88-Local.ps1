@@ -18,6 +18,9 @@ foreach ($test in $tests) {
 }
 & $node --test --test-concurrency=1 @tests
 if ($LASTEXITCODE -ne 0) { throw 'PF88_LOCAL_NODE_TESTS_FAILED' }
+$python = (Get-Command python -ErrorAction Stop).Source
+& $python -m unittest discover -s (Join-Path $root 'tests') -p 'test_*.py' -v
+if ($LASTEXITCODE -ne 0) { throw 'PF88_SOURCE_MANIFEST_INTEGRITY_FAILED' }
 Write-Host 'PF88 isolated tests PASS; native original writer hooks NOT PROVEN.'
 if ($NativeCheckout) {
   $native = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
