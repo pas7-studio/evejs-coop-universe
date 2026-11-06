@@ -64,3 +64,16 @@ Windows manual runner: `scripts/pf66/Test-PF66-Local.ps1` (skips SIGKILL).
 original station dwell monitor, running WORK engine, or two-client E2E has been
 proven.** Original sessionless dock authority and reciprocal writers need a
 separately reviewed native integration. This package is not a release approval.
+
+## PF-67 — one-shot native scene sub-attempt (2026-11-06)
+
+A retained PF66 private Symbol plus the permanent general docking token could
+previously authorize a second direct native scene-detach call after an actor
+was recreated. PF67 requires a SECOND immutable original `corporationRuntime`
+`dock-scene-attempt-v1:<assignmentID>` receipt, committed only *after* the
+ItemStore hangar readback and identity checks, immediately before the first
+original `removeDynamicEntity` write. The native service owns the final
+`consumeSceneDetach()` gate; it cannot be bypassed with the same capability.
+Unknown outcomes or SIGKILL are never retried; owner-controlled reconciliation
+is mandatory. Previous direct callers that do not install the new authority
+fail closed. The feature remains OFF and this is not a real WORK E2E result.
