@@ -75,17 +75,19 @@ function registrySizes() {
   const path = require("path");
   const space = __dirname;
   return {
-    nativeEntities: countOf(() => require(path.join(space, "npc/nativeNpcStore")).listNativeEntities()),
-    nativeControllers: countOf(() => require(path.join(space, "npc/nativeNpcStore")).listNativeControllers()),
-    nativeWrecks: countOf(() => require(path.join(space, "npc/nativeNpcStore")).listNativeWrecks()),
+    // Counters, not listers: each lister deep-clones its whole collection, and this sampler runs
+    // once a minute for a number.
+    nativeEntities: countOf(() => require(path.join(space, "npc/nativeNpcStore")).countNativeEntities()),
+    nativeControllers: countOf(() => require(path.join(space, "npc/nativeNpcStore")).countNativeControllers()),
+    nativeWrecks: countOf(() => require(path.join(space, "npc/nativeNpcStore")).countNativeWrecks()),
     scenes: countOf(() => {
       const runtime = require(path.join(space, "runtime"));
       return runtime && runtime.scenes instanceof Map ? runtime.scenes.size : 0;
     }),
     dungeonInstances: countOf(() => {
       const state = require(path.join(space, "..", "services/dungeon/dungeonRuntimeState"));
-      const snapshot = state.getStateSnapshot ? state.getStateSnapshot() : null;
-      return snapshot && snapshot.instancesByID ? Object.keys(snapshot.instancesByID).length : 0;
+      // getStateSnapshot() deep-clones all ~8 700 instances (~1.5 s); the count does not.
+      return typeof state.getInstanceCount === "function" ? state.getInstanceCount() : 0;
     }),
     identityLinks: countOf(() => {
       const registry = require(path.join(space, "coopIdentityRegistry"));
