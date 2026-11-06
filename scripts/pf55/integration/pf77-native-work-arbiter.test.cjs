@@ -10,6 +10,8 @@ const fs=require('node:fs');
 const path=require('node:path');
 const root=process.env.PF77_NATIVE_WORKTREE;
 if(!root||!path.isAbsolute(root))throw Error('PF77_REAL_WORKTREE_REQUIRED');
+if(root.split(/[\\/]+/).some(part=>['play','prod','production','deploy','deployment'].includes(part.toLowerCase())))
+ throw Error('PF77_PLAY_OR_PROD_PATH_FORBIDDEN');
 const base=path.join(root,'Code/server/src/space');
 const arbiterPath=path.join(base,'coopNpcOrderArbiter.js');
 const bridgePath=path.join(base,'coopNpcOrderBridge.js');
