@@ -108,3 +108,51 @@ test('a separate trusted auth owner cannot reinstall in same patched store',()=>
  const s=makeStore(f);create(f,s);
  assert.throws(()=>create(f,s),/ALREADY_INSTALLED/);
 }));
+
+test('PF64 durable token is present BEFORE first original native write',()=>run(f=>{
+ admit(f);const s=makeStore(f),method=s.removeScopedPersonalFleetTerminalNativeRows;
+ let readAtWrite=null;
+ s.removeScopedPersonalFleetTerminalNativeRows=req=>{
+  readAtWrite=f.read('corporationRuntime',require('../native/coopPersonalFleetScopedNativeCleanup.cjs').attemptKey(f.c.assignmentID));
+  return method(req);
+ };
+ const a=create(f,s);
+ assert.equal(a.execute(f.c).success,true);
+ assert.equal(readAtWrite.status,'CONSUMED');
+ assert.equal(readAtWrite.assignmentID,f.c.assignmentID);
+ assert.equal(readAtWrite.shipItemID,f.c.shipItemID);
+ assert.equal(readAtWrite.generation,f.c.generation);
+ assert.match(readAtWrite.signature,/^[a-f0-9]{64}$/);
+}));
+
+test('PF64 full process reinitialization cannot repeat persisted successful attempt',()=>run(f=>{
+ admit(f);const s1=makeStore(f),a1=create(f,s1);
+ assert.equal(a1.execute(f.c).success,true);
+ const s2=makeStore(f),a2=create(f,s2);
+ assert.equal(a2.execute(f.c).errorMsg,'PF64_DURABLE_NATIVE_ATTEMPT_ALREADY_CONSUMED');
+ assert.equal(s2.state.writes,0);
+}));
+
+test('PF64 restarted executor cannot repeat partial native write',()=>run(f=>{
+ admit(f);const s1=makeStore(f),a1=create(f,s1);s1.state.failAfterController=true;
+ assert.equal(a1.execute(f.c).errorMsg,'PF61_NATIVE_WRITE_OUTCOME_UNKNOWN');
+ const s2=makeStore(f),a2=create(f,s2);
+ assert.equal(a2.execute(f.c).errorMsg,'PF64_DURABLE_NATIVE_ATTEMPT_ALREADY_CONSUMED');
+ assert.equal(s2.state.writes,0);
+}));
+
+test('PF64 cannot use even an exact private capability before durable attempt',()=>run(f=>{
+ admit(f);const s=makeStore(f);create(f,s);
+ const out=s.removeScopedPersonalFleetTerminalNativeRows({command:f.c,capability:s.getCapability()});
+ assert.equal(out.errorMsg,'UNAUTHORIZED');
+ assert.equal(s.state.writes,0);
+}));
+
+test('PF64 stale or corrupt native attempt row blocks cleanup without overwriting it',()=>run(f=>{
+ admit(f);const {attemptKey}=require('../native/coopPersonalFleetScopedNativeCleanup.cjs');
+ f.put('corporationRuntime',attemptKey(f.c.assignmentID),{version:0,status:'UNKNOWN'});
+ const s=makeStore(f),a=create(f,s);
+ assert.equal(a.execute(f.c).errorMsg,'PF64_DURABLE_NATIVE_ATTEMPT_ALREADY_CONSUMED');
+ assert.equal(s.state.writes,0);
+ assert.deepEqual(f.read('corporationRuntime',attemptKey(f.c.assignmentID)),{version:0,status:'UNKNOWN'});
+}));
