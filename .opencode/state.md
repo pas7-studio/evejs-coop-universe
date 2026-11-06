@@ -255,6 +255,13 @@ Live repair without a restart: admin `militia_sync` pushed `warfactionid` into t
 19:08:52 (`sessionPushed: true`, `previous: 500001`). The code fix takes effect for every future login
 after ONE server-container restart, which has not been done yet (the owner's client was logged in).
 
+**VERIFIED LIVE 2026-11-06 19:18** (owner: "I am back in the faction, all good"): after the server
+restart onto image `evejs-local` built from fork `7ec6b7c`, the login `SessionChange` was logged with
+22 changes and **`warfactionid` is among them** (`19:18:22 OUT SessionChange 22 changes → charid,
+corpid, ..., warfactionid, ...`). The FW window then answered `GetMyCharacterRankInfo`, `GetStats_Character`
+and `GetStats_FactionInfo` with no `Unhandled method` warning, i.e. `GetSolarSystemLPs` is covered too.
+Both militia fixes (login session key + per-system LP answer) are now deployed on the play stack.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
