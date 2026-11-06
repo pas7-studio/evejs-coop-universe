@@ -54,7 +54,11 @@ function pf58IsPersonalFleetRecord(record) {
     record.personalFleetOriginal === true ||
     record.operatorKind === "PERSONAL_FLEET" ||
     record.entityType === "personalFleet" ||
-    record.npcEntityType === "personalFleet"
+    record.npcEntityType === "personalFleet" ||
+    record.selectionKind === "PERSONAL_FLEET" ||
+    typeof record.personalFleetAssignmentID === "string" ||
+    typeof record.personalFleetPilotID === "string" ||
+    record.personalFleetGeneration !== undefined
   );
 }
 function pf58OriginalNativePairValid(entityRecord, controllerRecord) {
@@ -100,6 +104,26 @@ function pf58OriginalNativePairValid(entityRecord, controllerRecord) {
 def transform(source: str) -> str:
     s = once(source, 'function buildNativeRuntimeShipSpec(entityRecord) {',
         HEADER + 'function buildNativeRuntimeShipSpec(entityRecord) {')
+    # PF71: nativeNpcService has TWO callsites into this low-level writer: the
+    # stored-controller restorer and the general native spawn path. Guard the
+    # common entrypoint as well as the early stored-controller read. This must
+    # precede both the existing-entity register path and fresh dynamic spawn.
+    lowlevel = ('function materializeNativeRuntimeEntity(scene, entityRecord, controllerRecord, definition, options = {}) {\n'
+                '  const runtimeKind = String(controllerRecord && controllerRecord.runtimeKind || "nativeAmbient").trim() || "nativeAmbient";')
+    guarded = ('function materializeNativeRuntimeEntity(scene, entityRecord, controllerRecord, definition, options = {}) {\n'
+        '  // PF71: every native runtime materialization path must validate PF custody.\n'
+        '  // A caller bypassing materializeStoredNativeController cannot register\n'
+        '  // a controller or spawn a PF original without the exact durable permit.\n'
+        '  if ((pf58IsPersonalFleetRecord(entityRecord) ||\n'
+        '       pf58IsPersonalFleetRecord(controllerRecord)) && (\n'
+        '      !pf58OriginalNativePairValid(entityRecord, controllerRecord) ||\n'
+        '      !scene || scene.systemID !== entityRecord.systemID ||\n'
+        '      process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_SHIP_ADOPTION !== "1" ||\n'
+        '      require(path.join(__dirname, "../coopPersonalFleetNativeBindings"))\n'
+        '        .authorize(entityRecord, {allowIssuing: options.personalFleetIssuing === true}) !== true\n'
+        '  )) return {success:false,errorMsg:"PF71_LOW_LEVEL_NATIVE_PERMIT_NOT_VERIFIED"};\n'
+        '  const runtimeKind = String(controllerRecord && controllerRecord.runtimeKind || "nativeAmbient").trim() || "nativeAmbient";')
+    s = once(s, lowlevel, guarded)
     s = once(s,
         '    fittedItems: nativeNpcStore.buildNativeFittedItems(entityRecord.entityID),',
         '    fittedItems: entityRecord.personalFleetOriginal === true\n'
