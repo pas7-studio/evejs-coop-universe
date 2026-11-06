@@ -50,7 +50,9 @@ class PF92CharacterOwnerGate(unittest.TestCase):
         source=BOOT.read_text(encoding='utf8')
         self.assertIn('createOriginalCharacterRecordWriteBarrier({',source)
         self.assertIn('pf52,verifyOriginalSessionLease:verifyOriginalDockedPlayerSession',source)
-        self.assertIn('commitStockCharacterRecordWithinOriginalTransaction:',source)
+        self.assertIn('commitStockCharacterRecordWithinOriginalTransaction(args)',source)
+        self.assertIn('PF92_NATIVE_CHARACTER_OWNER_GATE_DISABLED',source)
+        self.assertIn('nativeCharacterRecordBarrier.inTransaction(args)',source)
         self.assertIn('verifyOriginalDockedPlayerSession=()=>false',source)
         self.assertIn("typeof verifyOriginalWriterHooks==='function'",source)
 
