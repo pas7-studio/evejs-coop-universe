@@ -3688,3 +3688,9 @@ Why: a player could not buy the corporation's NPC listings: three claim RPCs wer
 Detail: The resale half was dead from the other side: the market window branches every coop-npc ask into space/coopNpcCorporateBuyRuntime, which called three RPCs the daemon did not implement, so the corporation's stock was visible and unbuyable. * tests/coop-npc-trade-buyback.test.mjs (8): a relisted SINGLETON module is bought for its real 139.202 M ISK price, a whole bought stack sells back, the keyed c
 Where: .opencode/state.md, docs/NPC_MARKET_MAKER.md, integration/coopNpcCorporateBuyRuntime.cjs, integration/coopNpcCorporateSettlement.cjs, tests/coop-npc-trade-buyback.test.mjs
 Evidence: fork 0f749ed+e4348e1; live Rust claim/finalize/get proof on the play stack; 22/22 listings READY read-only; suite 7656 tests 7561 pass 0 fail; AUDIT_OK FLAGS_OK SHIMS_OK
+### 2026-11-06T13:05Z · ac615b2 · L2 · test(refinery): the ore line was dead for a day; pin the three ways it stalled
+
+Why: the refinery had been blocked for a day: a paid fee could not be replayed, a lost receipt could not be rebuilt, the charge key was per stack instead of per operation, and a refused charge blocked every retry
+Detail: The refinery had been BLOCKED since 2026-11-05 14:05 with 10 778 `living-npc-refinery-blocked` events, so no ore had become minerals for a day. Three independent defects, each fatal on its own (fork df86231, e76e66a, df53bba): 1. payFee returned the bare OPERATION_ALREADY_COMMITTED status for a charge that was already reserved, so the refinery asked for a fee it had already paid and never moved; 2
+Where: .opencode/state.md, integration/coopNpcRefineryTick.cjs, integration/coopRefineryBudget.cjs, tests/coop-npc-refinery-fee-replay.test.mjs
+Evidence: fork df86231+e76e66a+df53bba; live 72 stacks refined in 58s, 0 blocked, 312370 units of ore, 392295.86 ISK fees; suite 7665 tests 7570 pass 0 fail; AUDIT_OK FLAGS_OK SHIMS_OK
