@@ -107,6 +107,7 @@ jobs:
           assert complete['pf62Paths']==20 and complete['pf55Paths']==2, 'PF80_NATIVE_SOURCE_SPLIT_INVALID'
           assert complete['totalNativePaths']==22, 'PF80_TOTAL_NATIVE_SOURCE_COUNT_INVALID'
           assert complete['pf77NativeArbiterGate']=='PASS', 'PF80_ORIGINAL_OWNER_GATE_NOT_VERIFIED'
+          assert complete['postTestNativeIntegrity']=='PASS', 'PF81_POST_NATIVE_TEST_INTEGRITY_NOT_VERIFIED'
           assert complete['featureEnabled'] is False and complete['appliedToPlay'] is False, 'PF80_UNSAFE_ACTIVATION'
           PY
 
