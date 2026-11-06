@@ -144,6 +144,53 @@ function createPermitVerifier({gameStore,enabled=()=>false,allWritersFenced=()=>
  * A historical one-shot ship lock is blocked until a separate, independently
  * reviewed original custody-release protocol proves original title restored.
  */
+/**
+ * PF91: scan ORIGINAL per-character SQLite keys inside the caller's one
+ * BEGIN IMMEDIATE transaction. The stock characterState repository writes
+ * paths /<characterID>, NOT a synthetic 'characters' aggregate row.
+ *
+ * Fail closed on mixed/legacy fixtures, duplicate keys, unreadable scans,
+ * invalid records, or an active hull held by any character in the universe.
+ * This can only attest the database; live in-memory sessions additionally
+ * need original native owner hooks (NOT installed by this archive).
+ */
+function inspectOriginalCharacterShipRows(tx,{ownerCharacterID,shipItemID}={}){
+ const reject=reason=>Object.freeze({status:'BLOCKED',reason,verified:false});
+ if(!pos(ownerCharacterID)||!pos(shipItemID)||
+    typeof tx?.get!=='function'||typeof tx?.scan!=='function')
+  return reject('PF91_ORIGINAL_CHARACTER_SCAN_AUTHORITY_REQUIRED');
+ try{
+  const records=tx.scan('characters');
+  if(!Array.isArray(records)||records.length===0||records.length>250000)
+   return reject('PF91_ORIGINAL_CHARACTER_ROWSET_UNAVAILABLE');
+  const seen=new Set();
+  let ownerRecord=null;
+  for(const entry of records){
+   const key=entry?.key,record=entry?.value;
+   if(typeof key!=='string'||!/^[1-9][0-9]*$/.test(key)||
+      !pos(Number(key))||String(Number(key))!==key||seen.has(key)||
+      !obj(record)||(record.characterID!==undefined&&
+        record.characterID!==Number(key)))
+    return reject('PF91_ORIGINAL_CHARACTER_ROW_INVALID');
+   seen.add(key);
+   if(key===String(ownerCharacterID))ownerRecord=record;
+   for(const active of [record.shipID,record.shipid,record.activeShipID]){
+    if(active===shipItemID||
+       (typeof active==='string'&&/^[1-9][0-9]*$/.test(active)&&
+        Number(active)===shipItemID))
+     return reject('PF91_ORIGINAL_SHIP_ACTIVE_FOR_CHARACTER');
+   }
+  }
+  if(!ownerRecord)
+   return reject('PF91_ORIGINAL_CHARACTER_OWNER_MISSING');
+  const owner=tx.get('characters',String(ownerCharacterID));
+  if(!obj(owner)||!isDeepStrictEqual(owner,ownerRecord))
+   return reject('PF91_ORIGINAL_CHARACTER_OWNER_DRIFT');
+  return Object.freeze({status:'CLEAR_IN_SAME_TRANSACTION',
+   verified:true,ownerCharacterID,checkedRows:records.length});
+ }catch{return reject('PF91_ORIGINAL_CHARACTER_SCAN_FAILED');}
+}
+
 function createReciprocalWriterFence({pf52}={}){
  if(typeof pf52?.REGISTRY_KEY!=='string'||
     pf52.REGISTRY_KEY!==prefix+'hangar-reservations-v1'||
@@ -378,4 +425,4 @@ function createReciprocalWriterFence({pf52}={}){
 }
 
 module.exports={createPermitVerifier,validateOriginalClaimsIndex,
- createReciprocalWriterFence};
+ createReciprocalWriterFence,inspectOriginalCharacterShipRows};
