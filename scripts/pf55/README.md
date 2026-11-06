@@ -34,6 +34,17 @@ entity+controller+PF actor claim before an order can be admitted.
   real native worktree; it refuses changed sources and runs `git apply --check`.
   This repository does not contain an applied original engine patch.
 
+## PF77 actual native WORK owner gate
+
+The source-pinned PF55 patch is also exercised against the **actual** native
+EveJS `coopNpcOrderBridge.js` and `coopNpcOrderArbiter.js` after installation
+into isolated WORK (not PLAY). The PF77 suite has 24 original-source scenarios:
+PF owner can command, seven foreign directors cannot hijack a PF ship,
+unknown/missing PF claim and wrong actor/controller/session fail closed,
+TACTICS cannot preempt a PF lease and ambiguous results remain unreplayable.
+This is a WORK integration *test*, not live game/server bootstrap.
+See `docs/PF77_NATIVE_OWNER_BRIDGE_GATE.md`.
+
 ## Local isolated tests
 
 Node.js 22+:
