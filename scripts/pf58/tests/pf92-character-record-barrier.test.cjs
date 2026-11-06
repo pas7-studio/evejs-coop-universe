@@ -156,7 +156,7 @@ test('PF92 characterID mismatch is rejected before any stock mutation',()=>fixtu
 }));
 test('PF92 malformed non-JSON original character record is rejected',()=>fixture(f=>{
  const result=commit(f,next=>{next.bad=()=>true;},{lease:()=>true});
- assert.equal(result.reason,'PF92_CHARACTER_OWNER_IDENTITY_INVALID');
+ assert.equal(result.reason,'PF92_CHARACTER_SNAPSHOT_UNSERIALIZABLE');
 }));
 test('PF92 false late session witness blocks the change after an earlier successful witness',()=>fixture(f=>{
  let n=0;
