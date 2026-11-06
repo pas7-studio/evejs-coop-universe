@@ -4,6 +4,7 @@
  * Restart: PF54 ACTIVE and the one matching original claim. Malformed global
  * claims NEVER count as empty (including an unrelated corrupt row).
  */
+const crypto=require('node:crypto');
 const T='corporationRuntime',SEP='\u001f';
 const prefix='coop-personal-fleet'+SEP;
 const pos=x=>Number.isSafeInteger(x)&&x>0;
@@ -33,6 +34,45 @@ function validateOriginalClaimsIndex(raw){
   if(!TOKEN.test(k)||!obj(v)||typeof v.signature!=='string'||!v.receipt)return null;
  return raw;
 }
+/** PF73 original custody barrier. A PF54 ACTIVE deployment is NOT permission
+ * to resurrect an NPC after PF56 committed DOCK_ISSUING, even if the original
+ * ItemStore ship has not yet left space. Observe the PF56 and PF60/PF66 rows
+ * together with PF54, PF58 and ItemStore inside ONE original SQLite read tx.
+ * This is an admission fence, not a retry/recovery executor.
+ */
+function originalNativeResumeAllowed(tx, deploy, e) {
+ const assignment=e.personalFleetAssignmentID;
+ const ret=tx.get(T,prefix+'return-dock-v1:'+assignment);
+ const dockAttempt=tx.get(T,prefix+'dock-native-attempt-v1:'+assignment);
+ const sceneAttempt=tx.get(T,prefix+'dock-scene-attempt-v1:'+assignment);
+ const terminal=tx.get(T,prefix+'terminal-v1:'+assignment);
+ // Under original GameStore, a proven absent row is null. An undefined read
+ // is unproven; malformed, unknown, or durable one-shot effects fail closed.
+ if([ret,dockAttempt,sceneAttempt,terminal].some(x=>x===undefined))return false;
+ if(dockAttempt!==null||sceneAttempt!==null||terminal!==null)return false;
+ if(ret===null)return true;
+ // Pre-dock return flight can be restored (the arrival dwell is re-proven
+ // in PF56); DOCK_ISSUING and DOCKED must never be restarted as an NPC.
+ if(!obj(ret)||deploy.phase!=='ACTIVE'||ret.version!==1||
+    !['RETURN_ISSUING','RETURNING','ARRIVAL_OBSERVED'].includes(ret.phase)||
+    ret.dockDispatchCount!==0||
+    ret.assignmentID!==assignment||ret.shipItemID!==e.entityID||
+    ret.ownerCharacterID!==e.ownerID||ret.pilotID!==e.personalFleetPilotID||
+    ret.systemID!==e.systemID||ret.typeID!==e.typeID||
+    ret.reservationGeneration!==e.personalFleetGeneration||
+    ret.actorGeneration!==deploy.actorGeneration||!pos(ret.stationID)||
+    !TOKEN.test(ret.operationID)||
+    !/^[0-9a-f]{64}$/.test(ret.signature))return false;
+ // PF56's original operation signature binds the return row to its precise
+ // actor/custody tuple; a forged early phase cannot mask committed docking.
+ const expected=crypto.createHash('sha256').update(JSON.stringify([
+   'PF56_RETURN',ret.operationID,assignment,e.ownerID,e.personalFleetPilotID,
+   e.entityID,ret.stationID,e.systemID,e.personalFleetGeneration,
+   deploy.actorGeneration])).digest('hex');
+ return ret.signature===expected;
+}
+// PF73 original native dock resume admission END
+
 function createPermitVerifier({gameStore,enabled=()=>false,allWritersFenced=()=>false}={}){
  const a=gameStore?.coopAtomicNativeRows;
  if(a?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof a.transact!=='function'||
@@ -66,6 +106,9 @@ function createPermitVerifier({gameStore,enabled=()=>false,allWritersFenced=()=>
    if(!obj(hull)||hull.itemID!==e.entityID||hull.ownerID!==e.ownerID||
       hull.typeID!==e.typeID||hull.categoryID!==6||hull.flagID!==0||
       hull.locationID!==e.systemID||hull.spaceState?.systemID!==e.systemID)return false;
+   // PF73: docking intent is terminal for native materialization admission,
+   // even while original ItemStore still reports the ship physically in space.
+   if(!originalNativeResumeAllowed(tx,row,e))return false;
    const rawClaims=tx.get(T,prefix+'actor-claims-v1');
    // undefined: unreadable/unknown. null: proven empty before first claim.
    if(rawClaims===undefined)return false;
