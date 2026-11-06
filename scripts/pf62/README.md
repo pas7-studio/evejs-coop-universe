@@ -40,6 +40,20 @@ still need reciprocal fencing. The staged modules cannot be enabled from a
 flag alone; the production composition root must be installed in the *engine
 fork* with real original authorities, followed by WORK gameplay acceptance.
 
+## PF79/PF80 complete native WORK preflight
+
+PF79 corrected an accidentally duplicated `coopPersonalFleetNativeReturnExecutor.cjs`
+entry; PF62 now stages **18 distinct modules plus two original stock files**,
+not 19 modules. Source inventory and local module dependencies fail closed
+before network/WORK activity. With the separate source-pinned PF55 arbiter and
+bridge updates, the complete review covers **22 native source paths**.
+
+**Preferred full native review:** `Prepare-PF80-CompleteNativeWork.ps1` uses the
+same two exact patches as GitHub Actions in one isolated WORK worktree and
+runs PF77 against the patched original native bridge. See
+`PF80_COMPLETE_NATIVE_WORK.md`. Legacy PF68 prepares only PF62's 20-path
+portion; it is not a complete original-command integration.
+
 ## Safe local checks (PowerShell 5.1+ / Node 22+ / Python 3.10+)
 
 From the checked-out **PR #350 branch**, run:
