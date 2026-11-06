@@ -25,7 +25,8 @@ if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) {
   & $node --test (Join-Path $repo 'scripts/pf66/tests/pf66-sigkill.test.cjs')
   if ($LASTEXITCODE -ne 0) { throw 'PF66_SQLITE_SIGKILL_REGRESSION_FAILED' }
 }
-foreach ($pf in 59,61,62,66) {
+# PF69 original source guard regression must be part of native preflight.
+foreach ($pf in 58,59,61,62,66) {
   & $python -m unittest discover -s (Join-Path $repo ('scripts/pf'+$pf+'/tests')) -p 'test_*.py' -v
   if ($LASTEXITCODE -ne 0) { throw ('PF62_PYTHON_REGRESSION_FAILED_'+$pf) }
 }
