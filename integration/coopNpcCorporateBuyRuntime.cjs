@@ -78,8 +78,11 @@ function makeForSession(session){
  };
  const verifyNpcCorporation=(corpID,stationID)=>{
   const record=getCorporationRecord(corpID),runtime=getCorporationRuntime(corpID);
-  return Boolean(record?.corporationID===corpID&&record.isNPC===true&&
-   runtime?.corporationID===corpID&&pos(stationID));
+  // The runtime row is stored by key with no embedded id, so only a present-and-different id is a
+  // conflict; demanding the field refused every real corporation (measured 2026-11-06).
+  const runtimeID=runtime?.corporationID;
+  return Boolean(record?.corporationID===corpID&&record.isNPC===true&&runtime&&
+   (runtimeID===undefined||runtimeID===null||Number(runtimeID)===corpID)&&pos(stationID));
  };
  return createNpcCorporateSettlement({gameStore:gameStore.coopAtomicNativeRows,market,
   verifyBuyerSession,verifyNpcCorporation});
@@ -97,13 +100,16 @@ async function buyFromOrder({session,sellOrder,quantity}={}){
  // An original Rust SELL order price must already be canonical cents.
  // Rounding 1.254 ISK to 1.25 changes the advertised contract before
  // any Rust claim / original GameStore escrow or wallet authority.
+ // The tolerance is a thousandth of a cent, not 1e-7: a double cannot hold 139 202 000.01 ISK
+ // exactly (its ulp is ~3e-8 ISK = 3e-6 cents), so a real module price with cents used to be
+ // refused as "not canonical cents" - the owner simply could not buy it.
  const price=sellOrder.price;
  const rawPriceCents=price*100,priceCents=Math.round(rawPriceCents);
  if(!pos(buyerID)||!pos(orderID)||!pos(stationID)||!pos(typeID)||
     !pos(listed)||quantity!==listed||typeof price!=="number"||
     !Number.isFinite(price)||price<=0||
-    !pos(priceCents)||priceCents>100000000||
-    Math.abs(rawPriceCents-priceCents)>1e-7||
+    !pos(priceCents)||priceCents>100000000000||
+    Math.abs(rawPriceCents-priceCents)>1e-3||
     Number(getDockedLocationID(session))!==stationID)
    return {status:"BLOCKED",error:"NPC_BUY_REQUIRES_FULL_STACK_DOCKED"};
  const escrow=getEscrowRecord(orderID);
@@ -124,7 +130,10 @@ async function buyFromOrder({session,sellOrder,quantity}={}){
    if(item?.ownerID===buyerID&&item.locationID===stationID)
      notifyInventoryChangesToCharacter(buyerID,[{item,
       previousData:{ownerID:identity.ownerID,locationID:9200000000+orderID,
-       flagID:4,quantity:quantity,stacksize:quantity}}]);
+       // A module or a ship is a SINGLETON: one unit, never a stack of `quantity`.
+       flagID:4,quantity:item.singleton===1?-1:quantity,
+       stacksize:item.singleton===1?1:quantity,
+       singleton:item.singleton===1?1:0}}]);
   }catch(error){console.warn("[CoopNpcMarket] postcommit notification:",error.message)}
  }
  return result;

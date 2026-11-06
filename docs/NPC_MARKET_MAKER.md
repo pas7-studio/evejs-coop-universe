@@ -316,3 +316,52 @@ orders are on the public book, so the owner (or anyone) can buy them at the band
 One more ratchet had to be closed: the corporation's own `coop-npc` asks are now excluded from the
 reference price on **both** sides, otherwise the next relist of the same type would have been priced
 at 140 % of its own previous ask.
+
+## 12. The owner buys back, live (2026-11-06)
+
+A player could see the corporation's 22 listed modules and never buy one: the market window branches
+every `source: "coop-npc"` ask into `space/coopNpcCorporateBuyRuntime`, which called
+`ClaimNpcSellOrder` / `FinalizeNpcSellOrder` / `GetNpcSellClaim` — three RPCs the daemon did not
+implement. Two more guards would have refused a real module even after that:
+
+1. the buyer path demanded the price be canonical cents with a `1e-7` tolerance, and a double cannot
+   hold `139 202 000.01` ISK (ulp ≈ 3e-8 ISK = 3e-6 cents), so any module with cents was refused as
+   `NPC_BUY_REQUIRES_FULL_STACK_DOCKED`; the tolerance is a thousandth of a cent now;
+2. the settlement's per-unit price ceiling was still 1 M ISK (the trader's stock is 11–139 M) and it
+   demanded a `corporationID` field on the `corporationRuntime` row, which is stored **by key** and
+   carries none — every real corporation would have been refused with `CORPORATE_WALLET_INVALID`.
+
+The settlement also learned the third provenance. `npc-trade:` is not industry and not salvage: the
+corporation owns the item because it **paid** for it, so custody means "the same singleton module (or
+the same whole stack) the relist escrowed", the escrow row says `NATIVE_TRADE`, and the receipt
+records `NATIVE_TRADE`. Money still moves only through the audited whole-stack GameStore transaction
+(buyer debit + corporation credit + item delivery + escrow delete + durable receipt, all in one
+commit), never through a character-seller transfer.
+
+The Rust half was proven live against the deployed daemon on a synthetic order of its own (a type no
+co-op path and no player trades, one unit, 5 ISK, a fake item id — no escrow, no item, no wallet):
+
+```
+RESERVED   {"order_id":596,"state":"pending","source":"coop-npc"}
+ACTIVATED  {"state":"open","vol_remaining":1}
+CLAIMED    {"state":"settling","buyer_id":999000001,"fill_id":400000000000596,
+            "price_cents":500,"quantity":1,"source":"coop-npc","is_corp":true,"bid":false}
+RECLAIMED  {"state":"settling","fill_id":400000000000596}      # same fill id, idempotent
+FINALIZED  {"state":"filled","vol_remaining":0,"fill_id":400000000000596}
+FINALIZE_REPLAY {"state":"filled","fill_id":400000000000596}   # idempotent
+FOREIGN_BUYER  "already belongs to another buyer"
+WRONG_ORDER    "is order 596, not 597"
+BOOK_AFTER {"sells":0,"bids":0}                                # a filled order leaves the book
+```
+
+The fill id is derived from the order (`4e14 + order id`), above the ask-lift range (< 2.8e14) and
+below the native `Date.now()*1000` range (≈ 1.7e15), so it cannot collide in a character journal and
+a retried claim returns the same one. A claimed order is already off the book (the book selects
+`state = 'open'`), so two buyers can never win the same stack.
+
+Read-only readiness probe against the 22 real listings: **22 of 22 READY** — every escrow row, item,
+price, provenance and corporation identity passes the same checks `buyFromOrder` applies. Total cost
+2 036 202 000 ISK against the owner's 1 933 440 953 ISK, so he can take 21 of the 22 today.
+
+The last step is his own click in the market window: buying a `coop-npc` ask needs a real
+authenticated, docked session, and the session guard is exactly what must not be faked.

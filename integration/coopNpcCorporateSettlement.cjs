@@ -20,8 +20,13 @@ const cents=x=>{
 };
 const isk=c=>Math.round(c)/100;
 const isSalvage=x=>typeof x==="string"&&/^npc-salvage:[0-9a-f]{32}$/.test(x);
+// The trader's bought stock is a third provenance: the corporation owns the item because it paid
+// for it (space/coopNpcTraderMaker.js), not because industry or salvage produced it.
+const isTrade=x=>typeof x==="string"&&/^npc-trade:[0-9a-f]{32}$/.test(x);
 const validID=x=>typeof x==="string"&&
- (/^npc-manufacture:[0-9a-f]{32}$/.test(x)||isSalvage(x));
+ (/^npc-manufacture:[0-9a-f]{32}$/.test(x)||isSalvage(x)||isTrade(x));
+const provenance=x=>isSalvage(x)?"NATIVE_SALVAGE":isTrade(x)?"NATIVE_TRADE":
+ "NATIVE_INDUSTRY";
 const salvageMarker=(wreckID,sourceCargoID)=>
  "coop-salvage-rival:v1:"+wreckID+":"+sourceCargoID;
 function verifySalvageOriginal(tx,identity,escrow,item){
@@ -90,7 +95,7 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
    !pos(Number(order.buyer_id))||Number(order.buyer_id)!==buyer||
    order.is_corp!==true||order.bid!==false||!pos(Number(order.fill_id))||
    !Number.isSafeInteger(Number(order.price_cents))||Number(order.price_cents)<=0||
-   order.price_cents>100000000||order.fill_id===undefined)throw Error("NPC_RUST_CLAIM_NOT_CANONICAL");
+   order.price_cents>100000000000||order.fill_id===undefined)throw Error("NPC_RUST_CLAIM_NOT_CANONICAL");
   if(order.operation_id!==identity.operationID||
    Number(order.order_id)!==identity.orderID||
    Number(order.owner_id)!==identity.ownerID||
@@ -119,7 +124,7 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
     // the full immutable receipt and cent-conservation ledger both verify.
     // Do not re-debit the buyer or require the item to remain unconsumed:
     // legitimate replay may happen after the buyer has used the goods.
-    const source=isSalvage(identity.operationID)?"NATIVE_SALVAGE":"NATIVE_INDUSTRY";
+    const source=provenance(identity.operationID);
     const walletProof=[prior.buyerBeforeCents,prior.buyerAfterCents,
       prior.corpBeforeCents,prior.corpAfterCents];
     if(prior.phase!=="NATIVE_COMMITTED"||
@@ -141,6 +146,9 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
       buyerID,itemID:identity.itemID,quantity:identity.quantity,grossCents};
    }
    if(order.state!=="settling")throw Error("NPC_MARKET_FILLED_WITHOUT_NATIVE_RECEIPT");
+   // Manufacturing, original NPC salvage and the trader's bought stock share the same native
+   // wallet settlement, but never the same provenance authority.
+   const salvage=isSalvage(identity.operationID),trade=isTrade(identity.operationID);
    const escrow=tx.get("marketEscrow",orderKey);
    const item=tx.get("items",itemKey);
    const corpKey="corporations"+String.fromCharCode(31)+identity.ownerID;
@@ -154,20 +162,37 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
     throw Error("NPC_MARKET_NATIVE_ESCROW_MISSING");
    if(!item||item.itemID!==identity.itemID||item.ownerID!==identity.ownerID||
       item.typeID!==identity.typeID||item.locationID!==ESCROW_BASE+identity.orderID||
-      item.flagID!==4||item.singleton!==0||item.quantity!==identity.quantity||
+      item.flagID!==4)
+    throw Error("NPC_MARKET_OUTPUT_CUSTODY_INVALID");
+   if(trade){
+    // The trader relists exactly what it bought: a whole stack, or a SINGLETON module/ship
+    // (quantity -1, stacksize 1) that is one unit. Nothing is split, minted or repackaged.
+    const singleton=item.singleton===1;
+    if(singleton){
+     if(identity.quantity!==1||
+        !(item.stacksize===1||item.stacksize===null||item.stacksize===undefined))
+      throw Error("NPC_MARKET_OUTPUT_CUSTODY_INVALID");
+    }else if(item.singleton!==0||item.quantity!==identity.quantity||
+       item.stacksize!==identity.quantity)
+      throw Error("NPC_MARKET_OUTPUT_CUSTODY_INVALID");
+    if(escrow.coopSource!=="NATIVE_TRADE")
+      throw Error("NPC_MARKET_NATIVE_ESCROW_MISSING");
+   }else if(item.singleton!==0||item.quantity!==identity.quantity||
       item.stacksize!==identity.quantity)
     throw Error("NPC_MARKET_OUTPUT_CUSTODY_INVALID");
-   // Manufacturing and original NPC salvage share the same native wallet
-   // settlement, but never the same provenance authority.
-   const salvage=isSalvage(identity.operationID);
-   if(!salvage&&!/^coop-industry:v1:[0-9]+$/.test(String(item.customInfo||"")))
+   // Manufacturing and original NPC salvage must also carry their own provenance marker.
+   if(!salvage&&!trade&&!/^coop-industry:v1:[0-9]+$/.test(String(item.customInfo||"")))
     throw Error("NPC_MARKET_OUTPUT_CUSTODY_INVALID");
    const original=salvage?verifySalvageOriginal(tx,identity,escrow,item):null;
    if(!character||Number(character.characterID??character.charID??buyerID)!==buyerID||
       !Number.isFinite(character.balance)||cents(character.balance)===null||
       cents(character.balance)<grossCents)throw Error("NPC_BUYER_INSUFFICIENT_FUNDS");
    const division=corp?.wallet?.divisions?.["1000"];
-   if(corp?.corporationID!==identity.ownerID||!division||
+   // The native corporationRuntime row is stored BY KEY with no embedded id (the same shape that
+   // refused every real corporation on the buy side): the key is the authority, so only a
+   // present-and-different id is a conflict.
+   if((corp?.corporationID!==undefined&&corp?.corporationID!==null&&
+      Number(corp.corporationID)!==identity.ownerID)||!division||
       cents(division.balance)===null||!Array.isArray(division.journal)||
       !Array.isArray(division.transactions)||!Array.isArray(character.walletJournal)||
       !Array.isArray(character.marketTransactions))
@@ -201,7 +226,7 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
        transactions:[...division.transactions,corpEntry].slice(-2000)}}}};
    const delivered={...item,ownerID:buyerID,locationID:identity.stationID};
    const receipt={phase:"NATIVE_COMMITTED",fillID,orderID:identity.orderID,operationID:identity.operationID,
-    coopSource:salvage?"NATIVE_SALVAGE":"NATIVE_INDUSTRY",
+    coopSource:provenance(identity.operationID),
     itemID:identity.itemID,buyerID,ownerID:identity.ownerID,stationID:identity.stationID,
     typeID:identity.typeID,quantity:identity.quantity,priceCents,grossCents,
     buyerBeforeCents:oldBuyer,buyerAfterCents:nextBuyer,

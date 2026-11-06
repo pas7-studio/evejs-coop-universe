@@ -40,10 +40,22 @@ reference. Verified live: **22 of 22** bought modules are listed on the book at 
 each with a real `marketEscrow` sell row for the corporation and the module physically in that escrow
 container (`docs/NPC_MARKET_MAKER.md` §11).
 
-Still open: a PLAYER cannot buy those NPC orders yet. The buy path branches on `source === "coop-npc"`
-into `space/coopNpcCorporateBuyRuntime`, which calls `ClaimNpcSellOrder` / `FinalizeNpcSellOrder` /
-`GetNpcSellClaim` — three RPCs the daemon still does not implement (same class as the defect fixed
-today). Until they exist the corporation's stock is visible but unsellable.
+**The buy-back half is closed too** (fork `0f749ed`): the daemon implements `ClaimNpcSellOrder` /
+`FinalizeNpcSellOrder` / `GetNpcSellClaim` (open → settling → filled, one buyer per order, fill id
+derived from the order so a retry is idempotent, a settling order is off the book), the settlement
+accepts the third provenance `npc-trade:` (singleton module or whole bought stack, escrow
+`NATIVE_TRADE`, receipt `NATIVE_TRADE`), the 1 M ISK ceilings are 1 B, the `corporationRuntime` row is
+accepted without an embedded id, and the price tolerance is a thousandth of a cent instead of 1e-7
+(a real 139 M ISK module with cents used to be refused). Play-stack flags
+`EVEJS_COOP_NATIVE_NPC_CORP_SETTLEMENT` / `_PROOF` were never on; they are now.
+Live: the Rust state machine walked end to end on a synthetic order of its own (claim, idempotent
+re-claim, finalize, idempotent finalize, foreign buyer refused, wrong order refused, book empty), and
+a read-only probe says **22 of 22** real listings pass every guard `buyFromOrder` applies
+(`docs/NPC_MARKET_MAKER.md` §12).
+
+Still open: the owner's own click. Buying a `coop-npc` ask needs a real authenticated, docked session
+— the session guard is exactly what must not be faked — so the last step is his market window.
+Total cost of the 22 listings is 2 036 202 000 ISK against his 1 933 440 953 ISK: he can take 21.
 
 ## Current state
 
