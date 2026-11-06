@@ -422,6 +422,26 @@ transfer) and returning inside `fsync`. Measured fsync on the data volume direct
 with fsync each, dematerialize/materialize commits, two JSON signature passes). That transfer is a rare
 per-jump event, so it is a visible but bounded 250 ms block.
 
+**The lag metric itself was broken: the container's wall clock steps** (fork `f64fed0`, deployed
+2026-11-06 21:05). Measured in-process: `Date.now()` advanced 18 466 ms while the monotonic clock
+advanced 20 743 ms inside one 20 s window (skew -2 277 ms), and 27 658 ms against 30 000 ms in a 30 s
+window; four 5 s windows stayed within 0.6 ms, so it is a STEP, not a drift. The event-loop monitor -
+the only witness to the owner's freezes - measured lateness on that clock. It now uses
+`performance.now()`; the event keeps `at: Date.now()` so the log stays readable.
+
+After the fix the lags are still there (250-1 150 ms, every ~30 s), so they are real, and now the
+record says what the world was doing: cycles 187-268 ms, GC 5-47 ms (worst 183 ms). That leaves
+50-800 ms per lag unexplained by phases and GC.
+
+**Why no profiler gap exists for them:** the server process uses only ~24% of one core while those
+lags happen (measured `process.cpuUsage()` over 30 s: 6 704 ms CPU / 27 658 ms wall). A thread that is
+not executing produces no V8 samples, so a CPU profile can never show these stalls - only wall-clock
+observation can. Two synchronous-blocking sites exist in the code: the persistence worker drain
+(`Atomics.wait` on the main thread, `gameStore/persistenceWorker.js:918`, bounded by a deadline) and
+the economy-v2 shadow lock retry (`Atomics.wait` 10 ms x up to 100 = 1 s, `space/coopEconomyV2.js:278`).
+The second is NOT loaded on the play stack (`coopEconomyV2` is absent from the module cache), so the
+drain is the remaining suspect.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
