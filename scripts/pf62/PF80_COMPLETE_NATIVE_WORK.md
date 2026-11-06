@@ -114,3 +114,19 @@ for the complete manual preflight. See
 This closes one transaction-boundary race, NOT the missing original player,
 Mining, WAR and Exploration reciprocal writer gates or native WORK E2E.
 No remote CI, main merge, PLAY start or Personal Fleet activation.
+
+## PF88 — reciprocal native writer custody (2026-11-07)
+
+The PF80 PowerShell `-ApplyToWork` preflight now runs the PF88 original
+GameStore reciprocal-writer and source-bound fail-closed regressions
+before generating a WORK review tree. The existing PF58 native permit
+module already appears in the exact 22-path PF62 package, so its new
+`createReciprocalWriterFence` export is staged automatically.
+
+**This does NOT install the necessary hooks** in the original EveJS
+`itemStore`, `characterState`, Mining, WAR or Exploration writers.
+The source-bound bootstrap rejects activation without the separately
+provided original writer hook witness. A read-only, source-pinned audit
+of those six original domains is available at
+`scripts/pf88/inspect-original-writer-hooks.cjs`, and never exits
+successfully for activation. See the PF88 contract document.
