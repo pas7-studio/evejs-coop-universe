@@ -10,6 +10,11 @@ entity+controller+PF actor claim before an order can be admitted.
 
 - Durable `ISSUING` before one original NPC runtime action. No automatic
   redelivery after a crash, timeout, transient error, or ambiguous native ACK.
+- **PF75:** the durable-orders adapter now calls `createNpcRuntimeExecutor()`'s
+  real immutable `{execute,probe,supports}` object via `.execute(row)`;
+  the previous function-only validation made the genuine runtime pair unusable.
+  A legacy callable with `supports()` is retained only for old fixture compatibility.
+  See `docs/PF75_RUNTIME_EXECUTOR_CONTRACT.md`.
 - `ACKED` requires an independent ORIGINAL *persisted controller order* witness.
   The stock `npcRuntime.issueOrder` return value is insufficient.
 - Atomically writes the latest ship order and a global operation ID index in
