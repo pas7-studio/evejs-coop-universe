@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   exact-native-worktree:
-    name: 21-file source-pinned native WORK gate (no deploy)
+    name: 23-path source-pinned native WORK gate (no deploy)
     if: >-
       (github.event_name == 'push' &&
        github.ref == 'refs/heads/docs/personal-fleet-contract-freeze-v1-4-20261104') ||
@@ -81,7 +81,7 @@ jobs:
           git -C "$RUNNER_TEMP/pf74-native-work" diff --check
           node --check "$RUNNER_TEMP/pf74-native-work/Code/server/src/space/npc/nativeNpcService.js"
           node --check "$RUNNER_TEMP/pf74-native-work/Code/server/src/space/npc/nativeNpcStore.js"
-          test "$(python3 -c 'import json,os; p=os.path.join(os.environ["RUNNER_TEMP"],"pf74-native-review","PF62-MANIFEST.json");m=json.load(open(p));print(len(m["files"])-1)')" = 19
+          test "$(python3 -c 'import json,os; p=os.path.join(os.environ["RUNNER_TEMP"],"pf74-native-review","PF62-MANIFEST.json");m=json.load(open(p));print(len(m["files"])-1)')" = 21
 
       - name: PF55 original command arbiter and claim ownership patch (WORK only)
         shell: bash
@@ -119,7 +119,11 @@ jobs:
             scripts/pf55/tests/pf55-native-executor.test.cjs \
             scripts/pf55/tests/pf55-sqlite-sigkill.test.cjs \
             scripts/pf55/tests/pf75-runtime-durable-contract.test.cjs \
-            scripts/pf55/tests/pf76-order-vs-dock.test.cjs
+            scripts/pf55/tests/pf76-order-vs-dock.test.cjs \
+            scripts/pf55/tests/pf78-actor-identity.test.cjs \
+            scripts/pf56/tests/pf56-return-dock.test.cjs \
+            scripts/pf56/tests/pf56-native-api.test.cjs \
+            scripts/pf56/tests/pf56-sqlite-sigkill.test.cjs
           python3 scripts/pf55/tests/pf55-patch-builder.test.py
 
       - name: PF58 original handoff and PF69-PF73 cross-contract tests
