@@ -222,7 +222,9 @@ function createNativeBootstrap({gameStore,pf52,originalItemStore,nativeNpcStore,
   verifyNativePermit:verifier.verify,
   checkForeignWriterWithinTransaction:foreignWriterFence.inTransaction,
   mutateForeignOriginalItemsWithinTransaction:
-   foreignWriterFence.mutateOriginalItemsInTransaction});
+   foreignWriterFence.mutateOriginalItemsInTransaction,
+  commitStockOwnerSnapshotWithinTransaction:
+   foreignWriterFence.commitOriginalOwnerSnapshot});
 }
 module.exports={createNativeBootstrap,createSourceBoundNativeBootstrap,
  createOriginalPresenceReaders,moveOriginalShipToSpaceAtomically};
