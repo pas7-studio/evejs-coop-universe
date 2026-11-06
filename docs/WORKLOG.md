@@ -3739,3 +3739,8 @@ Evidence: fork 4a66dbf (RepriceNpcSellOrder in the daemon + repriceOnce in the r
 Why: the competitive relist let a player buy the corporation's module just under the market and sell it straight back at the market reference, draining the corporation for ever
 Where: integration/coopNpcTraderMaker.cjs, tests/coop-npc-trader-maker.test.mjs
 Evidence: fork e9... ; maker records own coop-npc asks and skips player asks not cheaper; 18 maker tests + 11 relist tests pass; AUDIT_OK
+### 2026-11-06T19:09Z · 6951c8e · L1 · test(militia): the login session must carry the militia faction
+
+Why: the owner saw the Caldari militia as lost again while the enlistment row was ACTIVE: the login SessionChange filters to a stock key list that never contained warfactionid, which is the only field the client reads for CurrentlyInSameFaction; GetSolarSystemLPs was also unhandled and returned null into the LP donation path
+Where: tests/coop-facwar-mgr-answers.test.mjs, tests/coop-militia-session-truth.test.mjs
+Evidence: live log 18:26:58 SessionChange 17 keys, no warfactionid; militia_state ACTIVE 500001; GetCorpFactionalWarStatus -> facwarCorporationActive; fork 7ec6b7c; 17 tests pass; AUDIT_OK
