@@ -61,10 +61,11 @@ function originalNativeResumeAllowed(tx, deploy, e) {
     ret.systemID!==e.systemID||ret.typeID!==e.typeID||
     ret.reservationGeneration!==e.personalFleetGeneration||
     ret.actorGeneration!==deploy.actorGeneration||!pos(ret.stationID)||
-    !TOKEN.test(ret.operationID)||
+    typeof ret.operationID!=='string'||!TOKEN.test(ret.operationID)||
+    typeof ret.signature!=='string'||
     !/^[0-9a-f]{64}$/.test(ret.signature))return false;
- // PF56's original operation signature binds the return row to its precise
- // actor/custody tuple; a forged early phase cannot mask committed docking.
+ // PF56's canonical SHA256 digest detects a partially edited return row.
+ // This is NOT a MAC; authorization still relies on fenced original writers.
  const expected=crypto.createHash('sha256').update(JSON.stringify([
    'PF56_RETURN',ret.operationID,assignment,e.ownerID,e.personalFleetPilotID,
    e.entityID,ret.stationID,e.systemID,e.personalFleetGeneration,
