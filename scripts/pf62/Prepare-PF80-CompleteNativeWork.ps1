@@ -50,6 +50,10 @@ if ($ApplyToWork.IsPresent) {
     if (-not (Test-Path -LiteralPath $pf86Test -PathType Leaf)) { throw 'PF86_PRESENCE_TEST_MISSING' }
     & $node --test --test-concurrency=1 $pf86Test
     if ($LASTEXITCODE -ne 0) { throw 'PF86_ORIGINAL_PRESENCE_GATE_FAILED' }
+    $pf87Test = Join-Path $repo 'scripts/pf58/tests/pf87-atomic-handoff.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf87Test -PathType Leaf)) { throw 'PF87_ATOMIC_HANDOFF_TEST_MISSING' }
+    & $node --test --test-concurrency=1 $pf87Test
+    if ($LASTEXITCODE -ne 0) { throw 'PF87_ATOMIC_HANDOFF_GATE_FAILED' }
     $pf86Source = Join-Path $repo 'scripts/pf58/tests/pf86-original-source-pins.test.cjs'
     if (-not (Test-Path -LiteralPath $pf86Source -PathType Leaf)) { throw 'PF86_ORIGINAL_SOURCE_PINS_MISSING' }
     $oldPf86SourceRoot = [Environment]::GetEnvironmentVariable('PF86_NATIVE_WORKTREE', 'Process')
