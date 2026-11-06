@@ -15,6 +15,12 @@ entity+controller+PF actor claim before an order can be admitted.
   the previous function-only validation made the genuine runtime pair unusable.
   A legacy callable with `supports()` is retained only for old fixture compatibility.
   See `docs/PF75_RUNTIME_EXECUTOR_CONTRACT.md`.
+- **PF76:** a new order is denied inside the same original GameStore transaction
+  if a PF56 return row or any PF66/67 dock attempt or PF60 terminal intent exists
+  for the assignment. PF56 independently denies pending PF55 ISSUING during
+  return admission, preventing a command from overtaking docking at the durable
+  reservation level. Unknown custody reads also deny.
+  See `docs/PF76_ORDERS_VS_DOCK_CUSTODY.md`.
 - `ACKED` requires an independent ORIGINAL *persisted controller order* witness.
   The stock `npcRuntime.issueOrder` return value is insufficient.
 - Atomically writes the latest ship order and a global operation ID index in
@@ -33,7 +39,7 @@ entity+controller+PF actor claim before an order can be admitted.
 Node.js 22+:
 
 ```sh
-node --test tests/pf55-orders.test.cjs tests/pf55-native-executor.test.cjs tests/pf55-sqlite-sigkill.test.cjs tests/pf75-runtime-durable-contract.test.cjs
+node --test tests/pf55-orders.test.cjs tests/pf55-native-executor.test.cjs tests/pf55-sqlite-sigkill.test.cjs tests/pf75-runtime-durable-contract.test.cjs tests/pf76-order-vs-dock.test.cjs
 python tests/pf55-patch-builder.test.py
 ```
 
