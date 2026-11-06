@@ -224,6 +224,21 @@ Measured after the restart (9 samples, 6 min): p50 **813 ms**, p90 **1 422 ms**,
 RSS **2.82 GB** - against p50 1 289 ms, p90 5 043 ms, worst 8 592 ms and RSS 5.4 GB in the same
 shape of window before it.
 
+**The 22 listed modules are now the cheapest offer on the book** (fork `4a66dbf`, repair applied live
+2026-11-06 18:52). The daemon gained `RepriceNpcSellOrder` (price only; operation id, item, escrow and
+quantity untouched) and the relist gained `repriceOnce` (re-proves the escrow, calls the RPC, verifies
+the returned price, and moves the escrow's `coopTradePriceCents` with it). Only the MARKET container was
+recreated, so the owner's session was not dropped.
+
+Applied to all 22: 139 202 000 -> **98 435 700** for 23803 (cost 90 460 000, seed ask 99 430 000),
+126 868 000 -> 89 713 800 for 21472, and so on; `repriced=22 kept=0 blocked=0`. Verified on the book:
+the corporation's three 23803 orders now sit BELOW the seed ask, i.e. they are the best offer, and all
+22 escrow rows carry the new price.
+
+Caveat: the SERVER container still runs the pre-fix image (it was not recreated, to keep the owner's
+session), so the new relist rule (undercut 99 %, cost+5 % floor) and `repriceOnce` take effect only on
+the next server restart. The repair above already fixed the stock that was on the book.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
