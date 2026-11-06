@@ -32,8 +32,8 @@ PF82_NATIVE_WORKTREE=/absolute/path/to/native-work \
   node --test scripts/pf55/integration/pf82-friendly-follow-native.test.cjs
 ```
 
-The `scripts/pf55/tests/pf55-native-executor.test.cjs` and `pf75-runtime-durable-contract.test.cjs` regression tests also require the real executor to invoke `follow()` and verify that a friendly target never goes through the manual `issueOrder` API. Their actual physical scene/runtime are still isolated test adapters.
+The `scripts/pf55/tests/pf55-native-executor.test.cjs` and `pf75-runtime-durable-contract.test.cjs` regression tests also require the real executor to invoke `follow()` and verify that a friendly target never goes through manual `issueOrder`. Their physical scene/runtime are isolated test adapters. The native source test runs manually via `Test-PF55-Local.ps1 -NativeWorktree <EveJS checkout>` or directly with `PF82_NATIVE_WORKTREE`.
 
 **NOT PROVEN:** A live server/client command, after-combat FOLLOW transition, stock physics movement across bubbles/gates, actual two-player fleet behavior, original GameStore writer fencing, wages, combat and stock ammo.
 
-No main/PLAY writes, flags remain OFF. CI must show green results before advancing readiness.
+No main/PLAY writes, flags remain OFF. The owner prohibits remote CI; collect manual local Node and original WORK/gameplay evidence before readiness can advance.
