@@ -114,6 +114,8 @@ function createNpcPlayerAskLift({
         row.quantity !== request.quantity || !pos(row.itemID))
       throw Error("NPC_LIFT_RECEIPT_CONFLICT");
     return { status: "NPC_PURCHASED_PLAYER_GOODS", replayed: true,
+      // The claim key is what the post-commit seller notification looks the fill up by.
+      operation: request.claimKey,
       fillID: row.fillID, itemID: row.itemID, quantity: row.quantity,
       grossCents: row.grossCents, taxCents: row.taxCents, netCents: row.netCents };
   }
@@ -273,7 +275,10 @@ function createNpcPlayerAskLift({
             quantity: request.quantity });
         } catch (_error) { /* history only */ }
       }
-      return { ...settled, status: "NPC_PURCHASED_PLAYER_GOODS", itemID: settled.itemID };
+      // `operation` is the claim key the seller notification uses to find this fill; without it
+      // the notification could never be sent and the seller's client kept the item forever.
+      return { ...settled, status: "NPC_PURCHASED_PLAYER_GOODS", itemID: settled.itemID,
+        operation: request.claimKey };
     } finally {
       busy.delete(lock);
     }
