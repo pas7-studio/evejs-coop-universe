@@ -153,7 +153,7 @@ function createReciprocalWriterFence({pf52}={}){
  const rootItem=items=>obj(items)&&!Array.isArray(items)?items:null;
  // A stock child item can be fitted or held inside the ship. Protect title,
  // fittings and cargo, and the destination ship on a new insertion.
- function containingShip(items,rawID){
+ function containingShip(items,rawID,{externalDestination=false}={}){
   if(!pos(rawID))return {unresolved:true};
   let id=rawID,seen=new Set();
   for(let depth=0;depth<32;depth++){
@@ -161,7 +161,8 @@ function createReciprocalWriterFence({pf52}={}){
    seen.add(id);
    const x=items[String(id)];
    // Missing parent is often a station, structure or system, not an item.
-   if(x===undefined||x===null)return {ship:null};
+   if(x===undefined||x===null)
+    return depth===0&&!externalDestination?{unresolved:true}:{ship:null};
    if(!obj(x)||x.itemID!==id||!pos(x.ownerID)||
       !pos(x.locationID)||!pos(x.categoryID))return {unresolved:true};
    if(x.categoryID===6)return {ship:id};
@@ -188,9 +189,10 @@ function createReciprocalWriterFence({pf52}={}){
      return fail('PF88_SHIP_ID_NOT_ORIGINAL_STOCK');
     touched.add(shipItemID);
    }
-   for(const id of [affectedItemID,destinationLocationID]){
+   for(const [id,externalDestination] of [
+    [affectedItemID,false],[destinationLocationID,true]]){
     if(id===null)continue;
-    const found=containingShip(original,id);
+    const found=containingShip(original,id,{externalDestination});
     if(found.unresolved)return fail('PF88_PARENT_CHAIN_UNVERIFIED');
     if(found.ship!==null)touched.add(found.ship);
    }
