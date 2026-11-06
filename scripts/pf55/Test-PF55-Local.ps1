@@ -23,6 +23,16 @@ try {
             & $python.Source build_native_owner_patch.py --native-worktree $NativeWorktree --output $tempFile
             if ($LASTEXITCODE -ne 0) { throw 'PF55_NATIVE_SOURCE_PIN_OR_PATCH_CHECK_FAILED' }
             Write-Host 'PF55 native source-pinned patch verified. NOT APPLIED.'
+            $oldPF82Work = [Environment]::GetEnvironmentVariable('PF82_NATIVE_WORKTREE')
+            try {
+                $env:PF82_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeWorktree).Path
+                & $node.Source --test integration/pf82-friendly-follow-native.test.cjs
+                if ($LASTEXITCODE -ne 0) { throw 'PF82_ORIGINAL_FRIENDLY_FOLLOW_SOURCE_ABI_FAILED' }
+            } finally {
+                if ($null -eq $oldPF82Work) { Remove-Item Env:PF82_NATIVE_WORKTREE -ErrorAction SilentlyContinue }
+                else { $env:PF82_NATIVE_WORKTREE = $oldPF82Work }
+            }
+            Write-Host 'PF82 original NPC physics FOLLOW source-pin test PASS.'
         } finally { Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue }
     } else {
         Write-Host 'PF55 original native source preflight NOT RUN (no -NativeWorktree).'
