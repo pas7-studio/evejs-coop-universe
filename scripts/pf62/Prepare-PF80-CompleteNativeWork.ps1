@@ -54,6 +54,13 @@ if ($ApplyToWork.IsPresent) {
     if (-not (Test-Path -LiteralPath $pf87Test -PathType Leaf)) { throw 'PF87_ATOMIC_HANDOFF_TEST_MISSING' }
     & $node --test --test-concurrency=1 $pf87Test
     if ($LASTEXITCODE -ne 0) { throw 'PF87_ATOMIC_HANDOFF_GATE_FAILED' }
+    $pf88Tests = @('pf88-reciprocal-writers.test.cjs', 'pf88-sourcebound-gating.test.cjs') | ForEach-Object {
+      $path = Join-Path $repo ('scripts/pf58/tests/' + $_)
+      if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'PF88_RECIPROCAL_WRITER_TEST_MISSING' }
+      $path
+    }
+    & $node --test --test-concurrency=1 @pf88Tests
+    if ($LASTEXITCODE -ne 0) { throw 'PF88_RECIPROCAL_WRITER_GATE_FAILED' }
     $pf86Source = Join-Path $repo 'scripts/pf58/tests/pf86-original-source-pins.test.cjs'
     if (-not (Test-Path -LiteralPath $pf86Source -PathType Leaf)) { throw 'PF86_ORIGINAL_SOURCE_PINS_MISSING' }
     $oldPf86SourceRoot = [Environment]::GetEnvironmentVariable('PF86_NATIVE_WORKTREE', 'Process')
