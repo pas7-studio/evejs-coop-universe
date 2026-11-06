@@ -40,7 +40,7 @@ Do not use this fix to enable Personal Fleet on PLAY.
 
 The existing PF58 Python patch-builder tests remain 7/7 PASS. New
 `tests/test_pf69_restart_pair.py` adds 3 PASS (including Node 22 VM execution of
-the exact patched `materializeStoredNativeController` entrypoint with 25
+the exact patched `materializeStoredNativeController` entrypoint with 26
 identity, marker, feature, binding and ordinary-NPC assertions). All are
 **isolated tests**, not an original EveJS native WORK run.
 
