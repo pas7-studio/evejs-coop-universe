@@ -3774,3 +3774,8 @@ Evidence: heap sampling attributed (60 s, 32 KB): 113.11 MB readShipBaseAttribut
 Why: the heap sampler charged 88 MB/min to ruleAppliesToSystem rebuilding static scope arrays and 92 MB/min to a wormhole state deep clone made only to iterate pairs read-only
 Where: tests/coop-spawn-rule-scope.test.mjs, tests/coop-wormhole-state-view.test.mjs
 Evidence: heap sampling attributed 60 s: ruleAppliesToSystem 88.03 MB, wormholeRuntimeState.cloneRuntimeState 92.53 MB; 5 tests pass; AUDIT_OK
+### 2026-11-06T20:22Z · 0a8468b · L1 · test(wormhole): pin the no-clone mutation
+
+Why: mutateState cloned the whole wormhole state (41825 pairs, 49.5 ms per clone, 94 MB/min of garbage) before every mutation only to keep the mirror pristine on failure, while the persisted table is the authority
+Where: tests/coop-wormhole-mutate-no-clone.test.mjs
+Evidence: in-process timing through the inspector: pairs 41825, cloneMs 49.499; heap sampling 94.17 MB cloneRuntimeState; fork 6787faf; 3 tests pass; AUDIT_OK
