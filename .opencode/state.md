@@ -262,6 +262,26 @@ corpid, ..., warfactionid, ...`). The FW window then answered `GetMyCharacterRan
 and `GetStats_FactionInfo` with no `Unhandled method` warning, i.e. `GetSolarSystemLPs` is covered too.
 Both militia fixes (login session key + per-system LP answer) are now deployed on the play stack.
 
+**World-tick waste measured with a live V8 profile** (fork `ea8eaec`, 2026-11-06 19:40). The inspector
+was opened on the RUNNING server with `kill -USR1 7` and driven over CDP from inside the container
+(no restart, no code change, loopback only; it is closed again with `process._debugEnd()`).
+120 s at 500 us sampling, plus in-process timings of the same modules:
+
+| waste | measured | fix |
+|---|---|---|
+| `getSceneActivityState` | 2.14 s self + 0.97 s memo closure per 120 s; 0.0079 ms/call of which the stargate scan is 0.0079 ms | stargate SELECTION cached per scene (`space/npc/sceneStargateIndex.js`), timestamps still live |
+| `nativeNpcStore.entityIndexFor` | one cold `listNativeModulesForEntity` = 45.7 ms for ZERO rows (deep clone of the whole table; every module/cargo write clears the index) | index reads `rawCollection`; `cachedRowsForEntity` still clones each returned row |
+| `runtime.logMovementDebug` | 165 ms self per 120 s with verbose debug OFF (20-field JSON + 5 vector summaries per movement event) | early return before building anything |
+
+Also measured and NOT yet changed: `peekNativeCargo()` 6.4 ms (16 988 rows, `Object.values`+sort) and
+`peekNativeEntities()` 4.4 ms (8 544 rows) on every read-cache rebuild, and the cache is invalidated by
+EVERY native write - the prime suspect for combat-time stalls, needs a rebuild-frequency measurement
+first. No stall >= 120 ms occurred during the 120 s window (the owner was docked and idle), so the
+1.5 s combat stalls still have no captured stack: capture one with the same profiler during a fight.
+
+The three fixes above are committed and BUILT into `evejs-local`, but the running server container
+still has the previous image (the owner was in game). They take effect on the next server restart.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
