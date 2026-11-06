@@ -65,6 +65,12 @@ if ($ApplyToWork.IsPresent) {
     if (-not (Test-Path -LiteralPath $pf89Test -PathType Leaf)) { throw 'PF89_ORIGINAL_ITEMS_DELTA_TEST_MISSING' }
     & $node --test --test-concurrency=1 $pf89Test
     if ($LASTEXITCODE -ne 0) { throw 'PF89_ACTUAL_ITEMS_DELTA_GATE_FAILED' }
+    # PF91: the OLD PF87 aggregate-character fixture was not original EveJS.
+    # Require BOTH the revised strict PF87 test and real per-character rows.
+    $pf91 = Join-Path $repo 'scripts/pf58/tests/pf91-original-character-rows.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf91 -PathType Leaf)) { throw 'PF91_NATIVE_CHARACTER_ROWS_TEST_MISSING' }
+    & $node --test --test-concurrency=1 $pf87Test $pf91
+    if ($LASTEXITCODE -ne 0) { throw 'PF91_ORIGINAL_CHARACTER_RACE_GATE_FAILED' }
     $pf90Owner = Join-Path $repo 'scripts/pf58/tests/pf90-owner-snapshot.test.cjs'
     $pf90Sources = Join-Path $repo 'scripts/pf90/tests/pf90-original-owners.test.cjs'
     $pf90Audit = Join-Path $repo 'scripts/pf90/inspect-original-owner-writes.cjs'
