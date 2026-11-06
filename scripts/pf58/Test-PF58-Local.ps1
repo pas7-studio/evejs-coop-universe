@@ -11,7 +11,10 @@ if ($IsWindows -or $env:OS -eq 'Windows_NT') {
   Write-Warning 'SIGKILL needs Linux/WSL. Skipping pf58-sqlite-sigkill.test.cjs.'
   $tests = @($tests | Where-Object {$_.Name -ne 'pf58-sqlite-sigkill.test.cjs'})
 }
-& $node --test '--test-concurrency=1' @($tests.FullName)
+$pf73 = Join-Path $root 'tests/pf73-docking-restart-permit.test.cjs'
+if (-not (Test-Path -LiteralPath $pf73 -PathType Leaf)) { throw 'PF73_DOCK_RESTART_TEST_MISSING' }
+$allNodeTests = @($tests.FullName) + @($pf73)
+& $node --test '--test-concurrency=1' @allNodeTests
 if ($LASTEXITCODE -ne 0) { throw 'PF58_NODE_REGRESSION_FAILED' }
 $python = (Get-Command python -ErrorAction Stop).Source
 & $python -m unittest discover -s (Join-Path $root 'tests') -p 'test_*.py' -v
