@@ -111,3 +111,17 @@ original WORK server or two-client gameplay.
 - Verify every native character write route, Mining/WAR/Exploration
   writer integration, crash restart and two-client WORK E2E.
 - Keep Personal Fleet OFF and PR #350 Draft until those gates pass.
+
+## PF93 correction — collateral writes to unrelated SQLite keys
+
+PF92 originally compared the original `items/items` root and the
+current character row after a session witness. It did not cover
+unrelated `corporationRuntime`, other `characters` keys or
+non-root `items` keys. PF93 now fingerprints the **complete** three
+declared original SQLite table rowsets before and after both witness
+calls; any collateral change throws for atomic rollback. The
+limitation about write-then-restore and O(database) scan overhead is
+documented in
+`scripts/pf93/PF93_NATIVE_SESSION_WITNESS_ATOMIC_ISOLATION.md`.
+The original server integration and native session writer fencing
+remain unproven; Personal Fleet OFF.
