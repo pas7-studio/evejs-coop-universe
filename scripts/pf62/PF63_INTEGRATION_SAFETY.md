@@ -43,3 +43,12 @@ After a successful local preflight, integration still needs a separately
 reviewed engine-fork commit, real authority bindings, unfenced writer closure,
 real source compilation, WORK service and two independent EVE clients.
 Neither main nor PLAY are modified by this script.
+
+## PF-66 extension (subsequent change, 2026-11-06)
+
+The 18-file PF-63 contract described above is the historical baseline. PF-66
+adds a source-pinned scoped dock scene-detach module and transform against the
+same original `nativeNpcService.js`; the current integrated review bundle MUST
+therefore contain **19 paths**: two stock edits plus **17** new files. The
+PF-63 no-partial-install, no-overwrite, byte-perfect `git apply` and
+out-of-tree output rules still apply. PF66 is a review candidate, not installed.
