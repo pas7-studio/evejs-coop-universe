@@ -34,6 +34,16 @@ entity+controller+PF actor claim before an order can be admitted.
   real native worktree; it refuses changed sources and runs `git apply --check`.
   This repository does not contain an applied original engine patch.
 
+## PF78 physical actor authority before orders
+
+PF55's native executor now reads the same strict PF58 runtime actor + controller
+identity before entering the real native order bridge and again immediately
+before the native effect. A matching numeric ID alone is insufficient.
+The source-shared verifier rejects foreign ownership, stale pilot/assignment,
+controller mismatches, and a live session of any shape. The PF56 return and
+arrival readers use the same proof. The matching GameStore actor claim remains
+an independent mandatory gate. See `scripts/pf56/README.md`.
+
 ## PF77 actual native WORK owner gate
 
 The source-pinned PF55 patch is also exercised against the **actual** native
@@ -50,7 +60,7 @@ See `docs/PF77_NATIVE_OWNER_BRIDGE_GATE.md`.
 Node.js 22+:
 
 ```sh
-node --test tests/pf55-orders.test.cjs tests/pf55-native-executor.test.cjs tests/pf55-sqlite-sigkill.test.cjs tests/pf75-runtime-durable-contract.test.cjs tests/pf76-order-vs-dock.test.cjs
+node --test tests/pf55-orders.test.cjs tests/pf55-native-executor.test.cjs tests/pf55-sqlite-sigkill.test.cjs tests/pf75-runtime-durable-contract.test.cjs tests/pf76-order-vs-dock.test.cjs tests/pf78-actor-identity.test.cjs
 python tests/pf55-patch-builder.test.py
 ```
 
