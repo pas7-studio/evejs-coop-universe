@@ -299,6 +299,31 @@ it returned in. As of 19:55 the file holds only its start line: no stall >= 200 
 docked, so the combat freeze still needs his fight. Read that file BEFORE any restart (it lives in the
 data volume, the watcher process itself does not survive a container recreate).
 
+**Allocation profile: the server makes 2.3-5 GB of garbage per MINUTE while idle** (2026-11-06 20:20).
+Method: `HeapProfiler.startSampling` over CDP against the running process, 60 s windows, 32 KB
+sampling, builtins charged to their nearest user frame (`/tmp/heap-sampling-attributed.cjs` inside the
+container). Two more fixes followed from it:
+
+* `dungeonUniverseRuntime.listActiveRandomAllocatedInstances` listed ALL 8 491 universe-seeded
+  instances (5.3 ms: walk, Map, sort) once per family per band only to filter them by a candidate
+  system set it already held (402 + 298 + 189 MB/min). It now hands the candidates to the list:
+  ~1.5 ms per call, and the `getSecurityBand()` filter visits a few hundred rows instead of 8 491
+  (fork `d4371e5`).
+* `npcSceneActivity.getSceneCrimewatchDeadlineMs` re-required the crimewatch module with a fresh
+  `path.join()` on every scheduler call - 69 MB/min charged to `node:path` alone. Resolved once, with
+  a failed resolve still retried (fork `914befb`).
+
+Still on the table, by measured MB/min: `cloneValue` 197 (nativeNpcStore deep clones),
+`liveFittingState.buildShipResourceState` + `readShipBaseAttributeMap` 260 (per-tick ship resource
+state), the read cache's own shallow copies 266, `npcService.ruleAppliesToSystem` 132,
+`coopGameStoreAtomic.get` 100, `wormholeRuntimeState.cloneRuntimeState` 93, structure tick 103.
+`logMovementDebug` 28 is already fixed and waiting for the restart.
+
+**Six perf fixes are committed and built but NOT deployed**: the running server container still has
+the image from 19:14 (the owner was in game). One restart activates: stargate index, entityIndexFor
+raw read, movement-debug early return, unsorted peek enumerations, narrowed universe plan, crimewatch
+require hoist.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
