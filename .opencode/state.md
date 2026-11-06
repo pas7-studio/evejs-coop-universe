@@ -336,6 +336,34 @@ Seven fixes now wait for ONE server restart (the container still runs the 19:14 
 index, entityIndexFor raw read, movement-debug early return, unsorted peek enumerations, narrowed
 universe plan, crimewatch require hoist, per-type attribute cache.
 
+**The seven perf fixes are DEPLOYED and measured before/after** (server restarted onto the new image
+2026-11-06 20:06, owner's client was already closed). Same method both sides: attributed heap sampling
+60 s / 32 KB against the running process, plus a CPU profile, on an idle server.
+
+| site | before | after |
+|---|---|---|
+| total garbage / 60 s | 2 306.4 MB | **1 878.4 MB (-18.6%)** |
+| `cloneValue` nativeNpcStore | 196.98 MB | 75.61 MB (-62%) |
+| `peekNativeCargo` CPU | 389 ms / 120 s | 110 ms / 60 s (-44%) |
+| `computeSceneActivityState` CPU | 2 144 ms / 120 s + 971 ms closure | **absent from the top 20** |
+| dungeon universe plan | 402 + 298 + 189 MB | **absent from the top 20** |
+| `logMovementDebug` | 28.09 MB | absent |
+| `path.join` | 69.31 MB | 45.70 MB |
+| `ruleAppliesToSystem` | 131.90 MB | 88.03 MB |
+| `readShipBaseAttributeMap` | 113.11 MB | replaced by `toMap` 173.82 MB (the per-call copy is required) |
+
+Two measurements that settle earlier hypotheses: the read cache is rebuilt **27 times a minute, TTL-bound**
+(`cargoBuilds` 64 -> 91 in 60 s) while `invalidations` reached 5 125 in ~10 min (~8.5/s) - so writes
+invalidate cheaply and the TTL, not a write storm, sets the rebuild rate. And the 988 ms of
+`getNearestParentPackageJSON` in the first profile was a post-boot module-resolution burst: a 30 s window
+later charged it 5.7 ms total.
+
+Still on top, by measured MB/min: read-cache shallow copies 254 (140 + 114), `toMap` attribute copy 174,
+`coopGameStoreAtomic.get` 98, `wormholeRuntimeState.cloneRuntimeState` 92, `ruleAppliesToSystem` 88,
+`cloneValue` 76, `structuredClone` 48, `entityIndexFor` 40. No stall >= 200 ms was seen in either window
+(idle server), so the combat freeze still needs a live fight; the recorder is armed again on the new
+container (240 min, 60 s windows, threshold 200 ms).
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
