@@ -54,7 +54,7 @@ class PF93SessionWitnessAtomic(unittest.TestCase):
                         p.index('& $python $script @argsForPython'))
         self.assertIn('pf93-native-session-tx-isolation.test.cjs',
                       PF58.read_text(encoding='utf8'))
-        self.assertGreaterEqual(PF93TEST.read_text(encoding='utf8').count("test('"),14)
+        self.assertGreaterEqual(PF93TEST.read_text(encoding='utf8').count("test('"),16)
         self.assertGreaterEqual(SOURCE.read_text(encoding='utf8').count("test('"),3)
 
 if __name__=='__main__':
