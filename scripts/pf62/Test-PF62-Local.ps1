@@ -21,6 +21,8 @@ if ($LASTEXITCODE -ne 0) { throw 'PF62_REFERENCE_NODE_REGRESSION_FAILED' }
   (Join-Path $repo 'scripts/pf66/tests/pf66-dock.test.cjs') `
   (Join-Path $repo 'scripts/pf66/tests/pf66-native-service.test.cjs')
 if ($LASTEXITCODE -ne 0) { throw 'PF66_SCOPED_DOCK_NODE_REGRESSION_FAILED' }
+& $node --test '--test-concurrency=1' (Join-Path $repo 'scripts/pf58/tests/pf73-docking-restart-permit.test.cjs')
+if ($LASTEXITCODE -ne 0) { throw 'PF73_DOCK_RESTART_SQLITE_REGRESSION_FAILED' }
 if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) {
   & $node --test (Join-Path $repo 'scripts/pf66/tests/pf66-sigkill.test.cjs')
   if ($LASTEXITCODE -ne 0) { throw 'PF66_SQLITE_SIGKILL_REGRESSION_FAILED' }
