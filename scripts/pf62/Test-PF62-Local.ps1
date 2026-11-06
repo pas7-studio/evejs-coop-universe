@@ -17,6 +17,13 @@ if ($LASTEXITCODE -ne 0) { throw 'PF62_NODE22_REQUIRED' }
   (Join-Path $repo 'scripts/pf60/tests/pf60-terminal.test.cjs') `
   (Join-Path $repo 'scripts/pf61/tests/pf61-scoped-cleanup.test.cjs')
 if ($LASTEXITCODE -ne 0) { throw 'PF62_REFERENCE_NODE_REGRESSION_FAILED' }
+# PF78: WORK native bundle now includes the PF56 return executor and a shared
+# actor/controller identity validator. Test them as part of standard preflight.
+& $node --test '--test-concurrency=1' `
+  (Join-Path $repo 'scripts/pf55/tests/pf55-native-executor.test.cjs') `
+  (Join-Path $repo 'scripts/pf55/tests/pf78-actor-identity.test.cjs') `
+  (Join-Path $repo 'scripts/pf56/tests/pf56-native-api.test.cjs')
+if ($LASTEXITCODE -ne 0) { throw 'PF78_REAL_NATIVE_ORDER_RETURN_CONTRACT_FAILED' }
 & $node --test `
   (Join-Path $repo 'scripts/pf66/tests/pf66-dock.test.cjs') `
   (Join-Path $repo 'scripts/pf66/tests/pf66-native-service.test.cjs')
