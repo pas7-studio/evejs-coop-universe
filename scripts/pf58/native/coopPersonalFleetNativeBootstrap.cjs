@@ -235,8 +235,15 @@ function createNativeBootstrap({gameStore,pf52,originalItemStore,nativeNpcStore,
    foreignWriterFence.commitOriginalOwnerSnapshot,
   activateStockPlayerShipWithinOriginalTransaction:
    stockPlayerShipActivation.activate,
-  commitStockCharacterRecordWithinOriginalTransaction:
-   nativeCharacterRecordBarrier.inTransaction});
+  commitStockCharacterRecordWithinOriginalTransaction(args){
+   // The policy module is separately testable but source-bound bootstrap
+   // MUST NOT publish an always-writable original character owner API.
+   if(enabled()!==true||allWritersFenced()!==true||
+      gameStore?.coopAtomicNativeRows?.isPoisoned?.()!==false)
+    return Object.freeze({status:'BLOCKED',
+     reason:'PF92_NATIVE_CHARACTER_OWNER_GATE_DISABLED',mayCommit:false});
+   return nativeCharacterRecordBarrier.inTransaction(args);
+  }});
 }
 module.exports={createNativeBootstrap,createSourceBoundNativeBootstrap,
  createOriginalPresenceReaders,moveOriginalShipToSpaceAtomically};
