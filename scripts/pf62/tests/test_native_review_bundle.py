@@ -57,6 +57,26 @@ def make_patches():
 
 
 class PF62ReviewCompositionTests(unittest.TestCase):
+ def test_pf66_native_scene_detach_is_composed_into_one_service_diff(self):
+    original=SERVICE_SRC.replace('module.exports = {fake:true};',
+      'module.exports = {\n  PF58_ORIGINAL_ITEMSTORE_BRIDGE_V1: true,\n  isNativeAmbientRuleOptions,\n};')
+    pf66=b.import_python(NATIVE_PREVIEW_ROOT/'pf66/build_native_dock_scene_patch.py')
+    pf66.PIN=b.SERVICE_BLOB
+    patches=(*make_patches(),pf66)
+    service,store=b.transform_original(original,STORE_SRC,patches)
+    self.assertEqual(service.count('PF66_SCOPED_DOCK_SCENE_DETACH_V1:'),1)
+    self.assertEqual(service.count('PF58_ORIGINAL_ITEMSTORE_BRIDGE_V1:'),1)
+    self.assertEqual(service.count('pf59.checkOriginalRemoval('),2)
+    self.assertEqual(store.count('PF61_SCOPED_ORIGINAL_NATIVE_CLEANUP_V1:'),1)
+    self.assertEqual(len(b.MODULE_FILES),17)
+    self.assertIn('pf66/native/coopPersonalFleetScopedDock.cjs',b.MODULE_FILES)
+    old=pf66.PIN
+    try:
+      pf66.PIN='mismatch'
+      with self.assertRaisesRegex(ValueError,'PF66_SERVICE_SOURCE_PIN_INCONSISTENT'):
+        b.transform_original(original,STORE_SRC,patches)
+    finally:pf66.PIN=old
+
  def test_real_pf59_pf61_compose_in_one_stock_source(self):
     service,store=b.transform_original(SERVICE_SRC,STORE_SRC,make_patches())
     self.assertEqual(service.count('pf59.checkOriginalRemoval('),2)
