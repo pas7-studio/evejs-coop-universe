@@ -16,7 +16,12 @@ for(const when of ['after-commit','during-scene']){
     assert.equal(token?.status,'CONSUMED');
     assert.equal(token?.shipItemID,f.c.shipItemID);
     if(when==='after-commit')assert.equal(f.get('items','items')[f.c.shipItemID].flagID,0);
-    else assert.equal(f.get('items','items')[f.c.shipItemID].flagID,4);
+    else {
+     assert.equal(f.get('items','items')[f.c.shipItemID].flagID,4);
+     const scenePermit=f.get('corporationRuntime',f.pf.sceneAttemptKey(f.c.assignmentID));
+     assert.equal(scenePermit?.status,'CONSUMED');
+     assert.equal(scenePermit?.shipItemID,f.c.shipItemID);
+    }
     const a=f.build();
     assert.equal(a.execute(f.c).errorMsg,'PF66_DURABLE_ATTEMPT_ALREADY_CONSUMED');
     assert.equal(f.state.stockMoves,0);assert.equal(f.state.sceneRemovals,0);
