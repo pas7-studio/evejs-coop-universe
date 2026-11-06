@@ -67,7 +67,11 @@ function extract(source,name){
  const marker='function '+name+'(';
  const start=source.indexOf(marker);
  assert.ok(start>=0,'PF90_MISSING_ORIGINAL_SOURCE_FUNCTION:'+name);
- const brace=source.indexOf('{',start);
+ // A default parameter may contain braces (e.g. options = {}), so
+ // find the actual body opener AFTER the function parameter list.
+ const signatureEnd=source.indexOf(') {',start);
+ assert.ok(signatureEnd>start,'PF90_ORIGINAL_FUNCTION_SIGNATURE_DRIFT:'+name);
+ const brace=signatureEnd+2;
  let depth=0,end=-1;
  for(let i=brace;i<source.length;i++){
   if(source[i]==='{')depth++;
