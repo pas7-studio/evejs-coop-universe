@@ -120,6 +120,15 @@ jobs:
           node --test --test-concurrency=1 \
             scripts/pf55/integration/pf77-native-work-arbiter.test.cjs
 
+      - name: PF82 original EveJS friendly physical FOLLOW source contract
+        shell: bash
+        env:
+          PF82_NATIVE_WORKTREE: ${{ runner.temp }}/pf74-native-work
+        run: |
+          set -euo pipefail
+          node --test --test-concurrency=1 \
+            scripts/pf55/integration/pf82-friendly-follow-native.test.cjs
+
       - name: PF55 real runtime executor object to durable orders end-to-end contract
         shell: bash
         run: |
