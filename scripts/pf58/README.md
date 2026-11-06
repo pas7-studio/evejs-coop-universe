@@ -23,7 +23,7 @@ NPC equipment. A separate original controller binds to that same physical ID.
   **PF73:** in the same original SQLite transaction, also rejects native restart
   after PF56 `DOCK_ISSUING` / `DOCKED`, any PF66/PF67 dock attempt, or PF60
   terminal intent. Early PF56 return is allowed only with a matching original
-  signed operation and no dock dispatch; unknown/corrupt keys deny startup.
+  return record and canonical PF56 SHA256 digest (not a keyed MAC) and no dock dispatch; unknown/corrupt keys deny startup.
 - `native/coopPersonalFleetNativeBindings.cjs`: explicit one-time boot owner,
   defaults unavailable, never trusts environment flags alone.
 - `native/coopPersonalFleetNativeBootstrap.cjs`: composition root wiring the
@@ -36,7 +36,7 @@ NPC equipment. A separate original controller binds to that same physical ID.
   fitting/slim module reads for PF58 ships and fail-closed restart admission.
   **Does not modify EveJS or enable the flag.**
 - `tests/`: original PF58 baseline (59 Node tests, including Linux SIGKILL)
-  plus PF69-73 integration/patch tests. PF73 adds **24 SQLite WAL/FULL Node
+  plus PF69-73 integration/patch tests. PF73 adds **25 SQLite WAL/FULL Node
   tests**, including a child `SIGKILL` after durable docking intent. Run the
   full test discovery locally; no genuine WORK/EVE client run has occurred.
   See `docs/PF73_DOCK_RESTART_FENCE.md`.
