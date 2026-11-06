@@ -7,7 +7,7 @@ this local tool is a review workaround, NOT a security/operational bypass.
 
 ## Problem closed
 
-The original PF68 local script applied only PF62's native bundle. PF74 CI
+The original PF68 local script applied only PF62's native bundle. the historical PF74 review design
 subsequently applied PF55's `coopNpcOrderArbiter.js` and `coopNpcOrderBridge.js`
 patch separately. A local owner could therefore prepare an **incomplete** WORK
 installation and incorrectly assume they had reviewed the same tree as CI.
