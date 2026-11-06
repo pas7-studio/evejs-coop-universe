@@ -62,6 +62,7 @@ test("the fork service answers all five client getters from this projection", ()
   for (const method of [
     "GetFactionMilitiaCorporation", "GetCorpFactionalWarStatus",
     "GetCorporationWarFactionID", "GetAllianceWarFactionID", "GetFactionCorporations",
+    "GetSolarSystemLPs",
   ]) {
     assert.match(source, new RegExp(`Handle_${method}\\(`), `${method} must be handled`);
   }
@@ -122,4 +123,19 @@ test("the fork service wires all six statistics getters", () => {
     "GetStats_TopAndAllKillsAndVPs", "GetStats_Militia", "GetStats_FactionInfo"]) {
     assert.match(source, new RegExp(`Handle_${method}\\(`), method + " must be handled");
   }
+});
+
+// MEASURED 2026-11-06 18:32 on the live client: facWarSvc.GetSolarSystemLPs(solarSystemID) was
+// the one call the server did not handle ("WARN [facWarMgr] Unhandled method: GetSolarSystemLPs"),
+// so it answered null. facWarSvc.DonateLPsToSolarSystem adds that null to the donation and
+// compares the sum with facwarSolarSystemMaxLPPool, so the donation path raised instead of
+// telling the pilot the pool is empty. This world tracks no per-system LP pool: zero is the
+// honest number, and it is a number the client can add.
+test("the per-system LP pool answers zero instead of an unhandled null", () => {
+  const source = readFileSync(path.join(
+    process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs",
+    "Code/server/src/services/faction/facWarMgrService.js",
+  ), "utf8");
+  assert.match(source, /Handle_GetSolarSystemLPs\(\) \{\s*return 0;/,
+    "a real zero, not baseService's null");
 });

@@ -63,6 +63,26 @@ test("the war window asks the enlistment record, not the record's leftover field
     "the FW window corrects a stale session flag before answering");
   assert.match(warSource, /const enlistmentFaction = militiaOf\(/,
     "resolveWarFactionID asks the enlistment record first");
-  assert.match(warSource, /Handle_GetCorpFactionalWarStatus\(args, session\) \{\n    if \(session\) syncWarFactionSession\(session\);/,
+  assert.match(warSource, /Handle_GetCorpFactionalWarStatus\(args, session\) \{\n    if \(session\) syncWarFactionSession\(session\);/, 
     "and the status handler is where the client learns it");
+});
+
+// MEASURED 2026-11-06 (owner: "the Caldari State threw me out of the war again", while the
+// enlistment row and GetCorpFactionalWarStatus both said ACTIVE for faction 500001). A pilot who
+// logs in ALREADY IN SPACE takes characterState's initial-space-character-selection path, which
+// FILTERS the login SessionChange down to INITIAL_SPACE_CHARACTER_SESSION_CHANGE_KEYS. That list
+// did not contain `warfactionid`, so the client's session never learned his militia:
+// factionwarfare/client/enlistmentChecks.pyj CurrentlyInSameFaction() is
+// `factionID == session.warfactionid`, so the FW window showed him as not enlisted. The live
+// login SessionChange was logged with exactly 17 keys and warfactionid was not among them.
+test("a pilot who logs in in space is still told his militia faction", () => {
+  const stateSource = fs.readFileSync(path.join(SERVER, "services/character/characterState.js"), "utf8");
+  const start = stateSource.indexOf("const INITIAL_SPACE_CHARACTER_SESSION_CHANGE_KEYS = [");
+  assert.ok(start > 0, "the initial-space key list must exist");
+  const end = stateSource.indexOf("];", start);
+  const list = stateSource.slice(start, end);
+  assert.match(list, /"warfactionid"/,
+    "without this key the client reads session.warfactionid = None and offers Enlist again");
+  assert.match(stateSource, /appendSessionChange\(\s*sessionChanges,\s*"warfactionid",/,
+    "the change itself is still appended from the character record");
 });
