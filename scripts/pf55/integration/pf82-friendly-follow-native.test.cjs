@@ -95,3 +95,41 @@ test('original native follow wakes the NPC only when explicit wake is allowed',(
  assert.equal(ret.success,true);
  assert.equal(wakes,0);
 });
+
+test('original behaviorLoop ATTACK promotes live controller to nativeCombat; STOP clears target',()=>{
+ const toPositiveInt=(v,def=0)=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):def;
+ const toFiniteNumber=(v,def=0)=>Number.isFinite(Number(v))?Number(v):def;
+ const normalize= new Function('normalizeOrderType','toPositiveInt','toFiniteNumber',
+  `${extract(behaviorScript,'normalizeManualOrder','resolveBehaviorTarget')}\nreturn normalizeManualOrder;`)(
+   v=>String(v||'').toLowerCase(),toPositiveInt,toFiniteNumber);
+ const controller={entityID:1001,runtimeKind:'nativeAmbient',nextThinkAtMs:9999,
+  manualOrder:null,currentTargetID:0,preferredTargetID:0};
+ const originalIssue=new Function('getControllerByEntityID','normalizeManualOrder',
+  'toPositiveInt',`${extract(behaviorScript,'issueManualOrder','setBehaviorOverrides')}\nreturn issueManualOrder;`)(
+   id=>id===1001?controller:null,normalize,toPositiveInt);
+ assert.equal(originalIssue(1001,{type:'attack',targetID:2002}).success,true);
+ assert.equal(controller.runtimeKind,'nativeCombat');
+ assert.equal(controller.manualOrder.type,'attack');
+ assert.equal(controller.currentTargetID,2002);
+ assert.equal(originalIssue(1001,{type:'stop'}).success,true);
+ assert.equal(controller.manualOrder.type,'stop');
+ assert.equal(controller.currentTargetID,0);
+ assert.equal(controller.runtimeKind,'nativeCombat',
+  'stock STOP leaves combat runtime kind; PF78 live proof must accept this');
+});
+test('original npcRuntime.stop reports success only after native physical stop and manual STOP',()=>{
+ const calls=[];
+ const originalStop=new Function('resolveNpcContext','spaceRuntime','npcService',
+  `${extract(runtimeScript,'stop','follow')}\nreturn stop;`)(
+   ()=>({success:true,data:{systemID:300,entityID:1001}}),
+   {stopDynamicEntity:(...v)=>{calls.push(['physicalStop',...v]);return true;}},
+   {issueManualOrder:(...v)=>{calls.push(['manualStop',...v]);return {success:true};},
+    wakeNpcController:()=>{throw Error('PF82_UNEXPECTED_WAKE')}});
+ const result=originalStop(1001,{reason:'pf83-return-base',
+  allowSessionlessWarpAbort:false,issueStopOrder:true});
+ assert.equal(result.success,true);
+ assert.equal(calls[0][0],'physicalStop');
+ assert.equal(calls[1][0],'manualStop');
+ assert.equal(calls[1][1],1001);
+ assert.deepEqual(calls[1][2],{type:'stop'});
+});
