@@ -8,7 +8,7 @@
  */
 const {createOriginalShipHandoff,validStockHangar}=require('./coopPersonalFleetOriginalShipHandoff.cjs');
 const {createNativeShipAdoption}=require('./coopPersonalFleetNativeShipAdoption.cjs');
-const {createPermitVerifier}=require('./coopPersonalFleetOriginalNativePermit.cjs');
+const {createPermitVerifier,createReciprocalWriterFence}=require('./coopPersonalFleetOriginalNativePermit.cjs');
 const bindings=require('./coopPersonalFleetNativeBindings.cjs');
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 // Session ship IDs may arrive from the original protocol as canonical strings.
@@ -108,13 +108,22 @@ function createOriginalPresenceReaders({sessionRegistry,npcRegistry,nativeNpcSto
  * All other independent authorities remain mandatory and injected explicitly.
  */
 function createSourceBoundNativeBootstrap({
- sessionRegistry,npcRegistry,...originalAuthorities
+ sessionRegistry,npcRegistry,verifyOriginalWriterHooks,...originalAuthorities
 }={}){
  const presence=createOriginalPresenceReaders({
   sessionRegistry,npcRegistry,
   nativeNpcStore:originalAuthorities.nativeNpcStore,
   spaceRuntime:originalAuthorities.spaceRuntime});
+ // PF88: no source-bound deployment until the independent ORIGINAL player,
+ // Mining, WAR and Exploration entrypoint hooks attest their installation.
+ // A plain historical allWritersFenced() callback is not enough.
+ // This is a mandatory candidate gate, NOT cryptographic attestation.
+ const previouslyFenced=originalAuthorities.allWritersFenced;
+ const fenced=()=>typeof previouslyFenced==='function'&&
+  typeof verifyOriginalWriterHooks==='function'&&
+  previouslyFenced()===true&&verifyOriginalWriterHooks()===true;
  return createNativeBootstrap({...originalAuthorities,
+  allWritersFenced:fenced,
   originalNoActiveSession:presence.noActivePlayerSession,
   originalNoPhysicalActor:presence.noExistingPhysicalActor,
   // Never permit the unsafe post-commit legacy stock move in the genuine
@@ -136,6 +145,7 @@ function createNativeBootstrap({gameStore,pf52,originalItemStore,nativeNpcStore,
    allWritersFenced,enabled,clock].some(x=>typeof x!=='function'))
   throw Error('PF58_ORIGINAL_BOOTSTRAP_AUTHORITIES_REQUIRED');
  const verifier=createPermitVerifier({gameStore,enabled,allWritersFenced});
+ const foreignWriterFence=createReciprocalWriterFence({pf52});
  // First construct all side-effect-free adapters. A failure must never leave
  // bindings installed with only a subset of the required native authorities.
  const adoption=createNativeShipAdoption({nativeStore:nativeNpcStore,
@@ -209,7 +219,8 @@ function createNativeBootstrap({gameStore,pf52,originalItemStore,nativeNpcStore,
   throw Error('PF64_BINDING_INSTALL_UNCONFIRMED');
  return Object.freeze({executeOriginalHandoff:handoff.execute,
   inspectHandoff:handoff.inspect,
-  verifyNativePermit:verifier.verify});
+  verifyNativePermit:verifier.verify,
+  checkForeignWriterWithinTransaction:foreignWriterFence.inTransaction});
 }
 module.exports={createNativeBootstrap,createSourceBoundNativeBootstrap,
  createOriginalPresenceReaders,moveOriginalShipToSpaceAtomically};

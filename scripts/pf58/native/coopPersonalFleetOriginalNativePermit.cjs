@@ -132,4 +132,99 @@ function createPermitVerifier({gameStore,enabled=()=>false,allWritersFenced=()=>
  }
  return Object.freeze({verify});
 }
-module.exports={createPermitVerifier,validateOriginalClaimsIndex};
+/**
+ * PF88: reciprocal ORIGINAL ship writer check.
+ *
+ * This MUST be called from a competing player's / Mining / WAR / Exploration
+ * mutating GameStore transaction, using that SAME transaction object. A
+ * read-before-write in a separate transaction is *not* authority to commit.
+ *
+ * Never use a client-supplied "owner" or "release" marker to bypass custody.
+ * A historical one-shot ship lock is blocked until a separate, independently
+ * reviewed original custody-release protocol proves original title restored.
+ */
+function createReciprocalWriterFence({pf52}={}){
+ if(typeof pf52?.REGISTRY_KEY!=='string'||
+    pf52.REGISTRY_KEY!==prefix+'hangar-reservations-v1'||
+    typeof pf52.validateIndex!=='function')
+  throw Error('PF88_ORIGINAL_PF52_INDEX_AUTHORITY_REQUIRED');
+ const writerKinds=new Set(['PLAYER','MINING','WAR','EXPLORATION','MARKET','INDUSTRY']);
+ const fail=reason=>Object.freeze({status:'BLOCKED',reason,mayCommit:false});
+ const rootItem=items=>obj(items)&&!Array.isArray(items)?items:null;
+ // A stock child item can be fitted or held inside the ship. Protect title,
+ // fittings and cargo, and the destination ship on a new insertion.
+ function containingShip(items,rawID,{externalDestination=false}={}){
+  if(!pos(rawID))return {unresolved:true};
+  let id=rawID,seen=new Set();
+  for(let depth=0;depth<32;depth++){
+   if(seen.has(id))return {unresolved:true};
+   seen.add(id);
+   const x=items[String(id)];
+   // Missing parent is often a station, structure or system, not an item.
+   if(x===undefined||x===null)
+    return depth===0&&!externalDestination?{unresolved:true}:{ship:null};
+   if(!obj(x)||x.itemID!==id||!pos(x.ownerID)||
+      !pos(x.locationID)||!pos(x.categoryID))return {unresolved:true};
+   if(x.categoryID===6)return {ship:id};
+   if(x.locationID===id)return {unresolved:true};
+   id=x.locationID;
+  }
+  return {unresolved:true};
+ }
+ function inTransaction({tx,writer,shipItemID=null,affectedItemID=null,
+                          destinationLocationID=null}={}){
+  if(!writerKinds.has(writer)||typeof tx?.get!=='function'||
+     typeof tx?.put!=='function')return fail('PF88_WRITER_TRANSACTION_REQUIRED');
+  if(shipItemID!==null&&!pos(shipItemID)||affectedItemID!==null&&!pos(affectedItemID)||
+     destinationLocationID!==null&&!pos(destinationLocationID)||
+     (shipItemID===null&&affectedItemID===null&&destinationLocationID===null))
+    return fail('PF88_ORIGINAL_WRITER_IDENTIFIERS_INVALID');
+  try{
+   const original=tx.get('items','items');
+   if(!rootItem(original))return fail('PF88_ORIGINAL_ITEMSTORE_UNAVAILABLE');
+   const touched=new Set();
+   if(shipItemID!==null){
+    const found=containingShip(original,shipItemID);
+    if(found.unresolved||found.ship!==shipItemID)
+     return fail('PF88_SHIP_ID_NOT_ORIGINAL_STOCK');
+    touched.add(shipItemID);
+   }
+   for(const [id,externalDestination] of [
+    [affectedItemID,false],[destinationLocationID,true]]){
+    if(id===null)continue;
+    const found=containingShip(original,id,{externalDestination});
+    if(found.unresolved)return fail('PF88_PARENT_CHAIN_UNVERIFIED');
+    if(found.ship!==null)touched.add(found.ship);
+   }
+   const registry=tx.get(T,pf52.REGISTRY_KEY),
+         rawActors=tx.get(T,prefix+'actor-claims-v1');
+   if(registry===undefined||rawActors===undefined)
+    return fail('PF88_ORIGINAL_CUSTODY_READ_UNCERTAIN');
+   const actors=validateOriginalClaimsIndex(rawActors);
+   if(!actors)return fail('PF88_ACTOR_CLAIMS_CORRUPT');
+   let index;
+   try{index=registry===null?null:pf52.validateIndex(registry);}
+   catch{return fail('PF88_HANGAR_CUSTODY_CORRUPT');}
+   // Malformed unrelated rows also block every candidate writer.
+   for(const ship of touched){
+    const id=String(ship);
+    if(index?.ships?.[id])return fail('PF88_PF52_SHIP_RESERVED');
+    if(actors.claims[id])return fail('PF88_NATIVE_ACTOR_CLAIMED');
+    const handoff=tx.get(T,prefix+'handoff-ship-v1:'+id),
+          terminal=tx.get(T,prefix+'terminal-ship-v1:'+id);
+    if(handoff===undefined||terminal===undefined)
+     return fail('PF88_CUSTODY_LOCK_READ_UNCERTAIN');
+    // Terminal custody is not automatically safe: only a future, separately
+    // audited release protocol may return title to the stock player writer.
+    if(handoff!==null||terminal!==null)
+     return fail('PF88_ONE_SHOT_OR_TERMINAL_CUSTODY');
+   }
+   return Object.freeze({status:'CLEAR_IN_SAME_TRANSACTION',
+    mayCommit:true,originalShipIDs:Object.freeze([...touched].sort((a,b)=>a-b))});
+  }catch{return fail('PF88_ORIGINAL_CUSTODY_READ_FAILED');}
+ }
+ return Object.freeze({inTransaction});
+}
+
+module.exports={createPermitVerifier,validateOriginalClaimsIndex,
+ createReciprocalWriterFence};

@@ -150,3 +150,14 @@ contracts; only the source-bound bootstrap forces atomic mode.
 Full original engine WORK boot and reciprocal player/NPC writer fences
 remain outstanding; see `PF80_COMPLETE_NATIVE_WORK.md` and the PF87
 documentation. Personal Fleet stays OFF, no remote CI.
+
+## PF88 reciprocal writer gate (2026-11-07)
+
+The candidate PF58 source bundle includes a new same-transaction
+`createReciprocalWriterFence` for all original player/Mining/WAR/
+Exploration foreign writers and strict default-deny source-bound bootstrap
+until native hooks can be independently attested. The PF80 PowerShell
+preflight adds PF88 regression tests, but it does not install those
+original EveJS writer hooks. Original writer audit and 2-client
+gameplay acceptance remain blocked; see
+`scripts/pf88/PF88_RECIPROCAL_WRITER_CONTRACT.md`.
