@@ -25,6 +25,8 @@ class OriginalScenePatchTests(unittest.TestCase):
   self.assertEqual(result.count('function detachScopedPersonalFleetDockSceneActor('),1)
   self.assertEqual(result.count('function installScopedPersonalFleetDockAuthority('),1)
   self.assertIn('pf66DockAuthority.authorize(row)',result)
+  self.assertIn('pf66DockAuthority.consumeSceneDetach(row)',result)
+  self.assertLess(result.index('pf66DockAuthority.consumeSceneDetach(row)'),result.index('spaceRuntime.removeDynamicEntity'))
   self.assertIn('spaceRuntime.removeDynamicEntity',result)
   self.assertIn('unregisterController(shipID)',result)
   self.assertIn('allowSessionOwned:false',result)
