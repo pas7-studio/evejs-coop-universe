@@ -17,6 +17,6 @@
 
 PF57 loss needs native rows absent while PF59 blocks generic removal. The PF60 `executeScopedNativeCleanup` authority **must be a new carefully reviewed in-fork method** that removes exactly a verified Personal Fleet native row/controller; it may NOT reuse `destroyNativeNpcController` / `removeNativeEntityCascade`. No such native primitive exists in the current deployed engine. A code-level test double is not sufficient evidence. Do not enable PF54/58/59/60 in WORK or PLAY until the scoped native executor, independent scene readback and complete reciprocal writer fences exist.
 
-PF60 durable terminal ship tombstone is used only by PF60 for generation comparison; PF58 engine integration must also review and fence concurrent new handoffs. `readNativeIdentity` must be authoritative and synchronous, and `allWritersFenced` needs original writer coverage, not arbitrary callback returning true.
+PF60 finalization uses original `tx.del()` for lock release; `tx.put(null)` is prohibited by `coopGameStoreAtomic`. The PF60 durable terminal ship tombstone is used only by PF60 for generation comparison; PF58 engine integration must also review and fence concurrent new handoffs. `readNativeIdentity` must be authoritative and synchronous, and `allWritersFenced` needs original writer coverage, not arbitrary callback returning true.
 
 Never retry an ISSUING native effect on timeout. A stuck original ship should remain blocked and require operator investigation.
