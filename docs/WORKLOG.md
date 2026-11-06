@@ -3779,3 +3779,8 @@ Evidence: heap sampling attributed 60 s: ruleAppliesToSystem 88.03 MB, wormholeR
 Why: mutateState cloned the whole wormhole state (41825 pairs, 49.5 ms per clone, 94 MB/min of garbage) before every mutation only to keep the mirror pristine on failure, while the persisted table is the authority
 Where: tests/coop-wormhole-mutate-no-clone.test.mjs
 Evidence: in-process timing through the inspector: pairs 41825, cloneMs 49.499; heap sampling 94.17 MB cloneRuntimeState; fork 6787faf; 3 tests pass; AUDIT_OK
+### 2026-11-06T20:29Z · 3e47b54 · L1 · chore(integration): sync the phase coordinator and world runtime copies
+
+Why: the event-loop monitor could say the server froze but never which of the 46 world phases froze it, so every stall investigation started from zero
+Where: integration/coopLivingWorldPhaseCoordinator.cjs, integration/coopVirtualWorldRuntime.cjs
+Evidence: fork 987f785 amended; per-phase timing + slowPhases in living-world-phase-cycle, reported immediately when a cycle is >=250 ms; 3 tests; AUDIT_OK with the module at 4098 lines (ceiling 4100)
