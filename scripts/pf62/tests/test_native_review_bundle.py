@@ -104,6 +104,18 @@ class PF62ReviewCompositionTests(unittest.TestCase):
       subprocess.run(['node','--check',str(tmp/'coopPersonalFleetScopedNativeCleanup.js')],check=True)
       subprocess.run(['node','-e',f"require({str(tmp/'coopPersonalFleetScopedNativeCleanup.js')!r});"],check=True)
 
+ def test_pf79_rejects_duplicate_native_module_manifest_before_staging(self):
+    # The old 19-entry inventory repeated PF56 NativeReturnExecutor; it
+    # could never produce 19 distinct files, even on a clean native checkout.
+    # A future accidental duplicate must be rejected BEFORE source reads.
+    from unittest.mock import patch
+    repeated=b.MODULE_FILES+(b.MODULE_FILES[0],)
+    with patch.object(b,'MODULE_FILES',repeated):
+      with self.assertRaisesRegex(ValueError,'PF79_DUPLICATE_NATIVE_SOURCE_MODULE'):
+        b.plan_modules(Path('/pf79-nonexistent-repo'))
+    self.assertEqual(len(b.MODULE_FILES),18)
+    self.assertEqual(len({Path(s).name for s in b.MODULE_FILES}),18)
+
  def test_flatten_rejects_missing_files_and_local_dependencies(self):
     with tempfile.TemporaryDirectory() as td:
       repo=Path(td)
