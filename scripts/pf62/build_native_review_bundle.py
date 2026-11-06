@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PF62 -- read-only, source-pinned composition of PF58 + PF59 + PF61.
+"""PF62 -- read-only, source-pinned composition of PF58 + PF59 + PF61 + PF66.
 
 Reads a clean native EveJS checkout and a synchronized PR #350 checkout.
 Writes a *separate review bundle* (never the native engine). Nothing is deployed,
@@ -40,6 +40,7 @@ MODULE_FILES = (
  'pf59/native/coopPersonalFleetNativeRemovalGuard.cjs',
  'pf60/native/coopPersonalFleetTerminalCustody.cjs',
  'pf61/native/coopPersonalFleetScopedNativeCleanup.cjs',
+ 'pf66/native/coopPersonalFleetScopedDock.cjs',
 )
 LOCAL_IMPORT = re.compile(r'''require\(\s*['\"](\.[^'\"]+)['\"]\s*\)''')
 
@@ -66,24 +67,33 @@ def load_patches(repo: Path):
       import_python(repo/'scripts/pf58/build_native_stock_fittings_patch.py'),
       import_python(repo/'scripts/pf59/build_native_removal_patch.py'),
       import_python(repo/'scripts/pf61/build_native_scoped_cleanup_patch.py'),
+      import_python(repo/'scripts/pf66/build_native_dock_scene_patch.py'),
     )
 
 
 def transform_original(original_service: str, original_store: str, patches):
-    pf58,pf59,pf61=patches
+    if len(patches) not in (3,4):
+        raise ValueError('PF66_PATCH_SET_INVALID')
+    pf58,pf59,pf61=patches[:3]
+    pf66=patches[3] if len(patches)==4 else None
     # Each reference must STILL refer to the same exact stock Git blob.
     if pf58.EXPECTED_SHA1 != SERVICE_BLOB or pf59.PINS.get(SERVICE) != SERVICE_BLOB:
         raise ValueError('PF62_SERVICE_SOURCE_PIN_INCONSISTENT')
     if pf59.PINS.get(STORE) != STORE_BLOB or pf61.PIN != STORE_BLOB:
         raise ValueError('PF62_STORE_SOURCE_PIN_INCONSISTENT')
+    if pf66 is not None and pf66.PIN != SERVICE_BLOB:
+        raise ValueError('PF66_SERVICE_SOURCE_PIN_INCONSISTENT')
     # The three standalone patches overlap. Transform the ORIGINAL source once.
     service=pf59.service_transform(pf58.transform(original_service))
+    if pf66 is not None:
+        service=pf66.transform(service)
     store=pf61.transform(pf59.store_transform(original_store))
     markers=(
       (service,'PF58_ORIGINAL_ITEMSTORE_BRIDGE_V1:',1),
       (service,'pf59.checkOriginalRemoval(',2),
       (store,'pf59.checkOriginalRemoval(',3),
       (store,'PF61_SCOPED_ORIGINAL_NATIVE_CLEANUP_V1:',1),
+      *((service,'PF66_SCOPED_DOCK_SCENE_DETACH_V1:',1),) if pf66 is not None else (),
     )
     for source,needle,count in markers:
         if source.count(needle)!=count:
