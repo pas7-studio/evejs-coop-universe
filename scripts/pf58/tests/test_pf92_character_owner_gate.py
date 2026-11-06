@@ -43,7 +43,7 @@ class PF92CharacterOwnerGate(unittest.TestCase):
         self.assertIn('PF92_ORIGINAL_OWNER_CHANGED_BY_SESSION_WITNESS_ROLLBACK',source)
         self.assertIn('PF92_CHARACTER_SESSION_LEASE_REVOKED',source)
         self.assertIn('throw Error(\'PF92_CHARACTER_TRANSACTION_ABORT:',source)
-        self.assertLess(source.index('const finalLease=verifyOriginalSessionLease(witness,reader)'),
+        self.assertLess(source.index('const finalLease=verifyOriginalWitnessCannotWrite(tx,verifyOriginalSessionLease,witness)'),
                         source.index("tx.put('characters',String(characterID),after);"))
 
     def test_native_bootstrap_binds_witness_at_construction_not_user_input(self):
