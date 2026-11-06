@@ -13,7 +13,9 @@ if ($IsWindows -or $env:OS -eq 'Windows_NT') {
 }
 $pf73 = Join-Path $root 'tests/pf73-docking-restart-permit.test.cjs'
 if (-not (Test-Path -LiteralPath $pf73 -PathType Leaf)) { throw 'PF73_DOCK_RESTART_TEST_MISSING' }
-$allNodeTests = @($tests.FullName) + @($pf73)
+$pf86 = Join-Path $root 'tests/pf86-presence-and-prewrite.test.cjs'
+if (-not (Test-Path -LiteralPath $pf86 -PathType Leaf)) { throw 'PF86_PRESENCE_GATE_MISSING' }
+$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86)
 & $node --test '--test-concurrency=1' @allNodeTests
 if ($LASTEXITCODE -ne 0) { throw 'PF58_NODE_REGRESSION_FAILED' }
 $python = (Get-Command python -ErrorAction Stop).Source
