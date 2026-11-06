@@ -166,5 +166,6 @@ jobs:
             ${{ runner.temp }}/pf74-native-review/PF62-MANIFEST.json
             ${{ runner.temp }}/pf74-native-review/PF62-NATIVE-REVIEW.patch
             ${{ runner.temp }}/pf74-native-review/PF55-NATIVE-OWNER.patch
+            ${{ runner.temp }}/pf74-native-review/PF80-COMPLETE-WORK-REVIEW.json
           if-no-files-found: ignore
           retention-days: 7
