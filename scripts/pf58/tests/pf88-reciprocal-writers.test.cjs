@@ -147,6 +147,14 @@ test('PF88 no original ship parent allows unrelated hangar item changes in same 
  assert.equal(result.status,'CLEAR_IN_SAME_TRANSACTION');
  assert.deepEqual(result.originalShipIDs,[]);
 }));
+test('PF88 missing source item is not silently treated as a station destination',()=>run(({f,gate})=>{
+ const result=f.gameStore.coopAtomicNativeRows.transact([T,ITEMS],tx=>
+  gate.inTransaction({tx,writer:'PLAYER',affectedItemID:8000088}));
+ assert.equal(result.reason,'PF88_PARENT_CHAIN_UNVERIFIED');
+ const station=f.gameStore.coopAtomicNativeRows.transact([T,ITEMS],tx=>
+  gate.inTransaction({tx,writer:'PLAYER',destinationLocationID:F.STATION}));
+ assert.equal(station.status,'CLEAR_IN_SAME_TRANSACTION');
+}));
 test('PF88 cyclic item parent chain never counts as a proven empty custody path',()=>run(({f,gate})=>{
  const root=f.get(ITEMS,'items');
  root['8001']={itemID:8001,ownerID:owner,typeID:34,categoryID:7,
