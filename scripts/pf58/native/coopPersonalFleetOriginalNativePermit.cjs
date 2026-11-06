@@ -424,5 +424,97 @@ function createReciprocalWriterFence({pf52}={}){
   commitOriginalOwnerSnapshot});
 }
 
+/**
+ * PF91 original characterState target ship activation, staged for the REAL
+ * stock character owner. Existing stock characterState.activateShipForSession
+ * DOES NOT call this yet; until it does, source-bound gameplay remains OFF.
+ * Commit the exact original character row and read PF title/claims in ONE
+ * original BEGIN IMMEDIATE. No secondary owner or synthetic characters map.
+ */
+function createOriginalPlayerShipActivation({
+ gameStore,pf52,enabled=()=>false,allWritersFenced=()=>false,
+ verifyOriginalDockedPlayerSession=()=>false
+}={}){
+ const a=gameStore?.coopAtomicNativeRows;
+ if(a?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof a.transact!=='function'||
+    typeof a.isPoisoned!=='function'||typeof enabled!=='function'||
+    typeof allWritersFenced!=='function'||
+    typeof verifyOriginalDockedPlayerSession!=='function')
+  throw Error('PF91_ORIGINAL_CHARACTER_OWNER_AUTHORITIES_REQUIRED');
+ const fence=createReciprocalWriterFence({pf52});
+ const block=reason=>Object.freeze({status:'BLOCKED',reason,mayCommit:false});
+ const cleanSnapshot=value=>{
+  if(!obj(value))return null;
+  const copy=structuredClone(value);
+  const roundtrip=JSON.parse(JSON.stringify(copy));
+  return isDeepStrictEqual(copy,roundtrip)?roundtrip:null;
+ };
+ function activate({characterID,targetShipItemID,stationID,expectedBefore,
+                    session=null}={}){
+  if(!pos(characterID)||!pos(targetShipItemID)||!pos(stationID)||
+     !obj(expectedBefore)||!obj(session))
+   return block('PF91_PLAYER_ACTIVATION_INPUT_INVALID');
+  if(enabled()!==true||allWritersFenced()!==true||a.isPoisoned())
+   return block('PF91_PLAYER_ACTIVATION_DISABLED');
+  let before;
+  try{before=cleanSnapshot(expectedBefore);}
+  catch{return block('PF91_PLAYER_ACTIVATION_SNAPSHOT_INVALID');}
+  if(!before)return block('PF91_PLAYER_ACTIVATION_SNAPSHOT_INVALID');
+  try{return a.transact([T,'items','characters'],tx=>{
+   if(enabled()!==true||allWritersFenced()!==true)
+    return block('PF91_PLAYER_ACTIVATION_DISABLED');
+   // Live native session evidence is NOT a durable row. The actual stock
+   // character owner must supply a source-bound witness on every call.
+   if(verifyOriginalDockedPlayerSession({session,characterID,stationID},tx)!==true)
+    return block('PF91_ORIGINAL_PLAYER_SESSION_UNVERIFIED');
+   const original=tx.get('characters',String(characterID));
+   if(!obj(original)||original.characterID!==undefined&&
+      original.characterID!==characterID||
+      !isDeepStrictEqual(original,before))
+    return block('PF91_CHARACTER_OWNER_SNAPSHOT_STALE');
+   const items=tx.get('items','items');
+   const target=obj(items)?items[String(targetShipItemID)]:null;
+   if(!obj(target)||target.itemID!==targetShipItemID||
+      target.ownerID!==characterID||target.categoryID!==6||
+      target.flagID!==4||target.locationID!==stationID||
+      !pos(target.typeID)||target.singleton!==1)
+    return block('PF91_PLAYER_TARGET_NOT_ORIGINAL_HANGAR');
+   const present=inspectOriginalCharacterShipRows(tx,{
+    ownerCharacterID:characterID,shipItemID:targetShipItemID});
+   if(!present.verified)return block(present.reason);
+   const targetFence=fence.inTransaction({tx,writer:'PLAYER',
+    shipItemID:targetShipItemID});
+   if(targetFence.mayCommit!==true)return block(targetFence.reason);
+   const old=original.shipID===undefined?null:original.shipID;
+   const oldID=(typeof old==='string'&&/^[1-9][0-9]*$/.test(old))?
+     Number(old):old;
+   if(oldID!==null&&oldID!==0&&oldID!==undefined){
+    if(!pos(oldID))return block('PF91_ORIGINAL_ACTIVE_SHIP_ID_INVALID');
+    if(oldID===targetShipItemID)
+     return block('PF91_ALREADY_ACTIVE_OR_INCONSISTENT');
+    const currentFence=fence.inTransaction({tx,writer:'PLAYER',shipItemID:oldID});
+    if(currentFence.mayCommit!==true)return block(currentFence.reason);
+   }
+   if(verifyOriginalDockedPlayerSession({session,characterID,stationID},tx)!==true)
+    return block('PF91_ORIGINAL_PLAYER_SESSION_REVOKED');
+   const updated=structuredClone(original);
+   updated.shipID=target.itemID;
+   updated.shipTypeID=target.typeID;
+   updated.shipName=target.itemName??null;
+   if(Object.prototype.hasOwnProperty.call(updated,'storedShips'))
+    delete updated.storedShips;
+   tx.put('characters',String(characterID),updated);
+   const saved=tx.get('characters',String(characterID));
+   if(!isDeepStrictEqual(saved,updated))
+    throw Error('PF91_ORIGINAL_CHARACTER_WRITE_READBACK_FAILED');
+   return Object.freeze({status:'APPLIED_IN_ORIGINAL_SQLITE_TRANSACTION',
+    mayCommit:true,characterID,previousShipID:oldID??null,
+    targetShipItemID,stationID});
+  });}catch{return block('PF91_ORIGINAL_CHARACTER_TRANSACTION_FAILED');}
+ }
+ return Object.freeze({activate});
+}
+
 module.exports={createPermitVerifier,validateOriginalClaimsIndex,
- createReciprocalWriterFence,inspectOriginalCharacterShipRows};
+ createReciprocalWriterFence,inspectOriginalCharacterShipRows,
+ createOriginalPlayerShipActivation};
