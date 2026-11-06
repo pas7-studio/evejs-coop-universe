@@ -16,11 +16,12 @@ def blob(raw):
 INSERT = '''// PF66 SCOPED ORIGINAL DOCK SCENE DETACH. Only after original PF56
 // DOCK_ISSUING and PF66 durable one-shot token + stock ItemStore hangar commit.
 let pf66DockAuthority = null;
-function installScopedPersonalFleetDockAuthority({capability, authorize} = {}) {
+function installScopedPersonalFleetDockAuthority({capability, authorize, consumeSceneDetach} = {}) {
   if (pf66DockAuthority !== null) throw Error('PF66_NATIVE_AUTHORITY_ALREADY_INSTALLED');
-  if (typeof capability !== 'symbol' || typeof authorize !== 'function')
+  if (typeof capability !== 'symbol' || typeof authorize !== 'function' ||
+      typeof consumeSceneDetach !== 'function')
     throw Error('PF66_NATIVE_AUTHORITY_INVALID');
-  pf66DockAuthority = Object.freeze({capability, authorize});
+  pf66DockAuthority = Object.freeze({capability, authorize, consumeSceneDetach});
   return true;
 }
 function detachScopedPersonalFleetDockSceneActor({row, capability} = {}) {
@@ -65,6 +66,11 @@ function detachScopedPersonalFleetDockSceneActor({row, capability} = {}) {
   try {if (pf66DockAuthority.authorize(row) !== true)
     return fail('PF66_DOCK_AUTHORITY_REVOKED');}
   catch {return fail('PF66_DOCK_AUTHORITY_UNKNOWN');}
+  // Durable sub-attempt must COMMIT before the first scene mutation. On crash,
+  // a stale/retained private Symbol must never re-authorize this scene removal.
+  try {if (pf66DockAuthority.consumeSceneDetach(row) !== true)
+    return fail('PF66_SCENE_DURABLE_ATTEMPT_NOT_COMMITTED');}
+  catch {return fail('PF66_SCENE_DURABLE_COMMIT_UNKNOWN');}
   // Only scene/controller runtime state, NEVER stored NPC rows, ItemStore,
   // fittings, cargo, wrecks or wallet. PF59 generic removal remains forbidden.
   try {
