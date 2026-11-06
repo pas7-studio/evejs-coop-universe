@@ -22,9 +22,15 @@ that must be applied manually:
   The most recent PF-58 implementation of `OriginalDeployment` is chosen.
 - Rewrites archive-relative `.cjs` imports to genuine local `.js` imports,
   including the PF-61 → PF-60 dependency. Refuses missing sibling modules.
-- Writes one Git review diff, full staged files and an SHA256 manifest in a
-  separate **empty output directory**. Invokes `git apply --check` only; no apply,
-  startup, Docker command, CI, source write, or feature flag change.
+- Writes **one complete Git review diff containing BOTH original stock changes AND
+  all 16 newly added modules** (18 file paths total), full staged files and an
+  SHA256 manifest in a separate **empty output directory**. Rejects a pre-existing
+  module path rather than silently overwriting it.
+- Before creating output, runs `git apply --check` against the real native
+  checkout (read-only) and actually applies the **same patch to a disposable
+  temporary source-only tree**; compares every resulting file with the staged
+  bytes. Never applies to the actual EveJS checkout. No startup, Docker, CI,
+  source write, or feature flag change.
 - Runs `node --check` on the two composed stock files and all staged modules.
 
 This does **not** wire native original player authorization, real agent offers,
@@ -83,7 +89,21 @@ python3 scripts/pf62/build_native_review_bundle.py \
    cannot control/destroy each other's original ships. Only then separately
    review any activation/merge; **no automatic PLAY restart**.
 
-Local PF-62 composition test evidence: **8/8 Python PASS** on Python 3.13 /
+Original PF-62 baseline evidence: **8/8 Python PASS** on Python 3.13 /
 Node 22.16 in synthetic native fixtures (including actual PF-59/PF-61
 transforms, staged Node compile and dry-run Git apply). Real full EveJS source
 transform and WORK/PLAY E2E have **NOT RUN** on this machine.
+
+## PF-63 safety correction (2026-11-06)
+
+The original PF-62 diff contained only the two stock edits. That was unsafe:
+applying the patch could leave all 16 required modules absent. PF-63 corrects
+that incomplete package without installing or activating gameplay. The
+two-stock + sixteen-added review patch is checked in a throwaway Git repository
+for byte-perfect roundtrip. Additional negative tests reject missing terminal
+newlines, duplicate paths, output directories that contain the engine tree and
+native module filename collisions. Four historical .cjs files without a final
+newline are normalized in staging only. See `PF63_INTEGRATION_SAFETY.md`.
+
+Combined isolated PF-59–61 Node regression 59/59 PASS; PF-62+63 Python
+composition regression 13/13 PASS. This **does not prove original engine / WORK**.
