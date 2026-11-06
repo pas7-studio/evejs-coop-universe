@@ -29,8 +29,10 @@ attempt denies startup; malformed rows also deny. A PF56 row is allowed only
 when it is a fully matching, zero-dock-attempt pre-dock return stage:
 `RETURN_ISSUING`, `RETURNING`, or `ARRIVAL_OBSERVED`. No foreign assignment,
 ship, pilot, system, station, generation, type or owner may be accepted.
-The PF56 `operationID` and canonical SHA256 `signature` are also verified;
-an altered identity cannot masquerade as a still-eligible `RETURNING` row.
+The PF56 `operationID` and canonical SHA256 `signature` are also verified
+for consistency. This digest is **not a keyed MAC** and cannot authenticate
+a malicious writer; reciprocal original GameStore writer fencing remains a
+mandatory release requirement.
 `DOCK_ISSUING` and `DOCKED` are unconditionally denied before physical actor
 creation, regardless of whether the original ItemStore move occurred.
 
@@ -47,7 +49,7 @@ retry, re-dock, or new ItemStore title is introduced by PF73.
 
 `node --test scripts/pf58/tests/pf73-docking-restart-permit.test.cjs`
 
-24/24 Node 22 tests passed on real SQLite `DatabaseSync`, `WAL`,
+25/25 Node 22 tests passed on real SQLite `DatabaseSync`, `WAL`,
 `synchronous=FULL`. Tests include a separate Linux child process SIGKILL just
 after the actual PF56 `DOCK_ISSUING` SQLite commit and before original ship
 ItemStore change; a second process sees the durable row and denies native
