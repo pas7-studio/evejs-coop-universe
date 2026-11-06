@@ -96,3 +96,21 @@ rogue untracked or ignored files, and modifications to the orchestration
 checkout. This establishes the behavior of PF80's synthetic WORK harness, not
 full native gameplay acceptance or an atomic fencing guarantee against an
 external process changing the real WORK tree after the check returns.
+
+## PF87 — atomic stock title + permit preflight (2026-11-07)
+
+The Windows `Prepare-PF80-CompleteNativeWork.ps1 -ApplyToWork` wrapper runs
+the PF87 original-title atomic contract regression (after PF85/PF86 and
+before staging/applying any native WORK files). It verifies that a strict
+source-bound PF58 handoff consumes the durable original permit and transfers
+the **same original ItemStore title** under one GameStore
+`BEGIN IMMEDIATE` transaction, including `characters` active-ship guards.
+The legacy postcommit ItemStore move is disabled in source-bound mode.
+
+The manual bare Python `prepare_complete_native_work.py` entrypoint **does
+not** automatically run PF85/PF86/PF87 source gates; use the PowerShell wrapper
+for the complete manual preflight. See
+`scripts/pf58/docs/PF87_ATOMIC_ORIGINAL_TITLE_AND_PERMIT.md`.
+This closes one transaction-boundary race, NOT the missing original player,
+Mining, WAR and Exploration reciprocal writer gates or native WORK E2E.
+No remote CI, main merge, PLAY start or Personal Fleet activation.

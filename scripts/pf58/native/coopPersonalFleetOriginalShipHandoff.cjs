@@ -4,9 +4,10 @@
  * Only callable from PF54's already-committed ISSUING callback. The same stock
  * ship itemID becomes the native entityID, never an allocator-generated NPC.
  *
- * Native side-effects cannot share the GameStore transaction that reserves the
- * handoff permit. Consequently the PERMIT is committed FIRST and is never
- * automatically freed/retried; a crash anywhere requires native reconciliation.
+ * PF87: the ORIGINAL ship title can move within the SAME GameStore SQLite
+ * transaction that consumes the handoff permit (strict mode). Native actor
+ * materialization remains a separate one-shot effect requiring reconciliation.
+ * Legacy test/reference mode still supports external ItemStore movement.
  *
  * INERT by default. No new wallet, ship, module or cargo records are created.
  */
@@ -69,7 +70,8 @@ function verifyNativeOutcome(proof,row){
 }
 function createOriginalShipHandoff({gameStore,pf52,native,enabled=()=>false,
  allWritersFenced=()=>false,verifyExclusive=()=>false,
- verifyOriginalEquipment=()=>null,clock=()=>Date.now()}={}){
+ verifyOriginalEquipment=()=>null,clock=()=>Date.now(),
+ requireAtomicOriginalTransfer=false}={}){
  const a=gameStore?.coopAtomicNativeRows;
  if(a?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof a.transact!=='function'||
     typeof a.isPoisoned!=='function'||!pf52||
@@ -78,6 +80,8 @@ function createOriginalShipHandoff({gameStore,pf52,native,enabled=()=>false,
     ['verifyStationAndUndock','noActivePlayerSession','noExistingPhysicalActor',
      'moveOriginalShipToSpace','adoptOriginalShipAsNpc','readOriginalShip','inspectOriginalActor']
        .some(name=>typeof native?.[name]!=='function')||
+    (requireAtomicOriginalTransfer===true&&
+      typeof native?.moveOriginalShipToSpaceAtomically!=='function')||
     [enabled,allWritersFenced,verifyExclusive,verifyOriginalEquipment,clock]
       .some(fn=>typeof fn!=='function'))throw Error('PF58_NATIVE_AUTHORITIES_REQUIRED');
  const permitted=()=>enabled()===true&&allWritersFenced()===true&&!a.isPoisoned();
@@ -88,7 +92,8 @@ function createOriginalShipHandoff({gameStore,pf52,native,enabled=()=>false,
   if(!validPF54(pf54Row))return deny('PF58_UNTRUSTED_DISPATCH_ROW');
   const row=clone(pf54Row),ship=row.shipItemID;
   let permit;
-  try{permit=a.transact([T,ITEMS],tx=>{
+  try{permit=a.transact(requireAtomicOriginalTransfer===true?
+   [T,ITEMS,'characters']:[T,ITEMS],tx=>{
    if(!permitted())return deny('PF58_GATE_REVOKED');
    const persisted=tx.get(T,'coop-personal-fleet'+SEP+'deploy-v1:'+row.assignmentID);
    if(!validPF54(persisted)||hash(persisted)!==hash(row))
@@ -108,6 +113,23 @@ function createOriginalShipHandoff({gameStore,pf52,native,enabled=()=>false,
     return deny('PF58_ACTOR_CLAIMS_UNVERIFIED');
    if(actors?.claims?.[String(ship)]||Object.values(actors?.claims||{}).some(c=>c?.pilotID===row.pilotID))
     return deny('PF58_EXISTING_PF_ACTOR');
+   // PF87: the ORIGINAL character active-ship title belongs to the same
+   // BEGIN IMMEDIATE snapshot. In strict mode reject the reserved hull if
+   // *any* original character currently identifies it as their active ship.
+   // Null/missing identity table is not an affirmative ownership witness.
+   if(requireAtomicOriginalTransfer===true){
+    const chars=tx.get('characters','characters');
+    if(!obj(chars)||!obj(chars[String(row.ownerCharacterID)]))
+     return deny('PF87_ORIGINAL_CHARACTERS_UNAVAILABLE');
+    for(const c of Object.values(chars)){
+     if(!obj(c))return deny('PF87_ORIGINAL_CHARACTER_ROW_UNCERTAIN');
+     for(const active of [c.shipID,c.shipid,c.activeShipID]){
+      if(active===ship||(typeof active==='string'&&
+         /^[1-9][0-9]*$/.test(active)&&Number(active)===ship))
+       return deny('PF87_ORIGINAL_SHIP_ACTIVE_FOR_CHARACTER');
+     }
+    }
+   }
    const collision=pf52.checkCompetingClaims(tx,row);
    if(collision)return deny(collision);
    if(verifyExclusive(clone(row),tx)!==true)
@@ -129,18 +151,45 @@ function createOriginalShipHandoff({gameStore,pf52,native,enabled=()=>false,
     pilotID:row.pilotID,stationID:row.stationID,systemID:row.systemID,
     generation:row.generation,sourcePF54Hash:hash(row),
     fittingHash:row.fittingHash,cargoHash:row.cargoHash,consumedAtMs:at};
+   // PF87: a single BEGIN IMMEDIATE transaction now owns both the durable
+   // permit and original stock item title. Every native writer participating
+   // in this GameStore owner is serialized by its SQLite transaction.
+   // Re-read dynamic external witnesses as late as possible under the lock.
+   // NEVER fall back to post-commit ItemStore when strict atomic mode is on.
+   if(requireAtomicOriginalTransfer===true){
+    if(!permitted()||verifyExclusive(clone(row),tx)!==true||
+       native.noActivePlayerSession(clone(row),tx)!==true||
+       native.noExistingPhysicalActor(clone(row),tx)!==true)
+      return deny('PF87_ATOMIC_WRITER_OR_PRESENCE_CHANGED');
+    const eq=verifyOriginalEquipment(clone(row),tx);
+    if(!obj(eq)||eq.fittingHash!==row.fittingHash||
+       eq.cargoHash!==row.cargoHash)
+      return deny('PF87_ATOMIC_EQUIPMENT_CHANGED');
+    // Transaction-scoped native callback writes ONLY the same original item
+    // under ITEMS.'items'. A bad ACK after any write throws, forcing rollback.
+    const moved=native.moveOriginalShipToSpaceAtomically(clone(row),clone(spawn),tx);
+    if(moved?.success!==true||moved?.then||
+       !validStockSpace(tx.get(ITEMS,'items')?.[String(ship)],row))
+      throw Error('PF87_ORIGINAL_ATOMIC_STOCK_MOVE_UNPROVEN');
+   }
    tx.put(T,key(row.assignmentID),record);
    tx.put(T,shipKey(ship),{assignmentID:row.assignmentID,sourcePF54Hash:hash(row)});
-   return {status:'CONSUMED',record,spawn:clone(spawn)};
+   return {status:'CONSUMED',record,spawn:clone(spawn),
+    stockMovedAtomically:requireAtomicOriginalTransfer===true};
   });}catch{return deny('PF58_PERMIT_COMMIT_UNKNOWN_NO_RETRY');}
   if(permit?.status!=='CONSUMED')return permit;
-  // All effects below are external to the permit transaction. Failure or
-  // ambiguity is NOT retried; PF54+PF58 remain durably blocked.
-  let moved;
-  try{moved=native.moveOriginalShipToSpace(clone(row),clone(permit.spawn));}
-  catch{return {status:'OUTCOME_UNKNOWN',reason:'PF58_ITEMSTORE_WRITE_UNKNOWN'};}
-  if(moved?.success!==true||moved?.then)
-   return {status:'OUTCOME_UNKNOWN',reason:'PF58_ITEMSTORE_MOVE_UNPROVEN'};
+  // PF87 strict mode: stock item title is ALREADY transferred by the SQLite
+  // permit commit. The engine's separate ItemStore mutator must not run.
+  // Native NPC controller/adoption is still a separate, fenced one-shot effect.
+  if(requireAtomicOriginalTransfer===true&&!permit.stockMovedAtomically)
+   return {status:'OUTCOME_UNKNOWN',reason:'PF87_ATOMIC_MOVE_ACK_MISSING'};
+  if(requireAtomicOriginalTransfer!==true){
+   let moved;
+   try{moved=native.moveOriginalShipToSpace(clone(row),clone(permit.spawn));}
+   catch{return {status:'OUTCOME_UNKNOWN',reason:'PF58_ITEMSTORE_WRITE_UNKNOWN'};}
+   if(moved?.success!==true||moved?.then)
+    return {status:'OUTCOME_UNKNOWN',reason:'PF58_ITEMSTORE_MOVE_UNPROVEN'};
+  }
   let item;
   try{item=native.readOriginalShip(ship);}
   catch{return {status:'OUTCOME_UNKNOWN',reason:'PF58_ORIGINAL_ITEM_READ_FAILED'};}

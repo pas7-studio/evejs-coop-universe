@@ -138,3 +138,15 @@ VM tests of the injected native source) and 6/6 Python PASS. The updated PF62
 14-test suite and the actual native fork checkout have not been executed here.
 This does NOT resolve real station dwell, original writer exclusivity, game
 client integration, or native release approval; keep feature OFF and PR Draft.
+
+## PF87 original title / permit atomicity (2026-11-07)
+
+The PF80 PowerShell `-ApplyToWork` entrypoint now runs PF87 regressions before
+generating the native WORK tree. The strict source-bound PF58 adapter moves
+the existing ship title under the exact GameStore SQLite transaction that
+consumes the one-shot permit, with durable character active-ship checks.
+The generic reference bootstrap remains legacy for its previous fixture
+contracts; only the source-bound bootstrap forces atomic mode.
+Full original engine WORK boot and reciprocal player/NPC writer fences
+remain outstanding; see `PF80_COMPLETE_NATIVE_WORK.md` and the PF87
+documentation. Personal Fleet stays OFF, no remote CI.
