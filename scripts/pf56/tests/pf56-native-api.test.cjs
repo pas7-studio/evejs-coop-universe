@@ -25,7 +25,11 @@ function fixture(){
  const scene={systemID:row.systemID,getEntityByID(id){return id===row.shipItemID?entity:null;}};
  const calls=[],state={claim:true,enabled:true};
  const orderBridge={issue(c){calls.push(c);return c.execute();}};
- const npcRuntime={warpToPoint(...args){calls.push(args);return {success:true};}};
+ const npcRuntime={
+  stop(...args){calls.push(['stop',...args]);controller.manualOrder={type:'stop'};
+   controller.currentTargetID=0;return {success:true};},
+  warpToPoint(...args){calls.push(['warp',...args]);return {success:true};}
+ };
  const deps={npcRuntime,orderBridge,sceneForSystem:()=>scene,
   getController:()=>controller,getCanonicalStation:()=>station,
   verifyPersonalClaim:()=>state.claim,enabled:()=>state.enabled};
@@ -37,9 +41,10 @@ test('PF56 original Return uses canonical npcRuntime.warpToPoint under PERSONAL_
  assert.equal(exec.execute(row).success,true);
  assert.equal(f.calls[0].owner,'PERSONAL_FLEET');
  assert.equal(f.calls[0].action,'pf-return-base');
- assert.equal(f.calls[1][0],row.shipItemID);
- assert.deepEqual(f.calls[1][1],{x:1950,y:0,z:0});
- assert.equal(f.calls[1][2].forceImmediateStart,true);
+ assert.equal(f.calls[1][0],'warp');
+ assert.equal(f.calls[1][1],row.shipItemID);
+ assert.deepEqual(f.calls[1][2],{x:1950,y:0,z:0});
+ assert.equal(f.calls[1][3].forceImmediateStart,true);
 });
 
 test('original Return rechecks native actor immediately before warp effect',()=>{
@@ -118,8 +123,9 @@ test('PF83 Return uses current canonical station coordinates after arbiter admis
  const ex=createOriginalReturnExecutor(f.deps);
  assert.equal(ex.execute(row).success,true);
  assert.equal(f.calls[0].owner,'PERSONAL_FLEET');
- assert.deepEqual(f.calls[1][1],{x:8950,y:0,z:0});
- assert.equal(f.calls[1][0],row.shipItemID);
+ assert.deepEqual(f.calls[1][2],{x:8950,y:0,z:0});
+ assert.equal(f.calls[1][0],'warp');
+ assert.equal(f.calls[1][1],row.shipItemID);
 });
 
 test('PF83 Return denies overflowed physics coordinates without native warp',()=>{
@@ -140,4 +146,43 @@ test('PF83 Return rechecks canonical station identity inside arbiter callback',(
  assert.equal(r.success,false);
  assert.equal(r.errorMsg,'PF56_NATIVE_SOURCE_CHANGED');
  assert.equal(f.calls.length,0);
+});
+
+test('PF83-B live nativeCombat ATTACK must be STOPped and witnessed before Return warp',()=>{
+ const f=fixture();f.controller.runtimeKind='nativeCombat';
+ f.controller.currentTargetID=777;
+ f.controller.manualOrder={type:'attack',targetID:777,allowWeapons:true};
+ const out=createOriginalReturnExecutor(f.deps).execute(row);
+ assert.equal(out.success,true);
+ assert.equal(f.calls[0].owner,'PERSONAL_FLEET');
+ assert.deepEqual(f.calls[1],['stop',row.shipItemID,{
+  reason:'pf83-return-base',allowSessionlessWarpAbort:false,
+  issueStopOrder:true}]);
+ assert.equal(f.controller.manualOrder.type,'stop');
+ assert.equal(f.controller.currentTargetID,0);
+ assert.equal(f.calls[2][0],'warp');
+ assert.equal(f.calls[2][1],row.shipItemID);
+});
+test('PF83-B failed original STOP never starts return warp',()=>{
+ const f=fixture();f.controller.runtimeKind='nativeCombat';
+ f.controller.manualOrder={type:'attack',targetID:777};
+ f.deps.npcRuntime.stop=(...args)=>{f.calls.push(['stop',...args]);
+  return {success:false,errorMsg:'NPC_STOP_FAILED'};};
+ const out=createOriginalReturnExecutor(f.deps).execute(row);
+ assert.equal(out.success,false);
+ assert.equal(out.errorMsg,'PF83_NATIVE_COMBAT_STOP_UNVERIFIED');
+ assert.equal(f.calls.length,2);
+ assert.equal(f.calls.some(x=>Array.isArray(x)&&x[0]==='warp'),false);
+});
+test('PF83-B successful STOP ACK without controller change cannot authorize warp',()=>{
+ const f=fixture();f.controller.runtimeKind='nativeCombat';
+ f.controller.manualOrder={type:'attack',targetID:777};
+ f.controller.currentTargetID=777;
+ f.deps.npcRuntime.stop=(...args)=>{f.calls.push(['stop',...args]);
+  return {success:true};};
+ const out=createOriginalReturnExecutor(f.deps).execute(row);
+ assert.equal(out.success,false);
+ assert.equal(out.errorMsg,'PF83_NATIVE_COMBAT_QUIESCENCE_UNVERIFIED');
+ assert.equal(f.calls.length,2);
+ assert.equal(f.calls.some(x=>Array.isArray(x)&&x[0]==='warp'),false);
 });
