@@ -24,6 +24,11 @@ function applyNativeRuntimeNpcPresentation(entity, entityRecord) {
   entity.modules = nativeNpcStore.buildNativeSlimModuleTuples(entityRecord.entityID);
   return entity;
 }
+function materializeNativeRuntimeEntity(scene, entityRecord, controllerRecord, definition, options = {}) {
+  const runtimeKind = String(controllerRecord && controllerRecord.runtimeKind || "nativeAmbient").trim() || "nativeAmbient";
+  const existingEntity = scene.getEntityByID(entityRecord.entityID);
+  return {success:true,data:{existingEntity,runtimeKind}};
+}
 function materializeStoredNativeController(scene, entityID, options={}) {
   const normalizedEntityID=entityID;
   const entityRecord = nativeNpcStore.getNativeEntity(normalizedEntityID);
@@ -54,6 +59,8 @@ class TestNativeSourcePin(unittest.TestCase):
   self.assertIn('personalFleetIssuing === true',s)
   self.assertIn('PF58_ORIGINAL_ITEMSTORE_BRIDGE_V1: true',s)
   self.assertIn('PF58_ORIGINAL_NATIVE_PERMIT_NOT_VERIFIED',s)
+  self.assertIn('PF71_LOW_LEVEL_NATIVE_PERMIT_NOT_VERIFIED',s)
+  self.assertIn('PF71: every native runtime materialization path',s)
   self.assertIn('nativeCargoItems: entityRecord.personalFleetOriginal === true\n      ? []',s)
  def test_source_pin_rejects_changed_source_before_creating_patch(self):
   with tempfile.TemporaryDirectory() as td:
@@ -78,7 +85,6 @@ class TestNativeSourcePin(unittest.TestCase):
    subprocess.run(['git','init','-q'],cwd=root,check=True)
    check=subprocess.run(['git','apply','--check',str(patch)],cwd=root,capture_output=True,text=True)
    self.assertEqual(check.returncode,0,check.stderr)
-   # Apply only to temporary synthetic fixture, never to EveJS source.
    subprocess.run(['git','apply',str(patch)],cwd=root,check=True)
    syntax=subprocess.run(['node','--check',str(p)],capture_output=True,text=True)
    self.assertEqual(syntax.returncode,0,syntax.stderr)
