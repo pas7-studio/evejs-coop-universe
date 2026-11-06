@@ -4,7 +4,7 @@
 
 PF59 correctly forbids generic NPC cleanup for the player's original ship. PF60 provides a durable, single-shot `ISSUING` intent for terminal custody, but requires a trusted scoped removal of only its native NPC controller/entity. PF61 is a source-pinned native-store patch candidate plus a capability-bound server-only executor to implement this missing narrow endpoint.
 
-- `native/coopPersonalFleetScopedNativeCleanup.cjs`: consumes PF60's committed ISSUING record and immutable signature, PF58 original ship lock, terminal witness, independent scene absence, exclusive original writers, and an opaque per-process Symbol capability. It consumes its local attempt BEFORE the native call; failures/unknown results never retry.
+- `native/coopPersonalFleetScopedNativeCleanup.cjs`: consumes PF60's committed ISSUING record and immutable signature, PF58 original ship lock, terminal witness, independent scene absence, exclusive original writers, and an opaque per-process Symbol capability. PF64 commits an original GameStore `terminal-native-attempt-v1` receipt **before** the native call, also checking it from the private native-store authority. Process restart cannot erase this evidence. Failures/unknown results never retry.
 - `build_native_scoped_cleanup_patch.py`: exact Git blob pinned nativeStore patch on original fork source (`95724ab4537683e7ee933bc3149d0a891082ce7e`), outputs **review diff only**, no source mutation. Adds `installScopedOriginalTerminalCleanupAuthority` and a dedicated `removeScopedPersonalFleetTerminalNativeRows` original-store method. NativeStore checks opaque capability, real PF60 authority and native entity/controller tags; refuses stock cargo/modules; uses private low-level removes rather than PF59-blocked generic functions.
 - Controller/entity are **NOT in one original GameStore transaction**: `npcRuntimeControllers` is absent from `coopGameStoreAtomic`'s allowlist. A crash between two removals is `OUTCOME_UNKNOWN` and requires original readback/operator repair, never automatic duplicate cleanup. Do not hide this as atomic.
 - Requires native fork placement and explicit bootstrap installation, genuine original scene/wreck/ItemStore authority, complete reciprocal writer fences, and PF58/59/60 patch composition before enabling. Neither the command nor the capability may be exposed to players or RPC routes.
@@ -19,3 +19,7 @@ python3 -m unittest discover -s scripts/pf61/tests -p 'test_*.py' -v
 ```
 
 2026-11-06 isolated Node 22.16.0: **12/12 PASS**. Python 3.13: **5/5 PASS** including synthetic `git apply --check`. Real fork native compile, physical ItemStore/scene, post-SIGKILL native controller rows, client and two-player E2E are NOT RUN. See `docs/INTEGRATION_GATES.md`.
+
+## PF64 durability correction (2026-11-06)
+
+The original PF61 process-local `Set` was insufficient after Node restart. The scoped executor now writes one immutable original GameStore receipt before any native removal. Replays (even after SIGKILL) refuse; physical reconciliation must be separate. See `scripts/pf64/README.md`. Local PF61/64 19/19 PASS including two true Linux SQLite SIGKILL tests. Original WORK server NOT RUN.
