@@ -3734,3 +3734,8 @@ Evidence: live book type 23803: seed ask 99.43M, corp relist 139.202M, bids none
 Why: an npc sell order could never change its price, so the 22 modules listed above the market were permanently unsellable
 Where: integration/coopNpcTraderRelist.cjs, tests/coop-npc-trader-relist.test.mjs
 Evidence: fork 4a66dbf (RepriceNpcSellOrder in the daemon + repriceOnce in the relist, escrow trade price follows); 11 relist tests pass; AUDIT_OK
+### 2026-11-06T18:56Z · 406c63a · L2 · test(trader): the maker refuses to buy back its own offer
+
+Why: the competitive relist let a player buy the corporation's module just under the market and sell it straight back at the market reference, draining the corporation for ever
+Where: integration/coopNpcTraderMaker.cjs, tests/coop-npc-trader-maker.test.mjs
+Evidence: fork e9... ; maker records own coop-npc asks and skips player asks not cheaper; 18 maker tests + 11 relist tests pass; AUDIT_OK
