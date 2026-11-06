@@ -31,7 +31,6 @@ MODULE_FILES = (
  'pf55/native/coopPersonalFleetNpcRuntimeExecutor.cjs',
  'pf56/native/coopPersonalFleetReturnDock.cjs',
  'pf56/native/coopPersonalFleetNativeReturnExecutor.cjs',
- 'pf56/native/coopPersonalFleetNativeReturnExecutor.cjs',
  'pf57/native/coopPersonalFleetContractLifecycle.cjs',
  'pf58/native/coopPersonalFleetOriginalDeployment.cjs',
  'pf58/native/coopPersonalFleetNativeBootstrap.cjs',
@@ -120,6 +119,10 @@ def normalize_native_module(source: str, filename: str) -> str:
 
 
 def plan_modules(repo: Path) -> dict[str,str]:
+    # PF79: reject a repeated archive source *before* staging any native code;
+    # duplicate source entries must not inflate the purported patch file count.
+    if len(MODULE_FILES)!=len(set(MODULE_FILES)):
+        raise ValueError('PF79_DUPLICATE_NATIVE_SOURCE_MODULE')
     result={}
     for rel in MODULE_FILES:
         file=repo/'scripts'/rel
