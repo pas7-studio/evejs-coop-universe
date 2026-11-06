@@ -1,4 +1,5 @@
 import sys
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -73,6 +74,11 @@ class NativePatchTests(unittest.TestCase):
                 self.assertTrue(out.exists())
                 self.assertIn('--- a/'+pf59.SERVICE,patch)
                 self.assertIn('+++ b/'+pf59.STORE,patch)
+                subprocess.run(['git','-C',str(root),'init','-q'],check=True)
+                subprocess.run(['git','-C',str(root),'apply','--check',str(out)],check=True)
+                subprocess.run(['git','-C',str(root),'apply',str(out)],check=True)
+                self.assertEqual(service.read_text().count('pf59.checkOriginalRemoval'),2)
+                self.assertEqual(store.read_text().count('pf59.checkOriginalRemoval'),3)
             finally:pf59.PINS.clear();pf59.PINS.update(saved)
 
 if __name__=='__main__':unittest.main()
