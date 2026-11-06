@@ -215,3 +215,18 @@ independently fenced**. No original `characterState` runtime hook is
 installed and Personal Fleet remains OFF. Original owner source proofs,
 26 new Node fixture cases and manual local commands:
 `scripts/pf92/PF92_ORIGINAL_CHARACTER_GENERIC_WRITE_FENCE.md`.
+
+## PF93 original SQLite witness rollback (2026-11-07)
+
+PF91/PF92 session witnesses now share a complete, transaction-scoped
+original SQLite row fingerprint before/after every witness callback.
+The three scoped tables (`corporationRuntime`, `items`, `characters`)
+are scanned and SHA256-attested, including unrelated row keys. A
+callback closure writing anything in those tables forces an exception
+and rollback, **even if it returns false**. The read-only witness
+interface stays unchanged and async callbacks are rejected.
+Source-bound original GameStore checks and local 16-case native
+SQLite fixture regression:
+`scripts/pf93/PF93_NATIVE_SESSION_WITNESS_ATOMIC_ISOLATION.md`.
+This is a conservative O(database) safeguard, NOT final native
+session-fencing or original engine integration. Personal Fleet OFF.

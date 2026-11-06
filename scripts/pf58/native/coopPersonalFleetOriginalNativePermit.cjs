@@ -441,6 +441,74 @@ function createReciprocalWriterFence({pf52}={}){
  * Commit the exact original character row and read PF title/claims in ONE
  * original BEGIN IMMEDIATE. No secondary owner or synthetic characters map.
  */
+/**
+ * PF93: the original GameStore's explicit mutation scope is
+ * corporationRuntime + items + characters. Never trust an external session
+ * witness merely because the facade offered read-only methods: its closure
+ * may still capture another writer capability.
+ *
+ * The ONLY evidence available with the existing original SQLite adapter is
+ * to compare the complete declared table contents before and after each
+ * witness call, then throw (not BLOCKED) if they differ. Any thrown error
+ * causes the original SQLite owner to ROLLBACK. Future original native
+ * integration should replace O(database) scans with an owner-controlled
+ * transaction write-generation counter; no such counter exists today.
+ *
+ * This is for uncommon protected title transitions, NOT every wallet write.
+ * The cost cap rejects huge tables rather than silently skipping rows.
+ */
+const ORIGINAL_WITNESS_TABLES=Object.freeze([T,'items','characters']);
+function fingerprintOriginalWitnessRows(tx){
+ if(typeof tx?.scan!=='function'||typeof tx?.get!=='function')
+  throw Error('PF93_ORIGINAL_ROWSET_SCAN_REQUIRED');
+ const maxRows=250000,maxChars=64*1024*1024;
+ const hash=crypto.createHash('sha256');
+ let seenChars=0;
+ for(const table of ORIGINAL_WITNESS_TABLES){
+  const rows=tx.scan(table);
+  if(!Array.isArray(rows)||rows.length>maxRows)
+   throw Error('PF93_ORIGINAL_ROWSET_SCAN_INVALID');
+  const keys=new Set(),sorted=[];
+  for(const row of rows){
+   if(typeof row?.key!=='string'||row.key.length===0||
+      row.key.length>1024||keys.has(row.key))
+    throw Error('PF93_ORIGINAL_ROWSET_KEY_INVALID');
+   keys.add(row.key);
+   const json=JSON.stringify(row.value);
+   if(typeof json!=='string')
+    throw Error('PF93_ORIGINAL_ROWSET_JSON_INVALID');
+   seenChars+=row.key.length+json.length+32;
+   if(seenChars>maxChars)
+    throw Error('PF93_ORIGINAL_WITNESS_SCAN_LIMIT');
+   sorted.push([row.key,json]);
+  }
+  sorted.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
+  // Length-prefixed JSON tuple framing is unambiguous even for original
+  // corporationRuntime keys containing ASCII control separators (U+001F).
+  // Raw concatenation with those separators is not collision-safe framing.
+  hash.update(JSON.stringify([table,sorted]));
+ }
+ return hash.digest('hex');
+}
+function verifyOriginalWitnessCannotWrite(tx,callback,request){
+ const before=fingerprintOriginalWitnessRows(tx);
+ const reader=Object.freeze({
+  get:(table,key)=>structuredClone(tx.get(table,key)),
+  scan:table=>structuredClone(tx.scan(table))
+ });
+ let answer,issue=null;
+ try{
+  answer=callback(request,reader);
+  if(answer&&typeof answer.then==='function')
+   throw Error('PF93_ASYNC_SESSION_WITNESS_FORBIDDEN');
+ }catch(e){issue=e;}
+ const after=fingerprintOriginalWitnessRows(tx);
+ if(before!==after)
+  throw Error('PF93_SESSION_WITNESS_MUTATED_ORIGINAL_SQLITE_ROLLBACK');
+ if(issue)throw issue;
+ return answer===true;
+}
+
 function createOriginalPlayerShipActivation({
  gameStore,pf52,enabled=()=>false,allWritersFenced=()=>false,
  verifyOriginalDockedPlayerSession=()=>false
@@ -475,7 +543,9 @@ function createOriginalPlayerShipActivation({
     return block('PF91_PLAYER_ACTIVATION_DISABLED');
    // Live native session evidence is NOT a durable row. The actual stock
    // character owner must supply a source-bound witness on every call.
-   if(verifyOriginalDockedPlayerSession({session,characterID,stationID},tx)!==true)
+   if(!verifyOriginalWitnessCannotWrite(tx,
+      verifyOriginalDockedPlayerSession,
+      Object.freeze({session,characterID,stationID})))
     return block('PF91_ORIGINAL_PLAYER_SESSION_UNVERIFIED');
    const original=tx.get('characters',String(characterID));
    if(!obj(original)||original.characterID!==undefined&&
@@ -505,7 +575,9 @@ function createOriginalPlayerShipActivation({
     const currentFence=fence.inTransaction({tx,writer:'PLAYER',shipItemID:oldID});
     if(currentFence.mayCommit!==true)return block(currentFence.reason);
    }
-   if(verifyOriginalDockedPlayerSession({session,characterID,stationID},tx)!==true)
+   if(!verifyOriginalWitnessCannotWrite(tx,
+      verifyOriginalDockedPlayerSession,
+      Object.freeze({session,characterID,stationID})))
     return block('PF91_ORIGINAL_PLAYER_SESSION_REVOKED');
    const updated=structuredClone(original);
    updated.shipID=target.itemID;
@@ -595,14 +667,11 @@ function createOriginalCharacterRecordWriteBarrier({pf52,
      nextShipItemID:next.id,session});
     // The verifier receives a READ-ONLY view: never lend an original
     // SQLite writer's put/del capability to a session/session-lease probe.
-    const reader=Object.freeze({
-     get:(table,key)=>structuredClone(tx.get(table,key)),
-     scan:(table)=>typeof tx.scan==='function'?
-      structuredClone(tx.scan(table)):null
-    });
+    // The witness is invoked ONLY through PF93's read-only facade with
+    // a complete original SQLite rowset mutation check.
     const items=tx.get('items','items');
     if(!obj(items))return fail('PF92_ORIGINAL_ITEMS_UNAVAILABLE');
-    const firstLease=verifyOriginalSessionLease(witness,reader);
+    const firstLease=verifyOriginalWitnessCannotWrite(tx,verifyOriginalSessionLease,witness);
     // Callback closures can capture the outer tx despite receiving a
     // read-only view. A failed witness after any direct put must THROW
     // to roll back the transaction rather than return a BLOCKED result.
@@ -642,7 +711,7 @@ function createOriginalCharacterRecordWriteBarrier({pf52,
       allowOwnerAlreadyActive:true});
      if(scan.verified!==true)return fail(scan.reason);
     }
-    const finalLease=verifyOriginalSessionLease(witness,reader);
+    const finalLease=verifyOriginalWitnessCannotWrite(tx,verifyOriginalSessionLease,witness);
     if(!isDeepStrictEqual(tx.get('items','items'),items)||
        !isDeepStrictEqual(tx.get('characters',String(characterID)),before))
      throw Error('PF92_ORIGINAL_OWNER_CHANGED_BY_SESSION_WITNESS_ROLLBACK');

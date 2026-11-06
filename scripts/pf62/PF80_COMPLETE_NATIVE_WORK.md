@@ -199,3 +199,16 @@ preflight includes PF92 candidate SQLite tests and source-pinned
 original paths. The real engine owner hook is **not** installed;
 activation remains blocked. See
 `scripts/pf92/PF92_ORIGINAL_CHARACTER_GENERIC_WRITE_FENCE.md`.
+
+## PF93 complete original SQLite session-witness rollback
+
+Before WORK-only review staging, PF80 now runs PF93 candidate 16-case
+SQLite fixture regression and three source-pinned original GameStore
+writer tests. These verify that a callback returning `false` after
+writing any declared table row must THROW so SQLite rolls back, and
+that source-bound original GameStore has a one-writer
+`BEGIN IMMEDIATE`/`ROLLBACK` authority. PF93 uses expensive
+full-table fingerprints pending a reviewed native GameStore
+write-generation counter and independent original session lease.
+The original EveJS owner hooks are still not installed.
+See `scripts/pf93/PF93_NATIVE_SESSION_WITNESS_ATOMIC_ISOLATION.md`.

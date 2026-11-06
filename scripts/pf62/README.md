@@ -209,3 +209,15 @@ the PF88 disabled-sourcebound regression and four original
 source-pinned owner route checks. All tests are manual, and a
 good WORK *review* gate does not activate or install original EveJS
 character owner hooks. See `scripts/pf92/PF92_ORIGINAL_CHARACTER_GENERIC_WRITE_FENCE.md`.
+
+## PF93 original-session SQLite rollback preflight
+
+Manual PF80 `-ApplyToWork` source verification now includes PF93
+original GameStore witness read-set and 16 Node/SQLite fixture
+regressions. They catch witness callbacks that write unrelated
+`corporationRuntime`, `items` or `characters` rows after
+returning `false` or `true`. All changes remain inside the existing
+PF58 candidate native module. Original EveJS source is read-only;
+native GameStore write-generation instrumentation remains the
+performance-friendly final design. Gameplay remains OFF and untested
+on the local WORK server.
