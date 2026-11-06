@@ -3709,3 +3709,8 @@ Evidence: fork e5c6134+2038a0a; live reason ALIFE10_ALIFE10_POSTCOMMIT_CUSTODY_R
 Why: every dungeon mutation re-read and deep-cloned the whole 8684-instance table just to diff it, while the module already held that state
 Where: .opencode/state.md
 Evidence: fork 2bdf38f; read measured 428ms warm/1533ms cold; after deploy no stall above 1.3s, RSS 2.92GB, 8684 instances consistent; suite 7674/7579/0
+### 2026-11-06T17:21Z · 292e578 · L1 · test(haul): the transfer receipt is proof when the row is already consumed
+
+Why: the haul fleet was parked again because the readback heal only accepted an existing destination row, while the cargo row can legitimately be gone by the time the heal runs
+Where: integration/coopNativeHaulCargo.cjs, integration/coopNativeHaulTransferAtomic.cjs, tests/coop-haul-readback-heal.test.mjs
+Evidence: fork 826e165; live block 16:33-17:18 destination_rows=0; heal now accepts the COMMITTED transfer receipt written in the same transaction; 17 heal tests + 90 haul tests pass; AUDIT_OK
