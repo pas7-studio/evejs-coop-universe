@@ -3694,3 +3694,8 @@ Why: the refinery had been blocked for a day: a paid fee could not be replayed, 
 Detail: The refinery had been BLOCKED since 2026-11-05 14:05 with 10 778 `living-npc-refinery-blocked` events, so no ore had become minerals for a day. Three independent defects, each fatal on its own (fork df86231, e76e66a, df53bba): 1. payFee returned the bare OPERATION_ALREADY_COMMITTED status for a charge that was already reserved, so the refinery asked for a fee it had already paid and never moved; 2
 Where: .opencode/state.md, integration/coopNpcRefineryTick.cjs, integration/coopRefineryBudget.cjs, tests/coop-npc-refinery-fee-replay.test.mjs
 Evidence: fork df86231+e76e66a+df53bba; live 72 stacks refined in 58s, 0 blocked, 312370 units of ore, 392295.86 ISK fees; suite 7665 tests 7570 pass 0 fail; AUDIT_OK FLAGS_OK SHIMS_OK
+### 2026-11-06T13:56Z · 09b7b27 · L1 · docs(state): the event loop was paying for a whole-table dungeon clone
+
+Why: the world was late on its own timer (p50 467ms, p90 1994ms, worst 62.9s): three hot dungeon mutators deep-cloned and re-normalized the whole 8674-instance table because they edited records in place instead of replacing them
+Where: .opencode/state.md
+Evidence: fork 6e0a823+5a9d848; deep clone 1533ms cold/431ms warm vs shallow 0.26ms measured on the live table; after deploy p90 939ms, worst 1706ms, RSS 3.65->2.93GB; 22/22 NPC orders still READY
