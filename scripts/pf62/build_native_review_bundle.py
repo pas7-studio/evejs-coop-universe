@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import tempfile
 
 SERVICE = 'Code/server/src/space/npc/nativeNpcService.js'
 STORE = 'Code/server/src/space/npc/nativeNpcStore.js'
@@ -99,7 +100,10 @@ def normalize_native_module(source: str, filename: str) -> str:
         source=source.replace(prior,"require('./coopPersonalFleetTerminalCustody.js')")
     # Modules go into native Code/server/src/space as CommonJS .js files.
     # Node's extensionless require does not resolve .cjs automatically.
-    return re.sub(r"(?<=\w)\.cjs(?=['\"]\s*\))",'.js',source)
+    normalized=re.sub(r"(?<=\w)\.cjs(?=['\"]\s*\))",'.js',source)
+    # Four archived modules have no terminal LF. A Git new-file hunk needs a
+    # canonical final newline; normalize ONLY staged copies, never archives.
+    return normalized if normalized.endswith('\n') else normalized+'\n'
 
 
 def plan_modules(repo: Path) -> dict[str,str]:
@@ -128,12 +132,38 @@ def plan_modules(repo: Path) -> dict[str,str]:
     return result
 
 
-def make_review_diff(sources: dict[str,tuple[str,str]]) -> str:
+def make_review_diff(sources: dict[str,tuple[str,str]],
+                     added: dict[str,str] | None = None) -> str:
+    """One git-apply compatible patch for BOTH changed stock files AND new modules.
+
+    A stock-only diff produced a dangerous partial installation: reviewers could
+    apply the patch successfully without installing any of its required modules.
+    The complete patch now fails `git apply --check` if any target module already
+    exists, and `git apply` on a disposable source snapshot must reproduce the
+    exact staged bytes before this bundle is accepted.
+    """
     sections=[]
+    seen=set()
     for rel,(original,changed) in sources.items():
+        if rel in seen or not rel.startswith('Code/server/src/space/'):
+            raise ValueError('PF63_INVALID_REVIEW_PATH: '+rel)
+        seen.add(rel)
         if changed==original:raise ValueError('PF62_EMPTY_NATIVE_TRANSFORM: '+rel)
+        if not original.endswith('\n') or not changed.endswith('\n'):
+            raise ValueError('PF63_STOCK_SOURCE_NEWLINE_REQUIRED: '+rel)
+        sections.append(f'diff --git a/{rel} b/{rel}\n')
         sections.extend(difflib.unified_diff(original.splitlines(keepends=True),
                     changed.splitlines(keepends=True),fromfile='a/'+rel,tofile='b/'+rel))
+    for rel,changed in (added or {}).items():
+        if rel in seen or not rel.startswith(str(NATIVE_DIR)+'/') or \
+           rel.endswith('/') or '/..' in rel or rel.startswith('/'):
+            raise ValueError('PF63_INVALID_NEW_MODULE_PATH: '+rel)
+        if not changed or not changed.endswith('\n'):
+            raise ValueError('PF63_INVALID_NEW_MODULE_CONTENT: '+rel)
+        seen.add(rel)
+        sections.append(f'diff --git a/{rel} b/{rel}\nnew file mode 100644\n')
+        sections.extend(difflib.unified_diff([],changed.splitlines(keepends=True),
+                       fromfile='/dev/null',tofile='b/'+rel))
     return ''.join(sections)
 
 
@@ -141,7 +171,8 @@ def validate_paths(engine: Path, repo: Path, output: Path):
     engine=engine.resolve(); repo=repo.resolve(); output=output.resolve()
     if engine==repo or not (engine/'Code/server/src/space/npc/nativeNpcService.js').is_file():
         raise ValueError('PF62_NATIVE_FORK_CHECKOUT_REQUIRED')
-    if output==engine or output.is_relative_to(engine) or output==repo or output.is_relative_to(repo) or repo.is_relative_to(output):
+    if (output==engine or output.is_relative_to(engine) or engine.is_relative_to(output)
+        or output==repo or output.is_relative_to(repo) or repo.is_relative_to(output)):
         raise ValueError('PF62_NEVER_WRITE_NATIVE_FORK_OR_ORCHESTRATION_REPO')
     if output.exists() and any(output.iterdir()):
         raise ValueError('PF62_REVIEW_OUTPUT_MUST_BE_EMPTY')
@@ -173,22 +204,38 @@ def build(engine: Path, repo: Path, output: Path, *, verify_syntax=True):
     original_s=raw_s.decode('utf-8');original_n=raw_n.decode('utf-8')
     combined_s,combined_n=transform_original(original_s,original_n,load_patches(repo))
     sources={SERVICE:(original_s,combined_s),STORE:(original_n,combined_n)}
-    patch=make_review_diff(sources)
-    # Validate ALL preconditions before making the first output file.
+    additions={str(NATIVE_DIR/name):source for name,source in modules.items()}
+    patch=make_review_diff(sources,additions)
+    git=shutil.which('git')
+    if git is None: raise ValueError('PF62_GIT_REQUIRED_FOR_READ_ONLY_APPLY_CHECK')
+    # Validate the complete patch WITHOUT editing either source checkout.
+    # Do this BEFORE making the first output file, avoiding partial bundles on
+    # source conflict (e.g., a native module already exists in the engine).
+    with tempfile.TemporaryDirectory(prefix='pf63-native-check-') as tmp:
+        scratch=Path(tmp)
+        patch_file=scratch/'full.patch';patch_file.write_text(patch,encoding='utf-8')
+        subprocess.run([git,'-C',str(engine),'apply','--check',str(patch_file)],
+                       check=True,capture_output=True,text=True)
+        # Independently prove that a real git apply (in an isolated throwaway
+        # tree only) yields EVERY staged byte, not just the two stock files.
+        for rel,(original,_) in sources.items():
+            file=scratch/rel;file.parent.mkdir(parents=True,exist_ok=True)
+            file.write_bytes(original.encode('utf-8'))
+        subprocess.run([git,'-C',str(scratch),'init','-q'],check=True,
+                       capture_output=True,text=True)
+        subprocess.run([git,'-C',str(scratch),'apply',str(patch_file)],check=True,
+                       capture_output=True,text=True)
+        for rel,expected in [*((k,v[1]) for k,v in sources.items()),*additions.items()]:
+            if (scratch/rel).read_bytes()!=expected.encode('utf-8'):
+                raise ValueError('PF63_PATCH_ROUNDTRIP_CONTENT_MISMATCH: '+rel)
+    # Source check and independently applied roundtrip passed; emit review files.
     output.mkdir(parents=True,exist_ok=True)
     created={}
-    for rel,contents in [(SERVICE,combined_s),(STORE,combined_n),
-                         *((str(NATIVE_DIR/name),source) for name,source in modules.items())]:
+    for rel,contents in [*((k,v[1]) for k,v in sources.items()),*additions.items()]:
         path=output/rel;path.parent.mkdir(parents=True,exist_ok=True)
         encoded=contents.encode('utf-8');path.write_bytes(encoded)
         created[rel]={'sha256':sha256(encoded),'bytes':len(encoded)}
     (output/'PF62-NATIVE-REVIEW.patch').write_text(patch,encoding='utf-8')
-    git=shutil.which('git')
-    if git is None: raise ValueError('PF62_GIT_REQUIRED_FOR_READ_ONLY_APPLY_CHECK')
-    # This checks a patch WITHOUT applying it, without editing either checkout.
-    subprocess.run([git,'-C',str(engine),'apply','--check',
-                    str(output/'PF62-NATIVE-REVIEW.patch')],
-                   check=True,capture_output=True,text=True)
     created['PF62-NATIVE-REVIEW.patch']={'sha256':sha256(patch.encode()),'bytes':len(patch.encode())}
     if verify_syntax:compile_js(output,[Path(p) for p in created if p.endswith(".js")])
     manifest={
@@ -196,6 +243,7 @@ def build(engine: Path, repo: Path, output: Path, *, verify_syntax=True):
       'targetFork':'pas7-studio/EveJS coop/pas7std',
       'stockBlobs':{SERVICE:SERVICE_BLOB,STORE:STORE_BLOB},
       'featureEnabled':False,'gameplayE2E':'NOT_RUN',
+      'patchIncludesAllModules':True,'patchAppliedOnlyInEphemeralVerifier':True,
       'files':created,
       'instructions':'Review, commit to the ENGINE FORK in a separate WORK branch. NEVER activate PLAY from this package.',
     }
