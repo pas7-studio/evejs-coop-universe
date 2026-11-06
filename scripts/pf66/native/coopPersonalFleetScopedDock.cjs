@@ -8,7 +8,7 @@ const crypto=require('node:crypto');
 const T='corporationRuntime',ITEMS='items',SEP='\u001f',P='coop-personal-fleet'+SEP;
 const RETURN=P+'return-dock-v1:',DEPLOY=P+'deploy-v1:',HANDOFF=P+'handoff-v1:',LOCK=P+'handoff-ship-v1:';
 const CLAIMS=P+'actor-claims-v1',TERMINAL=P+'terminal-v1:';
-const KEY=P+'dock-native-attempt-v1:';
+const KEY=P+'dock-native-attempt-v1:',SCENE_KEY=P+'dock-scene-attempt-v1:';
 const positive=n=>Number.isSafeInteger(n)&&n>0;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const clone=x=>structuredClone(x);
@@ -17,6 +17,7 @@ const token=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const sha=/^[0-9a-f]{64}$/;
 const fail=errorMsg=>({success:false,errorMsg});
 const attemptKey=assignmentID=>KEY+assignmentID;
+const sceneAttemptKey=assignmentID=>SCENE_KEY+assignmentID;
 const fields=c=>['PF66_DOCK_V1',c.operationID,c.signature,c.assignmentID,c.shipItemID,
   c.pilotID,c.ownerCharacterID,c.stationID,c.systemID,c.reservationGeneration,
   c.actorGeneration,c.typeID,c.arrivalProofHash,hash(c.manifest)];
@@ -88,19 +89,40 @@ function createScopedDock({gameStore,originalItemStore,nativeNpcService,claimsPo
      terminal!==null||!obj(items)||!stockShip(items[String(c.shipItemID)],c,docked))return null;
   return row;
  }
+ const validDockAttempt=(x,c)=>obj(x)&&x.version===1&&x.status==='CONSUMED'&&
+  x.signature===signature(c)&&x.assignmentID===c.assignmentID&&
+  x.operationID===c.operationID&&x.shipItemID===c.shipItemID&&
+  x.actorGeneration===c.actorGeneration&&x.reservationGeneration===c.reservationGeneration&&
+  Number.isSafeInteger(x.committedAtMs)&&x.committedAtMs>0;
  function authorize(c){
   if(!valid(c))return false;
   try{return a.transact([T,ITEMS],tx=>{
    if(!gate(c,tx,true))return false;
-   const x=tx.get(T,attemptKey(c.assignmentID));
-   return obj(x)&&x.version===1&&x.status==='CONSUMED'&&
-     x.signature===signature(c)&&x.operationID===c.operationID&&
-     x.shipItemID===c.shipItemID&&x.actorGeneration===c.actorGeneration&&
-     x.reservationGeneration===c.reservationGeneration&&
-     Number.isSafeInteger(x.committedAtMs)&&x.committedAtMs>0;
+   const x=tx.get(T,attemptKey(c.assignmentID)),scene=tx.get(T,sceneAttemptKey(c.assignmentID));
+   return scene===null&&validDockAttempt(x,c);
   })===true;}catch{return false;}
  }
- if(nativeNpcService.installScopedPersonalFleetDockAuthority({capability,authorize})!==true)
+ // Native service consumes this original SQLite sub-attempt immediately before
+ // the first physical scene write, after verifying the actual actor identity.
+ // A durable unknown/partial result is NEVER retried on restart or by calling
+ // the original scene method again with a retained private Symbol.
+ function consumeSceneDetach(c){
+  if(!valid(c))return false;
+  try{return a.transact([T,ITEMS],tx=>{
+   const prior=tx.get(T,sceneAttemptKey(c.assignmentID));
+   if(prior!==null||!gate(c,tx,true))return false;
+   const first=tx.get(T,attemptKey(c.assignmentID));
+   if(!validDockAttempt(first,c))return false;
+   const at=clock();if(!positive(at))return false;
+   tx.put(T,sceneAttemptKey(c.assignmentID),{version:1,status:'CONSUMED',
+    assignmentID:c.assignmentID,shipItemID:c.shipItemID,
+    reservationGeneration:c.reservationGeneration,actorGeneration:c.actorGeneration,
+    dockAttemptSignature:first.signature,committedAtMs:at});
+   return true;
+  })===true;}catch{return false;}
+ }
+ if(nativeNpcService.installScopedPersonalFleetDockAuthority({capability,authorize,consumeSceneDetach})!==true)
+
   throw Error('PF66_NATIVE_AUTHORITY_INSTALL_UNCONFIRMED');
  function execute(row){
   if(!valid(row))return fail('PF66_DOCK_COMMAND_INVALID');
@@ -144,4 +166,4 @@ function createScopedDock({gameStore,originalItemStore,nativeNpcService,claimsPo
  }
  return Object.freeze({execute});
 }
-module.exports={createScopedDock,valid,signature,attemptKey,stockShip};
+module.exports={createScopedDock,valid,signature,attemptKey,sceneAttemptKey,stockShip};
