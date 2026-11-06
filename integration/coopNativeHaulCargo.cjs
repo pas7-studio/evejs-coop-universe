@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 // Real EveJS native cargo identity is preserved from miner to hauler.
 // A durable PREPARED receipt is mandatory BEFORE native hauler unloading.
 // Never credit virtual supply or station inventory unless cargo removal was
@@ -144,7 +144,7 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
  if((miner.coopHaulNeedsOperatorRepair||fleet.coopHaulNeedsOperatorRepair||
    miner.coopHaulCargoNeedsOperatorRepair||fleet.coopHaulCargoNeedsOperatorRepair)){
   try{
-   require("./coopNativeHaulTransferAtomic").healReadbackRepair({miner,
+   require("./coopNativeHaulTransferAtomic").healCustodyRepair({miner,
     hauler:(fleet.haulerEntityIDs||[]).map(id=>scene.getEntityByID?.(Number(id)))
       .find(x=>x&&x.kind==="ship"&&x.itemID!==miner.itemID)||null,
     fleet,nativeStore:require("./npc/nativeNpcStore"),
@@ -355,8 +355,13 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
     // Only the final native cargo reparent is made transactional.
     const atomic=options.atomicMover||require("./coopNativeHaulTransferAtomic");
     const result=atomic.transfer({scene,fleet,miner,hauler:selected,cargoID,maxQuantity});
-    if(result?.status!=="COMMITTED")
-     return stop("ALIFE10_"+String(result?.reason||result?.status||"UNKNOWN"),true,selected,cargoID);
+    if(result?.status!=="COMMITTED"){
+      // The reason already carries its own ALIFE10_ prefix; prefixing it again produced
+      // ALIFE10_ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED, which the repair matcher could not
+      // recognise - so the doubt it describes could never be resolved (measured 2026-11-06).
+      const detail=String(result?.reason||result?.status||"UNKNOWN");
+      return stop(detail.startsWith("ALIFE10_")?detail:"ALIFE10_"+detail,true,selected,cargoID);
+    }
     const movedQty=Number(result.quantity);
     const expected=movedQty>0&&movedQty<=Number(item.quantity)?
      movedQty*unit:NaN;

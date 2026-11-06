@@ -79,3 +79,23 @@ test("a flag from any other failure is never healed by this path", () => {
   assert.equal(healed, null);
   assert.equal(a.miner.coopHaulNeedsOperatorRepair, "HAUL_SOURCE_MOVE_UNCERTAIN");
 });
+
+test("a doubled ALIFE10_ prefix still names its cargo (the reason the heal never fired)", () => {
+  // Measured live 2026-11-06 15:42:34Z, fleet 960004610: the stored reason was
+  // "ALIFE10_ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED:destination_rows=0:cargo=980200450759" because
+  // the caller prefixed a reason that already carried the prefix. The matcher expected a single one,
+  // so it never recognised its own doubt and the fleet stayed parked for two days.
+  const doubled = "ALIFE10_ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED:destination_rows=0:cargo=980200450759";
+  const match = READBACK_REPAIR.exec(doubled);
+  assert.ok(match, "a doubled prefix is still parseable");
+  assert.equal(Number(match[1]), 980200450759);
+  const a = actors();
+  for (const actor of [a.miner, a.hauler, a.fleet]) {
+    actor.coopHaulNeedsOperatorRepair = doubled;
+    actor.coopHaulCargoNeedsOperatorRepair = doubled;
+  }
+  const healed = healReadbackRepair({...a, nativeStore: {listNativeCargoForEntity: (id) =>
+    (Number(id) === 980000027001 ? [{cargoID: 980200450759, typeID: 1228, quantity: 1249}] : [])}});
+  assert.equal(healed.status, "HEALED");
+  assert.equal(a.miner.coopHaulNeedsOperatorRepair, undefined);
+});

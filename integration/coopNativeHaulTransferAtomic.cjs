@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 /**
  * ALIFE-10. Move the ORIGINAL native ore cargoID from a persistent miner to a
  * persistent hauler in one original GameStore npcCargo SQLite transaction.
@@ -235,7 +235,9 @@ function transfer(args){
 // until the next restart. The doubt is now resolved by evidence on the next beat: if exactly one
 // row with that cargoID exists, the transfer really happened and the repair flag is cleared. A
 // row that is still missing keeps the flag - that is what "needs an operator" is for.
-const READBACK_REPAIR=/^ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED:.*:cargo=([0-9]+)$/;
+// Any number of ALIFE10_ prefixes: reasons stored before the double-prefix fix read
+// ALIFE10_ALIFE10_POSTCOMMIT_..., and those fleets must be able to heal too.
+const READBACK_REPAIR=/^(?:ALIFE10_)*POSTCOMMIT_CUSTODY_READBACK_FAILED:.*:cargo=([0-9]+)$/;
 function healReadbackRepair({miner,hauler,fleet,nativeStore,observe=null}={}){
   if(!nativeStore||typeof nativeStore.listNativeCargoForEntity!=="function")return null;
   const noted=String((miner&&miner.coopHaulCargoNeedsOperatorRepair)||
@@ -265,6 +267,61 @@ function healReadbackRepair({miner,hauler,fleet,nativeStore,observe=null}={}){
          cargoID,reason:String(noted).slice(0,120),
          proof:"DESTINATION_ROW_EXISTS_ONCE"});
   }catch(_error){/* telemetry must never change the world */}
-  return {status:"HEALED",cargoID};
+  return {status:"HEALED",cargoID,proof:"DESTINATION_ROW_EXISTS_ONCE"};
 }
-module.exports={createAtomicHaulMover,transfer,receiptKey,healReadbackRepair,READBACK_REPAIR};
+// The same doubt, answered from the other side. A source-cargo conflict says the miner's rows could
+// not be proven to be its own; if they can be proven NOW, the fleet may work again. Every clause the
+// conflict applies is re-checked here, so a row that is still wrong keeps the flag.
+const SOURCE_CONFLICT_REPAIR=/^HAUL_SOURCE_CARGO_IDENTITY_CONFLICT/;
+function healSourceCargoConflict({miner,hauler,fleet,nativeStore,observe=null}={}){
+  if(!nativeStore||typeof nativeStore.listNativeCargoForEntity!=="function"||
+   typeof nativeStore.listNativeCargo!=="function")return null;
+  const noted=String((miner&&miner.coopHaulCargoNeedsOperatorRepair)||
+    (fleet&&fleet.coopHaulCargoNeedsOperatorRepair)||
+    (hauler&&hauler.coopHaulCargoNeedsOperatorRepair)||"");
+  if(!SOURCE_CONFLICT_REPAIR.test(noted))return null;
+  const minerID=pos(miner&&miner.itemID),ownerID=pos(miner&&miner.ownerID);
+  if(!minerID||!ownerID)return null;
+  let source,all;
+  try{
+    source=nativeStore.listNativeCargoForEntity(minerID)||[];
+    all=nativeStore.listNativeCargo()||[];
+  }catch(_error){return null;}
+  if(!Array.isArray(source)||!Array.isArray(all))return null;
+  const counts=new Map();
+  for(const row of all){
+    const id=pos(row&&row.cargoID);
+    if(id)counts.set(id,(counts.get(id)||0)+1);
+  }
+  for(const row of source){
+    const id=pos(row&&row.cargoID);
+    if(!id)return null;
+    if(Number(row.entityID)!==minerID)return null;
+    if(Number(row.ownerID)!==ownerID)return null;
+    if(row.transient!==false)return null;
+    if(!(Number(row.quantity)>0))return null;
+    if(Number(row.categoryID)!==25)return null;
+    if((counts.get(id)||0)!==1)return null;
+  }
+  for(const actor of [miner,hauler,fleet]){
+    if(!actor||typeof actor!=="object")continue;
+    delete actor.coopHaulCargoNeedsOperatorRepair;
+    delete actor.coopHaulNeedsOperatorRepair;
+    delete actor.coopMiningCargoNeedsOperatorRepair;
+  }
+  try{
+    if(typeof observe==="function")
+      observe("living-haul-repair-healed",null,null,
+        {fleetID:pos(fleet&&fleet.fleetID),haulerID:pos(hauler&&hauler.itemID),
+         rows:source.length,reason:String(noted).slice(0,120),
+         proof:"SOURCE_CARGO_IDENTITY_CONSISTENT"});
+  }catch(_error){/* telemetry must never change the world */}
+  return {status:"HEALED",proof:"SOURCE_CARGO_IDENTITY_CONSISTENT",rows:source.length};
+}
+// One entry point for the caller: try every evidence-based repair, in order, and report which one
+// fired. A reason with no proof stays parked - that is what "needs an operator" is for.
+function healCustodyRepair(args={}){
+  return healReadbackRepair(args)||healSourceCargoConflict(args)||null;
+}
+module.exports={createAtomicHaulMover,transfer,receiptKey,healReadbackRepair,READBACK_REPAIR,
+  healSourceCargoConflict,healCustodyRepair,SOURCE_CONFLICT_REPAIR};

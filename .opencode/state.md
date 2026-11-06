@@ -151,6 +151,26 @@ names the real cause. The flag did not survive the 15:10 restart - the fleet is 
 now - but the class of bug (a doubt with no way back) is still there and is the next thing to fix:
 an evidence-based repair for every reason that can be proven resolved, not only the readback one.
 
+**The two-day parked haul fleet: root cause found and fixed** (fork `e5c6134`, `2038a0a`). The heal
+for the readback doubt was in the engine all along and could never fire, because the stored reason
+was `ALIFE10_ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED:destination_rows=0:cargo=980200450759` -
+the caller prefixes `ALIFE10_` onto a reason that already carries it - while the matcher expected
+exactly one prefix (`/^ALIFE10_POSTCOMMIT_.../`). So the doubt it was written for was invisible to
+it, and fleet 960004610 stayed parked from 2026-11-04 19:27 until a restart.
+
+Three changes:
+* the caller no longer doubles the prefix;
+* the matcher accepts any number of prefixes, so a flag already stored in the doubled shape heals;
+* a second, independent way back was added for the other doubt that parked the same fleet
+  (`HAUL_SOURCE_CARGO_IDENTITY_CONFLICT`, 1 378 events): every cargo row must now name the miner as
+  its entity and owner, be durable, carry a positive quantity, be ore, and have a globally unique
+  cargoID - the same clauses the conflict was raised from. `healCustodyRepair` is the single entry
+  point and `living-haul-repair-healed` names which proof fired.
+
+Verified after the deploy: the fleet loaded cargo (`living-mining-blocker TICK_loaded` at
+16:00:56Z) and there has been no `living-haul-custody-blocked` event since. Tests: 14 in the two
+heal suites, 103 across the haul suites, 0 failures; `AUDIT_OK`.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
