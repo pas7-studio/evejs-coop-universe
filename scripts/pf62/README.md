@@ -221,3 +221,15 @@ PF58 candidate native module. Original EveJS source is read-only;
 native GameStore write-generation instrumentation remains the
 performance-friendly final design. Gameplay remains OFF and untested
 on the local WORK server.
+
+## PF94 actual SQLite mutation-epoch test gate (2026-11-07)
+
+PF80 `-ApplyToWork` now verifies PF94 standalone original-owner
+transaction mutation epoch with actual Node `node:sqlite` tests
+and source-pinned original GameStore writer layout. PF94 detects
+same-value writes, write-and-restore, delete-missing and unintended
+corporate writes attempted during a supposedly read-only session
+witness. Its negative test proves a raw SQLite writer bypass is
+invisible unless the original GameStore owns all writes. Therefore
+this candidate does **not** install the original hook or enable
+Personal Fleet. See `scripts/pf94/PF94_ORIGINAL_OWNER_MUTATION_EPOCH.md`.

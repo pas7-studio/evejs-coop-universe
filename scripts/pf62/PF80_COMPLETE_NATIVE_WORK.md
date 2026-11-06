@@ -212,3 +212,17 @@ full-table fingerprints pending a reviewed native GameStore
 write-generation counter and independent original session lease.
 The original EveJS owner hooks are still not installed.
 See `scripts/pf93/PF93_NATIVE_SESSION_WITNESS_ATOMIC_ISOLATION.md`.
+
+## PF94 original GameStore mutation epoch evidence
+
+PF94 manual WORK review preflight runs 14 **executed** candidate
+Node `node:sqlite` tests for a source-owner mutation epoch,
+including write-restore and same-value writes which PF93 fingerprint
+cannot detect. Three additional original-source tests are run
+against the pinned `coopGameStoreAtomic.js` when an original fork
+checkout is provided. They confirm the original frozen GameStore
+writer still lacks PF94 hook; review-only staging is permitted,
+runtime activation is not. The standalone implementation must
+be installed by a reviewed original owner commit, not a runtime
+wrapper around the existing public tx.
+See `scripts/pf94/PF94_ORIGINAL_OWNER_MUTATION_EPOCH.md`.

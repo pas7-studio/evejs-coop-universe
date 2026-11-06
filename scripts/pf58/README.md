@@ -230,3 +230,19 @@ SQLite fixture regression:
 `scripts/pf93/PF93_NATIVE_SESSION_WITNESS_ATOMIC_ISOLATION.md`.
 This is a conservative O(database) safeguard, NOT final native
 session-fencing or original engine integration. Personal Fleet OFF.
+
+## PF94 original GameStore mutation epoch (2026-11-07)
+
+The PF93 full original SQLite row fingerprint cannot detect
+write-then-restore or identical-value writes. PF94 adds a separately
+testable candidate single-writer mutation epoch (no patch installer)
+that must be constructed by the actual original GameStore owner
+after BEGIN IMMEDIATE. Its wrapped put/del increments a private count
+on **every write attempt**, and its session witness aborts if that count
+changed. Tested on actual Node 22 `node:sqlite` with 14/14 PASS,
+including explicit SQLite rollback and a deliberate raw-writer bypass
+negative case. The unchanged original fork is source-pinned and
+does **not** have this hook. See
+`scripts/pf94/PF94_ORIGINAL_OWNER_MUTATION_EPOCH.md`.
+Personal Fleet OFF; unrelated PF91/92 code is not automatically
+authorized by a passing PF94 standalone suite.

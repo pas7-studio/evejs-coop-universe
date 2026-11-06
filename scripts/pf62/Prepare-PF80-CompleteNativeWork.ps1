@@ -113,6 +113,23 @@ if ($ApplyToWork.IsPresent) {
     } finally {
       [Environment]::SetEnvironmentVariable('PF93_NATIVE_WORKTREE',$priorPf93Source,'Process')
     }
+    # PF94: real Node SQLite owner-epoch tests and source-pinned absence of
+    # the original GameStore instrumentation. Review-only: no code installed.
+    $pf94Epoch = Join-Path $repo 'scripts/pf94/tests/pf94-owner-epoch-sqlite.test.cjs'
+    $pf94Original = Join-Path $repo 'scripts/pf94/tests/pf94-original-owner-source.test.cjs'
+    foreach ($required in @($pf94Epoch,$pf94Original)) {
+      if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw 'PF94_ORIGINAL_GAMESTORE_EPOCH_TEST_MISSING'
+      }
+    }
+    $priorPf94Source = [Environment]::GetEnvironmentVariable('PF94_NATIVE_WORKTREE','Process')
+    try {
+      $env:PF94_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf94Epoch $pf94Original
+      if ($LASTEXITCODE -ne 0) { throw 'PF94_ORIGINAL_OWNER_MUTATION_EPOCH_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF94_NATIVE_WORKTREE',$priorPf94Source,'Process')
+    }
     $pf90Owner = Join-Path $repo 'scripts/pf58/tests/pf90-owner-snapshot.test.cjs'
     $pf90Sources = Join-Path $repo 'scripts/pf90/tests/pf90-original-owners.test.cjs'
     $pf90Audit = Join-Path $repo 'scripts/pf90/inspect-original-owner-writes.cjs'
