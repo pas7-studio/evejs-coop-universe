@@ -11,7 +11,7 @@ The workflow at `.github/workflows/pf-native-work-review.yml` is restricted to t
 3. Calls the **actual** PF-68 opt-in tool, which invokes PF-62 to verify the two pinned original native source Git blobs, compose PF-58/PF-59/PF-61/PF-66, and create the complete 19-file review patch (two changed original files plus seventeen native JS modules). **PF75 additionally builds the independently source-pinned PF55 original native owner/claim patch and applies its two original code changes to that same isolated WORK worktree, for 21 native paths total.**
 4. Runs `git apply --check` and byte-exact application verification; applies only in a **new local WORK Git worktree** with the explicit `WORK-NOT-PLAY` confirmation. Tests the two transformed original files with `node --check` and asserts all 19 patch paths are present. Original checkout remains clean.
 5. Executes the original PF-58/69-73 Python/Node tests on the complete PR checkout, **including PF-70's real-adoption/validator cross-contract test**, which was previously unrun in partial local staging.
-6. Executes PF-59/60/61/62/66 Node and Python suites, including the Linux SQLite `SIGKILL` tests.
+6. Executes PF-55/59/60/61/62/66 Node and Python suites, including the Linux SQLite `SIGKILL` tests. PF-55 includes a real two-module `createNpcRuntimeExecutor` -> `createPersonalFleetNativeOrders` object-adapter contract. The original PF55 arbiter and bridge JavaScript files receive separate WORK-only syntax/apply checks; **no live actor/wallet bootstrap is installed**.
 7. Uploads only `PF62-MANIFEST.json` and `PF62-NATIVE-REVIEW.patch` as a short-retention review artifact.
 
 ## What PASS does not prove
