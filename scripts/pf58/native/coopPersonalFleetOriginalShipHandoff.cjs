@@ -92,7 +92,8 @@ function createOriginalShipHandoff({gameStore,pf52,native,enabled=()=>false,
   if(!validPF54(pf54Row))return deny('PF58_UNTRUSTED_DISPATCH_ROW');
   const row=clone(pf54Row),ship=row.shipItemID;
   let permit;
-  try{permit=a.transact([T,ITEMS],tx=>{
+  try{permit=a.transact(requireAtomicOriginalTransfer===true?
+   [T,ITEMS,'characters']:[T,ITEMS],tx=>{
    if(!permitted())return deny('PF58_GATE_REVOKED');
    const persisted=tx.get(T,'coop-personal-fleet'+SEP+'deploy-v1:'+row.assignmentID);
    if(!validPF54(persisted)||hash(persisted)!==hash(row))
@@ -112,6 +113,23 @@ function createOriginalShipHandoff({gameStore,pf52,native,enabled=()=>false,
     return deny('PF58_ACTOR_CLAIMS_UNVERIFIED');
    if(actors?.claims?.[String(ship)]||Object.values(actors?.claims||{}).some(c=>c?.pilotID===row.pilotID))
     return deny('PF58_EXISTING_PF_ACTOR');
+   // PF87: the ORIGINAL character active-ship title belongs to the same
+   // BEGIN IMMEDIATE snapshot. In strict mode reject the reserved hull if
+   // *any* original character currently identifies it as their active ship.
+   // Null/missing identity table is not an affirmative ownership witness.
+   if(requireAtomicOriginalTransfer===true){
+    const chars=tx.get('characters','characters');
+    if(!obj(chars)||!obj(chars[String(row.ownerCharacterID)]))
+     return deny('PF87_ORIGINAL_CHARACTERS_UNAVAILABLE');
+    for(const c of Object.values(chars)){
+     if(!obj(c))return deny('PF87_ORIGINAL_CHARACTER_ROW_UNCERTAIN');
+     for(const active of [c.shipID,c.shipid,c.activeShipID]){
+      if(active===ship||(typeof active==='string'&&
+         /^[1-9][0-9]*$/.test(active)&&Number(active)===ship))
+       return deny('PF87_ORIGINAL_SHIP_ACTIVE_FOR_CHARACTER');
+     }
+    }
+   }
    const collision=pf52.checkCompetingClaims(tx,row);
    if(collision)return deny(collision);
    if(verifyExclusive(clone(row),tx)!==true)
