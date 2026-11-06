@@ -3754,3 +3754,8 @@ Evidence: in-process timings via inspector: getSceneActivityState 0.0079 ms/call
 Why: the native read cache rebuilt 30 times a minute while idle (2 s TTL) and each rebuild sorted 16988 cargo rows and 8544 entity rows, though nothing depends on the order: the cache indexes by key and the one row-picking caller accepts only a unique match
 Where: integration/coopNativeReadCache.cjs
 Evidence: live cache snapshot: cargoBuilds 820->850 in 60 s, peekNativeCargo 6.4 ms, peekNativeEntities 4.4 ms; fork b4a747f; 10 tests pass; AUDIT_OK after trimming the stock comment under 66500 chars
+### 2026-11-06T19:58Z · 386064f · L1 · test(dungeon): the universe plan must narrow before it sorts
+
+Why: an idle play stack allocated 4.96 GB of garbage per minute, and the top three allocation sites were the universe-site plan listing all 8491 seeded instances per family per band only to filter them by a candidate set it already had
+Where: tests/coop-dungeon-universe-plan-narrowing.test.mjs
+Evidence: heap sampling 60 s: 402 MB/min in listUniverseSeededPersistentSiteInstances, 298 MB/min in buildRandomAllocatedSystemPlanForBand, 189 MB/min in getInstanceSpawnFamilyKey; in-process timing 5.3 ms all vs 1.3-1.8 ms narrowed; fork commit; 2 tests; AUDIT_OK
