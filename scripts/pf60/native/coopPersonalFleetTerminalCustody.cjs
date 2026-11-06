@@ -21,6 +21,9 @@ const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex'
 const block=reason=>({status:'BLOCKED',reason});
 const terminalKey=assignment=>KEY+assignment;
 const terminalShipKey=ship=>SHIP+ship;
+const terminalSignature=c=>hash(['PF60',c.operationID,c.mode,c.assignmentID,c.pilotID,
+ c.shipItemID,c.ownerCharacterID,c.systemID,c.generation,c.actorGeneration,
+ c.typeID,c.mode==='DOCK'?c.stationID:c.wreckID]);
 function validCommand(c){return obj(c)&&typeof c.operationID==='string'&&
  typeof c.assignmentID==='string'&&typeof c.pilotID==='string'&&
  TOKEN.test(c.operationID)&&TOKEN.test(c.assignmentID)&&PILOT.test(c.pilotID)&&['DOCK','LOSS'].includes(c.mode)&&
@@ -70,9 +73,7 @@ function createTerminalCustody({gameStore,pf52,claimsPolicy,authenticateCommand,
  const on=()=>enabled()===true&&allWritersFenced()===true&&!atomic.isPoisoned();
  const pre=c=>!validCommand(c)?block('PF60_COMMAND_INVALID'):
   !on()?block('PF60_DISABLED_OR_WRITERS_UNFENCED'):null;
- const sig=c=>hash(['PF60',c.operationID,c.mode,c.assignmentID,c.pilotID,c.shipItemID,
-  c.ownerCharacterID,c.systemID,c.generation,c.actorGeneration,c.typeID,
-  c.mode==='DOCK'?c.stationID:c.wreckID]);
+ const sig=terminalSignature;
  function original(tx,c,mode){
   if(!on()||authenticateCommand(c,tx)!==true||verifyExclusiveOwnership(c,tx)!==true)
    return {error:'PF60_ORIGINAL_WRITER_OR_COMMAND_AUTHORITY_UNVERIFIED'};
@@ -265,4 +266,4 @@ function createTerminalCustody({gameStore,pf52,claimsPolicy,authenticateCommand,
  return Object.freeze({prepare,issue,reconcile,finalize,inspect});
 }
 module.exports={createTerminalCustody,validCommand,validWitness,nativeSnapshot,
- terminalKey,terminalShipKey,KEY,SHIP,DEPLOY,HANDOFF,LOCK,RETURN,LEDGER,CLAIMS};
+ terminalKey,terminalShipKey,terminalSignature,KEY,SHIP,DEPLOY,HANDOFF,LOCK,RETURN,LEDGER,CLAIMS};
