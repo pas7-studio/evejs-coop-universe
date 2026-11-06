@@ -3784,3 +3784,8 @@ Evidence: in-process timing through the inspector: pairs 41825, cloneMs 49.499; 
 Why: the event-loop monitor could say the server froze but never which of the 46 world phases froze it, so every stall investigation started from zero
 Where: integration/coopLivingWorldPhaseCoordinator.cjs, integration/coopVirtualWorldRuntime.cjs
 Evidence: fork 987f785 amended; per-phase timing + slowPhases in living-world-phase-cycle, reported immediately when a cycle is >=250 ms; 3 tests; AUDIT_OK with the module at 4098 lines (ceiling 4100)
+### 2026-11-06T20:33Z · 8bc452f · L1 · docs(state): per-phase timing is live and the stall trend
+
+Why: the event-loop monitor could report a 1.2 s stall with heap numbers only, so the stall could not be tied to any world work
+Where: .opencode/state.md
+Evidence: lag record now carries the last world cycle (sequence, durationMs, slowPhases); module at 4100 lines, the ratchet ceiling; 2 tests; AUDIT_OK

@@ -798,7 +798,9 @@ function start(){
  if(require("./coopEventLoopMonitor").enabled()){
   loopMonitor=require("./coopEventLoopMonitor").createMonitor({
    observe:(event,detail)=>require("./coopRuntimeProbe").observe(event,null,null,detail),
-   memory:()=>require("./coopMemoryMetrics").memoryUsage()
+   memory:()=>Object.assign(require("./coopMemoryMetrics").memoryUsage(),
+    // The lag event must say what the world was doing: the last cycle's phases and timings.
+    {worldCycle:livingWorldPhases().last})
   });
   loopMonitor.start();
  }
