@@ -282,6 +282,23 @@ first. No stall >= 120 ms occurred during the 120 s window (the owner was docked
 The three fixes above are committed and BUILT into `evejs-local`, but the running server container
 still has the previous image (the owner was in game). They take effect on the next server restart.
 
+**A fourth world-tick waste, and a stall recorder that is already armed** (fork `b4a747f`, 2026-11-06 19:55).
+Live cache snapshot through the inspector: `cargoBuilds` went 820 -> 850 in 60 s while the owner was
+docked, i.e. exactly the 2 s TTL, and every rebuild paid `peekNativeCargo()` 6.4 ms (16 988 rows,
+`Object.values` + full sort) plus `peekNativeEntities()` 4.4 ms (8 544 rows) plus one shallow copy per
+row. Neither sort is load-bearing: the cache indexes rows into Maps by owner/cargoID/system+fleet, and
+the only caller that takes `hits[0]`/`matches[0]` (`coopHaulCargoAdoption`) does so only when exactly
+ONE row matches. Both enumerations are now unsorted, and the cache snapshot counts `invalidations` so
+the combat-time rebuild rate is measurable. Gate note: the comment had to be trimmed - `stockChars`
+has a hard 66 500 budget and the first version landed at 66 527 (`AUDIT_REGRESSION`).
+
+**Stall recorder is running on the play stack right now** (no restart, `kill -USR1 7` + CDP):
+`/tmp/stall-watch.cjs` inside `evejs-server-1`, 240 minutes, 60 s windows, writes every main-thread
+gap >= 200 ms to `/var/lib/evejs/coop-stall-watch.jsonl` with the frame it was stuck in and the frame
+it returned in. As of 19:55 the file holds only its start line: no stall >= 200 ms while the owner is
+docked, so the combat freeze still needs his fight. Read that file BEFORE any restart (it lives in the
+data volume, the watcher process itself does not survive a container recreate).
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
