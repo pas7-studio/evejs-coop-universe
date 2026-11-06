@@ -106,6 +106,12 @@ Measured right after the deploy: **72 stacks refined in 58 s, 0 blocked**, 2 312
 (types 1228, 1230, 17463, 17464, 17470, 17471) turned into minerals, 392 295.86 ISK of real station
 fees paid, wallet 46 478 850.22 → 45 528 194.67. `living-coop-loop-phase refinery REFINED`.
 
+**After the host restart (2026-11-06 17:10 local):** Docker Desktop and the whole play stack were
+down; both were brought back (`Docker Desktop.exe`, then `Start-Play-Stack.ps1 -Action Up`) and the
+stack is healthy again (`evejs-server-1` / `evejs-market-1` up, SSH banner on 55470 OK). The refinery
+fix survives the restart: **96 more stacks refined, 0 blocked**, 2 442 927 units of ore, fee budget
+7 461 904.02 of 50 000 000 spent. Nothing was recreated; the volumes were reused.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
