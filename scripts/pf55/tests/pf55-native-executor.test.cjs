@@ -9,8 +9,16 @@ function setup(action='FOLLOW',override={}){
  if(action==='ATTACK'||action==='WARP')row.followRangeMeters=null;
  const scene={systemID:F.SYSTEM,getEntityByID(id){return id===F.SHIP?entity:
   id===F.TARGET?target:null;}};
- const entity={kind:'ship',nativeNpc:true,itemID:F.SHIP,mode:'STOP',session:null};
- const controller={entityID:F.SHIP,systemID:F.SYSTEM,manualOrder:null};
+ const entity={kind:'ship',nativeNpc:true,nativeNpcOccupied:true,
+  npcEntityType:'personalFleet',operatorKind:'PERSONAL_FLEET',
+  selectionKind:'PERSONAL_FLEET',selectionID:F.ASSIGNMENT,
+  ownerID:F.OWNER,characterID:0,pilotCharacterID:0,
+  itemID:F.SHIP,mode:'STOP',session:null};
+ const controller={entityID:F.SHIP,systemID:F.SYSTEM,manualOrder:null,
+  personalFleetOriginal:true,operatorKind:'PERSONAL_FLEET',entityType:'personalFleet',
+  selectionKind:'PERSONAL_FLEET',selectionID:F.ASSIGNMENT,
+  personalFleetAssignmentID:F.ASSIGNMENT,personalFleetPilotID:F.PILOT,
+  personalFleetGeneration:1,runtimeKind:'nativeAmbient'};
  const target={itemID:F.TARGET,kind:'ship',ownerID:F.OWNER};
  const nativeCalls=[];const bridgeCalls=[];
  const npcRuntime={issueOrder(...a){nativeCalls.push(['issueOrder',...a]);return {success:true}},
