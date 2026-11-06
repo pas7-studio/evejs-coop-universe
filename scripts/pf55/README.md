@@ -25,7 +25,7 @@ entity+controller+PF actor claim before an order can be admitted.
   The stock `npcRuntime.issueOrder` return value is insufficient.
 - Atomically writes the latest ship order and a global operation ID index in
   the original `corporationRuntime` SQLite table (source ItemStore read-only).
-- Orders: FOLLOW -> original `npcRuntime.issueOrder({type:'follow',...})`,
+- Orders: FOLLOW -> original physical `npcRuntime.follow(shipID,targetID,range,{wakeController:false})`,
   HOLD -> original `npcRuntime.stop`, ATTACK -> original `issueAttackOrder`,
   WARP -> original `warpToEntity`. DEFEND requires a separate verified native
   combat-protection policy; stock follow is NOT equivalent to protecting a ship.
@@ -33,6 +33,19 @@ entity+controller+PF actor claim before an order can be admitted.
   for original `coopNpcOrderArbiter.js` and `coopNpcOrderBridge.js` from a
   real native worktree; it refuses changed sources and runs `git apply --check`.
   This repository does not contain an applied original engine patch.
+
+## PF82 friendly physical FOLLOW (stock EveJS behavior bug)
+
+The stock manual FOLLOW applies combat-target checks to ship movement, which
+can reject a friendly player ship even after reporting successful order issue.
+PF82 uses the original physics follow API instead of manual combat FOLLOW.
+The physical ship stays owned by ItemStore; no synthetic entity is allocated.
+After ATTACK promotes a LIVE controller to nativeCombat, HOLD and RETURN
+remain possible through PF78 identity proof. Another FOLLOW fails closed
+until a separate safe combat-quiescence path is implemented. PF58 persisted
+restart-pair checks still require nativeAmbient.
+Original stock npcRuntime/npcBehaviorLoop source pins are checked in WORK.
+See `docs/PF82_FRIENDLY_FOLLOW_NATIVE.md`.
 
 ## PF78 physical actor authority before orders
 
