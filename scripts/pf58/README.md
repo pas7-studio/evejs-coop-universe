@@ -91,3 +91,24 @@ read-only source-pinned patch preflight. Nothing applies/merges automatically.
 7. Keep main and PLAY untouched until a separately reviewed WORK acceptance.
 
 **Never merge the orchestration PR as a gameplay-ready implementation.**
+
+## PF87 — strict original stock title + permit (manual WORK only)
+
+The source-bound bootstrap now **requires** the original ship's hangar-to-space
+title transfer to happen inside the exact same original GameStore
+`BEGIN IMMEDIATE` transaction that consumes the PF58 durable one-shot
+handoff permit. It also reads the native `characters` active-ship table in
+that transaction and refuses any ship already marked active for a character.
+The original ItemStore post-commit movement API is forbidden for this strict
+path; generic legacy fixture mode remains available only for backward
+compatibility. Original source modules still must be pinned and reviewed.
+
+Tests: `tests/pf87-atomic-handoff.test.cjs` and
+`tests/test_pf87_atomic_preflight.py`. The local PF58 runner includes both,
+and the local PF80 WORK builder checks PF87 **before** applying the native
+review patch. See `docs/PF87_ATOMIC_ORIGINAL_TITLE_AND_PERMIT.md`.
+
+**NOT gameplay-ready:** other stock player / Mining / WAR / Exploration
+writers and the running native engine still require independent verified
+fencing and local two-client gameplay, restart, dock and wallet E2E.
+Personal Fleet OFF; no PLAY/main merge.
