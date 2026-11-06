@@ -46,6 +46,10 @@ if ($ApplyToWork.IsPresent) {
     $env:PF85_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
     & $node --test --test-concurrency=1 $pf85Test
     if ($LASTEXITCODE -ne 0) { throw 'PF85_ORIGINAL_RUNTIME_SOURCE_GATE_FAILED' }
+    $pf86Test = Join-Path $repo 'scripts\pf58\tests\pf86-presence-and-prewrite.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf86Test -PathType Leaf)) { throw 'PF86_PRESENCE_TEST_MISSING' }
+    & $node --test --test-concurrency=1 $pf86Test
+    if ($LASTEXITCODE -ne 0) { throw 'PF86_ORIGINAL_PRESENCE_GATE_FAILED' }
   } finally {
     [Environment]::SetEnvironmentVariable('PF85_NATIVE_WORKTREE', $previousPf85Root, 'Process')
   }
