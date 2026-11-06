@@ -525,6 +525,131 @@ function createOriginalPlayerShipActivation({
  return Object.freeze({activate});
 }
 
+/**
+ * PF92 — generic ORIGINAL characterState.writeCharacterRecord() owner path.
+ *
+ * The original character owner can update ship identity from several entry
+ * points, not only activateShipForSession(): active-ship repair, migration,
+ * normalization, and generic updateCharacterRecord() also reach its writer.
+ *
+ * Future stock integration MUST replace that owner's async repo.write with
+ * this single durable SQLite transaction (and preserve cache/notifications).
+ * The candidate below is not injected or installed in the original engine.
+ */
+function createOriginalCharacterRecordWriteBarrier({pf52}={}){
+ const fence=createReciprocalWriterFence({pf52});
+ const fail=reason=>Object.freeze({status:'BLOCKED',reason,mayCommit:false});
+ const cloneJson=value=>{
+  const copy=structuredClone(value);
+  const json=JSON.parse(JSON.stringify(copy));
+  return isDeepStrictEqual(copy,json)?json:null;
+ };
+ const activeId=record=>{
+  const ids=new Set();
+  for(const k of ['shipID','shipid','activeShipID']){
+   const value=record[k];
+   if(value===undefined||value===null||value===0)continue;
+   const id=typeof value==='string'&&/^[1-9][0-9]*$/.test(value)?
+    Number(value):value;
+   if(!pos(id))return {bad:true};
+   ids.add(id);
+  }
+  if(ids.size>1)return {bad:true};
+  return {id:ids.size===1?[...ids][0]:null};
+ };
+ const protectedFields=['shipID','shipid','activeShipID',
+  'shipTypeID','shipName','storedShips'];
+ function inTransaction({tx,characterID,expectedBefore,nextRecord,
+                         session=null,verifyOriginalSessionLease=()=>false}={}){
+  if(!pos(characterID)||typeof tx?.get!=='function'||
+     typeof tx?.put!=='function'||!obj(expectedBefore)||!obj(nextRecord)||
+     typeof verifyOriginalSessionLease!=='function')
+   return fail('PF92_CHARACTER_OWNER_AUTHORITIES_REQUIRED');
+  let before,after;
+  try{
+   before=cloneJson(expectedBefore);
+   after=cloneJson(nextRecord);
+  }catch{return fail('PF92_CHARACTER_SNAPSHOT_UNSERIALIZABLE');}
+  if(!before||!after||
+     (before.characterID!==undefined&&before.characterID!==characterID)||
+     (after.characterID!==undefined&&after.characterID!==characterID))
+   return fail('PF92_CHARACTER_OWNER_IDENTITY_INVALID');
+  try{
+   const current=tx.get('characters',String(characterID));
+   if(!obj(current)||!isDeepStrictEqual(current,before))
+    return fail('PF92_CHARACTER_BEFORE_IMAGE_STALE');
+   const prior=activeId(before),next=activeId(after);
+   if(prior.bad||next.bad)
+    return fail('PF92_CHARACTER_ACTIVE_SHIP_ALIAS_INVALID');
+   const sensitive=protectedFields.some(k=>
+    !isDeepStrictEqual(before[k],after[k]));
+   if(!sensitive&&isDeepStrictEqual(before,after))
+    return Object.freeze({status:'NOOP_IN_SAME_TRANSACTION',
+     mayCommit:true,characterID,protectedChange:false});
+   if(sensitive){
+    // This is source-bound original character/session evidence, not a
+    // caller-supplied boolean. Returning false or throwing denies writes.
+    const witness={characterID,previousShipItemID:prior.id,
+     nextShipItemID:next.id,session};
+    if(verifyOriginalSessionLease(witness,tx)!==true)
+     return fail('PF92_CHARACTER_SESSION_LEASE_REQUIRED');
+    const items=tx.get('items','items');
+    if(!obj(items))return fail('PF92_ORIGINAL_ITEMS_UNAVAILABLE');
+    const touched=[...new Set([prior.id,next.id].filter(pos))]
+     .sort((a,b)=>a-b);
+    for(const id of touched){
+     const item=items[String(id)];
+     if(!obj(item)||item.itemID!==id||item.ownerID!==characterID||
+        item.categoryID!==6||!pos(item.typeID))
+      return fail('PF92_CHARACTER_SHIP_TITLE_UNVERIFIED');
+     const custody=fence.inTransaction({tx,writer:'PLAYER',shipItemID:id});
+     if(custody.mayCommit!==true)return fail(custody.reason);
+    }
+    if(next.id!==null){
+     const hull=items[String(next.id)];
+     if(after.shipTypeID!==undefined&&after.shipTypeID!==null&&
+        after.shipTypeID!==hull.typeID)
+      return fail('PF92_CHARACTER_SHIP_TYPE_MISMATCH');
+     if(after.shipName!==undefined&&after.shipName!==null&&
+        hull.itemName!==undefined&&hull.itemName!==null&&
+        after.shipName!==hull.itemName)
+      return fail('PF92_CHARACTER_SHIP_NAME_MISMATCH');
+     const scan=inspectOriginalCharacterShipRows(tx,{
+      ownerCharacterID:characterID,shipItemID:next.id,
+      allowOwnerAlreadyActive:prior.id===next.id});
+     if(scan.verified!==true)return fail(scan.reason);
+    }else if(prior.id!==null){
+     // Leaving the current hull must not let another original character
+     // have silently taken it while the owner detached.
+     const scan=inspectOriginalCharacterShipRows(tx,{
+      ownerCharacterID:characterID,shipItemID:prior.id,
+      allowOwnerAlreadyActive:true});
+     if(scan.verified!==true)return fail(scan.reason);
+    }
+    if(verifyOriginalSessionLease(witness,tx)!==true)
+     return fail('PF92_CHARACTER_SESSION_LEASE_REVOKED');
+    if(!isDeepStrictEqual(tx.get('items','items'),items))
+     throw Error('PF92_ORIGINAL_ITEMS_CHANGED_BY_SESSION_WITNESS_ROLLBACK');
+   }
+   // Even purely economic/skill writes cannot silently overwrite a newer
+   // player ship selection based on an obsolete detached character record.
+   if(!isDeepStrictEqual(tx.get('characters',String(characterID)),before))
+    throw Error('PF92_CHARACTER_ROW_CHANGED_DURING_GUARD_ROLLBACK');
+   tx.put('characters',String(characterID),after);
+   if(!isDeepStrictEqual(tx.get('characters',String(characterID)),after))
+    throw Error('PF92_CHARACTER_WRITE_READBACK_FAILED_ROLLBACK');
+   return Object.freeze({status:'APPLIED_ORIGINAL_CHARACTER_ROW',
+    mayCommit:true,characterID,protectedChange:sensitive,
+    previousShipItemID:prior.id,nextShipItemID:next.id});
+  }catch(e){
+   // Never turn an unsafe, possibly already-mutated tx into a returned
+   // BLOCKED result: it MUST throw so original GameStore rolls back.
+   throw Error('PF92_CHARACTER_TRANSACTION_ABORT:'+String(e?.message||e));
+  }
+ }
+ return Object.freeze({inTransaction});
+}
+
 module.exports={createPermitVerifier,validateOriginalClaimsIndex,
  createReciprocalWriterFence,inspectOriginalCharacterShipRows,
- createOriginalPlayerShipActivation};
+ createOriginalPlayerShipActivation,createOriginalCharacterRecordWriteBarrier};
