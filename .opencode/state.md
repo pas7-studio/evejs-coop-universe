@@ -57,16 +57,19 @@ Still open: the owner's own click. Buying a `coop-npc` ask needs a real authenti
 — the session guard is exactly what must not be faked — so the last step is his market window.
 Total cost of the 22 listings is 2 036 202 000 ISK against his 1 933 440 953 ISK: he can take 21.
 
-**The ammo "loss" was not a loss** (2026-11-06, from the audit log itself). Two
+**The ammo "loss" was not a loss** (2026-11-06, from the audit log and the durable receipts). Two
 `living-item-audit` rows name the whole path of the rocket batch: `removeInventoryItem` by
 `coopNpcMineralLift.js:259` (lifted out of the hangar) and `removeNativeCargo` by
 `coopNativeNpcMarket.js:147 applyAck` (the native market ack consumed the cargo because the stack was
-SOLD). The Iron Charges were not removed at all — 478 of them are still in the world, owned by NPC
-corporation 98000001 in a fitted/charge location (221 + 229 + 26 + 1 + 1), i.e. loaded onto fleet
-ships and partly fired under `EVEJS_COOP_NPC_STRICT_AMMO=1`. My earlier "vanished with no event"
-reading was wrong: the audit did capture it, and the caller names are in `coop-events.jsonl`
-(292 audit rows total, every one with a caller). `EVEJS_COOP_ITEM_AUDIT` stays ON — it is what
-answered the question.
+SOLD). The durable receipts agree: `/var/lib/evejs/coop-native-market/receipts` holds **2 SETTLED
+receipts for type 215 (1 000 Iron Charge S, 4 940 ISK)** and **3 for type 2514 (700 Inferno Rockets,
+4 529 ISK)** — 264 receipts in total, every one SETTLED. What is left of the charges (478) is still
+owned by NPC corporation 98000001 in a fitted/charge location, loaded onto fleet ships and partly
+fired under `EVEJS_COOP_NPC_STRICT_AMMO=1`. My earlier "vanished with no event" reading was wrong:
+the audit did capture it, the caller names are in `coop-events.jsonl` (292 audit rows, every one with
+a caller), and the sale is receipted. `EVEJS_COOP_ITEM_AUDIT` stays ON — it is what answered the
+question. So the old handoff items "prove the ammunition sale end to end" and "two ammo batches
+disappeared" are both **closed**.
 
 **The owner's market window really renders the NPC asks**: `buildOrderRowset` on the live book
 returns a real `Rowset` (price / volRemaining / typeID / range / orderID) with 3 asks for 23803,
@@ -79,6 +82,29 @@ built; the ten that exist are inert stock and the market-sell loop retries type 
 `NO_REAL_NATIVE_CARGO`. Options, all operator-level: leave them, sell them at the factory station, or
 repackage them (a packaged shuttle is 2 500 m³ and would fit the 3 100 m³ hold — that needs a native
 repackaging step the fleet does not have yet).
+
+**The refinery was dead for a day and is alive again** (fork `df86231`, `e76e66a`, `df53bba`). It had
+been `BLOCKED` since 2026-11-05 14:05 with 10 778 `living-npc-refinery-blocked` events, so no ore had
+become minerals for a day. Three independent defects, each fatal on its own:
+
+1. `payFee` returned the bare `OPERATION_ALREADY_COMMITTED` status when a charge was already reserved,
+   so the refinery asked for a fee it had already paid and never moved;
+2. a charge reserved AND debited whose receipt file was lost (a crash in between) could never be
+   proved paid. The durable commitment ledger is now the authority: the receipt is rebuilt from it,
+   and only when `balanceBefore - amount === balanceAfter`;
+3. the charge was keyed by the ore stack alone while the refine runs per (item, quantity), so any
+   stack whose quantity changed after the payment could never pay again; and `reserve()` treated a
+   `REFUSED` row (written when the spend scope was exhausted) as a commitment, so raising the ceiling
+   changed nothing.
+
+Also: the fee budget is a LIFETIME cap, and 5 M ISK bought ~260 refines before it was exhausted at
+4 990 915.62. The play stack's ceiling is 50 M ISK now (`EVEJS_COOP_REFINERY_SPEND_LIMIT_ISK` and the
+budget file, `setBy operator:m003-refinery-fee-budget-20261106`); the corporation's own wallet still
+bounds it from below.
+
+Measured right after the deploy: **72 stacks refined in 58 s, 0 blocked**, 2 312 370 units of ore
+(types 1228, 1230, 17463, 17464, 17470, 17471) turned into minerals, 392 295.86 ISK of real station
+fees paid, wallet 46 478 850.22 → 45 528 194.67. `living-coop-loop-phase refinery REFINED`.
 
 ## Current state
 

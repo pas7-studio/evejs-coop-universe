@@ -20,6 +20,18 @@ const budgetApi = require("./coopRefineryBudget");
  * Default OFF (EVEJS_COOP_NPC_REFINERY=1 enables it, the same flag the runtime checks).
  */
 
+// The refinery names its operation "coop-refine:v1:<itemID>:<quantity>" and that name is the only
+// thing that makes a fee idempotent, so the key is taken from the refinery itself, never retyped.
+function refineKeyFor(itemID, quantity) {
+  try {
+    return require("./coopNpcRefinery").keyFor(itemID, quantity);
+  } catch (error) {
+    if (error && error.code === "MODULE_NOT_FOUND")
+      return require("./coopNpcRefinery.cjs").keyFor(itemID, quantity);
+    throw error;
+  }
+}
+
 const FLAG = "EVEJS_COOP_NPC_REFINERY";
 // The corporation earns whenever its pilots trade, and that has nothing to do with ore.
 // The sweep lived only inside the refinery path, so with the refinery off (its default) a
@@ -183,6 +195,52 @@ function fundTreasury({options, env, ownerID}) {
   }
 }
 
+// Read the fee receipt the refinery verifies by name. A replay never guesses: without the file there
+// is nothing to replay, and the caller reports that instead of paying twice.
+function readFeeReceipt(fsApi, root, receiptID) {
+  if (!pos(receiptID)) return null;
+  try {
+    const file = require("node:path").join(root, "refinery-fees", String(receiptID) + ".json");
+    if (!fsApi.existsSync(file)) return null;
+    const parsed = JSON.parse(String(fsApi.readFileSync(file, "utf8")));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+// A charge that was reserved AND debited really took the money, even when the process died before
+// the receipt file was written. The commitment ledger is durable, so the receipt can be rebuilt from
+// it instead of charging the corporation a second time - and never from a guess: the reservation's
+// balanceBefore minus the amount must equal the debit's balanceAfter, or nothing is rebuilt.
+function rebuildFeeReceipt({fsApi, root, receiptID, amount, ownerID, stationID, chargeID}) {
+  let rows;
+  try { rows = budgetApi.readCommitments(root, {fsApi}).rows; }
+  catch (_error) { return null; }
+  const reserved = rows.find((row) => row && row.operationID === chargeID &&
+    row.type === "RESERVED" && Math.abs(Number(row.amountISK) - amount) < 0.005 &&
+    Number(row.corporationID) === pos(ownerID) && Number(row.stationID) === pos(stationID));
+  const debited = rows.find((row) => row && row.operationID === chargeID && row.type === "DEBITED");
+  if (!reserved || !debited) return null;
+  const beforeISK = Number(reserved.balanceBefore), afterISK = Number(debited.balanceAfter);
+  if (!Number.isFinite(beforeISK) || !Number.isFinite(afterISK)) return null;
+  if (Math.abs((beforeISK - amount) - afterISK) > 0.005) return null;
+  const receipt = {version: 1, status: "PAID", receiptID, amountISK: amount,
+    corporationID: pos(ownerID), stationID: pos(stationID), oreItemID: receiptID,
+    beforeISK, afterISK, at: Number(debited.at) || Date.now(), rebuiltFromCommitment: true};
+  try {
+    const dir = require("node:path").join(root, "refinery-fees");
+    fsApi.mkdirSync(dir, {recursive: true});
+    const file = require("node:path").join(dir, String(receiptID) + ".json");
+    const tmp = file + ".tmp-" + process.pid;
+    const fd = fsApi.openSync(tmp, "w", 0o600);
+    try { fsApi.writeFileSync(fd, JSON.stringify(receipt)); fsApi.fsyncSync(fd); }
+    finally { fsApi.closeSync(fd); }
+    fsApi.renameSync(tmp, file);
+  } catch (_error) { return null; }
+  return receipt;
+}
+
 // Pay a real station fee from the corporation's own wallet and leave a durable
 // receipt the refinery can verify by name. Never creates ISK: the debit is the source.
 function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now, corporationState, operationID, quantity, fsApi = require("node:fs")}) {
@@ -200,6 +258,8 @@ function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now,
   const sinceAt = budget.status === "OK" ? Number(budget.budget.sinceAt) : 0;
   const chargeID = String(operationID || ("coop-refine:v1:" + pos(oreItemID) + ":" +
     (pos(quantity) || pos(oreItemID))));
+  // The durable receipt is named after the ore stack, exactly as the refinery verifies it.
+  const receiptID = pos(oreItemID);
   const wallet = loadWallet().readWallet({corporationState, gameStore,
     corporationID: ownerID});
   if (wallet.status !== "OK") return {status: wallet.status};
@@ -211,8 +271,30 @@ function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now,
   const reserved = budgetApi.reserve(root, {operationID: chargeID, amountISK: amount,
     corporationID: pos(ownerID), stationID: pos(stationID), balanceBefore: before,
     limitISK, sinceAt, now, fsApi});
-  if (reserved.status === "SPEND_SCOPE_EXHAUSTED" || reserved.status === "OPERATION_ALREADY_COMMITTED")
+  if (reserved.status === "SPEND_SCOPE_EXHAUSTED")
     return {status: reserved.status, iskCost: amount, limitISK, chargeID, balanceISK: before};
+  if (reserved.status === "OPERATION_ALREADY_COMMITTED") {
+    // This exact charge was already reserved, so the corporation already paid it: charging again
+    // would debit the wallet twice. The durable receipt is the authority. Measured live 2026-11-06:
+    // the refinery had been BLOCKED with this status since 14:05 the day before (10 778 events),
+    // because a crash between the debit and the refine left a committed fee and nothing ever replayed
+    // it - every tick asked for the fee, every tick refused to pay it, and no ore was ever refined.
+    const replayed = readFeeReceipt(fsApi, root, receiptID);
+    if (replayed && String(replayed.status) === "PAID" &&
+        Math.abs(Number(replayed.amountISK) - amount) < 0.005 &&
+        Number(replayed.corporationID) === pos(ownerID) &&
+        Number(replayed.stationID) === pos(stationID))
+      return {status: "PAID", receipt: replayed, replay: true, iskCost: amount, chargeID};
+    // No receipt but a real debit: the money already left, so rebuild the proof instead of asking
+    // the corporation to pay for the same ore twice.
+    const rebuilt = rebuildFeeReceipt({fsApi, root, receiptID, amount, ownerID, stationID, chargeID});
+    if (rebuilt)
+      return {status: "PAID", receipt: rebuilt, replay: true, rebuilt: true, iskCost: amount, chargeID};
+    // A committed charge with no matching receipt is not a state to paper over: name it, so an
+    // operator sees one real problem instead of an endless silent block.
+    return {status: "FEE_ALREADY_COMMITTED_RECEIPT_MISMATCH", iskCost: amount, chargeID,
+      balanceISK: before};
+  }
   if (reserved.status !== "RESERVED")
     return {status: String(reserved.status || "RESERVE_FAILED"), chargeID};
   const written = loadWallet().applyDelta({corporationState, gameStore,
@@ -227,7 +309,6 @@ function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now,
   const debitAfter = Number.isFinite(Number(written.balance))
     ? Number(written.balance) : Math.round((before - amount) * 100) / 100;
   budgetApi.commit(root, {operationID: chargeID, balanceAfter: debitAfter, now, fsApi});
-  const receiptID = pos(oreItemID);
   const after = Number.isFinite(Number(written.balance))
     ? Number(written.balance) : Math.round((before - amount) * 100) / 100;
   const receipt = {version: 1, status: "PAID", receiptID, amountISK: amount,
@@ -323,7 +404,13 @@ function refineAtStation(options = {}, stationIDOverride = 0) {
       try {
         const gameStore = options.gameStore || require("../gameStore");
         const root = options.root || env[DIR_FLAG];
+        // The charge must be keyed by the SAME operation the refine will run (item + quantity).
+        // Keyed by the item alone, a stack whose quantity changed between the payment and the refine
+        // could never be paid again: the reservation existed, the quote did not match it, and the
+        // ore was stuck forever (measured 2026-11-06 on the whole warehouse).
         paid = payFee({gameStore, root, ownerID, stationID, oreItemID: Number(row.itemID),
+          quantity: Number(row.quantity),
+          operationID: refineKeyFor(Number(row.itemID), Number(row.quantity)),
           amountISK: outcome.iskCost, now: options.now, fsApi: options.fsApi,
           corporationState: options.corporationState});
       } catch (error) {

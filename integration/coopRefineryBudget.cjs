@@ -119,16 +119,23 @@ function reserve(root, opts = {}) {
   const fsApi = opts.fsApi || fs;
   const { operationID, amountISK, corporationID, stationID, balanceBefore, limitISK, sinceAt, now } = opts;
   const { rows } = readCommitments(root, opts);
+  let refusedAlready = false;
   for (const row of rows) {
-    if (row.operationID === operationID) {
-      return { status: "OPERATION_ALREADY_COMMITTED" };
-    }
+    if (row.operationID !== operationID) continue;
+    // A REFUSED row means this operation was never paid (the scope was exhausted), and a VOID row
+    // means the reservation was deliberately undone. Neither is a commitment: refusing to retry them
+    // made an exhausted budget permanent - measured 2026-11-06, every refused refine stayed refused
+    // after the operator raised the ceiling, so the warehouse could never be refined again.
+    if (row.type === "REFUSED" || row.type === "VOID") { refusedAlready = true; continue; }
+    return { status: "OPERATION_ALREADY_COMMITTED" };
   }
   const spentNow = spent(root, opts).spentISK;
   if (spentNow + amountISK > limitISK) {
     const at = ROUND(now || Date.now());
     const file = commitmentsFileFor(root);
-    fsApi.appendFileSync(file, JSON.stringify({ type: "REFUSED", operationID, amountISK: ROUND(amountISK), reason: "SPEND_SCOPE_EXHAUSTED", at }) + "\n");
+    // One refusal row per operation, not one per tick: the append-only log is history, not a counter.
+    if (!refusedAlready)
+      fsApi.appendFileSync(file, JSON.stringify({ type: "REFUSED", operationID, amountISK: ROUND(amountISK), reason: "SPEND_SCOPE_EXHAUSTED", at }) + "\n");
     syncFile(file, fsApi);
     return { status: "SPEND_SCOPE_EXHAUSTED", spentISK: ROUND(spentNow), limitISK: ROUND(limitISK) };
   }
