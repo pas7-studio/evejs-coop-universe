@@ -195,3 +195,23 @@ character row. It is **disabled by default and NOT wired into the
 original EveJS characterState**. The bootstrap exposes the candidate
 method but cannot activate it without original writer hooks. See
 `scripts/pf91/PF91_ORIGINAL_CHARACTER_ROWS_AND_ATOMIC_PLAYER_SWITCH.md`.
+
+## PF92 generic original character owner mutation fence
+
+PF91's original player ship switch was only one route to the generic
+`characterState.writeCharacterRecord()` entrypoint. In original EveJS,
+`getCharacterRecord` normalization, `updateCharacterRecord` and
+`itemStore.syncCharacterActiveShip` also reach that owner. PF92 adds
+`createOriginalCharacterRecordWriteBarrier` to the existing PF58
+candidate permit module to enforce real before/after per-character
+SQLite writes, protected active-ship aliases, old/new original physical
+hull custody, all-original-character collision scans and source-bound
+session leases under one original `BEGIN IMMEDIATE`. Unsafe
+captured-writer callbacks force rollback.
+
+The native bootstrap exports a guarded character owner write function,
+but **only while Personal Fleet is enabled and all original writers are
+independently fenced**. No original `characterState` runtime hook is
+installed and Personal Fleet remains OFF. Original owner source proofs,
+26 new Node fixture cases and manual local commands:
+`scripts/pf92/PF92_ORIGINAL_CHARACTER_GENERIC_WRITE_FENCE.md`.
