@@ -206,7 +206,7 @@ test('PF92 first failed witness cannot commit a captured direct character tx.put
  },{lease:()=>{
   captured.put(C,String(F.OWNER),{...original,shipID:999999});
   return false;
- }}),/PF92_SESSION_WITNESS_MODIFIED_AUTHORITY_ROLLBACK/);
+ }}),/PF93_SESSION_WITNESS_MUTATED_ORIGINAL_SQLITE_ROLLBACK/);
  assert.deepEqual(f.get(C,String(F.OWNER)),original);
 }));
 test('PF92 second witness cannot change original physical ship and then fail',()=>fixture(f=>{
@@ -222,7 +222,7 @@ test('PF92 second witness cannot change original physical ship and then fail',()
    return false;
   }
   return true;
- }}),/PF92_ORIGINAL_OWNER_CHANGED_BY_SESSION_WITNESS_ROLLBACK/);
+ }}),/PF93_SESSION_WITNESS_MUTATED_ORIGINAL_SQLITE_ROLLBACK/);
  assert.deepEqual(f.get(I,'items'),original);
  assertNoSelection(f);
 }));
