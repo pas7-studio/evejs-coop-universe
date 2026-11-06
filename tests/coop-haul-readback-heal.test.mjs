@@ -68,6 +68,42 @@ test("an ambiguity (two rows with one cargo id) is not proof either", () => {
   assert.equal(a.miner.coopHaulNeedsOperatorRepair, REASON);
 });
 
+
+test("a committed transfer receipt heals a destination row that was already consumed", () => {
+  // Measured live 2026-11-06 16:33-17:18: the fleet was parked again with destination_rows=0 and
+  // the row-only proof could not fire, because the cargo had already been sold or moved.
+  const a = actors();
+  const seen = [];
+  const receipt = { version: 1, status: "COMMITTED", cargoID: 980200387963,
+    minerID: 980000073502, haulerID: 980000027001, typeID: 1228, quantity: 1249 };
+  const healed = healReadbackRepair({ ...a,
+    nativeStore: { listNativeCargoForEntity: () => [] },
+    readReceipt: (cargoID) => (Number(cargoID) === 980200387963 ? receipt : null),
+    observe: (event, _id, _space, fields) => seen.push({ event, fields }) });
+  assert.equal(healed.status, "HEALED");
+  assert.equal(healed.proof, "TRANSFER_RECEIPT_COMMITTED");
+  assert.equal(a.fleet.coopHaulNeedsOperatorRepair, undefined);
+  const event = seen.find((e) => e.event === "living-haul-repair-healed");
+  assert.equal(event.fields.proof, "TRANSFER_RECEIPT_COMMITTED");
+});
+
+test("a receipt that names another hauler proves nothing", () => {
+  const a = actors();
+  const healed = healReadbackRepair({ ...a,
+    nativeStore: { listNativeCargoForEntity: () => [] },
+    readReceipt: () => ({ status: "COMMITTED", cargoID: 980200387963,
+      minerID: 980000073502, haulerID: 999 }) });
+  assert.equal(healed, null);
+  assert.equal(a.miner.coopHaulNeedsOperatorRepair, REASON);
+});
+
+test("no row and no receipt still keeps the fleet parked", () => {
+  const a = actors();
+  const healed = healReadbackRepair({ ...a,
+    nativeStore: { listNativeCargoForEntity: () => [] }, readReceipt: () => null });
+  assert.equal(healed, null);
+  assert.equal(a.fleet.coopHaulNeedsOperatorRepair, REASON);
+});
 test("a flag from any other failure is never healed by this path", () => {
   const a = actors();
   for (const actor of [a.miner, a.hauler, a.fleet]) {

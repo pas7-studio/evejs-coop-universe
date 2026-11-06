@@ -238,7 +238,7 @@ function transfer(args){
 // Any number of ALIFE10_ prefixes: reasons stored before the double-prefix fix read
 // ALIFE10_ALIFE10_POSTCOMMIT_..., and those fleets must be able to heal too.
 const READBACK_REPAIR=/^(?:ALIFE10_)*POSTCOMMIT_CUSTODY_READBACK_FAILED:.*:cargo=([0-9]+)$/;
-function healReadbackRepair({miner,hauler,fleet,nativeStore,observe=null}={}){
+function healReadbackRepair({miner,hauler,fleet,nativeStore,observe=null,readReceipt=null}={}){
   if(!nativeStore||typeof nativeStore.listNativeCargoForEntity!=="function")return null;
   const noted=String((miner&&miner.coopHaulCargoNeedsOperatorRepair)||
     (fleet&&fleet.coopHaulCargoNeedsOperatorRepair)||
@@ -253,7 +253,18 @@ function healReadbackRepair({miner,hauler,fleet,nativeStore,observe=null}={}){
       ...(nativeStore.listNativeCargoForEntity(pos(miner&&miner.itemID))||[])];
   }catch(_error){return null;}
   const found=rows.filter(row=>pos(row&&row.cargoID)===cargoID);
-  if(found.length!==1)return null;
+  // One row is proof the transfer happened. No row is NOT proof that it did not: the cargo may
+  // have been sold or moved between the readback and this beat. The transfer writes its receipt in
+  // the SAME transaction as the row, so a committed receipt naming this cargo is the durable proof.
+  let proofName="DESTINATION_ROW_EXISTS_ONCE";
+  if(found.length!==1){
+    let receipt=null;
+    try{receipt=typeof readReceipt==="function"?readReceipt(cargoID):null}catch(_error){receipt=null}
+    const minerID=pos(miner&&miner.itemID),haulerID=pos(hauler&&hauler.itemID);
+    if(!receipt||String(receipt.status)!=="COMMITTED"||pos(receipt.cargoID)!==cargoID||
+     !minerID||pos(receipt.minerID)!==minerID||pos(receipt.haulerID)!==haulerID)return null;
+    proofName="TRANSFER_RECEIPT_COMMITTED";
+  }
   for(const actor of [miner,hauler,fleet]){
     if(!actor||typeof actor!=="object")continue;
     delete actor.coopHaulCargoNeedsOperatorRepair;
@@ -265,9 +276,9 @@ function healReadbackRepair({miner,hauler,fleet,nativeStore,observe=null}={}){
       observe("living-haul-repair-healed",null,null,
         {fleetID:pos(fleet&&fleet.fleetID),haulerID:pos(hauler&&hauler.itemID),
          cargoID,reason:String(noted).slice(0,120),
-         proof:"DESTINATION_ROW_EXISTS_ONCE"});
+         proof:proofName});
   }catch(_error){/* telemetry must never change the world */}
-  return {status:"HEALED",cargoID,proof:"DESTINATION_ROW_EXISTS_ONCE"};
+  return {status:"HEALED",cargoID,proof:proofName};
 }
 // The same doubt, answered from the other side. A source-cargo conflict says the miner's rows could
 // not be proven to be its own; if they can be proven NOW, the fleet may work again. Every clause the

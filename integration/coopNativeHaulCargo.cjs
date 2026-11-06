@@ -148,6 +148,17 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
     hauler:(fleet.haulerEntityIDs||[]).map(id=>scene.getEntityByID?.(Number(id)))
       .find(x=>x&&x.kind==="ship"&&x.itemID!==miner.itemID)||null,
     fleet,nativeStore:require("./npc/nativeNpcStore"),
+    // The transfer writes its receipt in the same transaction as the cargo row, so a committed
+    // receipt proves the goods moved even when the row is already consumed.
+    readReceipt:cargoID=>{
+     try{
+      const authority=require("../gameStore").coopAtomicNativeRows;
+      if(!authority||typeof authority.transact!=="function")return null;
+      const key="coopNativeHaulTransfer:"+pos(cargoID);
+      const result=authority.transact(["npcCargo"],tx=>tx.get("npcCargo",key));
+      return result&&typeof result==="object"?result:null;
+     }catch(_error){return null}
+    },
     observe:(event,_id,_space,fields)=>{try{require("./coopRuntimeProbe").observe(event,null,null,fields||{})}catch(_e){}}});
   }catch(_error){/* a failed heal is not a new fault */}
  }
