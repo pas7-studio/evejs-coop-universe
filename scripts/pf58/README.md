@@ -112,3 +112,25 @@ review patch. See `docs/PF87_ATOMIC_ORIGINAL_TITLE_AND_PERMIT.md`.
 writers and the running native engine still require independent verified
 fencing and local two-client gameplay, restart, dock and wallet E2E.
 Personal Fleet OFF; no PLAY/main merge.
+
+## PF88 — reciprocal original writer custody (review-only)
+
+The existing, source-bundled PF58 native permit module exports
+`createReciprocalWriterFence({pf52}).inTransaction({tx,writer,shipItemID,
+affectedItemID,destinationLocationID})`. This blocks an original ship that
+has a PF52 reservation, native PF actor claim, one-shot PF58 handoff or
+PF60 terminal custody. The same guard covers nested stock-fitted modules
+and cargo, and inbound destination writes. A clear result is valid only
+inside the **same** original writer's SQLite/GameStore mutation transaction.
+
+The source-bound PF58 bootstrap now defaults its independent writer
+fence OFF unless `verifyOriginalWriterHooks()` is provided and true
+alongside the previous all-writers fence. The genuine original EveJS player,
+Mining, WAR and Exploration writer hooks are **NOT INSTALLED** from this
+orchestration repo. `scripts/pf88/Test-PF88-Local.ps1` runs the isolated
+contract suite and optional source-pinned original writer audit; the audit
+always reports BLOCKED_FOR_ACTIVATION. See
+`scripts/pf88/PF88_RECIPROCAL_WRITER_CONTRACT.md`.
+
+These changes are **not** a working native writer integration or gameplay
+acceptance. Personal Fleet OFF and Draft PR retained.
