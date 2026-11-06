@@ -8,7 +8,7 @@ started, deployed or enabled by this workflow. Never point this at PLAY.
 
 GitHub App access to `pas7-studio/EveJS` currently fails with `403 Resource not
 accessible by integration`. PF-68 allows a developer to validate PR #350's
-**complete** original-source-pinned 21-file native patch *locally* and,
+**complete** original-source-pinned 20-file native patch *locally* and,
 only with a separate explicit opt-in, apply that reviewed patch to a NEW local
 Git WORK worktree. This does **not** install original server bootstrap
 authorities or turn on game functionality.
@@ -30,7 +30,7 @@ From the orchestration PR #350 checkout in PowerShell:
   -WorktreeOutput 'O:\tmp\PF68-native-work'
 ```
 
-This runs the real PF62 source-pinned builder, stages the complete 21-file
+This runs the real PF62 source-pinned builder, stages the complete 20-file
 review patch, runs Node syntax checks, `git apply --check`, and a byte-exact
 replay in an ephemeral Git directory. It emits `PF62-MANIFEST.json` in the
 review directory. **No worktree is created.** An existing nonempty review
@@ -70,7 +70,7 @@ deleting, or rolling back unknown writes.
 ## Hard safety gates
 
 - Exact original branch + PR #350 branch; both Git working trees clean.
-- Exact 21-file manifest: two original source updates, nineteen native modules
+- Exact 20-file manifest: two original source updates, eighteen **distinct** native modules
   and one full review patch; all paths/bytes and both stock Git blob IDs checked.
 - A byte-consistent on-disk `PF62-MANIFEST.json` receipt.
 - Worktree path, review path and both checkouts may not overlap or be ancestors
