@@ -3759,3 +3759,8 @@ Evidence: live cache snapshot: cargoBuilds 820->850 in 60 s, peekNativeCargo 6.4
 Why: an idle play stack allocated 4.96 GB of garbage per minute, and the top three allocation sites were the universe-site plan listing all 8491 seeded instances per family per band only to filter them by a candidate set it already had
 Where: tests/coop-dungeon-universe-plan-narrowing.test.mjs
 Evidence: heap sampling 60 s: 402 MB/min in listUniverseSeededPersistentSiteInstances, 298 MB/min in buildRandomAllocatedSystemPlanForBand, 189 MB/min in getInstanceSpawnFamilyKey; in-process timing 5.3 ms all vs 1.3-1.8 ms narrowed; fork commit; 2 tests; AUDIT_OK
+### 2026-11-06T20:01Z · 15c7dac · L1 · test(scene): pin the crimewatch resolver
+
+Why: the heap sampler charged 69 MB/min of garbage to path.join because the scene activity check re-required the crimewatch module with a fresh path.join on every call, hundreds of times a second
+Where: tests/coop-scene-activity-require-hoist.test.mjs
+Evidence: heap sampling attributed: 69.31 MB/min join @ node:path; fork 914befb; 2 tests pass; AUDIT_OK
