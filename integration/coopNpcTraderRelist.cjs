@@ -63,12 +63,16 @@ function createTraderRelist({
       verifyStation(x.stationID, x.ownerID) === true;
   }
 
-  // A bought stack is a whole, non-singleton inventory stack sitting in the corporation's hangar.
+  // A bought stack is one whole inventory object in the corporation's hangar. A module or a ship is
+  // a SINGLETON (quantity -1, stacksize 1) and is exactly one unit - the trader buys those, so the
+  // relist has to accept them too (measured 2026-11-06: every bought module was skipped as "not a
+  // whole stack" and the corporation could never resell what it bought).
   function checkItem(x, item, locationID = x.stationID) {
-    return Boolean(item && item.itemID === x.itemID && item.ownerID === x.ownerID &&
-      item.typeID === x.typeID && item.quantity === x.quantity &&
-      item.stacksize === x.quantity && item.singleton === 0 &&
-      item.locationID === locationID && item.flagID === 4);
+    const whole = Boolean(item) && (item.singleton === 1
+      ? item.stacksize === null || item.stacksize === undefined || item.stacksize === 1
+      : item.quantity === x.quantity && item.stacksize === x.quantity && item.singleton === 0);
+    return Boolean(whole && item.itemID === x.itemID && item.ownerID === x.ownerID &&
+      item.typeID === x.typeID && item.locationID === locationID && item.flagID === 4);
   }
 
   function sameOrder(row, x, price, state) {
@@ -100,9 +104,11 @@ function createTraderRelist({
     if (!checkRequest(x)) return { status: "BLOCKED", error: "TRADER_RELIST_IDENTITY_UNVERIFIED" };
     if (!Number.isSafeInteger(x.priceCents) || x.priceCents < 1)
       return { status: "BLOCKED", error: "TRADER_RELIST_PRICE_INVALID" };
-    // Rust quotes in ISK to the cent: never round somebody else's price silently.
+    // Rust quotes in ISK to the cent: never round somebody else's price silently. The ceiling is a
+    // real ceiling, not the old 1 M ISK one: the trader's own stock is modules worth 7-113 M ISK, and
+    // 140 % of that is what the owner's rule asks for (measured 2026-11-06: every relist refused).
     const price = x.priceCents / 100;
-    if (!Number.isFinite(price) || price <= 0 || price > 1000000)
+    if (!Number.isFinite(price) || price <= 0 || price > 1000000000)
       return { status: "BLOCKED", error: "TRADER_RELIST_PRICE_OUT_OF_RANGE" };
     if (inFlight.has(x.operationID))
       return { status: "BLOCKED", error: "TRADER_RELIST_OPERATION_BUSY" };

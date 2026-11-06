@@ -37,7 +37,9 @@ function createNpcPendingMarketEscrow({
   const p=resolvePrice(x);
   // Rust sells in integer cents. Never turn a positive sub-cent quote into
   // a free order or silently round a different price from the native quote.
-  if(typeof p!=="number"||!Number.isFinite(p)||p<=0||p>1000000)
+  // The same ceiling the trader uses: a real module is worth tens of millions of ISK, so the old
+  // 1 M ISK bound refused every capital-ish good (measured 2026-11-06 on the relist path).
+  if(typeof p!=="number"||!Number.isFinite(p)||p<=0||p>1000000000)
    throw Error("NPC_MARKET_PRICE_UNVERIFIED");
   const exact=p*100,whole=Math.round(exact);
   if(!Number.isSafeInteger(whole)||whole<1||

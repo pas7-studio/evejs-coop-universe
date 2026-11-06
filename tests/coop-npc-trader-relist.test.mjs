@@ -19,11 +19,14 @@ const TYPE = 34;
 const QTY = 50;
 
 function fixture({ stock = [{ itemID: ITEM, typeID: TYPE, quantity: QTY }],
-  referenceCents = 393, reserve = "ok", activate = "ok", itemInHangar = true } = {}) {
+  referenceCents = 393, reserve = "ok", activate = "ok", itemInHangar = true,
+  singleton = false } = {}) {
+  const qty = singleton ? 1 : QTY;
   const items = new Map();
   if (itemInHangar) {
-    items.set(ITEM, { itemID: ITEM, ownerID: CORP, typeID: TYPE, quantity: QTY,
-      stacksize: QTY, singleton: 0, locationID: HUB, flagID: 4 });
+    items.set(ITEM, { itemID: ITEM, ownerID: CORP, typeID: TYPE,
+      quantity: singleton ? -1 : QTY, stacksize: singleton ? 1 : QTY,
+      singleton: singleton ? 1 : 0, locationID: HUB, flagID: 4 });
   }
   const escrows = new Map();
   const calls = [];
@@ -51,16 +54,16 @@ function fixture({ stock = [{ itemID: ITEM, typeID: TYPE, quantity: QTY }],
         reservedPrice.set(params.operation_id, params.price);
         return { order_id: String(nextOrder), operation_id: params.operation_id,
           source_item_id: String(params.source_item_id), owner_id: CORP, station_id: HUB,
-          type_id: TYPE, quantity: QTY, price: params.price, bid: false, is_corp: true,
-          source: "coop-npc", vol_remaining: QTY, state: "pending" };
+          type_id: TYPE, quantity: qty, price: params.price, bid: false, is_corp: true,
+          source: "coop-npc", vol_remaining: qty, state: "pending" };
       }
       if (method === "ActivateNpcSellOrder") {
         const orderID = params.order_id;
         if (activate === "notverified") return { state: "pending" };
         return { order_id: orderID, operation_id: params.operation_id,
           source_item_id: params.source_item_id, owner_id: CORP, station_id: HUB,
-          type_id: TYPE, quantity: QTY, price: reservedPrice.get(params.operation_id), bid: false, is_corp: true,
-          source: "coop-npc", vol_remaining: QTY, state: "open" };
+          type_id: TYPE, quantity: qty, price: reservedPrice.get(params.operation_id), bid: false, is_corp: true,
+          source: "coop-npc", vol_remaining: qty, state: "open" };
       }
       throw new Error("unexpected " + method);
     },
@@ -147,4 +150,27 @@ test("an unverified native reserve or activation blocks instead of claiming succ
   const second = await badActivate.relist.tick({ corporationID: CORP, stationID: HUB });
   assert.equal(second.listed[0].status, "BLOCKED");
   assert.equal(second.listed[0].reason, "TRADER_RELIST_ACTIVATION_UNVERIFIED");
+});
+
+test("a bought SINGLETON module is relisted as one unit", async () => {
+  // Measured 2026-11-06: the trader's bought stock is modules (quantity -1, stacksize 1, singleton 1)
+  // and every one of them was skipped as "not a whole stack", so nothing could ever be resold.
+  const f = fixture({ singleton: true,
+    stock: [{ itemID: ITEM, typeID: TYPE, quantity: 1 }] });
+  const result = await f.relist.tick({ corporationID: CORP, stationID: HUB });
+  assert.equal(result.status, "TRADER_RELISTED");
+  assert.equal(result.listed[0].status, "TRADER_RELISTED");
+  assert.equal(result.listed[0].quantity, 1);
+  const reserve = f.calls.find((call) => call.method === "ReserveNpcSellOrder");
+  assert.equal(reserve.params.quantity, 1, "one module is one unit");
+});
+
+test("a real module price is relisted: the ceiling is not one million ISK", async () => {
+  // Measured live 2026-11-06: the bought modules are worth 90-113 M ISK, so 140 % of the reference is
+  // ~139 M ISK and the old 1 M ISK ceiling refused every single relist as PRICE_OUT_OF_RANGE.
+  const f = fixture({ referenceCents: 9_943_000_000 });
+  const result = await f.relist.tick({ corporationID: CORP, stationID: HUB });
+  assert.equal(result.status, "TRADER_RELISTED");
+  const reserve = f.calls.find((call) => call.method === "ReserveNpcSellOrder");
+  assert.equal(reserve.params.price, 139_202_000, "140 % of 99.43 M ISK, in ISK");
 });

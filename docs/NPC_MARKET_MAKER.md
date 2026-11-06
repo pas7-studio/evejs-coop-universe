@@ -285,3 +285,34 @@ Two operational lessons are now in the code: a native row key contains `\u001f`,
 through the atomic bridge (a JSON path read turns the separator into nesting), and a claim the
 executor already started is **resumed with the same claim key** (bounded, six attempts) instead of
 being fenced for ever — the deterministic fill id is what makes that safe.
+
+## 11. The resale half, live (2026-11-06)
+
+The trader bought 22 modules and then could not resell a single one, for two independent reasons:
+
+1. **the daemon implemented no NPC listing RPC at all** — `ReserveNpcSellOrder`, `ActivateNpcSellOrder`
+   and `GetNpcSellOrder` were JS calls into nothing ("unsupported market RPC method"), so the
+   two-step escrow protocol (`docs` §7) had never run once. `market_orders` now carries
+   `operation_id` (unique when present) and `source_item_id`, and the daemon implements all three:
+   reserve inserts the order in state `pending` (invisible to the book and to matching, idempotent by
+   operation id), activate moves it to `open` and invalidates the cached book, get reads it back;
+2. **the relist refused anything worth more than 1 M ISK** (`TRADER_RELIST_PRICE_OUT_OF_RANGE`), and
+   the trader's stock is 90–113 M ISK modules. The ceiling is now 1 B ISK, the same one the buy side
+   uses. The relist also had to learn singletons: a module is `quantity -1 / stacksize 1`, and every
+   bought module was skipped as "not a whole stack".
+
+Measured on the play stack after the fix:
+
+```
+{"event":"space.trader-relist","status":"TRADER_RELISTED","corporationID":1000035,
+ "listed":[{"typeID":21472,"quantity":1,"priceCents":12686800000,"status":"TRADER_RELISTED"}, ...]}
+```
+
+and for each listing: a real `market_orders` row (`state open`, `source coop-npc`,
+`vol_remaining 1`), a `marketEscrow` sell row for the corporation at `9200000000 + orderID`, and the
+physical module moved into that escrow container, still a singleton and still owned by 1000035. The
+orders are on the public book, so the owner (or anyone) can buy them at the band price.
+
+One more ratchet had to be closed: the corporation's own `coop-npc` asks are now excluded from the
+reference price on **both** sides, otherwise the next relist of the same type would have been priced
+at 140 % of its own previous ask.

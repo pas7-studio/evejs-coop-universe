@@ -32,9 +32,18 @@ gross 1 231 691 000 ISK, native tax 55 179 756.8, net to him 1 176 511 243.2 (wa
 receipts with zero conservation violations. Seven defects were found and fixed in that order; the
 whole list is `docs/NPC_MARKET_MAKER.md` §10.
 
-Still open: `ReserveNpcSellOrder` / `ActivateNpcSellOrder` do not exist in the daemon either, so the
-trader cannot RELIST what it bought and the industry/salvage NPC sale paths cannot list at all. That
-is the next engine piece (Rust, needs a market rebuild).
+**The resale half now works too** (fork `7e0f4bf`, `8faa1c0`, `ce16e43`): the daemon implements
+`ReserveNpcSellOrder` / `ActivateNpcSellOrder` / `GetNpcSellOrder` (pending → escrow → open, idempotent
+by operation id, `market_orders.operation_id` + `source_item_id` added by migration), the relist
+ceiling is 1 B ISK instead of 1 M, singletons are accepted, and the trader's own asks never set the
+reference. Verified live: **22 of 22** bought modules are listed on the book at 140 % of the market,
+each with a real `marketEscrow` sell row for the corporation and the module physically in that escrow
+container (`docs/NPC_MARKET_MAKER.md` §11).
+
+Still open: a PLAYER cannot buy those NPC orders yet. The buy path branches on `source === "coop-npc"`
+into `space/coopNpcCorporateBuyRuntime`, which calls `ClaimNpcSellOrder` / `FinalizeNpcSellOrder` /
+`GetNpcSellClaim` — three RPCs the daemon still does not implement (same class as the defect fixed
+today). Until they exist the corporation's stock is visible but unsellable.
 
 ## Current state
 

@@ -1133,11 +1133,11 @@ function advanceNativePveSiteDefense(){
 }
 
 async function relistBoughtStock(stationID){
+ const journalFile=process.env.EVEJS_COOP_TRADER_JOURNAL||"/var/lib/evejs/coop-trader-maker.json";
  if(!relistWorker){
   const worldData=require("./worldData"),gameStore=require("../gameStore"),
    items=require("../services/inventory/itemStore"),
    marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
-  const journalFile=process.env.EVEJS_COOP_TRADER_JOURNAL||"/var/lib/evejs/coop-trader-maker.json";
   const readSettled=()=>{
    const rows=[];
    try{
@@ -1174,8 +1174,9 @@ async function relistBoughtStock(stationID){
     try{item=items.findItemById(row.itemID)||null}catch(_error){item=null}
     if(!item||Number(item.ownerID)!==Number(corpID)||Number(item.locationID)!==Number(hub))
      return null;
+    // A singleton (module, ship) is one unit even though the native row stores quantity -1.
     return {itemID:Number(item.itemID),typeID:Number(item.typeID),
-     quantity:Number(item.quantity)};
+     quantity:Number(item.singleton)===1?1:Number(item.quantity)};
    }).filter(Boolean),
    resolvePriceCents:async(typeID,hub)=>{
     const station=worldData.getStationByID(hub);
@@ -1183,8 +1184,11 @@ async function relistBoughtStock(stationID){
     const book=await marketClient.call("GetOrders",
      {region_id:station.regionID,type_id:typeID});
     const asks=Array.isArray(book&&book.sells)?book.sells:[];
+    // The trader's OWN asks must never set the reference: it would price every next relist off its
+    // previous one (140 % of 140 %). Only the world's real offers are the market.
     const reference=asks.filter(row=>row&&row.bid!==true&&
-     String(row.source)!=="player"&&Number(row.station_id)===Number(hub))
+     String(row.source)!=="player"&&String(row.source)!=="coop-npc"&&
+     Number(row.station_id)===Number(hub))
      .map(row=>Math.round(Number(row.price)*100))
      .filter(price=>Number.isSafeInteger(price)&&price>0);
     return reference.length?Math.min(...reference):0;
@@ -1192,8 +1196,29 @@ async function relistBoughtStock(stationID){
    clock:()=>Date.now(),
    maxListingsPerTick:Math.max(1,Math.min(8,Number(process.env.EVEJS_COOP_TRADER_RELIST_PER_TICK||3)))});
  }
- return relistWorker.tick({corporationID:Number(process.env.EVEJS_COOP_TRADER_CORP_ID||0),
+ const result=await relistWorker.tick({corporationID:Number(process.env.EVEJS_COOP_TRADER_CORP_ID||0),
   stationID:Number(stationID)});
+ // Remember what is already on the book, so the next tick does not re-list the same stack (the
+ // operation id is stable, so a retry would only be refused as "not pending" anyway).
+ const listed=(result&&Array.isArray(result.listed)?result.listed:[])
+  .filter(row=>row&&row.status==="TRADER_RELISTED");
+ if(listed.length){
+  const fs=require("node:fs"),lock=journalFile+".lock";
+  let fd=null;
+  try{fd=fs.openSync(lock,"wx",0o600)}catch(_error){fd=null}
+  if(fd!==null){
+   try{
+    const state=JSON.parse(fs.readFileSync(journalFile,"utf8"));
+    for(const claim of Object.values(state.claims||{})){
+     if(claim&&listed.some(row=>Number(row.itemID)===Number(claim.itemID)))claim.relisted=true;
+    }
+    fs.writeFileSync(journalFile+".tmp-relist",JSON.stringify(state));
+    fs.renameSync(journalFile+".tmp-relist",journalFile);
+   }catch(_error){/* the stable operation id keeps a retry harmless */}
+   finally{try{fs.closeSync(fd)}catch(_error){} try{fs.unlinkSync(lock)}catch(_error){}}
+  }
+ }
+ return result;
 }
 
 function advanceTraderMaker(){
@@ -1321,7 +1346,9 @@ function advanceTraderMaker(){
     maxLotUnits:Math.max(1,Math.min(1000000,Number(process.env.EVEJS_COOP_TRADER_MAX_LOT_UNITS||50)))});
   }
   traderMaker.tick({stationID,typeIDs:types}).then(result=>{
-   if(result.status==="TRADER_MAKER_SETTLED"&&process.env.EVEJS_COOP_TRADER_RELIST==="1"){
+   // The relist is its own job: bought stock sits in the hangar whether or not THIS tick bought
+   // anything, so it must run on every live tick (it lists at most EVEJS_COOP_TRADER_RELIST_PER_TICK).
+   if(process.env.EVEJS_COOP_TRADER_RELIST==="1"&&result.status!=="BLOCKED"){
     // The other half of the owner's rule: sell what we bought at 105-140 % of the reference.
     relistBoughtStock(stationID).catch(error=>console.warn(
      "[CoopLivingWorld] trader relist failed: "+String(error&&error.message||error)));

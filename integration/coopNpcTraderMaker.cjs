@@ -140,6 +140,9 @@ function createTraderMaker({
         if (!atHub) continue;
         playerAsks.push({ typeID, orderID, stationID, remainingQuantity: volume,
           unitPriceCents: priceCents, verifiedNative: true, state: "open" });
+      } else if (String(row.source) === "coop-npc") {
+        // Our own stock is not the market: pricing a buy off our own ask would ratchet the band.
+        continue;
       } else if (atHub) {
         referenceAsks.push({ orderID, priceCents, volume });
       } else {
