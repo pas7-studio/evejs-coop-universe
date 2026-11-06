@@ -34,7 +34,11 @@ function setup(options={}) {
  const atomic={mode:'SERVER_INTERNAL_FLAGGED',poison:false,transact(tables,fn){
   db.exec('BEGIN IMMEDIATE');try{
    const r=fn({get:(table,key)=>{if(!tables.includes(table))throw Error('UNLISTED_TABLE');return read(table,key);},
-    put:(table,key,value)=>{if(!tables.includes(table))throw Error('UNLISTED_TABLE');put(table,key,value);}});
+    put:(table,key,value)=>{if(!tables.includes(table))throw Error('UNLISTED_TABLE');
+     if(value===null||typeof value!=='object'||Array.isArray(value))throw Error('NATIVE_ROW_MUST_BE_OBJECT');
+     put(table,key,value);},
+    del:(table,key)=>{if(!tables.includes(table))throw Error('UNLISTED_TABLE');
+     db.prepare('DELETE FROM cells WHERE table_name=? AND key=?').run(table,key);}});
    if(options.beforeCommit)options.beforeCommit(r);
    db.exec('COMMIT');if(options.afterCommit)options.afterCommit(r);return r;
   }catch(e){db.exec('ROLLBACK');throw e;}
