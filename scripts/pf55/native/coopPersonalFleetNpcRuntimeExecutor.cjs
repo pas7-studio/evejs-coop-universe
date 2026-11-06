@@ -10,7 +10,7 @@ const deny=errorMsg=>({success:false,errorMsg});
 function createNpcRuntimeExecutor({npcRuntime,orderBridge,sceneForSystem,getController,
  verifyPersonalClaim,authorizeTarget,defensiveEscort=null,enabled=()=>false}={}){
  if(!npcRuntime||!orderBridge||typeof orderBridge.issue!=='function'||
-  !['issueOrder','stop','issueAttackOrder','warpToEntity'].every(k=>typeof npcRuntime[k]==='function')||
+  !['issueOrder','stop','follow','issueAttackOrder','warpToEntity'].every(k=>typeof npcRuntime[k]==='function')||
   [sceneForSystem,getController,verifyPersonalClaim,authorizeTarget,enabled].some(x=>typeof x!=='function')||
   (defensiveEscort!==null&&typeof defensiveEscort!=='function'))
   throw Error('PF55_ORIGINAL_NPC_RUNTIME_DEPENDENCIES_REQUIRED');
@@ -43,9 +43,18 @@ function createNpcRuntimeExecutor({npcRuntime,orderBridge,sceneForSystem,getCont
     const ready=proof(row);if(!ready)return deny('PF55_NATIVE_SOURCE_CHANGED');
     switch(row.action){
      case 'FOLLOW':
-      return npcRuntime.issueOrder(row.shipItemID,{type:'follow',targetID:row.targetEntityID,
-       movementMode:'follow',followRangeMeters:row.followRangeMeters,
-       allowWeapons:false,keepLock:false,allowPodKill:false});
+      // PF82: stock NPC manual FOLLOW is not appropriate for an ally's ship:
+      // npcBehaviorLoop.resolveDesiredTarget() requires isValidCombatTarget()
+      // for ALL ship targets, which rejects friendly players. Use the native
+      // physics follow API; it accepts actual movement targets independent
+      // of hostility, without manufacturing any combat order or ship/item.
+      // An already nativeCombat controller may retain a previous ATTACK
+      // manualOrder that could compete with physics; fail closed until a
+      // separately fenced combat quiescence protocol is implemented.
+      if(ready.controller.runtimeKind!=='nativeAmbient')
+       return deny('PF82_FOLLOW_COMBAT_CONTROLLER_NOT_QUIESCED');
+      return npcRuntime.follow(row.shipItemID,row.targetEntityID,
+       row.followRangeMeters,{wakeController:false,allowWeapons:false});
      case 'HOLD':
       return npcRuntime.stop(row.shipItemID,{reason:'pf55-personal-fleet',
        allowSessionlessWarpAbort:false,issueStopOrder:true});
