@@ -85,6 +85,7 @@ block('RETURNING','malformed station blocks', {stationID:0});
 block('RETURNING','changed hull type blocks', {typeID:607});
 block('RETURNING','forged signature blocks', {signature:'0'.repeat(64)});
 block('RETURNING','foreign operation ID blocks', {operationID:'foreign-operation'});
+block('RETURNING','numeric operation ID blocks', {operationID:123});
 block('RETURNING','changed owner blocks', {ownerCharacterID:99});
 test('original PF66 first dock attempt blocks even without return row',()=>withDb(s=>{
  s.put(T,key('dock-native-attempt-v1'),{version:1,status:'CONSUMED'});
