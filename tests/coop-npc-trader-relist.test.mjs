@@ -65,6 +65,15 @@ function fixture({ stock = [{ itemID: ITEM, typeID: TYPE, quantity: QTY }],
           type_id: TYPE, quantity: qty, price: reservedPrice.get(params.operation_id), bid: false, is_corp: true,
           source: "coop-npc", vol_remaining: qty, state: "open" };
       }
+      if (method === "RepriceNpcSellOrder") {
+        const orderID = String(params.order_id);
+        const escrow = escrows.get(orderID);
+        if (!escrow) throw new Error("no escrow " + orderID);
+        return { order_id: orderID, operation_id: params.operation_id,
+          source_item_id: String(escrow.sourceItemID), owner_id: CORP, station_id: HUB,
+          type_id: TYPE, quantity: qty, price: params.price, bid: false, is_corp: true,
+          source: "coop-npc", vol_remaining: qty, state: "open" };
+      }
       throw new Error("unexpected " + method);
     },
     gameStore,
@@ -187,4 +196,38 @@ test("an item whose cost is above the competitive price is not listed at all", a
   assert.equal(result.listed[0].reason, "TRADER_RELIST_BELOW_COST");
   assert.equal(f.calls.filter((call) => call.method === "ReserveNpcSellOrder").length, 0,
     "nothing is put on the book");
+});
+
+test("an order already on the book can be repriced, and its escrow follows", async () => {
+  // 2026-11-06: the 22 modules were listed at 140 % of the market and nothing could change that price,
+  // so they could never sell. Repricing touches the advertised price only - never the escrow or item.
+  process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS = "1";
+  process.env.EVEJS_COOP_TRADER_RELIST = "1";
+  const f = fixture({ referenceCents: 9_943_000_000 });
+  const listed = await f.relist.tick({ corporationID: CORP, stationID: HUB });
+  assert.equal(listed.status, "TRADER_RELISTED");
+  const orderID = listed.listed[0].orderID;
+  const operationID = f.calls.find((row) => row.method === "ReserveNpcSellOrder").params.operation_id;
+  const repriced = await f.relist.repriceOnce({ operationID, ownerID: CORP, stationID: HUB,
+    itemID: ITEM, typeID: TYPE, quantity: QTY, orderID, priceCents: 9_843_570_000 });
+  assert.equal(repriced.status, "TRADER_REPRICED");
+  assert.equal(repriced.priceCents, 9_843_570_000);
+  const call = f.calls.find((row) => row.method === "RepriceNpcSellOrder");
+  assert.equal(Math.round(call.params.price * 100), 9_843_570_000);
+  assert.equal(f.escrows.get(String(orderID)).coopTradePriceCents, 9_843_570_000,
+    "the escrow records the price it is really listed at");
+});
+
+test("a repriced order must still be the corporation's own escrowed stack", async () => {
+  process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS = "1";
+  process.env.EVEJS_COOP_TRADER_RELIST = "1";
+  const f = fixture({ referenceCents: 9_943_000_000 });
+  const listed = await f.relist.tick({ corporationID: CORP, stationID: HUB });
+  const orderID = listed.listed[0].orderID;
+  const operationID = f.calls.find((row) => row.method === "ReserveNpcSellOrder").params.operation_id;
+  f.escrows.get(String(orderID)).coopSource = "NATIVE_INDUSTRY";
+  const repriced = await f.relist.repriceOnce({ operationID, ownerID: CORP, stationID: HUB,
+    itemID: ITEM, typeID: TYPE, quantity: QTY, orderID, priceCents: 1_000 });
+  assert.equal(repriced.status, "BLOCKED");
+  assert.equal(repriced.error, "TRADER_RELIST_ESCROW_UNVERIFIED");
 });

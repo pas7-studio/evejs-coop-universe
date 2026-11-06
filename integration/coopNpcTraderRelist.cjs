@@ -168,6 +168,38 @@ function createTraderRelist({
     }
   }
 
+  // An order already on the book keeps its price forever unless something can change it:
+  // reserve/activate cannot, and that is why the 22 modules listed at 140 % of the market could not be
+  // made competitive. Repricing changes the advertised price ONLY - the escrow row, its source item
+  // and the operation id stay exactly as they were, and the escrow's recorded trade price follows.
+  async function repriceOnce(x = {}) {
+    if (!flag()) return { status: "BLOCKED", error: "TRADER_RELIST_DISABLED" };
+    if (!checkRequest(x)) return { status: "BLOCKED", error: "TRADER_RELIST_IDENTITY_UNVERIFIED" };
+    if (!good(x.orderID)) return { status: "BLOCKED", error: "TRADER_RELIST_ORDER_INVALID" };
+    if (!Number.isSafeInteger(x.priceCents) || x.priceCents < 1)
+      return { status: "BLOCKED", error: "TRADER_RELIST_PRICE_INVALID" };
+    const price = x.priceCents / 100;
+    if (!Number.isFinite(price) || price <= 0 || price > 1000000000)
+      return { status: "BLOCKED", error: "TRADER_RELIST_PRICE_OUT_OF_RANGE" };
+    const escrow = getNativeEscrow(x.orderID);
+    if (!escrow || escrow.coopOperationID !== x.operationID ||
+        escrow.coopSource !== "NATIVE_TRADE" || escrow.sourceItemID !== x.itemID ||
+        escrow.ownerId !== x.ownerID || escrow.remainingQuantity !== x.quantity)
+      return { status: "BLOCKED", error: "TRADER_RELIST_ESCROW_UNVERIFIED" };
+    const updated = await call("RepriceNpcSellOrder", {
+      operation_id: x.operationID, order_id: String(x.orderID), price });
+    if (!sameOrder(updated, x, price, "open"))
+      return { status: "BLOCKED", error: "TRADER_RELIST_REPRICE_NOT_VERIFIED" };
+    gameStore.coopAtomicNativeRows.transact(["marketEscrow"], (tx) => {
+      const row = tx.get("marketEscrow", String(x.orderID));
+      if (!row || row.coopOperationID !== x.operationID || row.sourceItemID !== x.itemID)
+        throw Error("TRADER_RELIST_REPRICE_ESCROW_CONFLICT");
+      tx.put("marketEscrow", String(x.orderID), { ...row, coopTradePriceCents: x.priceCents,
+        updatedAt: new Date(clock()).toISOString() });
+    });
+    return { status: "TRADER_REPRICED", orderID: x.orderID, priceCents: x.priceCents };
+  }
+
   async function tick({ corporationID, stationID } = {}) {
     if (!flag()) return { status: "DISABLED", listed: [] };
     if (!good(corporationID) || !good(stationID))
@@ -235,7 +267,8 @@ function createTraderRelist({
     return summary;
   }
 
-  return Object.freeze({ tick, listOnce, operationFor, mode: "NATIVE_TRADE_RELIST" });
+  return Object.freeze({ tick, listOnce, repriceOnce, operationFor,
+    mode: "NATIVE_TRADE_RELIST" });
 }
 
 module.exports = { createTraderRelist, ESCROW_BASE, operationFor };
