@@ -324,6 +324,18 @@ the image from 19:14 (the owner was in game). One restart activates: stargate in
 raw read, movement-debug early return, unsorted peek enumerations, narrowed universe plan, crimewatch
 require hoist.
 
+**A seventh perf fix: static type attributes are normalised once, not per ship evaluation**
+(fork `014021c`, 2026-11-06 20:45). The heap sampler charged 113 MB/min to
+`liveFittingState.readShipBaseAttributeMap` and part of 147 MB/min to `buildShipResourceState`:
+both re-ran `Object.entries -> map -> filter -> Object.fromEntries` over static type tables on every
+call. The normalisation now lives in `services/fitting/numericAttributePairs.js` (pairs cached per
+type, a fresh object built per call because callers extend it; an empty answer is not cached so a
+type whose table loads later still answers; cache bounded).
+
+Seven fixes now wait for ONE server restart (the container still runs the 19:14 image): stargate
+index, entityIndexFor raw read, movement-debug early return, unsorted peek enumerations, narrowed
+universe plan, crimewatch require hoist, per-type attribute cache.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
