@@ -69,3 +69,15 @@ the native checkout is inaccessible in this environment. Native WORK
 start, restart/SIGKILL, player + NPC race, salaries, combat, docking,
 crash reconciliation and two-client gameplay E2E are NOT RUN.
 No PLAY or main merge is authorized.
+
+## PF91 erratum — real characters row layout
+
+PF87 originally checked a synthetic single
+`tx.get('characters','characters')` record for active player ships.
+That is **not** the real original characterState SQLite layout.
+PF91 replaces it with a fail-closed scan of real canonical
+`characters/<characterID>` records within the same transaction,
+and changes the strict PF87 fixture to match the original source.
+The original per-character owner hook and WORK gameplay are still
+not installed/tested. Refer to
+`scripts/pf91/PF91_ORIGINAL_CHARACTER_ROWS_AND_ATOMIC_PLAYER_SWITCH.md`.
