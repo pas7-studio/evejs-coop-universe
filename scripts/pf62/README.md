@@ -17,13 +17,13 @@ that must be applied manually:
   and refuses mismatched source.
 - Composes PF-58 then PF-59 then PF-66 into **one** `nativeNpcService.js`, and PF-59
   then PF-61 into **one** `nativeNpcStore.js`.
-- Stages **19** distinct PF-52–78 `.js` modules in the native `space/`
+- Stages **18** distinct PF-52–78 `.js` modules in the native `space/`
   directory structure without changing original wallet, ItemStore or GameStore.
   The most recent PF-58 implementation of `OriginalDeployment` is chosen.
 - Rewrites archive-relative `.cjs` imports to genuine local `.js` imports,
   including the PF-61 → PF-60 dependency. Refuses missing sibling modules.
 - Writes **one complete Git review diff containing BOTH original stock changes AND
-  all 19 newly added modules** (21 file paths total), full staged files and an
+  all 18 newly added modules** (20 file paths total), full staged files and an
   SHA256 manifest in a separate **empty output directory**. Rejects a pre-existing
   module path rather than silently overwriting it.
 - Before creating output, runs `git apply --check` against the real native
@@ -116,7 +116,7 @@ separate, source-pinned, durable-once docking bridge: original stock ItemStore
 station dock + an original nativeNpcService capability-bound scene detach,
 without touching native persisted entity/controller rows (PF61 later removes
 those under its separate one-shot custody). The PF62 composer now stages the
-PF66 module and source patch **in one 19-file review-only bundle**. A new
+PF66 module and source patch **in one historical 19-file review-only bundle**. A new
 four-way composition test checks exact PF58/PF59/PF61/PF66 anchors.
 
 Isolated PF66 evidence: 27/27 Node PASS (including 2 Linux SIGKILL plus eight
