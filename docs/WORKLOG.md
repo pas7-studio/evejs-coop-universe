@@ -3744,3 +3744,8 @@ Evidence: fork e9... ; maker records own coop-npc asks and skips player asks not
 Why: the owner saw the Caldari militia as lost again while the enlistment row was ACTIVE: the login SessionChange filters to a stock key list that never contained warfactionid, which is the only field the client reads for CurrentlyInSameFaction; GetSolarSystemLPs was also unhandled and returned null into the LP donation path
 Where: tests/coop-facwar-mgr-answers.test.mjs, tests/coop-militia-session-truth.test.mjs
 Evidence: live log 18:26:58 SessionChange 17 keys, no warfactionid; militia_state ACTIVE 500001; GetCorpFactionalWarStatus -> facwarCorporationActive; fork 7ec6b7c; 17 tests pass; AUDIT_OK
+### 2026-11-06T19:41Z · 551c426 · L1 · test(perf): pin the three world-tick wastes the live profile found
+
+Why: a live V8 profile of the play stack showed the scheduler paying a full static-entity walk per call (2.14 s per 120 s), a 45.7 ms full-table deep clone per per-entity index rebuild, and a 20-field JSON built for every movement event with debug off
+Where: tests/coop-hot-path-waste.test.mjs, tests/coop-scene-stargate-index.test.mjs
+Evidence: in-process timings via inspector: getSceneActivityState 0.0079 ms/call of which stargates 0.0079 ms; listNativeModulesForEntity cold 45.7 ms for 0 rows; profile 165 ms/120 s in logMovementDebug with verbose off; fork ea8eaec; 12 tests pass; AUDIT_OK
