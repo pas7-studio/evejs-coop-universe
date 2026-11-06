@@ -1,0 +1,108 @@
+name: Personal Fleet native WORK source integration
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/pf-native-work-review.yml'
+      - 'scripts/pf*/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pf-native-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  exact-native-worktree:
+    name: 19-file source-pinned native WORK gate (no deploy)
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'docs/personal-fleet-contract-freeze-v1-4-20261104'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVEJS_COOP_PERSONAL_FLEET_NATIVE_SHIP_ADOPTION: '0'
+      EVEJS_COOP_PERSONAL_FLEET_DOCK_SCENE_DETACH: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout exact orchestration PR branch (without credentials)
+        uses: actions/checkout@v4
+        with:
+          ref: docs/personal-fleet-contract-freeze-v1-4-20261104
+          persist-credentials: false
+
+      - name: Reject stale or unexpected PR head
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git branch --show-current)" = 'docs/personal-fleet-contract-freeze-v1-4-20261104'
+
+      - name: Use native Node 22 and Python 3.13
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Fetch real public EveJS original, no credentials or changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet --single-branch --branch coop/pas7std \
+            https://github.com/pas7-studio/EveJS.git "$RUNNER_TEMP/pf74-original-evejs"
+          test "$(git -C "$RUNNER_TEMP/pf74-original-evejs" branch --show-current)" = 'coop/pas7std'
+          test -z "$(git -C "$RUNNER_TEMP/pf74-original-evejs" status --porcelain)"
+
+      - name: Native source-pinned bundle and isolated WORK apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/pf62/prepare_native_worktree.py \
+            --engine "$RUNNER_TEMP/pf74-original-evejs" \
+            --repo "$GITHUB_WORKSPACE" \
+            --review "$RUNNER_TEMP/pf74-native-review" \
+            --worktree "$RUNNER_TEMP/pf74-native-work" \
+            --branch work/pf-native-ci \
+            --apply \
+            --confirm-work-only WORK-NOT-PLAY
+          test -z "$(git -C "$RUNNER_TEMP/pf74-original-evejs" status --porcelain)"
+          git -C "$RUNNER_TEMP/pf74-native-work" diff --check
+          node --check "$RUNNER_TEMP/pf74-native-work/Code/server/src/space/npc/nativeNpcService.js"
+          node --check "$RUNNER_TEMP/pf74-native-work/Code/server/src/space/npc/nativeNpcStore.js"
+          test "$(python3 -c 'import json,os; p=os.path.join(os.environ["RUNNER_TEMP"],"pf74-native-review","PF62-MANIFEST.json");m=json.load(open(p));print(len(m["files"])-1)')" = 19
+
+      - name: PF58 original handoff and PF69-PF73 cross-contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/pf58/tests -p 'test_*.py' -v
+          node --test --test-concurrency=1 scripts/pf58/tests/*.test.cjs
+
+      - name: PF59-PF62 and PF66 native source integration regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for id in 59 61 62 66; do
+            python3 -m unittest discover -s "scripts/pf${id}/tests" -p 'test_*.py' -v
+          done
+          node --test --test-concurrency=1 \
+            scripts/pf59/tests/pf59-removal.test.cjs \
+            scripts/pf60/tests/pf60-terminal.test.cjs \
+            scripts/pf61/tests/pf61-scoped-cleanup.test.cjs \
+            scripts/pf66/tests/pf66-dock.test.cjs \
+            scripts/pf66/tests/pf66-native-service.test.cjs \
+            scripts/pf66/tests/pf66-sigkill.test.cjs
+
+      - name: Upload read-only native review receipt and exact patch
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pf74-native-work-review
+          path: |
+            ${{ runner.temp }}/pf74-native-review/PF62-MANIFEST.json
+            ${{ runner.temp }}/pf74-native-review/PF62-NATIVE-REVIEW.patch
+          if-no-files-found: ignore
+          retention-days: 7
