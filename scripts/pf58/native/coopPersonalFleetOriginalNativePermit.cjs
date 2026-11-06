@@ -154,7 +154,8 @@ function createPermitVerifier({gameStore,enabled=()=>false,allWritersFenced=()=>
  * This can only attest the database; live in-memory sessions additionally
  * need original native owner hooks (NOT installed by this archive).
  */
-function inspectOriginalCharacterShipRows(tx,{ownerCharacterID,shipItemID}={}){
+function inspectOriginalCharacterShipRows(tx,{ownerCharacterID,shipItemID,
+ allowOwnerAlreadyActive=false}={}){
  const reject=reason=>Object.freeze({status:'BLOCKED',reason,verified:false});
  if(!pos(ownerCharacterID)||!pos(shipItemID)||
     typeof tx?.get!=='function'||typeof tx?.scan!=='function')
@@ -174,12 +175,21 @@ function inspectOriginalCharacterShipRows(tx,{ownerCharacterID,shipItemID}={}){
     return reject('PF91_ORIGINAL_CHARACTER_ROW_INVALID');
    seen.add(key);
    if(key===String(ownerCharacterID))ownerRecord=record;
-   for(const active of [record.shipID,record.shipid,record.activeShipID]){
-    if(active===shipItemID||
-       (typeof active==='string'&&/^[1-9][0-9]*$/.test(active)&&
-        Number(active)===shipItemID))
-     return reject('PF91_ORIGINAL_SHIP_ACTIVE_FOR_CHARACTER');
+   const aliases=[record.shipID,record.shipid,record.activeShipID];
+   const activeIDs=new Set();
+   for(const active of aliases){
+    if(active===undefined||active===null||active===0)continue;
+    const id=typeof active==='string'&&/^[1-9][0-9]*$/.test(active)?
+      Number(active):active;
+    if(!pos(id))
+     return reject('PF92_ORIGINAL_ACTIVE_SHIP_ALIAS_INVALID');
+    activeIDs.add(id);
    }
+   if(activeIDs.size>1)
+    return reject('PF92_ORIGINAL_ACTIVE_SHIP_ALIASES_CONFLICT');
+   if(activeIDs.has(shipItemID)&&
+      !(allowOwnerAlreadyActive===true&&key===String(ownerCharacterID)))
+    return reject('PF91_ORIGINAL_SHIP_ACTIVE_FOR_CHARACTER');
   }
   if(!ownerRecord)
    return reject('PF91_ORIGINAL_CHARACTER_OWNER_MISSING');
