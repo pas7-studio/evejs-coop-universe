@@ -602,11 +602,15 @@ function createOriginalCharacterRecordWriteBarrier({pf52,
     });
     const items=tx.get('items','items');
     if(!obj(items))return fail('PF92_ORIGINAL_ITEMS_UNAVAILABLE');
-    if(verifyOriginalSessionLease(witness,reader)!==true)
-     return fail('PF92_CHARACTER_SESSION_LEASE_REQUIRED');
+    const firstLease=verifyOriginalSessionLease(witness,reader);
+    // Callback closures can capture the outer tx despite receiving a
+    // read-only view. A failed witness after any direct put must THROW
+    // to roll back the transaction rather than return a BLOCKED result.
     if(!isDeepStrictEqual(tx.get('items','items'),items)||
        !isDeepStrictEqual(tx.get('characters',String(characterID)),before))
      throw Error('PF92_SESSION_WITNESS_MODIFIED_AUTHORITY_ROLLBACK');
+    if(firstLease!==true)
+     return fail('PF92_CHARACTER_SESSION_LEASE_REQUIRED');
     const touched=[...new Set([prior.id,next.id].filter(pos))]
      .sort((a,b)=>a-b);
     for(const id of touched){
@@ -638,10 +642,17 @@ function createOriginalCharacterRecordWriteBarrier({pf52,
       allowOwnerAlreadyActive:true});
      if(scan.verified!==true)return fail(scan.reason);
     }
-    if(verifyOriginalSessionLease(witness,reader)!==true)
+    const finalLease=verifyOriginalSessionLease(witness,reader);
+    if(!isDeepStrictEqual(tx.get('items','items'),items)||
+       !isDeepStrictEqual(tx.get('characters',String(characterID)),before))
+     throw Error('PF92_ORIGINAL_OWNER_CHANGED_BY_SESSION_WITNESS_ROLLBACK');
+    for(const id of touched){
+     const recustody=fence.inTransaction({tx,writer:'PLAYER',shipItemID:id});
+     if(recustody.mayCommit!==true)
+      return fail(recustody.reason);
+    }
+    if(finalLease!==true)
      return fail('PF92_CHARACTER_SESSION_LEASE_REVOKED');
-    if(!isDeepStrictEqual(tx.get('items','items'),items))
-     throw Error('PF92_ORIGINAL_ITEMS_CHANGED_BY_SESSION_WITNESS_ROLLBACK');
    }
    // Even purely economic/skill writes cannot silently overwrite a newer
    // player ship selection based on an obsolete detached character record.
