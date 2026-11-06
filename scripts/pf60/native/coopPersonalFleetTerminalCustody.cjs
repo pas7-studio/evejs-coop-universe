@@ -246,7 +246,9 @@ function createTerminalCustody({gameStore,pf52,claimsPolicy,authenticateCommand,
    // Atomic original GameStore lock release plus durable tombstone. The
    // consumed per-assignment PF58 permit stays immutable to forbid stale
    // restart/redispatch. No ItemStore or wallet writes happen here.
-   tx.put(T,LOCK+c.shipItemID,null);
+   // The original coopAtomicNativeRows serializer forbids null in tx.put.
+   // Deleting this row is the only native-compatible lock release.
+   tx.del(T,LOCK+c.shipItemID);
    tx.put(T,terminalShipKey(c.shipItemID),{...tomb,phase:'FINALIZED',mode:c.mode,
     generation:c.generation,actorGeneration:c.actorGeneration,finalizedAtMs:at});
    tx.put(T,terminalKey(c.assignmentID),{...row,phase:'FINALIZED',finalizedAtMs:at});
