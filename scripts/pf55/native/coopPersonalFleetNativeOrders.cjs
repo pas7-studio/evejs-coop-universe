@@ -125,8 +125,9 @@ function createPersonalFleetNativeOrders({gameStore,pf52,access,
   typeof pf52.validateIndex!=='function'||typeof pf52.validateRoster!=='function'||
   typeof pf52.REGISTRY_KEY!=='string'||typeof pf52.ROSTER_PREFIX!=='string'||
   typeof access?.isOwner!=='function'||typeof nativeExecutor?.supports!=='function'||
+  !(typeof nativeExecutor==='function'||typeof nativeExecutor?.execute==='function')||
   [verifyExclusiveOwnership,verifyNativeActor,verifyTarget,verifyOriginalControl,
-   nativeExecutor,verifyPersistedNativeOrder,allWritersFenced,enabled,clock]
+   verifyPersistedNativeOrder,allWritersFenced,enabled,clock]
    .some(x=>typeof x!=='function'))throw Error('PF55_AUTHORITIES_REQUIRED');
  function preflight(c){
   if(enabled()!==true)return {status:'DISABLED'};
@@ -182,7 +183,12 @@ function createPersonalFleetNativeOrders({gameStore,pf52,access,
   // Durable ISSUING before the first original native effect. A crash or an
   // unknown native outcome MUST NOT cause redispatch.
   try{
-   const native=nativeExecutor(Object.freeze({...admission.row}));
+   // Production native PF55 adapter returns { execute, probe, supports }.
+   // The legacy callable + supports shape remains accepted for existing
+   // on-disk reference fixtures, but is never assumed for the real adapter.
+   const frozen=Object.freeze({...admission.row});
+   const native=typeof nativeExecutor==='function'
+    ? nativeExecutor(frozen) : nativeExecutor.execute(frozen);
    if(native&&typeof native.then==='function')return {status:'NEEDS_RECONCILIATION',
     reason:'PF55_ASYNC_NATIVE_ORDER_FORBIDDEN',operationID:c.operationID};
    return {status:'NEEDS_RECONCILIATION',operationID:c.operationID,
