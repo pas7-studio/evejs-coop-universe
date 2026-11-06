@@ -3794,3 +3794,8 @@ Evidence: lag record now carries the last world cycle (sequence, durationMs, slo
 Why: lags of 1.6-3.8 s could not be attributed: the world cycle is 226-1871 ms and the record only carried heap size, never a GC duration
 Where: integration/coopMemoryMetrics.cjs, tests/coop-gc-watch.test.mjs
 Evidence: coopGcWatch via node:perf_hooks gc entries; coop-event-loop-lag now carries gc{last,worst,count}; 4 tests; AUDIT_OK
+### 2026-11-06T20:55Z · 6ec3d71 · L1 · test(world): pin the monotonic lag clock
+
+Why: the event-loop monitor, the only witness to the owner's freezes, measured lateness on a wall clock that was measured stepping backwards by 2277 ms in one 20 s window
+Where: integration/coopEventLoopMonitor.cjs, tests/coop-event-loop-monotonic.test.mjs
+Evidence: in-process clock probe: wall 18466 ms vs monotonic 20743 ms; 5 s windows within 0.6 ms; fork f64fed0; lag math on performance.now(); 3 tests; AUDIT_OK
