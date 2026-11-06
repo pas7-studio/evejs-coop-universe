@@ -80,6 +80,8 @@ function pf58OriginalNativePairValid(entityRecord, controllerRecord) {
       typeof entityRecord.personalFleetPilotID !== "string" ||
       !entityRecord.personalFleetPilotID ||
       entityRecord.personalFleetPilotID !== controllerRecord.personalFleetPilotID ||
+      entityRecord.selectionKind !== "PERSONAL_FLEET" ||
+      controllerRecord.selectionKind !== "PERSONAL_FLEET" ||
       entityRecord.selectionID !== entityRecord.personalFleetAssignmentID ||
       controllerRecord.selectionID !== entityRecord.personalFleetAssignmentID ||
       !entityRecord.profileID || !entityRecord.loadoutID ||
