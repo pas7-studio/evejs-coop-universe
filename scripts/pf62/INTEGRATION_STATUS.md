@@ -38,3 +38,18 @@ unreviewed direct stock-code rewriting is authorized.
 - 27/27 isolated PF66 Node and 6/6 Python PASS. The newly updated PF62 Python
   composition suite is **not rerun** against the complete 20-file original
   source, and real WORK E2E remains NOT RUN. No feature flags enabled.
+
+## PF-79/PF-80 corrected complete native review (current PR head)
+
+- PF79 removed a duplicate PF56 return executor entry. The actual PF62 builder
+  inventory now has **18 unique modules + 2 original stock files = 20 paths**,
+  and fails closed on duplicate sources or flattened import errors.
+- PF80 assembles **both** source-pinned patches in a single isolated Git WORK:
+  PF62 (20 paths) and PF55 original order arbiter/bridge (2) = **22 paths**.
+  The original native checkout stays clean; no server is started or deployed.
+- PF80's synthetic Git acceptance verified preflight, explicit WORK opt-in,
+  two git apply operations, exact 22-path Git status, PF77 invocation, and
+  original checkout safety. Full native WORK source/CI and gameplay E2E are
+  **NOT RUN**; no claim of playable Personal Fleet is made.
+- Run Prepare-PF80-CompleteNativeWork.ps1 and inspect
+  PF80-COMPLETE-WORK-REVIEW.json before any real integration review.
