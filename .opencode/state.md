@@ -404,6 +404,24 @@ Important: the whole 46-phase cycle is only 200-350 ms, while the reported lags 
 the phases alone do not explain the stalls - the remainder is outside them (GC, store flush, socket
 work). That is exactly what the armed stall recorder is for.
 
+**Every lag is now self-explanatory: world cycle + GC pause, in the event itself** (fork `5a64c73`,
+`b5458ad`, deployed 2026-11-06 20:44). `coop-event-loop-lag` carries `worldCycle` (sequence,
+durationMs, slowPhases) and `gc{last,worst,count}` from `space/coopGcWatch.js` (node:perf_hooks gc
+entries). Live readings, which settle three hypotheses at once:
+
+* a 6 658 ms lag right after boot had a **1 857 ms first cycle** and a **64.7 ms worst GC** - so neither
+  the phases nor GC explain it; that one is boot work (`native-faction-war-opening` 930 ms +
+  `native-market-schedule` 534 ms are the first-cycle half of it);
+* steady state: lags 676-779 ms with cycles 231-323 ms and GC 65-170 ms - GC is real but is not the
+  multi-second stall, and the phases are not either;
+* the first world cycle after boot is consistently ~1.8-1.9 s; later cycles are 200-350 ms.
+
+**First stall the recorder caught:** 252 ms stuck in `coopNativeGateTransfer` (the NPC cross-system
+transfer) and returning inside `fsync`. Measured fsync on the data volume directly: **p50 2.1 ms, max
+3.6 ms** - so the disk is fine and the cost is the transfer's own synchronous work (4 journal saves
+with fsync each, dematerialize/materialize commits, two JSON signature passes). That transfer is a rare
+per-jump event, so it is a visible but bounded 250 ms block.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
