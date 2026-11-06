@@ -65,6 +65,36 @@ if ($ApplyToWork.IsPresent) {
     if (-not (Test-Path -LiteralPath $pf89Test -PathType Leaf)) { throw 'PF89_ORIGINAL_ITEMS_DELTA_TEST_MISSING' }
     & $node --test --test-concurrency=1 $pf89Test
     if ($LASTEXITCODE -ne 0) { throw 'PF89_ACTUAL_ITEMS_DELTA_GATE_FAILED' }
+    $pf90Owner = Join-Path $repo 'scripts/pf58/tests/pf90-owner-snapshot.test.cjs'
+    $pf90Sources = Join-Path $repo 'scripts/pf90/tests/pf90-original-owners.test.cjs'
+    $pf90Audit = Join-Path $repo 'scripts/pf90/inspect-original-owner-writes.cjs'
+    foreach ($required in @($pf90Owner, $pf90Sources, $pf90Audit)) {
+      if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw 'PF90_ORIGINAL_OWNER_SOURCE_GATE_MISSING'
+      }
+    }
+    $oldPf90NativeRoot = [Environment]::GetEnvironmentVariable('PF90_NATIVE_WORKTREE', 'Process')
+    try {
+      $env:PF90_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf90Owner $pf90Sources
+      if ($LASTEXITCODE -ne 0) { throw 'PF90_ORIGINAL_OWNER_SOURCE_REGRESSION_FAILED' }
+      $ownerReportText = & $node $pf90Audit --fork-root $env:PF90_NATIVE_WORKTREE
+      $ownerAuditExit = $LASTEXITCODE
+      if ($ownerAuditExit -ne 2) { throw 'PF90_OWNER_AUDIT_EXIT_CONTRACT_FAILED' }
+      try { $ownerReport = ($ownerReportText | Out-String | ConvertFrom-Json) }
+      catch { throw 'PF90_ORIGINAL_OWNER_AUDIT_UNPARSABLE' }
+      if ($ownerReport.status -cne 'BLOCKED_FOR_ACTIVATION' -or
+          $ownerReport.releaseAuthority -ne $false -or
+          @($ownerReport.ownerPaths).Count -ne 5 -or
+          @($ownerReport.ownerPaths | Where-Object { $_.status -cne 'OWNER_HOOK_ABSENT' }).Count -ne 0 -or
+          $ownerReport.originalRisks.inventoryReadsSharedCache -ne $true -or
+          $ownerReport.originalRisks.characterShipTitleOutsidePFAtomic -ne $true) {
+        throw 'PF90_ORIGINAL_OWNER_INTEGRATION_REVIEW_REQUIRED'
+      }
+      Write-Warning 'PF90: unchanged original ItemStore/characterState owners still lack reciprocal atomic hooks. WORK staging is review-only, feature OFF.'
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF90_NATIVE_WORKTREE', $oldPf90NativeRoot, 'Process')
+    }
     $pf86Source = Join-Path $repo 'scripts/pf58/tests/pf86-original-source-pins.test.cjs'
     if (-not (Test-Path -LiteralPath $pf86Source -PathType Leaf)) { throw 'PF86_ORIGINAL_SOURCE_PINS_MISSING' }
     $oldPf86SourceRoot = [Environment]::GetEnvironmentVariable('PF86_NATIVE_WORKTREE', 'Process')
