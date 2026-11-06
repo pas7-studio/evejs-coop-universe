@@ -102,3 +102,12 @@ test('legacy function executor supported only when it has explicit supports()',(
   assert.equal(count,1);
   assert.throws(()=>make(()=>({success:true})),/PF55_AUTHORITIES_REQUIRED/);
  }));
+
+test('actual PF55 runtime object cannot override an already durable docking intent',()=>
+ withNative('ATTACK',({f,c,orders,calls,bridges})=>{
+  f.put('corporationRuntime','coop-personal-fleet\u001freturn-dock-v1:'+F.ASSIGNMENT,
+   {version:1,phase:'DOCK_ISSUING'});
+  assert.equal(orders.issue(c).reason,'PF55_RETURN_DOCK_OR_TERMINAL_PENDING');
+  assert.equal(f.get('corporationRuntime',F.pf55.key(F.SHIP)),null);
+  assert.equal(calls.length,0);assert.equal(bridges.length,0);
+ }));
