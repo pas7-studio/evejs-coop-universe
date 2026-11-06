@@ -110,3 +110,34 @@ test('PF78 Return denies foreign runtime actor or controller before order bridge
   assert.equal(read(row),null,field);
  }
 });
+
+test('PF83 Return uses current canonical station coordinates after arbiter admission',()=>{
+ const f=fixture();
+ f.deps.orderBridge.issue=opts=>{f.calls.push(opts);
+   f.station.position.x=8000;return opts.execute();};
+ const ex=createOriginalReturnExecutor(f.deps);
+ assert.equal(ex.execute(row).success,true);
+ assert.equal(f.calls[0].owner,'PERSONAL_FLEET');
+ assert.deepEqual(f.calls[1][1],{x:8950,y:0,z:0});
+ assert.equal(f.calls[1][0],row.shipItemID);
+});
+
+test('PF83 Return denies overflowed physics coordinates without native warp',()=>{
+ const f=fixture();
+ f.station.position.x=Number.MAX_VALUE;
+ f.station.radius=Number.MAX_VALUE;
+ const r=createOriginalReturnExecutor(f.deps).execute(row);
+ assert.equal(r.success,false);
+ assert.equal(r.errorMsg,'PF83_NATIVE_RETURN_DESTINATION_INVALID');
+ assert.equal(f.calls.length,1,'only the bridge was called');
+});
+
+test('PF83 Return rechecks canonical station identity inside arbiter callback',()=>{
+ const f=fixture();
+ f.deps.orderBridge.issue=opts=>{
+   f.station.stationID=row.stationID+1;return opts.execute();};
+ const r=createOriginalReturnExecutor(f.deps).execute(row);
+ assert.equal(r.success,false);
+ assert.equal(r.errorMsg,'PF56_NATIVE_SOURCE_CHANGED');
+ assert.equal(f.calls.length,0);
+});
