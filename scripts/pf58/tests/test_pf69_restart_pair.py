@@ -31,6 +31,8 @@ function applyNativeRuntimeNpcPresentation(entity,entityRecord) {
 }
 function materializeNativeRuntimeEntity(scene, entityRecord, controllerRecord, definition, options = {}) {
   const runtimeKind = String(controllerRecord && controllerRecord.runtimeKind || "nativeAmbient").trim() || "nativeAmbient";
+  const existingEntity = scene.getEntityByID(entityRecord.entityID);
+  if (existingEntity) { return {success:true,data:{entityRecord,controllerRecord,runtimeKind}}; }
   return {success:true,data:{entityRecord,controllerRecord,runtimeKind}};
 }
 function materializeStoredNativeController(scene, entityID, options = {}) {
