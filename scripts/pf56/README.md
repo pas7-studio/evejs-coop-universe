@@ -53,3 +53,17 @@ receipt do **not** exist in this candidate. See `docs/ORIGINAL_DOCKING_GATES.md`
 
 GitHub write into `pas7-studio/EveJS` previously returned 403; do not merge or
 claim feature active until original integration and WORK two-player E2E pass.
+
+## PF83-B combat-to-return transition (native one-shot)
+
+The stock `npcBehaviorLoop.issueManualOrder(ATTACK)` promotes an otherwise
+valid live PF controller to `nativeCombat`. Before PF56 sends a Return-to-Base
+warp in that state, its original native executor now requires a successful
+`npcRuntime.stop(ship,{allowSessionlessWarpAbort:false,issueStopOrder:true})`
+and a second scene/controller read verifying `manualOrder.type === 'stop'`
+and `currentTargetID === 0`. A STOP error or misleading success blocks warp.
+The durable PF56 return attempt is one-shot; no automatic retry is allowed.
+PF83's separate current-station-position read remains inside the native
+order-bridge callback. This is unit/ABI coverage, not actual game docking.
+Run `node --test scripts/pf56/tests/pf56-native-api.test.cjs` manually.
+Read `scripts/pf62/PF83_RETURN_SOURCE_AND_MANUAL_GATE.md` for evidence.
