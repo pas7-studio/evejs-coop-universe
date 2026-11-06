@@ -9,9 +9,15 @@ non-spoofed, crash-fenced Return-to-Base and sessionless docking protocol.
 ## Code
 
 - `native/coopPersonalFleetReturnDock.cjs` — original SQLite `corporationRuntime` + `items` single-flight RETURN_ISSUING/RETURNING/ARRIVAL_OBSERVED/DOCK_ISSUING/DOCKED and one-commit PF actor + roster + hangar release.
-- `native/coopPersonalFleetNativeReturnExecutor.cjs` — actual EveJS `npcRuntime.warpToPoint` API adapter routed through `PERSONAL_FLEET` order bridge; live native station observation gate. Neither invents a ship or spoofs a character session.
+- `native/coopPersonalFleetNativeReturnExecutor.cjs` — included in the PF78 source-pinned WORK bundle (previously omitted); actual EveJS `npcRuntime.warpToPoint` API adapter routed through `PERSONAL_FLEET` order bridge; live native station observation gate. Neither invents a ship or spoofs a character session.
 - `deps/*` — pinned reference dependencies solely for local tests. Never register these as original live server authorities.
 - `tests/*` — Node 22 `node:sqlite` tests with real `SIGKILL` child processes and a **synthetic native controller, ItemStore and station**. Native stock source and WORK E2E are **not** executed.
+
+PF78 now requires exact physical Personal Fleet actor and controller metadata
+for both return movement and station-arrival evidence, not merely an existing
+`itemID`. The shared `scripts/pf55/native/coopPersonalFleetNativeActorProof.cjs`
+rejects a foreign controller, reused player ship, incorrect assignment or
+session. Any claim in SQLite is still separately proven by the caller.
 
 ## Local source / SQLite regression
 
