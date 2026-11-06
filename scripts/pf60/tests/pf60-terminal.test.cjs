@@ -163,3 +163,12 @@ test('original owner mismatch in live native entity refuses cleanup even with co
  f.physical.entity.ownerID=987;
  assert.equal(f.create().prepare(f.c).reason,'PF60_NATIVE_IDENTITY_UNVERIFIED');
 }));
+test('missing operationID, assignmentID and malformed pilot are never coerced to valid tokens',()=>run(f=>{
+ const api=f.create();
+ for(const field of ['operationID','assignmentID','pilotID']){
+  const bad={...f.c};delete bad[field];
+  assert.equal(validCommand(bad),false,field);
+  assert.equal(api.prepare(bad).reason,'PF60_COMMAND_INVALID',field);
+ }
+ assert.equal(api.inspect({}).status,'BLOCKED');
+}));
