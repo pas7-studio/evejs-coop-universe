@@ -54,7 +54,7 @@ const corruptions=[
  ['controller.personalFleetAssignmentID','controller','personalFleetAssignmentID','foreign'],
  ['controller.personalFleetPilotID','controller','personalFleetPilotID','coop-pilot-999'],
  ['controller.personalFleetGeneration','controller','personalFleetGeneration',0],
- ['controller.runtimeKind','controller','runtimeKind','nativeCombat'],
+ ['controller.runtimeKind','controller','runtimeKind','foreignRuntime'],
 ];
 for(const [name,part,field,bad] of corruptions){
  test('PF78 refuses '+name,()=>{const f=fixture();f[part][field]=bad;
@@ -71,4 +71,12 @@ test('PF78 never writes to native caller objects',()=>{
  const f=fixture();const before=JSON.stringify(f);
  assert.equal(proof(f.row,f.entity,f.controller),true);
  assert.equal(JSON.stringify(f),before);
+});
+test('PF82 accepts independently authenticated LIVE nativeCombat controller after stock ATTACK',()=>{
+ const f=fixture();
+ f.controller.runtimeKind='nativeCombat';
+ f.controller.manualOrder={type:'attack',targetID:5001,allowWeapons:true};
+ assert.equal(proof(f.row,f.entity,f.controller),true);
+ // The persisted PF58 record is still required to remain nativeAmbient by
+ // PF69 stock pair validation; this is only a live scene controller witness.
 });
