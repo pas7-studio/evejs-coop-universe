@@ -28,9 +28,15 @@ function createCache({ listNativeEntities, listNativeCargo, ttlMs = DEFAULT_TTL_
   let flatCargo = [];
   let haulIndex = null;
   let cargoIDCounts = null;
-  const stats = { entityBuilds: 0, cargoBuilds: 0, entityHits: 0, entityMisses: 0, cargoHits: 0, cargoMisses: 0 };
+  const stats = { entityBuilds: 0, cargoBuilds: 0, entityHits: 0, entityMisses: 0, cargoHits: 0, cargoMisses: 0,
+    // How often a native write threw the whole window away. Measured 2026-11-06 while the owner was
+    // docked: 30 cargo rebuilds a minute, i.e. exactly the 2 s TTL, so idle cost is the TTL and not
+    // the writes. This counter is what tells the same story during combat, where the rebuild rate -
+    // not the TTL - decides whether a read cache is cheaper than no cache at all.
+    invalidations: 0 };
 
   function invalidate() {
+    stats.invalidations += 1;
     haulIndex = null;
     cargoIDCounts = null;
     entityIndex = null;
