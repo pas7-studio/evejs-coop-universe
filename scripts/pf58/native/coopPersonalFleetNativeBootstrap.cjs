@@ -8,7 +8,8 @@
  */
 const {createOriginalShipHandoff,validStockHangar}=require('./coopPersonalFleetOriginalShipHandoff.cjs');
 const {createNativeShipAdoption}=require('./coopPersonalFleetNativeShipAdoption.cjs');
-const {createPermitVerifier,createReciprocalWriterFence}=require('./coopPersonalFleetOriginalNativePermit.cjs');
+const {createPermitVerifier,createReciprocalWriterFence,
+ createOriginalPlayerShipActivation}=require('./coopPersonalFleetOriginalNativePermit.cjs');
 const bindings=require('./coopPersonalFleetNativeBindings.cjs');
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 // Session ship IDs may arrive from the original protocol as canonical strings.
@@ -135,6 +136,7 @@ function createNativeBootstrap({gameStore,pf52,originalItemStore,nativeNpcStore,
  originalStationUndockPoint,originalNoActiveSession,originalNoPhysicalActor,
  originalEquipmentWitness,originalOwnershipWitness,independentOriginalActorWitness,
  allWritersFenced=()=>false,enabled=()=>false,clock=()=>Date.now(),
+ verifyOriginalDockedPlayerSession=()=>false,
  atomicOriginalTransfer=false}={}){
  if(!originalItemStore||typeof originalItemStore.findItemById!=='function'||
   typeof originalItemStore.moveShipToSpace!=='function'||
@@ -146,6 +148,9 @@ function createNativeBootstrap({gameStore,pf52,originalItemStore,nativeNpcStore,
   throw Error('PF58_ORIGINAL_BOOTSTRAP_AUTHORITIES_REQUIRED');
  const verifier=createPermitVerifier({gameStore,enabled,allWritersFenced});
  const foreignWriterFence=createReciprocalWriterFence({pf52});
+ const stockPlayerShipActivation=createOriginalPlayerShipActivation({
+  gameStore,pf52,enabled,allWritersFenced,
+  verifyOriginalDockedPlayerSession});
  // First construct all side-effect-free adapters. A failure must never leave
  // bindings installed with only a subset of the required native authorities.
  const adoption=createNativeShipAdoption({nativeStore:nativeNpcStore,
@@ -224,7 +229,9 @@ function createNativeBootstrap({gameStore,pf52,originalItemStore,nativeNpcStore,
   mutateForeignOriginalItemsWithinTransaction:
    foreignWriterFence.mutateOriginalItemsInTransaction,
   commitStockOwnerSnapshotWithinTransaction:
-   foreignWriterFence.commitOriginalOwnerSnapshot});
+   foreignWriterFence.commitOriginalOwnerSnapshot,
+  activateStockPlayerShipWithinOriginalTransaction:
+   stockPlayerShipActivation.activate});
 }
 module.exports={createNativeBootstrap,createSourceBoundNativeBootstrap,
  createOriginalPresenceReaders,moveOriginalShipToSpaceAtomically};
