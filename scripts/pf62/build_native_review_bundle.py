@@ -93,8 +93,9 @@ def transform_original(original_service: str, original_store: str, patches):
       (service,'pf59.checkOriginalRemoval(',2),
       (store,'pf59.checkOriginalRemoval(',3),
       (store,'PF61_SCOPED_ORIGINAL_NATIVE_CLEANUP_V1:',1),
-      *((service,'PF66_SCOPED_DOCK_SCENE_DETACH_V1:',1),) if pf66 is not None else (),
     )
+    if pf66 is not None:
+        markers += ((service,'PF66_SCOPED_DOCK_SCENE_DETACH_V1:',1),)
     for source,needle,count in markers:
         if source.count(needle)!=count:
             raise ValueError(f'PF62_COMPOSED_SOURCE_MARKER_MISMATCH: {needle}')
