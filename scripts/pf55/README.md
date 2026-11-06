@@ -44,7 +44,8 @@ After ATTACK promotes a LIVE controller to nativeCombat, HOLD and RETURN
 remain possible through PF78 identity proof. Another FOLLOW fails closed
 until a separate safe combat-quiescence path is implemented. PF58 persisted
 restart-pair checks still require nativeAmbient.
-Original stock npcRuntime/npcBehaviorLoop source pins are checked in WORK.
+Original stock npcRuntime/npcBehaviorLoop source pins are checked in a manual
+WORK gate via Test-PF55-Local.ps1 -NativeWorktree; remote CI is prohibited.
 See `docs/PF82_FRIENDLY_FOLLOW_NATIVE.md`.
 
 ## PF78 physical actor authority before orders
