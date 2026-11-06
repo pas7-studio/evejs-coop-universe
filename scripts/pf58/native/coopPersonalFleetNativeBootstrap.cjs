@@ -11,6 +11,9 @@ const {createNativeShipAdoption}=require('./coopPersonalFleetNativeShipAdoption.
 const {createPermitVerifier}=require('./coopPersonalFleetOriginalNativePermit.cjs');
 const bindings=require('./coopPersonalFleetNativeBindings.cjs');
 const pos=x=>Number.isSafeInteger(x)&&x>0;
+// Session ship IDs may arrive from the original protocol as canonical strings.
+const sameID=(value,id)=>value===id||(typeof value==='string'&&
+ /^[1-9][0-9]*$/.test(value)&&Number(value)===id);
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 /**
  * PF86: read-only ORIGINAL registry/session/scene witnesses.
