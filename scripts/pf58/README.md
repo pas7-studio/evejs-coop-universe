@@ -134,3 +134,23 @@ always reports BLOCKED_FOR_ACTIVATION. See
 
 These changes are **not** a working native writer integration or gameplay
 acceptance. Personal Fleet OFF and Draft PR retained.
+
+## PF89 — actual original inventory delta enforcement
+
+PF88 allowed the caller to declare which stock item or ship would be
+modified. PF89 adds `mutateOriginalItemsInTransaction`, which computes
+the **actual** changed original item IDs from a complete before/after
+`items/items` snapshot inside a single native GameStore transaction.
+It checks old/new module and cargo ancestry, every touched ship's durable
+custody, untrusted builder/unknown changes, and only then performs one
+stock item row write. A false/Promise builder never authorizes a commit;
+attempted direct stock tx writes throw to force rollback.
+
+`createNativeBootstrap` now exposes
+`mutateForeignOriginalItemsWithinTransaction`, but **original EveJS
+ItemStore/characterState/Mining/WAR/Exploration hooks are not installed**.
+The refactor must live in the actual original engine fork and preserve its
+single-owner write, cache indexes, transient cargo and notifications.
+Full details and local tests:
+`scripts/pf89/PF89_ACTUAL_ORIGINAL_ITEMS_DELTA_GATE.md`.
+Feature OFF, PR Draft, no PLAY changes.
