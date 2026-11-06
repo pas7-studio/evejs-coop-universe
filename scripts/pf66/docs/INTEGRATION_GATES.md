@@ -21,3 +21,16 @@ stock fitting/charge writes, player active sessions, PF42 exclusions and
 cross-process fencing cannot be proven by the fixture. If a crash leaves stock
 ItemStore DOCKED but scene actor still present, operator intervention is required;
 automatic retries and arbitrary token deletion are prohibited.
+
+## PF-67 native scene single-use custody
+
+- PF66 original GameStore requires the prior PF56 `DOCK_ISSUING` and exact
+  dock token, original stock ItemStore already in hangar, no PF60 terminal.
+- Before any scene mutation, native service must synchronously invoke the
+  trusted `consumeSceneDetach(row)` authority. Only one SQLite transaction may
+  commit `dock-scene-attempt-v1`; absent/undefined/foreign/corrupt blocks.
+- The original native actor must be verified BEFORE consuming; after this
+  durable commit the exact same capability cannot retry even if an actor
+  reappears. No automatic recovery after crash or uncertain scene removal.
+- Original native WORK checkout+two clients remain NOT RUN; no environment
+  variable alone may activate these writers.
