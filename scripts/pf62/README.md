@@ -171,3 +171,15 @@ GameStore transaction. The manual PF80 preflight tests this API, but
 original EveJS writer hook installation, ItemStore owner refactoring
 and WORK gameplay remain blocked. Full PF89 contract:
 `scripts/pf89/PF89_ACTUAL_ORIGINAL_ITEMS_DELTA_GATE.md`.
+
+## PF90 original stock owner source gate (2026-11-07)
+
+PF80 PowerShell WORK staging now executes PF90 original owner snapshot
+regressions and a **read-only, source-pinned** hazard audit of original
+ItemStore, characterState, GameStore and table ownership. This audit
+returns `BLOCKED_FOR_ACTIVATION` (expected exit 2) even on the exact
+historical source. The preflight may continue staging a review-only
+WORK bundle with Personal Fleet OFF; it is *not* proof of original
+single-writer integration. Source drift or missing files block review
+pending independent re-attestation.
+See `scripts/pf90/PF90_ORIGINAL_STOCK_OWNERS.md`.

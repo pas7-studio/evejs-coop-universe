@@ -326,7 +326,55 @@ function createReciprocalWriterFence({pf52}={}){
    mayCommit:true,changedItemIDs:Object.freeze(changed),
    originalShipIDs:Object.freeze([...guardedShips].sort((a,b)=>a-b))});
  }
- return Object.freeze({inTransaction,mutateOriginalItemsInTransaction});
+ /**
+  * PF90: pure snapshot form of the original ItemStore owner write.
+  *
+  * The caller captures expectedBefore BEFORE preparing any mutation.
+  * It must never pass a previously-mutated shared GameStore cache as
+  * expectedBefore. The SAME SQLite tx compares that snapshot with durable
+  * original items and writes only the independently prepared nextItems.
+  *
+  * No untrusted builder callback is accepted from the original owner; that
+  * avoids PF89's callback closure capturing the transaction and writing
+  * other rows. The actual original owner still needs to invoke this API
+  * rather than a later asynchronous repo.write() — NOT INSTALLED YET.
+  */
+ function commitOriginalOwnerSnapshot({tx,writer,expectedBefore,nextItems,
+                                       declaredItemIDs=null}={}){
+  if(!writerKinds.has(writer)||typeof tx?.get!=='function'||
+     typeof tx?.put!=='function'||!rootItem(expectedBefore)||
+     !rootItem(nextItems))
+   return fail('PF90_ORIGINAL_OWNER_SNAPSHOT_AUTHORITIES_REQUIRED');
+  let inputCurrent,proposal,beforeCopy;
+  try{
+   // Forbid JSON-incompatible source state and reject functions, symbols,
+   // undefined, NaN and object prototypes BEFORE durable transaction writes.
+   const copyJson=(raw)=>{
+    const cloned=structuredClone(raw);
+    const text=JSON.stringify(cloned);
+    const parsed=JSON.parse(text);
+    if(!isDeepStrictEqual(cloned,parsed))
+     throw Error('PF90_NON_JSON_OWNER_SNAPSHOT');
+    return parsed;
+   };
+   beforeCopy=copyJson(expectedBefore);
+   proposal=copyJson(nextItems);
+   inputCurrent=tx.get('items','items');
+  }catch{return fail('PF90_ORIGINAL_OWNER_SNAPSHOT_UNREADABLE');}
+  if(!rootItem(inputCurrent)||!isDeepStrictEqual(inputCurrent,beforeCopy))
+   return fail('PF90_ORIGINAL_OWNER_STALE_SNAPSHOT');
+  // PF89 is the single delta/custody authority. We only replace the
+  // isolated, mutable clone it gives the builder — no external tx mutation.
+  return mutateOriginalItemsInTransaction({tx,writer,declaredItemIDs,
+   buildNext:(working)=>{
+    for(const id of Object.keys(working))delete working[id];
+    for(const [id,value] of Object.entries(proposal))
+     working[id]=structuredClone(value);
+    return true;
+   }});
+ }
+ return Object.freeze({inTransaction,mutateOriginalItemsInTransaction,
+  commitOriginalOwnerSnapshot});
 }
 
 module.exports={createPermitVerifier,validateOriginalClaimsIndex,

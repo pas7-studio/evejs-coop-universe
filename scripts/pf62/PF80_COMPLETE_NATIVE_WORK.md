@@ -145,3 +145,23 @@ from their own SQLite transaction. This is NOT installed or activated
 by the PF80 review builder.
 
 See `scripts/pf89/PF89_ACTUAL_ORIGINAL_ITEMS_DELTA_GATE.md`.
+
+## PF90 — original stock owner source gate (2026-11-07)
+
+Before any `-ApplyToWork` review staging, the PowerShell preflight
+runs 16 PF90 original owner snapshot tests and 8 original-source audit
+tests. It executes the source-pinned original owner audit on the genuine
+native checkout, requires all five known stock GameStore/ItemStore/
+characterState source blobs/anchors to match and requires a
+`BLOCKED_FOR_ACTIVATION` report with exit 2 and the original cache
+alias risk. Unknown source drift blocks staging until independently
+reviewed. A good source audit **does not install hooks or authorize
+activation**: it confirms the exact *unmodified* original stock owner
+is still unsafe for Personal Fleet. The WORK result remains review-only
+with Personal Fleet OFF.
+
+PF90 adds a detached owner snapshot policy in the existing PF58 native
+module. Real original owner hooks still require reviewed commits in
+`pas7-studio/EveJS`, preserving cache invalidation, original owner
+repository, transfer/transaction semantics and client notifications.
+Full spec: `scripts/pf90/PF90_ORIGINAL_STOCK_OWNERS.md`.
