@@ -29,6 +29,10 @@ function applyNativeRuntimeNpcPresentation(entity,entityRecord) {
   entity.modules = nativeNpcStore.buildNativeSlimModuleTuples(entityRecord.entityID);
   return entity;
 }
+function materializeNativeRuntimeEntity(scene, entityRecord, controllerRecord, definition, options = {}) {
+  const runtimeKind = String(controllerRecord && controllerRecord.runtimeKind || "nativeAmbient").trim() || "nativeAmbient";
+  return {success:true,data:{entityRecord,controllerRecord,runtimeKind}};
+}
 function materializeStoredNativeController(scene, entityID, options = {}) {
   const normalizedEntityID = entityID;
   const entityRecord = nativeNpcStore.getNativeEntity(normalizedEntityID);
