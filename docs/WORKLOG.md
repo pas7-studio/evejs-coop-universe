@@ -3664,3 +3664,9 @@ Evidence: fork 99361bb 4258c8d 5814660 fbc1072; war row ACTIVE faction 500001 en
 Why: market data repairs so the owner can sell loot: penny bids, consumed bids, two-sided book, restored asks, rebuilt summaries
 Where: docs/M003_DEPLOY_20261105.md, docs/WORKLOG.md
 Evidence: 3773+8222+6718 seed_buy_orders rows repriced, 21 empty bids refilled, 55338 region + 352135 system summaries rebuilt, 0 bids >= ask; verified through market-daemon GetOrders (e.g. 23809 ask 126M / bid 113.4M, 23795 ask 14.84M / bid 13.356M)
+### 2026-11-06T10:43Z · 3e42cfb · L2 · test(market): pin the NPC ask lift, and correct a stale audit ratchet
+
+Why: NPC corporations must really buy the owner's reasonable asks: the maker was wired to a claim RPC the daemon does not implement, and FillOrder pays nobody
+Detail: Fork a461abe adds space/coopNpcPlayerAskLift.js because the pinned daemon has no claim RPC and FillOrder pays nobody. This pins the money rules that make it safe: ISK/item conservation, no double pay for one claim, resume from the durable LIFT_FILL_ISSUED marker after a crash between the fill and the payment, a row somebody else closed is never paid, the escrow and book prices must agree to the ce
+Where: .opencode/state.md, docs/NPC_MARKET_MAKER.md, docs/coop-flags.json, integration/coopAdminBridge.cjs, integration/coopAdminBridgeActions.cjs, integration/coopFactionWarCore.cjs, integration/coopNpcBuyerNativeBindings.cjs, integration/coopNpcCorporateBuyerAtomic.cjs, integration/coopNpcPlayerAskLift.cjs, integration/coopNpcTraderMaker.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, scripts/coop-engine-audit.cjs, tests/coop-npc-player-ask-lift.test.mjs, tests/coop-npc-topology.test.mjs, tests/coop-npc-trader-maker.test.mjs
+Evidence: fork a461abe+ce006c7; tests/coop-npc-player-ask-lift (10) + 12 trader-maker; full suite 7638/7543 pass 0 fail; AUDIT_OK FLAGS_OK SHIMS_OK
