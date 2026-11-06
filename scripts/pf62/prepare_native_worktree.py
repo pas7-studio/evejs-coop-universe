@@ -89,16 +89,16 @@ def build(engine:Path,repo:Path,review:Path):
     if manifest.get('status')!='NOT_INSTALLED_IN_EVEJS' or manifest.get('featureEnabled') is not False:
         raise ValueError('PF68_UNSAFE_BUNDLE_ACTIVATION_STATUS')
     files=manifest.get('files')
-    # Fail closed if ANY of the 17 original native module files is missing.
+    # Fail closed if ANY of the 19 original native module files is missing.
     # Do not trust a file count alone: a swapped path also invalidates review.
     stock={'Code/server/src/space/npc/nativeNpcService.js',
            'Code/server/src/space/npc/nativeNpcStore.js'}
     modules={str(module.NATIVE_DIR / Path(x).name.replace('.cjs','.js'))
              for x in module.MODULE_FILES}
     expected=stock|modules|{REVIEW_PATCH}
-    if (len(modules)!=17 or not isinstance(files,dict) or
-        set(files)!=expected or len(files)!=20):
-        raise ValueError('PF68_INCOMPLETE_19_FILE_BUNDLE')
+    if (len(modules)!=19 or not isinstance(files,dict) or
+        set(files)!=expected or len(files)!=22):
+        raise ValueError('PF68_INCOMPLETE_21_FILE_BUNDLE')
     pins=manifest.get('stockBlobs')
     if not isinstance(pins,dict) or set(pins)!=stock:
         raise ValueError('PF68_STOCK_SOURCE_PINS_MISSING')
