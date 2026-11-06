@@ -19,7 +19,7 @@ import hashlib
 import difflib
 import json
 NATIVE_DIR=Path('Code/server/src/space')
-MODULE_FILES=tuple(f'pf66/native/coopFakeModule{i}.cjs' for i in range(17))
+MODULE_FILES=tuple(f'pf66/native/coopFakeModule{i}.cjs' for i in range(19))
 def blob(raw):return hashlib.sha1(f'blob {len(raw)}\0'.encode()+raw).hexdigest()
 def sha(raw):return hashlib.sha256(raw).hexdigest()
 def build(engine,repo,output):
@@ -94,7 +94,7 @@ class PF68WorktreeTests(unittest.TestCase):
     def test_default_never_creates_worktree_and_only_stages_review(self):
         result=self.run_review()
         self.assertEqual(result['status'],'PREFLIGHT_ONLY')
-        self.assertEqual(result['totalPatchPaths'],19)
+        self.assertEqual(result['totalPatchPaths'],21)
         self.assertFalse(self.worktree.exists())
         self.assertTrue((self.review/pf.REVIEW_PATCH).is_file())
         self.assertEqual((self.engine/SERVICE).read_text(),'module.exports = "OLD";\n')
@@ -164,7 +164,7 @@ class PF68WorktreeTests(unittest.TestCase):
         builder.write_text(content)
         cmd(self.repo,'add','.')
         cmd(self.repo,'commit','-qm','intentional incomplete source test')
-        with self.assertRaisesRegex(ValueError,'INCOMPLETE_19_FILE_BUNDLE'):
+        with self.assertRaisesRegex(ValueError,'INCOMPLETE_21_FILE_BUNDLE'):
             self.run_review(apply=True,confirmation='WORK-NOT-PLAY')
         self.assertFalse(self.worktree.exists())
 
