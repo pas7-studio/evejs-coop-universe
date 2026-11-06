@@ -3714,3 +3714,8 @@ Evidence: fork 2bdf38f; read measured 428ms warm/1533ms cold; after deploy no st
 Why: the haul fleet was parked again because the readback heal only accepted an existing destination row, while the cargo row can legitimately be gone by the time the heal runs
 Where: integration/coopNativeHaulCargo.cjs, integration/coopNativeHaulTransferAtomic.cjs, tests/coop-haul-readback-heal.test.mjs
 Evidence: fork 826e165; live block 16:33-17:18 destination_rows=0; heal now accepts the COMMITTED transfer receipt written in the same transaction; 17 heal tests + 90 haul tests pass; AUDIT_OK
+### 2026-11-06T18:18Z · 9c86fc5 · L1 · chore(integration): re-sync coopMemoryMetrics to the fork
+
+Why: the memory sampler deep-cloned four registries once a minute just to print their sizes: ~3s of blocked event loop per minute
+Where: integration/coopMemoryMetrics.cjs
+Evidence: fork f04bf21; lister vs counter on the live table: entities 432.5ms->0.67ms, controllers 863.1ms->0.64ms, wrecks 10.5ms->0.03ms, dungeon 1669.3ms->0.76ms, all counts identical; suite 7677/7582/0
