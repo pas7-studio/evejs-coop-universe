@@ -483,9 +483,10 @@ function fingerprintOriginalWitnessRows(tx){
    sorted.push([row.key,json]);
   }
   sorted.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
-  hash.update(table).update('\u001f');
-  for(const [key,json] of sorted)
-   hash.update(key).update('\u001f').update(json).update('\u001e');
+  // Length-prefixed JSON tuple framing is unambiguous even for original
+  // corporationRuntime keys containing ASCII control separators (U+001F).
+  // Raw concatenation with those separators is not collision-safe framing.
+  hash.update(JSON.stringify([table,sorted]));
  }
  return hash.digest('hex');
 }
