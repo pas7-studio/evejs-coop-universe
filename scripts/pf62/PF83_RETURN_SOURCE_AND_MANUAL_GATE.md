@@ -10,6 +10,13 @@ physics. PF83 recalculates the destination from the **reverified** station
 inside the callback and rejects non-finite output (for example, overflow when
 adding station radius and clearance).
 
+PF83-B adds combat return quiescence after stock ATTACK promotes the live
+Personal Fleet controller to nativeCombat. A one-shot native STOP must be
+acknowledged and independently read back as manualOrder.type=stop with
+currentTargetID=0 before a return warp can be issued. A failed or lying
+STOP blocks warp; no automatic retry or gameplay success is claimed.
+Three additional pf56-native-api.test.cjs regressions cover those cases.
+
 Three new tests check: changed station coordinates during arbitration, numeric
 overflow, and changed station identity inside the callback. These are
 isolated tests and do not establish an actual server warp or station arrival.
