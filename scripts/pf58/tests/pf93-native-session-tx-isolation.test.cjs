@@ -161,3 +161,29 @@ test('PF93 generic original wallet update needs no scan or session witness',()=>
  assert.equal(out.protectedChange,false);
  assert.equal(scans,0);
 }));
+
+test('PF93 canonical row fingerprints do not depend on SQLite scan enumeration order',()=>fixture(f=>{
+ f.put(C,String(FOREIGN),{characterID:FOREIGN,shipID:70000007});
+ f.put(T,'pf93\u001fother-key',{count:12});
+ let reversed=false;
+ f.shared.onTx=tx=>{
+  const scan=tx.scan;
+  tx.scan=table=>{
+   const rows=scan(table);
+   reversed=!reversed;
+   return reversed?rows.slice().reverse():rows;
+  };
+ };
+ const out=activate(f,()=>true);
+ assert.equal(out.status,'APPLIED_IN_ORIGINAL_SQLITE_TRANSACTION');
+ assert.equal(f.get(C,String(F.OWNER)).shipID,F.SHIP);
+}));
+test('PF93 no transaction-scoped SQLite scan authority fails closed',()=>fixture(f=>{
+ f.shared.onTx=tx=>{tx.scan=undefined;};
+ const out=activate(f,()=>true);
+ assert.equal(out.reason,'PF91_ORIGINAL_CHARACTER_TRANSACTION_FAILED');
+ assert.equal(f.get(C,String(F.OWNER)).shipID,undefined);
+ assert.throws(()=>write(f,()=>true,next=>{next.shipID=F.SHIP;}),
+  /PF93_ORIGINAL_ROWSET_SCAN_REQUIRED/);
+ assert.equal(f.get(C,String(F.OWNER)).shipID,undefined);
+}));
