@@ -109,7 +109,8 @@ jobs:
             scripts/pf55/tests/pf55-orders.test.cjs \
             scripts/pf55/tests/pf55-native-executor.test.cjs \
             scripts/pf55/tests/pf55-sqlite-sigkill.test.cjs \
-            scripts/pf55/tests/pf75-runtime-durable-contract.test.cjs
+            scripts/pf55/tests/pf75-runtime-durable-contract.test.cjs \
+            scripts/pf55/tests/pf76-order-vs-dock.test.cjs
           python3 scripts/pf55/tests/pf55-patch-builder.test.py
 
       - name: PF58 original handoff and PF69-PF73 cross-contract tests
