@@ -17,7 +17,15 @@ if ($LASTEXITCODE -ne 0) { throw 'PF62_NODE22_REQUIRED' }
   (Join-Path $repo 'scripts/pf60/tests/pf60-terminal.test.cjs') `
   (Join-Path $repo 'scripts/pf61/tests/pf61-scoped-cleanup.test.cjs')
 if ($LASTEXITCODE -ne 0) { throw 'PF62_REFERENCE_NODE_REGRESSION_FAILED' }
-foreach ($pf in 59,61,62) {
+& $node --test `
+  (Join-Path $repo 'scripts/pf66/tests/pf66-dock.test.cjs') `
+  (Join-Path $repo 'scripts/pf66/tests/pf66-native-service.test.cjs')
+if ($LASTEXITCODE -ne 0) { throw 'PF66_SCOPED_DOCK_NODE_REGRESSION_FAILED' }
+if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) {
+  & $node --test (Join-Path $repo 'scripts/pf66/tests/pf66-sigkill.test.cjs')
+  if ($LASTEXITCODE -ne 0) { throw 'PF66_SQLITE_SIGKILL_REGRESSION_FAILED' }
+}
+foreach ($pf in 59,61,62,66) {
   & $python -m unittest discover -s (Join-Path $repo ('scripts/pf'+$pf+'/tests')) -p 'test_*.py' -v
   if ($LASTEXITCODE -ne 0) { throw ('PF62_PYTHON_REGRESSION_FAILED_'+$pf) }
 }
