@@ -93,3 +93,20 @@ test('injected sessionless docking is mandatory: this module never calls session
  assert.throws(()=>createOriginalReturnExecutor({...f.deps,npcRuntime:{}}),/REQUIRED/);
  assert.throws(()=>createNativeStationArrivalReader({...f.deps,getSceneEpoch:null}),/REQUIRED/);
 });
+
+test('PF78 Return denies foreign runtime actor or controller before order bridge',()=>{
+ for(const [which,field,value] of [
+  ['entity','ownerID',row.ownerCharacterID+1],
+  ['entity','selectionID','foreign'],['entity','npcEntityType','war'],
+  ['entity','session',{socket:{}}],
+  ['controller','personalFleetPilotID','coop-pilot-999'],
+  ['controller','personalFleetGeneration',row.reservationGeneration+1],
+  ['controller','selectionKind','WAR'],
+  ['controller','personalFleetOriginal',false]]){
+  const f=fixture();f[which][field]=value;
+  assert.equal(createOriginalReturnExecutor(f.deps).execute(row).success,false,field);
+  assert.equal(f.calls.length,0,field);
+  const read=createNativeStationArrivalReader({...f.deps,getSceneEpoch:()=> 'boot-19'});
+  assert.equal(read(row),null,field);
+ }
+});
