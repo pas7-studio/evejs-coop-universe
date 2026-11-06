@@ -388,6 +388,22 @@ numbers, not the total. New top sites after the restart: `toMap` attribute copy 
 145, `coopGameStoreAtomic.get` 142, `loadRows` 122, `cargoAll` 121, `cloneValue` 107, read-cache
 copies 96, `cloneCargoTransientIsolation` 83, `loadTableObject` 77, `keyCheck` (isDeepStrictEqual) 75.
 
+**The world tick now names its own slow phases** (fork `987f785`, deployed 2026-11-06 20:31). The
+coordinator times every phase and records the five most expensive per cycle; `living-world-phase-cycle`
+carries `durationMs` + `slowPhases` and is emitted immediately for any cycle >= 250 ms (previously
+only every tenth cycle, with no timings). First live cycles: 268 / 213 / 342 ms with
+`npc-reconcile:30000144` 108 ms, `universe-sites` 56-73 ms, `native-faction-war-mobilization` 32-82 ms.
+The module had to stay at 4098 lines (ratchet ceiling 4100), and both integration copies were synced.
+
+**Stall trend (coop-event-loop-lag, per runtime run, no client connected):** Nov 4 max 2.5 -> 10.7 ->
+28.6 -> 52.8 s (avg 0.7-1.5 s); Nov 5 mostly 1.7-8.5 s; Nov 6 morning 2.3-5.1 s; before today's fixes
+18:00-19:14 max 8.6/10.0 s (avg 1.3-2.3 s); after the seven perf fixes 19:14-20:06 max 3.2 s (avg
+1.07 s); next run 20:07-20:16 max 2.3 s (avg 0.82 s). The newest run is too short to judge.
+
+Important: the whole 46-phase cycle is only 200-350 ms, while the reported lags average 0.6-1.2 s, so
+the phases alone do not explain the stalls - the remainder is outside them (GC, store flush, socket
+work). That is exactly what the armed stall recorder is for.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
