@@ -51,6 +51,8 @@ function setup({dir=null,noSeed=false,afterCommit=null}={}){
   detachScopedPersonalFleetDockSceneActor({row,capability}){
    if(!authority||capability!==authority.capability||authority.authorize(row)!==true)
     return {success:false,errorMsg:'UNAUTHORIZED'};
+   if(authority.consumeSceneDetach(row)!==true)
+    return {success:false,errorMsg:'PF66_SCENE_DURABLE_ATTEMPT_NOT_COMMITTED'};
    if(!state.physical)return {success:false,errorMsg:'ALREADY_GONE'};
    state.sceneRemovals++;
    state.physical=false;
