@@ -12,7 +12,7 @@ function setup({entity=true,controller=true,physical=true,session=false,modules=
   ...(session?{session:{characterID:row.ownerCharacterID}}:{})}:null;
  let runtimeController=controller?{entityID:1001,systemID:300}:null;
  const scene={systemID:300,getEntityByID:id=>id===1001?physicalRow:null};
- const state={removalCalls:0,unregisterCalls:0,options:null,authorized:false,authCalls:0};
+ const state={removalCalls:0,unregisterCalls:0,options:null,authorized:false,authCalls:0,sceneConsumes:0,consumed:false,failConsume:false};
  const store={getNativeEntity:()=>entity?{...marker,ownerID:row.ownerCharacterID}:null,
   getNativeController:()=>controller?{...marker}:null,
   listNativeModulesForEntity:()=>modules,
@@ -29,8 +29,16 @@ function setup({entity=true,controller=true,physical=true,session=false,modules=
  vm.runInNewContext(code+'\nthis.install = installScopedPersonalFleetDockAuthority;'+
   'this.detach = detachScopedPersonalFleetDockSceneActor;',sandbox);
  const capability=Symbol('cap');
- sandbox.install({capability,authorize:c=>{state.authCalls++;return state.authorized;}});
- return {row,state,store,runtime,sandbox,capability,detach:()=>sandbox.detach({row,capability})};
+ sandbox.install({capability,
+  authorize:c=>{state.authCalls++;return state.authorized&&!state.consumed;},
+  consumeSceneDetach:c=>{
+   if(!state.authorized||state.consumed||state.failConsume)return false;
+   state.consumed=true;state.sceneConsumes++;return true;
+  }});
+ return {row,state,store,runtime,sandbox,capability,
+  restorePhysical(){physicalRow={itemID:row.shipItemID,nativeNpc:true,ownerID:row.ownerCharacterID};
+   runtimeController={entityID:row.shipItemID,systemID:row.systemID};},
+  detach:()=>sandbox.detach({row,capability})};
 }
 test('PF66 actual inserted native source rejects direct scene detach before token proof',()=>{
  const f=setup();let r=f.detach();assert.equal(r.success,false);
@@ -46,6 +54,7 @@ test('PF66 source removes only original runtime actor and unregisters controller
  const r=f.detach();assert.equal(r.success,true,r.errorMsg);
  assert.equal(f.state.authCalls,2);assert.equal(f.state.removalCalls,1);
  assert.equal(f.state.unregisterCalls,1);
+ assert.equal(f.state.sceneConsumes,1);
  assert.equal(f.state.options.allowSessionOwned,false);
  assert.equal(f.store.getNativeEntity().entityID,1001);
  assert.equal(f.store.getNativeController().entityID,1001);
@@ -78,4 +87,25 @@ test('PF66 source fails closed when scene removal has no effect',()=>{
 test('PF66 source authority is single-owner process singleton',()=>{
  const f=setup();assert.throws(()=>f.sandbox.install({capability:Symbol('again'),authorize:()=>true}),
   /ALREADY_INSTALLED/);
+});
+
+test('PF67 retained private capability cannot remove recreated scene actor',()=>{
+ const f=setup();f.state.authorized=true;
+ assert.equal(f.detach().success,true);
+ f.restorePhysical();
+ assert.equal(f.detach().success,false);
+ assert.equal(f.state.removalCalls,1);
+ assert.equal(f.state.sceneConsumes,1);
+ assert.equal(f.state.unregisterCalls,1);
+});
+test('PF67 durable scene permit failure cannot remove actor',()=>{
+ const f=setup();f.state.authorized=true;f.state.failConsume=true;
+ assert.equal(f.detach().errorMsg,'PF66_SCENE_DURABLE_ATTEMPT_NOT_COMMITTED');
+ assert.equal(f.state.removalCalls,0);
+ assert.equal(f.state.unregisterCalls,0);
+ assert.equal(f.state.sceneConsumes,0);
+});
+test('PF67 native authority requires a trusted durable scene-consume callback',()=>{
+ const sandbox={};vm.runInNewContext(code+'\nthis.install = installScopedPersonalFleetDockAuthority;',sandbox);
+ assert.throws(()=>sandbox.install({capability:Symbol('x'),authorize:()=>true}),/PF66_NATIVE_AUTHORITY_INVALID/);
 });
