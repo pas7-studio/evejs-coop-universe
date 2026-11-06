@@ -9,7 +9,8 @@
 const {createOriginalShipHandoff,validStockHangar}=require('./coopPersonalFleetOriginalShipHandoff.cjs');
 const {createNativeShipAdoption}=require('./coopPersonalFleetNativeShipAdoption.cjs');
 const {createPermitVerifier,createReciprocalWriterFence,
- createOriginalPlayerShipActivation}=require('./coopPersonalFleetOriginalNativePermit.cjs');
+ createOriginalPlayerShipActivation,
+ createOriginalCharacterRecordWriteBarrier}=require('./coopPersonalFleetOriginalNativePermit.cjs');
 const bindings=require('./coopPersonalFleetNativeBindings.cjs');
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 // Session ship IDs may arrive from the original protocol as canonical strings.
@@ -148,6 +149,8 @@ function createNativeBootstrap({gameStore,pf52,originalItemStore,nativeNpcStore,
   throw Error('PF58_ORIGINAL_BOOTSTRAP_AUTHORITIES_REQUIRED');
  const verifier=createPermitVerifier({gameStore,enabled,allWritersFenced});
  const foreignWriterFence=createReciprocalWriterFence({pf52});
+ const nativeCharacterRecordBarrier=createOriginalCharacterRecordWriteBarrier({
+  pf52,verifyOriginalSessionLease:verifyOriginalDockedPlayerSession});
  const stockPlayerShipActivation=createOriginalPlayerShipActivation({
   gameStore,pf52,enabled,allWritersFenced,
   verifyOriginalDockedPlayerSession});
@@ -231,7 +234,16 @@ function createNativeBootstrap({gameStore,pf52,originalItemStore,nativeNpcStore,
   commitStockOwnerSnapshotWithinTransaction:
    foreignWriterFence.commitOriginalOwnerSnapshot,
   activateStockPlayerShipWithinOriginalTransaction:
-   stockPlayerShipActivation.activate});
+   stockPlayerShipActivation.activate,
+  commitStockCharacterRecordWithinOriginalTransaction(args){
+   // The policy module is separately testable but source-bound bootstrap
+   // MUST NOT publish an always-writable original character owner API.
+   if(enabled()!==true||allWritersFenced()!==true||
+      gameStore?.coopAtomicNativeRows?.isPoisoned?.()!==false)
+    return Object.freeze({status:'BLOCKED',
+     reason:'PF92_NATIVE_CHARACTER_OWNER_GATE_DISABLED',mayCommit:false});
+   return nativeCharacterRecordBarrier.inTransaction(args);
+  }});
 }
 module.exports={createNativeBootstrap,createSourceBoundNativeBootstrap,
  createOriginalPresenceReaders,moveOriginalShipToSpaceAtomically};

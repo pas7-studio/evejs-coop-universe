@@ -42,6 +42,13 @@ test('PF88 genuine source-bound bootstrap remains DISABLED without independent o
    verifyOriginalWriterHooks:()=>{originalHookReads++;return false},
    enabled:()=>true});
   assert.equal(typeof bootstrap.checkForeignWriterWithinTransaction,'function');
+  assert.equal(typeof bootstrap.commitStockCharacterRecordWithinOriginalTransaction,'function');
+  const blockedCharacterOwner=bootstrap.commitStockCharacterRecordWithinOriginalTransaction({
+   tx:{get:()=>null,put:()=>{throw Error('PF92_DISABLED_OWNER_WRITE_ATTEMPT')}},
+   characterID:F.OWNER,expectedBefore:{characterID:F.OWNER},
+   nextRecord:{characterID:F.OWNER,balance:0}});
+  assert.equal(blockedCharacterOwner.reason,'PF92_NATIVE_CHARACTER_OWNER_GATE_DISABLED');
+  assert.equal(blockedCharacterOwner.mayCommit,false);
   f.shared.onHandoff=bootstrap.executeOriginalHandoff;
   const result=f.bridge.dispatch(command);
   assert.equal(result.executorStatus,'UNVERIFIED');
