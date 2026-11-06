@@ -113,3 +113,29 @@ test('native identity is revalidated inside arbiter execute callback',()=>{
  const r=f.executor.execute(f.row);assert.equal(r.success,false);
  assert.equal(r.errorMsg,'PF55_NATIVE_SOURCE_CHANGED');assert.equal(f.nativeCalls.length,0);
 });
+
+test('PF78 rejects foreign physical actor metadata before PF55 order bridge',()=>{
+ for(const [field,value] of [
+  ['ownerID',F.OWNER+1],['selectionID','foreign'],
+  ['operatorKind','WAR'],['nativeNpcOccupied',false],
+  ['npcEntityType','war'],['characterID',F.OWNER],
+  ['session',{socket:{}}]]){
+  const f=setup();f.entity[field]=value;
+  assert.equal(f.executor.execute(f.row).errorMsg,'PF55_NATIVE_ACTOR_OR_TARGET_UNVERIFIED',field);
+  assert.equal(f.bridgeCalls.length,0,field);
+  assert.equal(f.nativeCalls.length,0,field);
+ }
+});
+test('PF78 rejects foreign live NPC controller metadata before PF55 native effect',()=>{
+ for(const [field,value] of [
+  ['personalFleetPilotID','coop-pilot-999'],
+  ['personalFleetAssignmentID','foreign'],
+  ['personalFleetOriginal',false],
+  ['operatorKind','RAID'],
+  ['selectionID','foreign'],
+  ['runtimeKind','nativeCombat']]){
+  const f=setup();f.controller[field]=value;
+  assert.equal(f.executor.execute(f.row).success,false,field);
+  assert.equal(f.bridgeCalls.length,0,field);
+ }
+});
