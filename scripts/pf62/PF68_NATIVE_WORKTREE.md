@@ -4,6 +4,12 @@
 Personal Fleet feature is **OFF**; no source is pushed, committed, merged,
 started, deployed or enabled by this workflow. Never point this at PLAY.
 
+**PF80 preferred for full command integration:** This legacy tool handles
+only the PF62 20-path patch. PF55's two original arbiter/bridge updates are
+NOT applied by PF68 alone. To validate the **same complete 22-path native WORK
+source tree as CI**, use `Prepare-PF80-CompleteNativeWork.ps1` and read
+`PF80_COMPLETE_NATIVE_WORK.md` instead.
+
 ## Purpose
 
 GitHub App access to `pas7-studio/EveJS` currently fails with `403 Resource not
