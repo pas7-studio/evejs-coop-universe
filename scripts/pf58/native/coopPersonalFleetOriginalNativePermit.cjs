@@ -441,6 +441,73 @@ function createReciprocalWriterFence({pf52}={}){
  * Commit the exact original character row and read PF title/claims in ONE
  * original BEGIN IMMEDIATE. No secondary owner or synthetic characters map.
  */
+/**
+ * PF93: the original GameStore's explicit mutation scope is
+ * corporationRuntime + items + characters. Never trust an external session
+ * witness merely because the facade offered read-only methods: its closure
+ * may still capture another writer capability.
+ *
+ * The ONLY evidence available with the existing original SQLite adapter is
+ * to compare the complete declared table contents before and after each
+ * witness call, then throw (not BLOCKED) if they differ. Any thrown error
+ * causes the original SQLite owner to ROLLBACK. Future original native
+ * integration should replace O(database) scans with an owner-controlled
+ * transaction write-generation counter; no such counter exists today.
+ *
+ * This is for uncommon protected title transitions, NOT every wallet write.
+ * The cost cap rejects huge tables rather than silently skipping rows.
+ */
+const ORIGINAL_WITNESS_TABLES=Object.freeze([T,'items','characters']);
+function fingerprintOriginalWitnessRows(tx){
+ if(typeof tx?.scan!=='function'||typeof tx?.get!=='function')
+  throw Error('PF93_ORIGINAL_ROWSET_SCAN_REQUIRED');
+ const maxRows=250000,maxChars=64*1024*1024;
+ const hash=crypto.createHash('sha256');
+ let seenChars=0;
+ for(const table of ORIGINAL_WITNESS_TABLES){
+  const rows=tx.scan(table);
+  if(!Array.isArray(rows)||rows.length>maxRows)
+   throw Error('PF93_ORIGINAL_ROWSET_SCAN_INVALID');
+  const keys=new Set(),sorted=[];
+  for(const row of rows){
+   if(typeof row?.key!=='string'||row.key.length===0||
+      row.key.length>1024||keys.has(row.key))
+    throw Error('PF93_ORIGINAL_ROWSET_KEY_INVALID');
+   keys.add(row.key);
+   const json=JSON.stringify(row.value);
+   if(typeof json!=='string')
+    throw Error('PF93_ORIGINAL_ROWSET_JSON_INVALID');
+   seenChars+=row.key.length+json.length+32;
+   if(seenChars>maxChars)
+    throw Error('PF93_ORIGINAL_WITNESS_SCAN_LIMIT');
+   sorted.push([row.key,json]);
+  }
+  sorted.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
+  hash.update(table).update('\u001f');
+  for(const [key,json] of sorted)
+   hash.update(key).update('\u001f').update(json).update('\u001e');
+ }
+ return hash.digest('hex');
+}
+function verifyOriginalWitnessCannotWrite(tx,callback,request){
+ const before=fingerprintOriginalWitnessRows(tx);
+ const reader=Object.freeze({
+  get:(table,key)=>structuredClone(tx.get(table,key)),
+  scan:table=>structuredClone(tx.scan(table))
+ });
+ let answer,issue=null;
+ try{
+  answer=callback(request,reader);
+  if(answer&&typeof answer.then==='function')
+   throw Error('PF93_ASYNC_SESSION_WITNESS_FORBIDDEN');
+ }catch(e){issue=e;}
+ const after=fingerprintOriginalWitnessRows(tx);
+ if(before!==after)
+  throw Error('PF93_SESSION_WITNESS_MUTATED_ORIGINAL_SQLITE_ROLLBACK');
+ if(issue)throw issue;
+ return answer===true;
+}
+
 function createOriginalPlayerShipActivation({
  gameStore,pf52,enabled=()=>false,allWritersFenced=()=>false,
  verifyOriginalDockedPlayerSession=()=>false
