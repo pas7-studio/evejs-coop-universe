@@ -3,6 +3,7 @@
  * NOT a docking authority: EveJS stock docking is session-based. A separate
  * verified ORIGINAL sessionless dock function must be implemented in the fork.
  */
+const {matchesOriginalPersonalFleetActor}=require('./coopPersonalFleetNativeActorProof.cjs');
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const vec=v=>!!v&&['x','y','z'].every(k=>typeof v[k]==='number'&&Number.isFinite(v[k]));
 function createOriginalReturnExecutor({npcRuntime,orderBridge,sceneForSystem,
@@ -14,10 +15,9 @@ function createOriginalReturnExecutor({npcRuntime,orderBridge,sceneForSystem,
   if(enabled()!==true||verifyPersonalClaim(row)!==true)return null;
   const scene=sceneForSystem(row.systemID),entity=scene?.getEntityByID?.(row.shipItemID),
    controller=getController(row.shipItemID),station=getCanonicalStation(row.stationID);
-  if(scene?.systemID!==row.systemID||!entity||entity.kind!=='ship'||
-   entity.nativeNpc!==true||entity.itemID!==row.shipItemID||
-   entity.session?.characterID||controller?.entityID!==row.shipItemID||
-   controller.systemID!==row.systemID||station?.stationID!==row.stationID||
+  if(scene?.systemID!==row.systemID||
+   !matchesOriginalPersonalFleetActor(row,entity,controller)||
+   station?.stationID!==row.stationID||
    station.systemID!==row.systemID||!vec(station.position)||
    !Number.isFinite(station.radius)||station.radius<0)return null;
   return {scene,entity,controller,station};
@@ -48,10 +48,11 @@ function createNativeStationArrivalReader({sceneForSystem,getController,
   const scene=sceneForSystem(row.systemID),entity=scene?.getEntityByID?.(row.shipItemID),
    controller=getController(row.shipItemID),station=getCanonicalStation(row.stationID),
    sceneEpoch=getSceneEpoch(scene);
-  if(scene?.systemID!==row.systemID||entity?.kind!=='ship'||
-   entity.nativeNpc!==true||entity.itemID!==row.shipItemID||
-   entity.session?.characterID||controller?.entityID!==row.shipItemID||
-   controller?.systemID!==row.systemID||station?.stationID!==row.stationID||
+  // A false positive arrival proof could permit destruction of an original
+  // ship title. Require the exact same native PF actor as the return writer.
+  if(scene?.systemID!==row.systemID||
+   !matchesOriginalPersonalFleetActor(row,entity,controller)||
+   station?.stationID!==row.stationID||
    station?.systemID!==row.systemID||typeof sceneEpoch!=='string'||
    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(sceneEpoch)||
    !vec(entity.position)||!vec(station.position)||!vec(entity.velocity)||
