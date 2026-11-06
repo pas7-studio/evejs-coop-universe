@@ -183,3 +183,18 @@ WORK bundle with Personal Fleet OFF; it is *not* proof of original
 single-writer integration. Source drift or missing files block review
 pending independent re-attestation.
 See `scripts/pf90/PF90_ORIGINAL_STOCK_OWNERS.md`.
+
+## PF91 per-character native ownership (2026-11-07)
+
+PF91 removes PF87's synthetic aggregate `characters/characters` read:
+the original GameStore character owner persists per-character SQLite
+keys. The PF58 native permit and PF87 handoff files already belong to
+the existing PF62 source package; no second installer or extra
+production native module is introduced. PF80 manual `-ApplyToWork`
+preflight now runs both the corrected PF87, PF91 per-character fixture,
+and four **source-pinned original characterState/itemStore tests**
+against the genuine native checkout before WORK review staging.
+
+These are candidate tests and schema corrections; actual original
+player/Mining/WAR/Exploration source hooks are **not installed**,
+and native WORK gameplay remains unproven. See the PF91 contract.
