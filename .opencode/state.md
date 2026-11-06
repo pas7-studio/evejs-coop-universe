@@ -112,6 +112,27 @@ stack is healthy again (`evejs-server-1` / `evejs-market-1` up, SSH banner on 55
 fix survives the restart: **96 more stacks refined, 0 blocked**, 2 442 927 units of ore, fee budget
 7 461 904.02 of 50 000 000 spent. Nothing was recreated; the volumes were reused.
 
+**The world was late on its own timer and is much better now** (fork `6e0a823`, `5a9d848`). The
+event-loop monitor had been reporting a 467 ms median delay all day (p90 1 994 ms, p99 7 487 ms,
+worst **62 916 ms**), which is what a client feels as a frozen server. The cause was measured, not
+guessed: the dungeon table holds **8 674 instances**, and `dungeonRuntimeState.mutateState`
+deep-clones and re-normalizes the whole table unless the caller promises its mutator REPLACES whole
+records. Two hot mutators did exactly that but never promised it, so every site creation, every
+expiry and every lifecycle change paid it - and sites expire on every world tick.
+
+Measured on the live table: deep clone **1 533 ms cold / 431 ms warm**, shallow copy **0.26 ms**.
+The three mutators (`createInstance`, `tickRuntime` expiry, `setLifecycleState`) now replace their
+records and take the documented fast path, the same one the universe seeder already used.
+
+After the deploy (16 samples, 12 min): p50 446 ms, p90 **939 ms** (was 1 994), worst **1 706 ms**
+(was 62 916), RSS **2.91 GB** (was 3.65 GB). The median did not move, and the next target is known
+and measured: `gameStore.read("dungeonRuntimeState", "/")` inside `applyPersistedDiff` costs
+**428 ms** for the first read after any write, so every mutation still pays it. Fixing that means
+changing what the diff compares against - correctness-sensitive, so it stays a separate task.
+
+Also closed in the same pass: the ammo "loss" (sold, receipted) and the client rendering check are
+in the blocks above; `state/NOW.md` is still the 2026-11-04 snapshot and needs a republish.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
