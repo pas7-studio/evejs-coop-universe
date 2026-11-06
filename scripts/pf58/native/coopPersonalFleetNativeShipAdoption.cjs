@@ -81,6 +81,7 @@ function createNativeShipAdoption({nativeStore,stockItems,npcService,spaceRuntim
     personalFleetOriginal:true,personalFleetAssignmentID:row.assignmentID,
     personalFleetPilotID:row.pilotID,personalFleetGeneration:row.generation,
     transient:false,operatorKind:'PERSONAL_FLEET',
+    selectionKind:'PERSONAL_FLEET',selectionID:row.assignmentID,
     createdAtMs:at,position,velocity:{x:0,y:0,z:0},direction,targetPoint:position,
     mode:'STOP',speedFraction:0,targetEntityID:0,followRange:0,orbitDistance:0,
     conditionState:copy(ship.conditionState||{}),
