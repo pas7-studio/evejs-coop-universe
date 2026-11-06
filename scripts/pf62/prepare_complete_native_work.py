@@ -62,16 +62,41 @@ def git_apply(root:Path,patch:str,*,apply=False):
 
 
 def native_changed_paths(root:Path):
-    # --untracked-files=all is essential: all eighteen newly added files are
-    # untracked in an isolated worktree until the owner explicitly reviews.
+    # Include ignored content: otherwise a native test can write e.g. ignored
+    # JS/log artifacts after validation without changing the final Git set.
+    # All eighteen newly added modules are visible as untracked files.
     proc=subprocess.run(['git','-C',str(root),'status','--porcelain=v1',
-      '--untracked-files=all'],check=True,capture_output=True,text=True)
+      '--untracked-files=all','--ignored=matching'],
+      check=True,capture_output=True,text=True)
     result=[]
     for line in proc.stdout.splitlines():
+        if line.startswith('!! '):
+            raise ValueError('PF81_IGNORED_NATIVE_ARTIFACT: '+line[3:])
         if not line.startswith((' M ','?? ')):
             raise ValueError('PF80_UNEXPECTED_WORKTREE_GIT_STATUS: '+line)
         result.append(line[3:])
     return result
+
+
+def verify_complete_worktree(root:Path, expected_hashes:dict[str,str]):
+    """PF81: attest the *final*, post-PF77 WORK state, not just pre-test bytes.
+
+    Native verification runs user-space JS against its own worktree. A green
+    test process cannot be allowed to change the files that the receipt claims
+    were just verified. Both the file set and exact contents are mandatory.
+    """
+    expected=set(expected_hashes)
+    observed=native_changed_paths(root)
+    if len(observed)!=len(expected) or set(observed)!=expected:
+        raise ValueError('PF81_NATIVE_FILE_SET_MUTATED_AFTER_TEST')
+    for relative,expected_digest in expected_hashes.items():
+        path=root/relative
+        if path.is_symlink() or not path.is_file():
+            raise ValueError('PF81_NATIVE_FILE_REPLACED_AFTER_TEST: '+relative)
+        actual=hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual!=expected_digest:
+            raise ValueError('PF81_NATIVE_CONTENT_MUTATED_AFTER_TEST: '+relative)
+    return True
 
 
 def prepare(*,engine:Path,repo:Path,review:Path,worktree:Path,
@@ -102,6 +127,16 @@ def prepare(*,engine:Path,repo:Path,review:Path,worktree:Path,
         raise ValueError('PF80_NATIVE_PATCH_OVERLAP_OR_MISSING_PATH')
     with (review/PATCH55).open('x',encoding='utf8') as f:f.write(patch)
     hashes={k:hashlib.sha256((review/k).read_bytes()).hexdigest() for k in staged}
+    # Compute stock PF55 expected bytes from the exact pinned original source.
+    # PF62 hashes come from the verified stage receipt; do not trust post-test
+    # content as the expected value.
+    expected_pf55_hashes={
+        relative:hashlib.sha256(pf55.change(
+            (engine/relative).read_text(encoding='utf8'),Path(relative).name
+        ).encode('utf8')).hexdigest()
+        for relative in EXPECTED_PF55
+    }
+    all_expected_hashes={**hashes,**expected_pf55_hashes}
     result={
       'status':'WORKTREE_PATCH_APPLIED_REVIEW_ONLY' if apply else 'PREFLIGHT_ONLY',
       'featureEnabled':False,'gameplayE2E':'NOT_RUN','serverBoot':'NOT_RUN',
@@ -120,17 +155,8 @@ def prepare(*,engine:Path,repo:Path,review:Path,worktree:Path,
         # Now apply only the same two pinned stock modifications, never mutate
         # the original native checkout's tracked files.
         git_apply(worktree,patch,apply=True)
-        for relative in EXPECTED_PF55:
-            original=(engine/relative).read_text(encoding='utf8')
-            name=Path(relative).name
-            expected=pf55.change(original,name).encode('utf8')
-            got=(worktree/relative).read_bytes()
-            if got!=expected:
-                raise ValueError('PF80_ORIGINAL_PF55_PATCH_SHA_MISMATCH: '+relative)
-        expected_paths=staged|set(EXPECTED_PF55)
-        changed=native_changed_paths(worktree)
-        if len(changed)!=22 or set(changed)!=expected_paths:
-            raise ValueError('PF80_WORKTREE_WRONG_FILE_SET')
+        # Verify the native stock changes before running any JS acceptance.
+        verify_complete_worktree(worktree,all_expected_hashes)
         node=shutil.which('node')
         if node is None:raise ValueError('PF80_NODE_REQUIRED')
         for relative in EXPECTED_PF55:
@@ -142,9 +168,15 @@ def prepare(*,engine:Path,repo:Path,review:Path,worktree:Path,
         env={**os.environ,'PF77_NATIVE_WORKTREE':str(worktree)}
         subprocess.run([node,'--test','--test-concurrency=1',str(pf77_test)],
             check=True,capture_output=True,text=True,env=env)
-        if pf68.git(engine,'status','--porcelain','--untracked-files=normal'):
-            raise ValueError('PF80_ORIGINAL_NATIVE_SOURCE_DIRTY_AFTER_BUILD')
+        # PF81: a green PF77 process cannot add or mutate any native artifact.
+        # The final receipt is written ONLY after a second, post-test readback.
+        verify_complete_worktree(worktree,all_expected_hashes)
+        if pf68.git(engine,'status','--porcelain','--untracked-files=all'):
+            raise ValueError('PF81_ORIGINAL_NATIVE_SOURCE_DIRTY_AFTER_TEST')
+        if pf68.git(repo,'status','--porcelain','--untracked-files=all'):
+            raise ValueError('PF81_ORCHESTRATION_SOURCE_DIRTY_AFTER_TEST')
         result['pf77NativeArbiterGate']='PASS'
+        result['postTestNativeIntegrity']='PASS'
     (review/RECEIPT).write_text(json.dumps(result,indent=2,sort_keys=True)+'\n',
         encoding='utf8')
     return result
