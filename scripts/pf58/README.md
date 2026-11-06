@@ -174,3 +174,24 @@ documents and reproduces that hazard. Local regression:
 `tests/pf90-owner-snapshot.test.cjs`; full explanation:
 `scripts/pf90/PF90_ORIGINAL_STOCK_OWNERS.md`.
 Personal Fleet OFF, no original fork or PLAY update.
+
+## PF91 original per-character ship ownership (2026-11-07)
+
+PF91 fixes a P0 schema mismatch in PF87's strict active-player check:
+the real original `characterState` writes `characters` one SQLite row
+per characterID, whereas the historical PF87 fixture stored a synthetic
+`characters/characters` aggregate. PF87 now calls the shared
+`inspectOriginalCharacterShipRows(tx,...)` on a **same transaction**
+`tx.scan('characters')` of canonical original keys. Unreadable, absent,
+mixed legacy, malformed or already-active original title fails closed.
+The strict PF87 Node fixture now uses real individual SQLite rows.
+
+The source-bundled permit module also exports
+`createOriginalPlayerShipActivation(...).activate(...)` for a future
+real `characterState` integration. It checks owner/target/previous
+stock ship/claims under a single SQLite transaction, verifies an
+independent docked-session witness twice and updates only the original
+character row. It is **disabled by default and NOT wired into the
+original EveJS characterState**. The bootstrap exposes the candidate
+method but cannot activate it without original writer hooks. See
+`scripts/pf91/PF91_ORIGINAL_CHARACTER_ROWS_AND_ATOMIC_PLAYER_SWITCH.md`.

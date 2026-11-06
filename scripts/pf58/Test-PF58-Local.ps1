@@ -26,7 +26,9 @@ $pf89 = Join-Path $root 'tests/pf89-actual-item-delta.test.cjs'
 if (-not (Test-Path -LiteralPath $pf89 -PathType Leaf)) { throw 'PF89_ORIGINAL_ITEMS_DELTA_TEST_MISSING' }
 $pf90 = Join-Path $root 'tests/pf90-owner-snapshot.test.cjs'
 if (-not (Test-Path -LiteralPath $pf90 -PathType Leaf)) { throw 'PF90_ORIGINAL_OWNER_SNAPSHOT_TEST_MISSING' }
-$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87) + @($pf88) + @($pf89) + @($pf90)
+$pf91 = Join-Path $root 'tests/pf91-original-character-rows.test.cjs'
+if (-not (Test-Path -LiteralPath $pf91 -PathType Leaf)) { throw 'PF91_ORIGINAL_CHARACTER_ROWS_TEST_MISSING' }
+$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87) + @($pf88) + @($pf89) + @($pf90) + @($pf91)
 & $node --test '--test-concurrency=1' @allNodeTests
 if ($LASTEXITCODE -ne 0) { throw 'PF58_NODE_REGRESSION_FAILED' }
 $python = (Get-Command python -ErrorAction Stop).Source

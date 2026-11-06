@@ -12,6 +12,7 @@
  * INERT by default. No new wallet, ship, module or cargo records are created.
  */
 const crypto=require('node:crypto');
+const {inspectOriginalCharacterShipRows}=require('./coopPersonalFleetOriginalNativePermit.cjs');
 const T='corporationRuntime',ITEMS='items',SEP='\u001f';
 const PREFIX='coop-personal-fleet'+SEP+'handoff-v1:';
 const SHIP_PREFIX='coop-personal-fleet'+SEP+'handoff-ship-v1:';
@@ -113,22 +114,14 @@ function createOriginalShipHandoff({gameStore,pf52,native,enabled=()=>false,
     return deny('PF58_ACTOR_CLAIMS_UNVERIFIED');
    if(actors?.claims?.[String(ship)]||Object.values(actors?.claims||{}).some(c=>c?.pilotID===row.pilotID))
     return deny('PF58_EXISTING_PF_ACTOR');
-   // PF87: the ORIGINAL character active-ship title belongs to the same
-   // BEGIN IMMEDIATE snapshot. In strict mode reject the reserved hull if
-   // *any* original character currently identifies it as their active ship.
-   // Null/missing identity table is not an affirmative ownership witness.
+   // PF91: original characterState persists an individual SQLite row per
+   // character ID, unlike the old synthetic PF87 aggregate fixture. Scan
+   // every original row under this SAME BEGIN IMMEDIATE transaction before
+   // consuming the PF58 one-shot permit or moving physical ItemStore title.
    if(requireAtomicOriginalTransfer===true){
-    const chars=tx.get('characters','characters');
-    if(!obj(chars)||!obj(chars[String(row.ownerCharacterID)]))
-     return deny('PF87_ORIGINAL_CHARACTERS_UNAVAILABLE');
-    for(const c of Object.values(chars)){
-     if(!obj(c))return deny('PF87_ORIGINAL_CHARACTER_ROW_UNCERTAIN');
-     for(const active of [c.shipID,c.shipid,c.activeShipID]){
-      if(active===ship||(typeof active==='string'&&
-         /^[1-9][0-9]*$/.test(active)&&Number(active)===ship))
-       return deny('PF87_ORIGINAL_SHIP_ACTIVE_FOR_CHARACTER');
-     }
-    }
+    const active=inspectOriginalCharacterShipRows(tx,{
+     ownerCharacterID:row.ownerCharacterID,shipItemID:ship});
+    if(active.verified!==true)return deny(active.reason);
    }
    const collision=pf52.checkCompetingClaims(tx,row);
    if(collision)return deny(collision);
