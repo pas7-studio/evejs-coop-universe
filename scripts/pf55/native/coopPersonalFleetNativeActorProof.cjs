@@ -32,7 +32,11 @@ function matchesOriginalPersonalFleetActor(row,entity,controller){
     controller.selectionID!==row.assignmentID||
     controller.personalFleetAssignmentID!==row.assignmentID||
     controller.personalFleetPilotID!==row.pilotID||
-    controller.runtimeKind!=='nativeAmbient'||
+    // PF82: stock npcBehaviorLoop.issueManualOrder(ATTACK) promotes the LIVE
+    // controller from nativeAmbient to nativeCombat. PF58 persistent rows must
+    // still remain nativeAmbient; this read-only runtime identity witness is
+    // used by subsequent HOLD/RETURN and must not strand an engaged PF ship.
+    !['nativeAmbient','nativeCombat'].includes(controller.runtimeKind)||
     !positive(controller.personalFleetGeneration))return false;
  // PF56 carries the ship's reservation generation. PF55 manual orders only
  // carry actorGeneration (a distinct PF54 claims epoch): do not conflate them.
