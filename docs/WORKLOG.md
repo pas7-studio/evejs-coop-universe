@@ -3729,3 +3729,8 @@ Evidence: fork a03a801; heap limit now 6336MB; after restart p50 813ms p90 1422m
 Why: the corporation's relisted modules could never sell: they were priced at 140% of the market, i.e. above the cheapest competing ask, with no bids at all on those types
 Where: integration/coopNpcTraderRelist.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-npc-trader-relist.test.mjs
 Evidence: live book type 23803: seed ask 99.43M, corp relist 139.202M, bids none, corp paid 90.46M; relist now undercuts to 99% of the reference with cost+5% floor; 9 relist tests pass; AUDIT_OK
+### 2026-11-06T18:46Z · 5195832 · L2 · test(trader): pin the reprice path and its escrow receipt
+
+Why: an npc sell order could never change its price, so the 22 modules listed above the market were permanently unsellable
+Where: integration/coopNpcTraderRelist.cjs, tests/coop-npc-trader-relist.test.mjs
+Evidence: fork 4a66dbf (RepriceNpcSellOrder in the daemon + repriceOnce in the relist, escrow trade price follows); 11 relist tests pass; AUDIT_OK
