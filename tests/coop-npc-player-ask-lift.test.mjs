@@ -138,6 +138,10 @@ test("a reasonable ask is lifted whole: real ISK moves, the stack moves, nothing
     const result = await f.lift.liftOnce(f.request);
     assert.equal(result.status, "NPC_PURCHASED_PLAYER_GOODS");
     assert.equal(result.itemID, ITEM);
+    // The claim key is what the post-commit seller notification looks the fill up by. Without it
+    // the seller's client was never told the item left his hangar, and every later action on the
+    // ghost failed with "not owned by the active character" (measured live 2026-11-06 16:26).
+    assert.equal(result.operation, f.request.claimKey);
     assert.equal(f.fills(), 1, "the playER ask is closed exactly once");
     assert.equal(f.data.corporationRuntime[CKEY].wallet.divisions["1000"].balance, 975);
     assert.equal(f.data.characters[SELLER].balance, 123, "gross minus the real native tax");
@@ -155,6 +159,7 @@ test("the same claim never pays twice, even when the book is already closed", ()
   const again = await f.lift.liftOnce(f.request);
   assert.equal(again.status, "NPC_PURCHASED_PLAYER_GOODS");
   assert.equal(again.replayed, true);
+  assert.equal(again.operation, f.request.claimKey, "a replay names the same claim");
   assert.deepEqual(f.data, before);
   assert.equal(f.fills(), 1);
   assert.equal(f.trades(), 1);
