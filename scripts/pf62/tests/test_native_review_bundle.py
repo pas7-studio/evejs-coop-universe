@@ -70,6 +70,8 @@ class PF62ReviewCompositionTests(unittest.TestCase):
     self.assertEqual(store.count('PF61_SCOPED_ORIGINAL_NATIVE_CLEANUP_V1:'),1)
     self.assertEqual(len(b.MODULE_FILES),19)
     self.assertIn('pf66/native/coopPersonalFleetScopedDock.cjs',b.MODULE_FILES)
+    self.assertIn('pf56/native/coopPersonalFleetNativeReturnExecutor.cjs',b.MODULE_FILES)
+    self.assertIn('pf55/native/coopPersonalFleetNativeActorProof.cjs',b.MODULE_FILES)
     old=pf66.PIN
     try:
       pf66.PIN='mismatch'
