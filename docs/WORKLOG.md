@@ -3764,3 +3764,8 @@ Evidence: heap sampling 60 s: 402 MB/min in listUniverseSeededPersistentSiteInst
 Why: the heap sampler charged 69 MB/min of garbage to path.join because the scene activity check re-required the crimewatch module with a fresh path.join on every call, hundreds of times a second
 Where: tests/coop-scene-activity-require-hoist.test.mjs
 Evidence: heap sampling attributed: 69.31 MB/min join @ node:path; fork 914befb; 2 tests pass; AUDIT_OK
+### 2026-11-06T20:05Z · 325a285 · L1 · test(fitting): pin the per-type attribute normalisation cache
+
+Why: the heap sampler put 113 MB/min in readShipBaseAttributeMap and part of 147 MB/min in buildShipResourceState, all of it re-normalising static type attributes on every ship resource evaluation
+Where: tests/coop-numeric-attribute-cache.test.mjs
+Evidence: heap sampling attributed (60 s, 32 KB): 113.11 MB readShipBaseAttributeMap, 147.39 MB buildShipResourceState; fork commit; 4 tests pass; AUDIT_OK
