@@ -19,9 +19,10 @@ function setup(action='FOLLOW',override={}){
   selectionKind:'PERSONAL_FLEET',selectionID:F.ASSIGNMENT,
   personalFleetAssignmentID:F.ASSIGNMENT,personalFleetPilotID:F.PILOT,
   personalFleetGeneration:1,runtimeKind:'nativeAmbient'};
- const target={itemID:F.TARGET,kind:'ship',ownerID:F.OWNER};
+ const target={itemID:F.TARGET,kind:'ship',ownerID:F.OWNER,position:{x:100,y:0,z:0}};
  const nativeCalls=[];const bridgeCalls=[];
  const npcRuntime={issueOrder(...a){nativeCalls.push(['issueOrder',...a]);return {success:true}},
+  follow(...a){nativeCalls.push(['follow',...a]);return {success:true}}, 
   issueAttackOrder(...a){nativeCalls.push(['attack',...a]);return {success:true}},
   stop(...a){nativeCalls.push(['stop',...a]);return {success:true}},
   warpToEntity(...a){nativeCalls.push(['warp',...a]);return {success:true}}};
@@ -33,13 +34,15 @@ function setup(action='FOLLOW',override={}){
  return {row,scene,entity,controller,target,nativeCalls,bridgeCalls,npcRuntime,bridge,
   executor,setTrusted:v=>trusted=v,setAllowed:v=>allowed=v,setEnabled:v=>enabled=v};
 }
-test('FOLLOW uses original issueOrder with movement-only manual order and PF bridge ownership',()=>{
+test('PF82 FOLLOW uses original physics follow, not hostile-only manual combat follow',()=>{
  const f=setup(),result=f.executor.execute(f.row);
  assert.equal(result.success,true);assert.equal(f.bridgeCalls.length,1);
  assert.equal(f.bridgeCalls[0].owner,'PERSONAL_FLEET');
  assert.equal(f.bridgeCalls[0].action,'pf-follow');
- assert.deepEqual(f.nativeCalls[0],["issueOrder",F.SHIP,{type:'follow',targetID:F.TARGET,
-  movementMode:'follow',followRangeMeters:1500,allowWeapons:false,keepLock:false,allowPodKill:false}]);
+ assert.equal(f.target.ownerID,F.OWNER,'friendly target has the owner of the PF ship');
+ assert.deepEqual(f.nativeCalls[0],['follow',F.SHIP,F.TARGET,1500,
+  {wakeController:false,allowWeapons:false}]);
+ assert.equal(f.nativeCalls.some(call=>call[0]==='issueOrder'),false);
 });
 test('ATTACK uses original issueAttackOrder, never allows pod-kill',()=>{
  const f=setup('ATTACK');assert.equal(f.executor.execute(f.row).success,true);
@@ -133,9 +136,31 @@ test('PF78 rejects foreign live NPC controller metadata before PF55 native effec
   ['personalFleetOriginal',false],
   ['operatorKind','RAID'],
   ['selectionID','foreign'],
-  ['runtimeKind','nativeCombat']]){
+  ['runtimeKind','nativeWander']]){
   const f=setup();f.controller[field]=value;
   assert.equal(f.executor.execute(f.row).success,false,field);
   assert.equal(f.bridgeCalls.length,0,field);
  }
+});
+
+test('PF82 HOLD remains permitted after native stock ATTACK switches runtimeKind to nativeCombat',()=>{
+ const f=setup('HOLD');f.controller.runtimeKind='nativeCombat';
+ const out=f.executor.execute(f.row);
+ assert.equal(out.success,true);
+ assert.equal(f.nativeCalls.length,1);
+ assert.equal(f.nativeCalls[0][0],'stop');
+});
+test('PF82 FOLLOW refuses an active combat controller rather than silently competing with ATTACK',()=>{
+ const f=setup();f.controller.runtimeKind='nativeCombat';
+ const out=f.executor.execute(f.row);
+ assert.equal(out.success,false);
+ assert.equal(out.errorMsg,'PF82_FOLLOW_COMBAT_CONTROLLER_NOT_QUIESCED');
+ assert.equal(f.nativeCalls.length,0);
+});
+test('PF82 fails at composition if native physics follow capability is not wired',()=>{
+ const f=setup();delete f.npcRuntime.follow;
+ assert.throws(()=>createNpcRuntimeExecutor({npcRuntime:f.npcRuntime,
+  orderBridge:f.bridge,sceneForSystem:()=>f.scene,
+  getController:()=>f.controller,verifyPersonalClaim:()=>true,
+  authorizeTarget:()=>true,enabled:()=>true}),/PF55_ORIGINAL_NPC_RUNTIME_DEPENDENCIES_REQUIRED/);
 });
