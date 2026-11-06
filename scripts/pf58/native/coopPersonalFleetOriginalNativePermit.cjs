@@ -591,12 +591,22 @@ function createOriginalCharacterRecordWriteBarrier({pf52,
    if(sensitive){
     // This is source-bound original character/session evidence, not a
     // caller-supplied boolean. Returning false or throwing denies writes.
-    const witness={characterID,previousShipItemID:prior.id,
-     nextShipItemID:next.id,session};
-    if(verifyOriginalSessionLease(witness,tx)!==true)
-     return fail('PF92_CHARACTER_SESSION_LEASE_REQUIRED');
+    const witness=Object.freeze({characterID,previousShipItemID:prior.id,
+     nextShipItemID:next.id,session});
+    // The verifier receives a READ-ONLY view: never lend an original
+    // SQLite writer's put/del capability to a session/session-lease probe.
+    const reader=Object.freeze({
+     get:(table,key)=>structuredClone(tx.get(table,key)),
+     scan:(table)=>typeof tx.scan==='function'?
+      structuredClone(tx.scan(table)):null
+    });
     const items=tx.get('items','items');
     if(!obj(items))return fail('PF92_ORIGINAL_ITEMS_UNAVAILABLE');
+    if(verifyOriginalSessionLease(witness,reader)!==true)
+     return fail('PF92_CHARACTER_SESSION_LEASE_REQUIRED');
+    if(!isDeepStrictEqual(tx.get('items','items'),items)||
+       !isDeepStrictEqual(tx.get('characters',String(characterID)),before))
+     throw Error('PF92_SESSION_WITNESS_MODIFIED_AUTHORITY_ROLLBACK');
     const touched=[...new Set([prior.id,next.id].filter(pos))]
      .sort((a,b)=>a-b);
     for(const id of touched){
@@ -628,7 +638,7 @@ function createOriginalCharacterRecordWriteBarrier({pf52,
       allowOwnerAlreadyActive:true});
      if(scan.verified!==true)return fail(scan.reason);
     }
-    if(verifyOriginalSessionLease(witness,tx)!==true)
+    if(verifyOriginalSessionLease(witness,reader)!==true)
      return fail('PF92_CHARACTER_SESSION_LEASE_REVOKED');
     if(!isDeepStrictEqual(tx.get('items','items'),items))
      throw Error('PF92_ORIGINAL_ITEMS_CHANGED_BY_SESSION_WITNESS_ROLLBACK');
