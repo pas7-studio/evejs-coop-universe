@@ -14,7 +14,7 @@ PF-59 creates `native/coopPersonalFleetNativeRemovalGuard.cjs` and a pinned patc
 
 A PF marker in the native entity/controller OR a durable original `corporationRuntime` handoff ship lock blocks cleanup, including when an apparent `DOCKED`, `LOST` or `DESTROYED` status exists. This is intentional: PF56/PF57 terminal reconciliation is not installed or authoritative yet. Inconsistent native/store state requires operator repair. A poisoned/unreadable GameStore blocks deletion. No retry, item manufacture, title transfer or new NPC IDs.
 
-The bootstrap must call `installOriginalRemovalAuthority({gameStore: ORIGINAL_GAMESTORE})` exactly once before feature activation. It uses a read-only original `coopAtomicNativeRows` transaction to find `coop-personal-fleet\\u001fhandoff-ship-v1:<originalShipItemID>`. `undefined` is unknown (blocked); `null` is a proven missing lock. This alone does NOT cover direct inventory/market/exploration/mining writers or true dock/loss disposition. If the authority is absent and feature flag is enabled, even ordinary NPC cleanup fails closed.
+The bootstrap must call `installOriginalRemovalAuthority({gameStore: ORIGINAL_GAMESTORE})` exactly once before feature activation. It uses a read-only original `coopAtomicNativeRows` transaction to find `coop-personal-fleet\u001fhandoff-ship-v1:<originalShipItemID>`. `undefined` is unknown (blocked); `null` is a proven missing lock. This alone does NOT cover direct inventory/market/exploration/mining writers or true dock/loss disposition. If the authority is absent and feature flag is enabled, even ordinary NPC cleanup fails closed.
 
 ## Run (manual only)
 
