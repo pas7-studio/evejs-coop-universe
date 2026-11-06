@@ -239,6 +239,22 @@ Caveat: the SERVER container still runs the pre-fix image (it was not recreated,
 session), so the new relist rule (undercut 99 %, cost+5 % floor) and `repriceOnce` take effect only on
 the next server restart. The repair above already fixed the stock that was on the book.
 
+**Militia "kicked out again" was a client-session gap, not a leave** (fork `7ec6b7c`, 2026-11-06 19:10).
+Measured on the live play stack: the enlistment row is `ACTIVE` for 140000005 / 500001, the character
+record carries `warFactionID 500001`, and `GetCorpFactionalWarStatus` answers `facwarCorporationActive(1)`.
+No code path wrote `LEFT`. What was missing is the client's own copy: the login `SessionChange` was
+logged with 17 keys and **no `warfactionid`**, because a pilot who logs in already in space takes
+`characterState`'s initial-space path, which filters the change down to the stock
+`INITIAL_SPACE_CHARACTER_SESSION_CHANGE_KEYS` list. `enlistmentChecks.pyj CurrentlyInSameFaction()` is
+`factionID == session.warfactionid`, so the FW window showed an ACTIVE enlistment as "not enlisted".
+`warfactionid` is now on that list and is sent even when unchanged on the login selection;
+`facWarMgr.GetSolarSystemLPs` (the one unhandled method on the live client, WARN 18:32) now answers 0
+instead of null, which used to break the LP-donation arithmetic.
+
+Live repair without a restart: admin `militia_sync` pushed `warfactionid` into the running session at
+19:08:52 (`sessionPushed: true`, `previous: 500001`). The code fix takes effect for every future login
+after ONE server-container restart, which has not been done yet (the owner's client was logged in).
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
