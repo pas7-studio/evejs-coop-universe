@@ -97,6 +97,21 @@ function pf58OriginalNativePairValid(entityRecord, controllerRecord) {
   return true;
 }
 // PF69 RESTART ADMISSION END
+// PF72: the stock materializer reuses a same-ID actor BEFORE registering a
+// controller or applying the native NPC presentation. A live player ship or
+// a foreign NPC with the same ID must never be converted to Personal Fleet.
+function pf58OriginalExistingSceneActorValid(actor, record) {
+  return !!actor && actor.kind === "ship" &&
+    actor.itemID === record.entityID &&
+    actor.nativeNpc === true && actor.nativeNpcOccupied === true &&
+    actor.npcEntityType === "personalFleet" &&
+    actor.operatorKind === "PERSONAL_FLEET" &&
+    actor.selectionKind === "PERSONAL_FLEET" &&
+    actor.selectionID === record.personalFleetAssignmentID &&
+    actor.ownerID === record.ownerID &&
+    actor.characterID === 0 && actor.pilotCharacterID === 0 &&
+    (actor.session === undefined || actor.session === null);
+}
 // PF58 ORIGINAL ITEMSTORE NATIVE HULL FENCE END
 
 '''
@@ -124,6 +139,22 @@ def transform(source: str) -> str:
         '  )) return {success:false,errorMsg:"PF71_LOW_LEVEL_NATIVE_PERMIT_NOT_VERIFIED"};\n'
         '  const runtimeKind = String(controllerRecord && controllerRecord.runtimeKind || "nativeAmbient").trim() || "nativeAmbient";')
     s = once(s, lowlevel, guarded)
+    # PF72: the same original low-level materializer has a branch which
+    # reuses any preexisting scene actor by numeric ID. Refuse to register a
+    # Personal Fleet controller on a player-owned or foreign runtime actor.
+    # This gate is after the original read-only getEntityByID and strictly
+    # BEFORE the existing-actor register/presentation/idle side effects.
+    scene_anchor = ('  const existingEntity = scene.getEntityByID(entityRecord.entityID);\n'
+                    '  if (existingEntity) {')
+    scene_guard = ('  const existingEntity = scene.getEntityByID(entityRecord.entityID);\n'
+      '  // PF72: never hijack a physical player/foreign actor with the same ID.\n'
+      '  if (existingEntity &&\n'
+      '      (pf58IsPersonalFleetRecord(entityRecord) ||\n'
+      '       pf58IsPersonalFleetRecord(controllerRecord)) &&\n'
+      '      !pf58OriginalExistingSceneActorValid(existingEntity, entityRecord))\n'
+      '    return {success:false,errorMsg:"PF72_FOREIGN_EXISTING_SCENE_ACTOR"};\n'
+      '  if (existingEntity) {')
+    s = once(s, scene_anchor, scene_guard)
     s = once(s,
         '    fittedItems: nativeNpcStore.buildNativeFittedItems(entityRecord.entityID),',
         '    fittedItems: entityRecord.personalFleetOriginal === true\n'
