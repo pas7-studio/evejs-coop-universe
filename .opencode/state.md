@@ -364,6 +364,30 @@ Still on top, by measured MB/min: read-cache shallow copies 254 (140 + 114), `to
 (idle server), so the combat freeze still needs a live fight; the recorder is armed again on the new
 container (240 min, 60 s windows, threshold 200 ms).
 
+**Fixes 8-10 from the allocation profile** (2026-11-06 21:10).
+
+* `ruleAppliesToSystem` (88 MB/min) rebuilt four scope arrays with map+filter per call, per rule per
+  system. Normalised scope now lives in `space/npc/spawnRuleScope.js`, cached per rule object
+  (WeakMap) and revalidated against the rule's own array identities, so an edited rule recomputes
+  (fork `af8626a`). Verified after deploy: gone from the top-20 allocators.
+* `dungeonInstanceCacheMgrService.addVisibleWormholeSignatureCounts` (92 MB/min) deep-cloned the whole
+  wormhole state only to iterate its pairs read-only; it now uses the published `getStateView()`
+  (same commit).
+* `wormholeRuntimeState.mutateState` cloned the whole state before EVERY mutation only to keep the
+  mirror pristine if the mutation failed. The persisted table is the authority, so it now drops the
+  mirror (`cache = null`) on a throwing mutator or a write that does not acknowledge and reloads on
+  the next read (fork `6787faf`). `getStateSnapshot()` still clones for callers that mutate.
+
+**Finding worth knowing:** the wormhole runtime state holds **41 825 pairs** (83 650 endpoints, plus
+3 015 static slots). One `cloneRuntimeState` costs **49.5 ms**. Any code that snapshots or clones
+that state is paying for ~20-40 MB of objects, and the co-op world seeds it.
+
+**Measurement caveat:** single 60 s heap windows vary a lot (1 878 MB vs 2 540 MB for the same
+idle server, because periodic reconcile/flush work lands in different windows). Compare PER-SITE
+numbers, not the total. New top sites after the restart: `toMap` attribute copy 170, `reconcileObject`
+145, `coopGameStoreAtomic.get` 142, `loadRows` 122, `cargoAll` 121, `cloneValue` 107, read-cache
+copies 96, `cloneCargoTransientIsolation` 83, `loadTableObject` 77, `keyCheck` (isDeepStrictEqual) 75.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
