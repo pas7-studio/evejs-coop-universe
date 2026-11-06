@@ -47,6 +47,50 @@ function pf58OriginalStockSlimModules(record) {
   if (!Array.isArray(slim))throw Error("PF58_STOCK_SLIM_MODULES_NOT_READABLE");
   return slim;
 }
+// PF69 RESTART ADMISSION: any one-sided Personal Fleet marker poisons the pair.
+// Never admit a controller-only PF original via the unmarked-entity startup path.
+function pf58IsPersonalFleetRecord(record) {
+  return !!record && (
+    record.personalFleetOriginal === true ||
+    record.operatorKind === "PERSONAL_FLEET" ||
+    record.entityType === "personalFleet" ||
+    record.npcEntityType === "personalFleet"
+  );
+}
+function pf58OriginalNativePairValid(entityRecord, controllerRecord) {
+  if (!entityRecord || !controllerRecord ||
+      entityRecord.personalFleetOriginal !== true ||
+      controllerRecord.personalFleetOriginal !== true ||
+      entityRecord.operatorKind !== "PERSONAL_FLEET" ||
+      controllerRecord.operatorKind !== "PERSONAL_FLEET" ||
+      entityRecord.entityType !== "personalFleet" ||
+      controllerRecord.entityType !== "personalFleet" ||
+      controllerRecord.runtimeKind !== "nativeAmbient" ||
+      !Number.isSafeInteger(entityRecord.entityID) || entityRecord.entityID <= 0 ||
+      entityRecord.entityID !== controllerRecord.entityID ||
+      !Number.isSafeInteger(entityRecord.systemID) || entityRecord.systemID <= 0 ||
+      entityRecord.systemID !== controllerRecord.systemID ||
+      !Number.isSafeInteger(entityRecord.ownerID) || entityRecord.ownerID <= 0 ||
+      !Number.isSafeInteger(entityRecord.personalFleetGeneration) ||
+      entityRecord.personalFleetGeneration <= 0 ||
+      entityRecord.personalFleetGeneration !== controllerRecord.personalFleetGeneration ||
+      typeof entityRecord.personalFleetAssignmentID !== "string" ||
+      !entityRecord.personalFleetAssignmentID ||
+      entityRecord.personalFleetAssignmentID !== controllerRecord.personalFleetAssignmentID ||
+      typeof entityRecord.personalFleetPilotID !== "string" ||
+      !entityRecord.personalFleetPilotID ||
+      entityRecord.personalFleetPilotID !== controllerRecord.personalFleetPilotID ||
+      entityRecord.selectionID !== entityRecord.personalFleetAssignmentID ||
+      controllerRecord.selectionID !== entityRecord.personalFleetAssignmentID ||
+      !entityRecord.profileID || !entityRecord.loadoutID ||
+      !entityRecord.behaviorProfileID ||
+      entityRecord.profileID !== controllerRecord.profileID ||
+      entityRecord.loadoutID !== controllerRecord.loadoutID ||
+      entityRecord.behaviorProfileID !== controllerRecord.behaviorProfileID)
+    return false;
+  return true;
+}
+// PF69 RESTART ADMISSION END
 // PF58 ORIGINAL ITEMSTORE NATIVE HULL FENCE END
 
 '''
@@ -87,9 +131,12 @@ def transform(source: str) -> str:
     s = once(s, anchor, anchor + '''
   // An ISSUING permit is valid only for one explicit adoption call. Startup
   // never auto-repairs a partially handed-off original player ship.
-  if (entityRecord?.personalFleetOriginal === true && (
+  // PF69: inspect BOTH stock rows before any definition, scene, or spawn work.
+  // A controller-only marker is not a normal NPC; it is an ambiguous PF ship.
+  if ((pf58IsPersonalFleetRecord(entityRecord) ||
+       pf58IsPersonalFleetRecord(controllerRecord)) && (
+      !pf58OriginalNativePairValid(entityRecord, controllerRecord) ||
       process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_SHIP_ADOPTION !== "1" ||
-      controllerRecord?.runtimeKind !== "nativeAmbient" ||
       require(path.join(__dirname, "../coopPersonalFleetNativeBindings"))
         .authorize(entityRecord, {allowIssuing: options.personalFleetIssuing === true}) !== true
   )) return {success:false,errorMsg:"PF58_ORIGINAL_NATIVE_PERMIT_NOT_VERIFIED"};''')
