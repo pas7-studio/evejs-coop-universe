@@ -243,3 +243,45 @@ flag, the market-price band, the bounded retry and the partial-lot skip.
   it buys (§7) or the industry/salvage NPCs can sell theirs;
 * the claim RPCs remain the cleaner long-term authority for `COOP-048`; the lift path is what works
   today and `purchaseAsk` stays available for the day they exist.
+
+## 10. Live proof, 2026-11-06 (play stack, corp 1000035, hub Jita 4-4)
+
+The owner's 23 open asks were on the book; the trader corporation bought **22 of them** at its own
+configured band (≤ the real ask) and paid him from its real wallet:
+
+| measurement | value |
+|---|---|
+| committed receipts (`NATIVE_NPC_BUY_COMMITTED`) | **22**, every one with `buyerBefore - buyerAfter === grossCents` and `sellerAfter - sellerBefore === netCents` — **0 conservation violations** |
+| gross spent by the corporation | **1 231 691 000 ISK** |
+| native transaction tax | **55 179 756.8 ISK** |
+| net credited to the seller (`Raih1488`, 140000005) | **1 176 511 243.2 ISK** |
+| seller balance | 756 929 709.48 → **1 933 440 952.68 ISK** |
+| corporation cash | 50 004 867 000 → **48 773 176 000 ISK** |
+| goods | every purchased module is now owned by 1000035 at 60003760, flag 4 |
+| asks left | 1 (order 281, the one my own `FillOrder` experiment had closed; its stale escrow row was removed after proving the item was back in the hangar) |
+
+Each purchase is `space.trader-maker` with `status: TRADER_MAKER_SETTLED` and
+`executions[].settled: true` plus a `fillID`; the settlement is the COOP-048 receipt keyed by
+`corp-buy<SEP><fillID>`.
+
+### The seven defects that sat between "wired" and "pays"
+
+Found in this order, each one measured on the live stack, each one fixed and pinned by a test:
+
+1. the daemon has no claim RPC (`ClaimNpcCorpPlayerSell` …) → the executor was replaced by COOP-LIFT;
+2. the escrow row has **no price** (custody only) → the price comes from the book row;
+3. a player ask costs **more than 1 M ISK** and the settlement capped a unit at 1 M → ceiling is now
+   1 B ISK per unit, 1 B ISK per trade;
+4. the order id is **decimal text** and `pos()` refused it → a text id is accepted when it round-trips
+   through a safe integer, a 64-bit id is refused rather than truncated;
+5. the book row has **no seller** → the seller comes from the escrow row, and a disagreement between
+   the two authorities drops the offer;
+6. `GetOrder` **splits** the order (identity on top, `row` nested) → both readers flatten it;
+7. `corporationRuntime` and the `corporations` record are **keyed rows without an embedded id**, and
+   the owner's goods are **singletons** (`quantity -1`, `stacksize 1`) → both are accepted, with the
+   keyed read as the identity and a singleton as exactly one unit.
+
+Two operational lessons are now in the code: a native row key contains `\u001f`, so it is read
+through the atomic bridge (a JSON path read turns the separator into nesting), and a claim the
+executor already started is **resumed with the same claim key** (bounded, six attempts) instead of
+being fenced for ever — the deterministic fill id is what makes that safe.

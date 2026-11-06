@@ -1265,9 +1265,12 @@ function advanceTraderMaker(){
      const scaled=Number(balance)*100;
      return Number.isFinite(scaled)&&Math.abs(scaled-Math.round(scaled))<=1e-6?Math.round(scaled):null;
     },
-    // Player asks never appear in the public book (it is seeded stock only), so they come from the
-    // GameStore escrow rows - the same authority the atomic buyer validates before it pays.
-    readPlayerAsks:(hub,typeID)=>{
+    // A player sell escrow row carries CUSTODY ONLY: it has no price field at all (measured
+    // 2026-11-06 on order 282: orderId, ownerId, typeId, stationId, escrowLocationID,
+    // remainingQuantity, escrowType). The price and the state are the BOOK's, so each escrowed
+    // order is named by the daemon before it becomes an offer; reading `row.price` here (it is
+    // undefined) silently turned every real ask into "no player asks on the book".
+    readPlayerAsks:async(hub,typeID)=>{
      const read=gameStore.read("marketEscrow","/");
      const rows=read&&read.success===true&&read.data&&typeof read.data==="object"?read.data:{};
      const out=[];
@@ -1276,13 +1279,26 @@ function advanceTraderMaker(){
       if(Number(row.typeId)!==Number(typeID)||Number(row.stationId)!==Number(hub))continue;
       const qty=Number(row.remainingQuantity);
       if(!Number.isSafeInteger(qty)||qty<=0)continue;
-      // The escrow row prices in ISK; the maker works in cents.
-      const priceIsk=Number(row.price);
-      if(!Number.isFinite(priceIsk)||priceIsk<=0)continue;
       // The seller is part of the offer, not a detail: the settlement pays exactly this owner.
       const sellerOwnerID=Number(row.ownerId);
       if(!Number.isSafeInteger(sellerOwnerID)||sellerOwnerID<=0)continue;
-      out.push({orderID:String(row.orderId),remainingQuantity:qty,
+      const orderID=String(row.orderId);
+      if(!/^[0-9]{1,20}$/.test(orderID))continue;
+      let native=null;
+      try{native=await marketClient.call("GetOrder",{order_id:orderID});}catch(_error){native=null;}
+      if(!native||String(native.source===null||native.source===undefined?"player":native.source)!=="player")
+       continue;
+      // GetOrder splits the order: identity/state on top, the row (price, station, type, volume)
+      // under `row`. Reading only the top level found no price at all.
+      native={...native,...(native.row&&typeof native.row==="object"?native.row:{})};
+      if(Number(native.owner_id)!==sellerOwnerID||Number(native.type_id)!==Number(typeID)||
+         Number(native.station_id)!==Number(hub))continue;
+      if(String(native.state||"").toLowerCase()!=="open")continue;
+      const remaining=Number(native.vol_remaining);
+      if(!Number.isSafeInteger(remaining)||remaining<=0||remaining!==qty)continue;
+      const priceIsk=Number(native.price);
+      if(!Number.isFinite(priceIsk)||priceIsk<=0)continue;
+      out.push({orderID,remainingQuantity:qty,
        unitPriceCents:Math.round(priceIsk*100),sellerOwnerID});
      }
      return out;

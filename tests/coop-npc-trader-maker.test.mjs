@@ -16,7 +16,8 @@ const STATION = 60003760;
 const HUB = { stationID: STATION, regionID: 10000002, stationName: "Jita IV - 4" };
 
 function fixture({ cashCents = 5_000_000_00, mode = "plan", playerAsks = [], seedPrice = 1000,
-  executor, wallet = null, buyMaxPct = null, minProfitBps = null, seedStation = STATION } = {}) {
+  executor, wallet = null, buyMaxPct = null, minProfitBps = null, seedStation = STATION,
+  playerEscrow = null } = {}) {
   const journalFile = path.join(os.tmpdir(),
     `trader-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
   const calls = [];
@@ -39,6 +40,7 @@ function fixture({ cashCents = 5_000_000_00, mode = "plan", playerAsks = [], see
     getStation: (id) => (Number(id) === STATION ? HUB : null),
     readWalletCents: () => (wallet === "unreadable" ? null : wallet === null ? cashCents : wallet),
     buyAsk: executor === undefined ? undefined : executor,
+    readPlayerAsks: playerEscrow === null ? null : async () => playerEscrow,
     journalFile,
     clock: () => 1_000_000,
     env: { EVEJS_COOP_TRADER_MAKER: "1", EVEJS_COOP_TRADER_MAKER_MODE: mode,
@@ -111,18 +113,25 @@ test("a settled order is never bought twice", async () => {
   fs.rmSync(f.journalFile, { force: true });
 });
 
-test("an unresolved claim fences the type until an operator looks at it", async () => {
+test("an ambiguous claim is resumed with the SAME key, and fenced after six attempts", async () => {
+  // The executor's fill id is a pure function of the claim key, so resuming is safe by construction:
+  // it finds its own durable marker and settles once, or finds the receipt and pays nothing.
   let buys = 0;
+  const keys = [];
   const f = fixture({ mode: "live",
     playerAsks: [{ typeID: 34, orderID: 9001, remainingQuantity: 50, unitPriceCents: 850 }],
-    executor: async () => { buys += 1; throw new Error("rpc timeout"); } });
+    executor: async (args) => { buys += 1; keys.push(args.claimKey); throw new Error("rpc timeout"); } });
   const first = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
   assert.equal(first.status, "TRADER_MAKER_NOT_SETTLED");
   const journal = JSON.parse(fs.readFileSync(f.journalFile, "utf8"));
   assert.equal(journal.claims["9001"].phase, "PREPARED", "write-ahead, never silently completed");
-  const second = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
-  assert.equal(buys, 1, "an ambiguous native outcome is never retried automatically");
-  assert.ok(["TRADER_MAKER_ALREADY_HANDLED", "TRADER_MAKER_NO_BARGAIN"].includes(second.status));
+  assert.equal(journal.claims["9001"].attempts, 1);
+  for (let tick = 0; tick < 6; tick += 1) await f.maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(buys, 6, "retried, but bounded");
+  assert.ok(keys.every((key) => key === keys[0]), "every retry reuses the original claim key");
+  const fenced = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(buys, 6, "after the attempt ceiling the order is left for an operator");
+  assert.ok(["TRADER_MAKER_ALREADY_HANDLED", "TRADER_MAKER_NO_BARGAIN"].includes(fenced.status));
   fs.rmSync(f.journalFile, { force: true });
 });
 
@@ -241,7 +250,8 @@ test("a clean refusal is retried a bounded number of times, then fenced", async 
   assert.equal(journal.claims["9001"].reason, "NPC_LIFT_ORDER_BUSY");
   const fenced = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
   assert.equal(buys, 3, "a refused order that keeps refusing is not hammered forever");
-  assert.equal(fenced.status, "TRADER_MAKER_ALREADY_HANDLED");
+  assert.ok(["TRADER_MAKER_NO_BARGAIN", "TRADER_MAKER_ALREADY_HANDLED"].includes(fenced.status),
+    "the fenced type is not even planned");
   fs.rmSync(f.journalFile, { force: true });
 });
 
@@ -274,4 +284,69 @@ test("a hub with no ask of its own still gets a price from the region, not from 
   const atHub = await hub.maker.tick({ stationID: STATION, typeIDs: [34] });
   assert.equal(atHub.candidates[0].referenceScope, "HUB", "the hub always wins when it has an ask");
   fs.rmSync(hub.journalFile, { force: true });
+});
+
+test("an ask in both the book and the escrow gets its SELLER from the escrow", async () => {
+  // Measured live 2026-11-06: the book row carries the price but no owner, so lot.sellerOwnerID was 0
+  // and every attempt answered BLOCKED:NPC_LIFT_REQUEST_INVALID. The escrow row names the seller.
+  const seen = [];
+  const f = fixture({ mode: "live",
+    playerAsks: [{ typeID: 34, orderID: 9001, remainingQuantity: 50, unitPriceCents: 850 }],
+    playerEscrow: [{ orderID: "9001", remainingQuantity: 50, unitPriceCents: 850,
+      sellerOwnerID: 140000005 }],
+    executor: async (args) => { seen.push(args);
+      return { status: "NPC_PURCHASED_PLAYER_GOODS", fillID: 3, itemID: 4 }; } });
+  const result = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(result.status, "TRADER_MAKER_SETTLED");
+  assert.equal(seen[0].sellerID, 140000005, "the settlement knows whom to pay");
+  assert.equal(seen[0].quantity, 50);
+  fs.rmSync(f.journalFile, { force: true });
+});
+
+test("book and escrow disagreeing on quantity or price is not an offer", async () => {
+  const f = fixture({ mode: "plan",
+    playerAsks: [{ typeID: 34, orderID: 9001, remainingQuantity: 50, unitPriceCents: 850 }],
+    playerEscrow: [{ orderID: "9001", remainingQuantity: 50, unitPriceCents: 900,
+      sellerOwnerID: 140000005 }] });
+  const result = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(result.status, "TRADER_MAKER_NO_BARGAIN");
+  fs.rmSync(f.journalFile, { force: true });
+});
+
+test("a claim the executor already started is finished before anything new is planned", async () => {
+  // The order is no longer on the book at all (the fill closed it), so only the journal can find it.
+  const calls = [];
+  const claimKey = "npc-corpbuy:" + "a".repeat(32);
+  const f = fixture({ mode: "live", playerAsks: [],
+    executor: async (args) => { calls.push(args);
+      return { status: "NPC_PURCHASED_PLAYER_GOODS", fillID: 9, itemID: 8 }; } });
+  fs.writeFileSync(f.journalFile, JSON.stringify({ version: 1, claims: { "286": {
+    phase: "PREPARED", claimKey, typeID: 21472, stationID: STATION, quantity: 1,
+    unitPriceCents: 6_470_000_000, sellerID: 140000005, createdAt: 1, attempts: 1, refusals: 0,
+  } } }));
+  const result = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(calls.length, 1, "the pending claim is resumed even with nothing to plan");
+  assert.equal(calls[0].claimKey, claimKey, "with the same claim key, so it cannot pay twice");
+  assert.equal(calls[0].sellerID, 140000005);
+  assert.equal(calls[0].orderID, "286");
+  assert.equal(result.status, "TRADER_MAKER_SETTLED");
+  assert.equal(result.executions[0].resumed, true);
+  const journal = JSON.parse(fs.readFileSync(f.journalFile, "utf8"));
+  assert.equal(journal.claims["286"].phase, "SETTLED");
+  assert.equal(journal.claims["286"].fillID, 9);
+  fs.rmSync(f.journalFile, { force: true });
+});
+
+test("a claim with no recorded seller is left for an operator instead of guessing", async () => {
+  const calls = [];
+  const f = fixture({ mode: "live", playerAsks: [],
+    executor: async (args) => { calls.push(args); return { status: "BLOCKED", reason: "x" }; } });
+  fs.writeFileSync(f.journalFile, JSON.stringify({ version: 1, claims: { "286": {
+    phase: "PREPARED", claimKey: "npc-corpbuy:" + "b".repeat(32), typeID: 21472,
+    stationID: STATION, quantity: 1, unitPriceCents: 6_470_000_000, createdAt: 1, attempts: 1,
+  } } }));
+  const result = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(calls.length, 0);
+  assert.equal(result.status, "TRADER_MAKER_ALREADY_HANDLED");
+  fs.rmSync(f.journalFile, { force: true });
 });

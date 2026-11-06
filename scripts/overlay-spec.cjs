@@ -592,7 +592,7 @@ for(const name of [
 // installed modules that require files it never copied (caught by the drift gate).
 for(const name of ["coopCorporateShipment","coopNativeSaleLedger","coopNativeSaleProofSettlement",
  "coopNativeSaleRefusalWindow","coopRefineryBudget","coopSaleAmount","coopNpcTraderMaker",
- "coopNpcTraderRelist","coopTraderEndowment"]) if(!names.includes(name))names.push(name);
+ "coopNpcTraderRelist","coopTraderEndowment","coopNpcPlayerAskLift"]) if(!names.includes(name))names.push(name);
 
 module.exports={PIN,names,ORE_PATCH_PATHS,STRUCTURE_PATCH_PATHS,SOCIAL_PATCH_PATHS,specs,oldLines,lootOld,lootNew,slimBroadcastOld,slimBroadcastNew};
 

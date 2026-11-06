@@ -4,10 +4,31 @@
 // Manual, default OFF, never schedules itself or impersonates a player session.
 const TABLES=Object.freeze(["corporationRuntime","characters","items","marketEscrow","npcMarketFills"]);
 const SEP="\u001f",ESCROW_BASE=9200000000;
+// Measured 2026-11-06: the owner's real modules cost 7 651 000 to 113 400 000 ISK per unit, and the
+// original 1 000 000 ISK per-unit ceiling refused every one of them (NPC_LIFT_REQUEST_INVALID, and
+// the same bound in the Rust-claim path). 1 000 000 000 ISK per unit keeps a real ceiling without
+// making the top half of this market unbuyable; the total per trade stays capped below.
+const MAX_UNIT_PRICE_CENTS=100000000000;
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const nonneg=x=>Number.isSafeInteger(x)&&x>=0;
 const validKey=x=>typeof x==="string"&&/^npc-corpbuy:[0-9a-f]{32}$/.test(x);
 const toInt=x=>typeof x==="string"&&/^(0|[1-9][0-9]*)$/.test(x)?Number(x):x;
+// Book ids travel as decimal text; the escrow container is 9 200 000 000 + orderID, so only an id
+// that round-trips exactly through a safe integer may be used for arithmetic.
+const orderIdOf=x=>{
+ if(typeof x==="number")return pos(x)?x:null;
+ if(typeof x!=="string"||!/^[1-9][0-9]{0,15}$/.test(x))return null;
+ const value=Number(x);
+ return Number.isSafeInteger(value)&&String(value)===x?value:null;
+};
+// A stack is N units; a SINGLETON (a module, a ship) is exactly one unit and the native row stores
+// it as quantity -1 / stacksize 1. The old `quantity === stacksize === N` test therefore refused
+// every real module the owner sells (measured 2026-11-06: 'Gauntlet' Small Focused Beam Laser I).
+const unitCountOf=item=>{
+ if(item?.singleton===1)return item.stacksize==null||item.stacksize===1?1:null;
+ return pos(item?.quantity)&&pos(item?.stacksize)&&item.quantity===item.stacksize?
+  item.quantity:null;
+};
 // Native wallets must already be canonical to the cent. Rounding an
 // existing balance during an atomic buy silently destroys or invents ISK.
 const cents=x=>{
@@ -45,7 +66,7 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
      n(claim.station_id)!==request.stationID||
      n(claim.type_id)!==request.typeID||quantity!==request.quantity||
      quantity>50000||priceCents>request.maxUnitPriceCents||
-     priceCents>100000000)
+     priceCents>MAX_UNIT_PRICE_CENTS)
    throw Error("NPC_CORP_BUY_RUST_IDENTITY_CHANGED");
   const grossCents=quantity*priceCents;
   if(!pos(grossCents)||grossCents>100000000000)
@@ -124,7 +145,7 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
    if(matched.length!==1)throw Error("NPC_CORP_BUY_SINGLE_ESCROW_STACK_REQUIRED");
    const {key:itemKey,value:item}=matched[0];
    if(String(item.itemID)!==itemKey||item.typeID!==request.typeID||
-      item.singleton!==0||item.quantity!==quantity||item.stacksize!==quantity||
+      unitCountOf(item)!==quantity||
       !pos(item.itemID)||!pos(item.categoryID)||item.categoryID===9)
     throw Error("NPC_CORP_BUY_PHYSICAL_STACK_UNVERIFIED");
    const division=corporation?.wallet?.divisions?.["1000"];
@@ -133,7 +154,12 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
    // GameStore read plus the Rust claim and verified physical escrow.
    // If the row DOES contain an embedded ID, it must agree exactly.
    const sellerEmbedded=seller?.characterID??seller?.charID;
-   if(corporation?.corporationID!==request.buyerCorpID||!division||
+   // Same rule as the seller row: the runtime wallet is stored BY KEY and carries no embedded
+   // corporationID (measured 2026-11-06 on 1000035), so an embedded id, when present, must agree,
+   // and its absence is bound by the keyed read that produced this row.
+   const corpEmbedded=corporation?.corporationID;
+   if((corpEmbedded!==undefined&&corpEmbedded!==null&&
+       Number(corpEmbedded)!==request.buyerCorpID)||!division||
      !Array.isArray(division.journal)||!Array.isArray(division.transactions)||
      cents(division.balance)===null||!seller||
      (sellerEmbedded!==undefined&&sellerEmbedded!==null&&
@@ -213,11 +239,14 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
  }
  async function purchaseOnce(request={}){
   if(!enabled())return {status:"BLOCKED",reason:"NPC_CORP_BUY_DISABLED"};
+  const orderID=orderIdOf(request&&request.orderID);
+  if(orderID===null)return {status:"BLOCKED",reason:"NPC_CORP_BUY_REQUEST_INVALID"};
+  request={...request,orderID};
   if(!request||!validKey(request.claimKey)||
      [request.buyerCorpID,request.sellerID,request.stationID,
       request.typeID,request.orderID,request.quantity,
       request.maxUnitPriceCents].some(x=>!pos(x))||
-     request.quantity>50000||request.maxUnitPriceCents>100000000||
+     request.quantity>50000||request.maxUnitPriceCents>MAX_UNIT_PRICE_CENTS||
      !nonneg(request.minReserveCents)||request.sellerID===request.buyerCorpID)
    return {status:"BLOCKED",reason:"NPC_CORP_BUY_REQUEST_INVALID"};
   if(verifyBuyerCorporation(request.buyerCorpID,request.stationID)!==true||

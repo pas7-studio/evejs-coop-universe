@@ -76,6 +76,7 @@ function createTraderMaker({
   // One lot is one whole escrow stack: the atomic settlement moves ONE stack and pays ONE exact
   // quantity, so a truncated lot can never settle. It is skipped, not silently shrunk.
   const MAX_REFUSALS = 3;
+  const MAX_ATTEMPTS = 6;
 
   const lock = journalFile + ".lock";
 
@@ -108,10 +109,16 @@ function createTraderMaker({
     }
   }
 
+  // A type is fenced only by a claim we have given up on. A claim that may still be resumed must let
+  // the planner see the order again, otherwise the resume can never happen (measured 2026-11-06).
   function ownedByUs(typeID) {
     const state = loadJournal();
-    return Object.values(state.claims).some((claim) =>
-      claim && Number(claim.typeID) === Number(typeID) && claim.phase === "PREPARED");
+    return Object.values(state.claims).some((claim) => {
+      if (!claim || Number(claim.typeID) !== Number(typeID)) return false;
+      if (claim.phase === "PREPARED") return (claim.attempts || 0) >= MAX_ATTEMPTS;
+      if (claim.phase === "REFUSED") return (claim.refusals || 0) >= MAX_REFUSALS;
+      return false;
+    });
   }
 
   async function bookFor(regionID, typeID, stationID) {
@@ -154,16 +161,36 @@ function createTraderMaker({
     // provides one, and never trust a row it would not name.
     if (typeof readPlayerAsks === "function") {
       const escrowed = await readPlayerAsks(stationID, typeID);
-      const known = new Set(playerAsks.map((ask) => String(ask.orderID)));
+      const known = new Map(playerAsks.map((ask) => [String(ask.orderID), ask]));
+      const disagreed = new Set();
       for (const row of Array.isArray(escrowed) ? escrowed : []) {
         const orderID = String(row && row.orderID || "");
         const priceCents = money(row && row.unitPriceCents);
         const volume = pos(row && row.remainingQuantity);
-        if (!/^[0-9]{1,20}$/.test(orderID) || known.has(orderID)) continue;
+        if (!/^[0-9]{1,20}$/.test(orderID)) continue;
         if (priceCents === null || !(priceCents > 0) || !volume) continue;
+        const sellerOwnerID = pos(row && row.sellerOwnerID);
+        const existing = known.get(orderID);
+        if (existing) {
+          // The same order also appears in the book. The book carries the price, the escrow carries
+          // the SELLER - and a settlement that does not know whom to pay is not an offer. Only the
+          // two agreeing on quantity and price may be lifted.
+          if (existing.remainingQuantity !== volume || existing.unitPriceCents !== priceCents) {
+            // Two authorities disagree about the same order: it is not an offer until they agree.
+            disagreed.add(orderID);
+            continue;
+          }
+          if (sellerOwnerID) existing.sellerOwnerID = sellerOwnerID;
+          continue;
+        }
         playerAsks.push({ typeID, orderID, stationID, remainingQuantity: volume,
-          unitPriceCents: priceCents, verifiedNative: true, state: "open" });
-        known.add(orderID);
+          unitPriceCents: priceCents, sellerOwnerID, verifiedNative: true, state: "open" });
+        known.set(orderID, playerAsks[playerAsks.length - 1]);
+      }
+      if (disagreed.size) {
+        for (let index = playerAsks.length - 1; index >= 0; index -= 1) {
+          if (disagreed.has(String(playerAsks[index].orderID))) playerAsks.splice(index, 1);
+        }
       }
     }
     return { referenceCents: reference, referenceScope: hubCents !== null ? "HUB" : (regionCents !== null ? "REGION" : "NONE"),
@@ -240,7 +267,9 @@ function createTraderMaker({
       executions: [],
       refused: [],
     };
-    if (!live || !plans.length) {
+    // In live mode the journal is opened even with nothing to plan: a claim the executor already
+    // started still has to be finished (its order is not on the book any more).
+    if (!live) {
       probe.observe("space.trader-maker", null, null, {
         status: summary.status, mode: summary.mode, hub: summary.hub, buyerCorpID: summary.buyerCorpID,
         cashCents: summary.cashCents, typesRead: summary.typesRead,
@@ -263,15 +292,69 @@ function createTraderMaker({
     try {
       const journal = loadJournal();
       let alreadyHandled = 0;
+      // Resume first: a claim the executor already started must be finished even when its order is no
+      // longer on the book at all (the fill closed it). The same claim key is what makes this land on
+      // the same marker and the same receipt row, so it can never pay twice.
+      const resumable = Object.entries(journal.claims)
+        .filter(([, claim]) => claim && claim.phase === "PREPARED" &&
+          (claim.attempts || 0) < MAX_ATTEMPTS && claim.claimKey &&
+          pos(claim.sellerID) && pos(claim.stationID) && pos(claim.typeID) &&
+          pos(claim.quantity) && pos(claim.unitPriceCents))
+        .slice(0, Math.max(0, maxBuysPerTick));
+      for (const [orderID, claim] of resumable) {
+        let resumed;
+        try {
+          resumed = await buyAsk({
+            claimKey: claim.claimKey, buyerCorpID, sellerID: claim.sellerID,
+            stationID: claim.stationID, typeID: claim.typeID, orderID,
+            quantity: claim.quantity, maxUnitPriceCents: claim.unitPriceCents, minReserveCents,
+          });
+        } catch (error) {
+          resumed = { status: "TRADER_EXECUTOR_THROW",
+            reason: String(error && error.message || error).slice(0, 120) };
+        }
+        const done = resumed && resumed.status === "NPC_PURCHASED_PLAYER_GOODS";
+        const refused = !done && resumed && resumed.status === "BLOCKED";
+        journal.claims[orderID] = {
+          ...claim,
+          phase: done ? "SETTLED" : (refused ? "REFUSED" : "PREPARED"),
+          attempts: (claim.attempts || 0) + 1,
+          refusals: refused ? (claim.refusals || 0) + 1 : (claim.refusals || 0),
+          result: String(resumed && resumed.status || "NO_RESULT"),
+          reason: done ? null : String((resumed && resumed.reason) || "NO_REASON").slice(0, 120),
+          fillID: done ? resumed.fillID : claim.fillID,
+          itemID: done ? resumed.itemID : claim.itemID,
+          atMs: clock(),
+        };
+        saveJournal(journal);
+        summary.executions.push({ typeID: claim.typeID, orderID, quantity: claim.quantity,
+          buyUnitPriceCents: claim.unitPriceCents, settled: done,
+          fillID: done ? resumed.fillID : null, resumed: true,
+          outcome: String(resumed && resumed.status || "NO_RESULT") });
+      }
+      if (!plans.length && !summary.executions.length) {
+        // Nothing new and nothing to resume: report the same shape as the read-only path.
+        summary.status = "TRADER_MAKER_ALREADY_HANDLED";
+        probe.observe("space.trader-maker", null, null, {
+          status: summary.status, mode: summary.mode, hub: summary.hub,
+          buyerCorpID: summary.buyerCorpID, cashCents: summary.cashCents,
+          typesRead: summary.typesRead, typesWithPlayerAsks: summary.typesWithPlayerAsks,
+          candidates: [],
+        });
+        return summary;
+      }
       for (const plan of plans) {
         if (summary.executions.length >= maxBuysPerTick) break;
         const lot = plan.lots[0];
         const key = String(lot.sourceOrderID);
         const existing = journal.claims[key];
         if (existing && existing.phase === "SETTLED") { alreadyHandled += 1; continue; }
-        // A PREPARED claim may already have closed the book row: never touch it again. A REFUSED
-        // claim moved nothing at all, so a later tick may retry it - a bounded number of times.
-        if (existing && existing.phase === "PREPARED") continue;
+        // A retry is safe and necessary: the executor's fill id is a pure function of the claim key,
+        // so the SAME claim can be resumed (it finds its own marker and settles once, or finds a
+        // committed receipt and pays nothing). Both outcomes are bounded so a broken order cannot
+        // be hammered for ever.
+        if (existing && existing.phase === "PREPARED" &&
+            (existing.attempts || 0) >= MAX_ATTEMPTS) continue;
         if (existing && existing.phase === "REFUSED" &&
             (existing.refusals || 0) >= MAX_REFUSALS) continue;
         // Whole escrow only: the settlement pays for exactly one whole physical stack.
@@ -280,10 +363,16 @@ function createTraderMaker({
             offerQuantity: lot.offerQuantity, reason: "LOT_REQUIRES_PARTIAL_SETTLEMENT" });
           continue;
         }
-        const claimKey = "npc-corpbuy:" + crypto.randomUUID().replace(/-/g, "");
+        // Same claim key on a retry: that is what makes the resume land on the same receipt row.
+        const claimKey = existing && existing.claimKey
+          ? existing.claimKey
+          : "npc-corpbuy:" + crypto.randomUUID().replace(/-/g, "");
         journal.claims[key] = { phase: "PREPARED", claimKey, typeID: lot.typeID,
           stationID: lot.stationID, quantity: lot.quantity, unitPriceCents: lot.buyUnitPriceCents,
-          createdAt: clock(), refusals: existing ? (existing.refusals || 0) : 0 };
+          sellerID: lot.sellerOwnerID,
+          createdAt: existing && existing.createdAt ? existing.createdAt : clock(),
+          attempts: ((existing && existing.attempts) || 0) + 1,
+          refusals: existing ? (existing.refusals || 0) : 0 };
         saveJournal(journal); // write-ahead, same rule the coordinator uses
         let result;
         try {
@@ -306,7 +395,10 @@ function createTraderMaker({
           refusals: refused ? ((existing ? (existing.refusals || 0) : 0) + 1)
             : (journal.claims[key].refusals || 0),
           result: String(result && result.status || "NO_RESULT"),
-          reason: refused ? String(result.reason || "NO_REASON").slice(0, 90) : null,
+          // Always keep the executor's own words: a swallowed reason is what made the live
+          // diagnosis a guess ("TRADER_EXECUTOR_THROW" with no message).
+          reason: settled ? null
+            : String((result && result.reason) || "NO_REASON").slice(0, 120),
           fillID: settled ? result.fillID : null,
           itemID: settled ? result.itemID : null,
           atMs: clock(),

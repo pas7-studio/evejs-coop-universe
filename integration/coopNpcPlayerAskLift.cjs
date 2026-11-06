@@ -44,6 +44,16 @@ const cents = (isk) => {
   return Number.isSafeInteger(whole) && Math.abs(scaled - whole) <= 1e-6 ? whole : null;
 };
 
+// The book carries order ids as decimal text (a seed id is 64-bit), and every settlement path here
+// does real arithmetic on them (the escrow container is 9 200 000 000 + orderID). Accept a numeric
+// string only when it round-trips exactly, so a 64-bit id can never be silently truncated.
+const orderIdOf = (x) => {
+  if (typeof x === "number") return pos(x) ? x : null;
+  if (typeof x !== "string" || !/^[1-9][0-9]{0,15}$/.test(x)) return null;
+  const value = Number(x);
+  return Number.isSafeInteger(value) && String(value) === x ? value : null;
+};
+
 // The fill id must be a pure function of the claim key: a retry after a crash has to land on the
 // same receipt row, and never on a second wallet transaction.
 function deriveFillID(claimKey) {
@@ -82,13 +92,16 @@ function createNpcPlayerAskLift({
       [x.buyerCorpID, x.sellerID, x.stationID, x.typeID, x.orderID, x.quantity,
         x.maxUnitPriceCents].every(pos) &&
       nonneg(x.minReserveCents) &&
-      x.quantity <= 50000 && x.maxUnitPriceCents <= 100000000 &&
+      x.quantity <= 50000 && x.maxUnitPriceCents <= 100000000000 &&
       x.sellerID !== x.buyerCorpID);
   }
 
   function readRow(table, key) {
-    const result = gameStore.read(table, "/" + key);
-    return result?.success === true ? result.data : null;
+    // A native row key contains the  separator (corp-buy<SEP><fillID>), and a JSON path read
+    // treats that separator as nesting: measured 2026-11-06, the marker read back as
+    // {"corp-buy":{"<fillID>":{...}}} and every resume answered NPC_LIFT_FOREIGN_FILL. Read the exact
+    // key through the same atomic bridge the settlement transaction uses.
+    return gameStore.coopAtomicNativeRows.transact([table], (tx) => tx.get(table, key)) ?? null;
   }
 
   // A committed receipt is the whole answer: the money already moved and must never move again.
@@ -142,8 +155,11 @@ function createNpcPlayerAskLift({
   }
 
   async function readBookRow(request) {
-    const row = await marketClient.call("GetOrder", { order_id: String(request.orderID) });
-    if (!row) throw Error("NPC_LIFT_BOOK_ROW_MISSING");
+    const native = await marketClient.call("GetOrder", { order_id: String(request.orderID) });
+    if (!native) throw Error("NPC_LIFT_BOOK_ROW_MISSING");
+    // The daemon answers with the order split in two: identity/state at the top level and the row
+    // itself (`price`, `station_id`, `type_id`, `vol_remaining`, `source`) nested under `row`.
+    const row = { ...native, ...(native.row && typeof native.row === "object" ? native.row : {}) };
     const priceCents = cents(Number(row.price));
     const state = String(row.state === null || row.state === undefined ? "" : row.state).toLowerCase();
     const isCorp = row.is_corp === true || Number(row.is_corp) === 1;
@@ -172,18 +188,23 @@ function createNpcPlayerAskLift({
         escrow.remainingQuantity !== request.quantity ||
         escrow.escrowLocationID !== ESCROW_BASE + request.orderID)
       return { ok: false, reason: "NPC_LIFT_ESCROW_SCOPE_INVALID" };
-    if (cents(Number(escrow.price)) !== priceCents)
+    // A player sell escrow row has no price at all; the book is the price authority. If some other
+    // writer did record one (the relist path stores coopTradePriceCents), it must agree exactly.
+    const escrowCents = cents(Number(escrow.price));
+    if (escrowCents !== null && escrowCents !== priceCents)
       return { ok: false, reason: "NPC_LIFT_PRICE_AUTHORITY_DISAGREE" };
     const items = itemStore.listOwnedItems(request.sellerID);
     if (!Array.isArray(items) || items.length > 10000)
       return { ok: false, reason: "NPC_LIFT_ITEMS_UNAVAILABLE" };
     const stack = items.filter((item) => item?.ownerID === request.sellerID &&
       item.locationID === escrow.escrowLocationID && item.flagID === 4);
+    // A singleton (module, ship) is one unit stored as quantity -1 / stacksize 1; a stack is N.
+    const unitCount = (item) => item?.singleton === 1
+      ? (item.stacksize === null || item.stacksize === undefined || item.stacksize === 1 ? 1 : null)
+      : (pos(item?.quantity) && item.quantity === item?.stacksize ? item.quantity : null);
     if (stack.length !== 1 ||
         stack[0].typeID !== request.typeID ||
-        stack[0].quantity !== request.quantity ||
-        stack[0].stacksize !== request.quantity ||
-        stack[0].singleton !== 0)
+        unitCount(stack[0]) !== request.quantity)
       return { ok: false, reason: "NPC_LIFT_ESCROW_STACK_UNVERIFIED" };
     return { ok: true, escrow, itemID: stack[0].itemID };
   }
@@ -197,8 +218,10 @@ function createNpcPlayerAskLift({
     });
   }
 
-  async function liftOnce(request = {}) {
+  async function liftOnce(input = {}) {
     if (!enabled()) return { status: "BLOCKED", reason: "NPC_LIFT_DISABLED" };
+    const orderID = orderIdOf(input && input.orderID);
+    const request = orderID === null ? null : { ...input, orderID };
     if (!validateRequest(request)) return { status: "BLOCKED", reason: "NPC_LIFT_REQUEST_INVALID" };
     const fillID = deriveFillID(request.claimKey);
     if (!pos(fillID)) return { status: "BLOCKED", reason: "NPC_LIFT_CLAIM_KEY_INVALID" };

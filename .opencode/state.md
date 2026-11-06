@@ -25,12 +25,16 @@ Band: `EVEJS_COOP_TRADER_BUY_MAX_PCT=1` (at or below the real ask), `EVEJS_COOP_
 `EVEJS_COOP_NPC_BUY_PLAYER_ASK=1` — all three are in `Code/compose.coop-probe.yaml`. Lots are never
 truncated (whole escrow stack only) and a `BLOCKED` executor answer is retried 3× then fenced.
 
-Evidence: `tests/coop-npc-player-ask-lift.test.mjs` (10) + 3 trader-maker cases + the full suite.
-**Not yet verified live**: Docker Desktop and the client are both down (last gamelog 12 h old).
-When the stack is up: `node /tmp/verify-owner-asks.js` (read-only: which of his asks the band would
-buy), then watch `space.trader-maker` for `TRADER_MAKER_SETTLED` with `executions[].settled=true`,
-his wallet credited and the corporation's debited. `repair-stale-escrow.js` (dry run first) clears
-the escrow row left behind by the order-281 experiment.
+Evidence: `tests/coop-npc-player-ask-lift.test.mjs` (13) + 16 trader-maker cases + the full suite.
+**Verified live on the play stack 2026-11-06**: 22 of his 23 asks were bought at the configured band,
+gross 1 231 691 000 ISK, native tax 55 179 756.8, net to him 1 176 511 243.2 (wallet
+756 929 709.48 → 1 933 440 952.68), every module now in 1000035's hangar at 60003760, 22 committed
+receipts with zero conservation violations. Seven defects were found and fixed in that order; the
+whole list is `docs/NPC_MARKET_MAKER.md` §10.
+
+Still open: `ReserveNpcSellOrder` / `ActivateNpcSellOrder` do not exist in the daemon either, so the
+trader cannot RELIST what it bought and the industry/salvage NPC sale paths cannot list at all. That
+is the next engine piece (Rust, needs a market rebuild).
 
 ## Current state
 

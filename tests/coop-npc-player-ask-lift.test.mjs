@@ -23,23 +23,26 @@ const FILL = deriveFillID(CLAIM);
 const CKEY = "corporations\u001f" + BUYER, RECEIPT = "corp-buy\u001f" + FILL;
 const UNIT_CENTS = 125, QUANTITY = 20;
 
-const request = () => ({ claimKey: CLAIM, buyerCorpID: BUYER, sellerID: SELLER,
-  stationID: STATION, typeID: TYPE, orderID: ORDER, quantity: QUANTITY,
-  maxUnitPriceCents: UNIT_CENTS, minReserveCents: 10000 });
+const requestFor = (unitCents, quantity) => ({ claimKey: CLAIM, buyerCorpID: BUYER,
+  sellerID: SELLER, stationID: STATION, typeID: TYPE, orderID: ORDER, quantity,
+  maxUnitPriceCents: unitCents, minReserveCents: 10000 });
 
-function fixture({ buyerISK = 1000, bookState = "open", bookPrice = 1.25,
-  escrowPrice = 1.25, faultOn = null, ackPatch = null } = {}) {
+function fixture({ buyerISK = 1000, bookState = "open", unitCents = UNIT_CENTS,
+  quantity = QUANTITY, escrowPrice = null, faultOn = null, ackPatch = null,
+  singleton = false, wrapOrder = false } = {}) {
+  const bookPrice = unitCents / 100;
+  const escrowPriceISK = escrowPrice === null ? bookPrice : escrowPrice;
   const data = {
     corporationRuntime: { [CKEY]: { corporationID: BUYER, wallet: { divisions: { "1000": {
       balance: buyerISK, journal: [], transactions: [] } } } } },
     characters: { [SELLER]: { characterID: SELLER, balance: 100,
       walletJournal: [], marketTransactions: [] } },
     items: { [ITEM]: { itemID: ITEM, typeID: TYPE, ownerID: SELLER,
-      locationID: 9200000000 + ORDER, flagID: 4, singleton: 0, categoryID: 8,
-      quantity: QUANTITY, stacksize: QUANTITY } },
+      locationID: 9200000000 + ORDER, flagID: 4, singleton: singleton ? 1 : 0, categoryID: 8,
+      quantity: singleton ? -1 : quantity, stacksize: singleton ? 1 : quantity } },
     marketEscrow: { [ORDER]: { orderId: String(ORDER), escrowType: "sell", isCorp: false,
-      ownerId: SELLER, stationId: STATION, typeId: TYPE, price: escrowPrice,
-      escrowLocationID: 9200000000 + ORDER, remainingQuantity: QUANTITY } },
+      ownerId: SELLER, stationId: STATION, typeId: TYPE, price: escrowPriceISK,
+      escrowLocationID: 9200000000 + ORDER, remainingQuantity: quantity } },
     npcMarketFills: {},
   };
   const copy = (v) => structuredClone(v);
@@ -76,10 +79,15 @@ function fixture({ buyerISK = 1000, bookState = "open", bookPrice = 1.25,
   const calls = [];
   const book = { order_id: String(ORDER), owner_id: SELLER, is_corp: false, bid: false,
     station_id: STATION, type_id: TYPE, price: bookPrice, state: bookState,
-    vol_remaining: bookState === "open" ? QUANTITY : 0, source: "player" };
+    vol_remaining: bookState === "open" ? quantity : 0, source: "player" };
   const marketClient = { call: async (method, params) => {
     calls.push({ method, params });
-    if (method === "GetOrder") return { ...book };
+    if (method === "GetOrder") {
+      if (!wrapOrder) return { ...book };
+      // The real daemon splits the order: identity/state on top, the row nested.
+      const { bid, price, station_id, type_id, vol_remaining, source, ...identity } = book;
+      return { ...identity, source, row: { bid, price, station_id, type_id, vol_remaining, source } };
+    }
     if (method === "FillOrder") {
       if (bookState !== "open") throw Error("test: order is not open");
       bookState = "filled"; book.state = "filled"; book.vol_remaining = 0;
@@ -106,7 +114,7 @@ function fixture({ buyerISK = 1000, bookState = "open", bookPrice = 1.25,
     verifyBuyerCorporation: () => true, verifyPlayerSeller: () => true,
     clock: () => 1762000000000,
     recordTrade: (args) => marketClient.call("RecordTrade", args) });
-  return { data, lift, request: request(), calls, book,
+  return { data, lift, request: requestFor(unitCents, quantity), calls, book,
     fills: () => calls.filter((call) => call.method === "FillOrder").length,
     trades: () => calls.filter((call) => call.method === "RecordTrade").length,
     failNextPut: (table) => { failing = table; } };
@@ -235,3 +243,45 @@ test("the fill id is a pure function of the claim key", () => {
   assert.equal(deriveFillID("npc-corpbuy:not-hex"), null);
   assert.equal(deriveFillID(CLAIM.replace(/^npc-corpbuy:/, "npc-trade:")), null);
 });
+
+test("a real module price is bought: the per-unit ceiling is not one million ISK", () =>
+  run(async () => {
+    // Measured 2026-11-06: the owner's asks are 7 651 000 - 113 400 000 ISK per unit, and the
+    // original 1 000 000 ISK per-unit ceiling refused every one of them as REQUEST_INVALID.
+    const big = fixture({ unitCents: 7_651_000_000, quantity: 1, buyerISK: 100_000_000 });
+    const result = await big.lift.liftOnce(big.request);
+    assert.equal(result.status, "NPC_PURCHASED_PLAYER_GOODS");
+    assert.equal(big.data.corporationRuntime[CKEY].wallet.divisions["1000"].balance,
+      100_000_000 - 76_510_000, "the corporation paid the real 76.51 M ISK");
+    assert.equal(big.data.characters[SELLER].balance, 100 + 70_389_200,
+      "the seller got the gross minus the real native tax");
+    assert.equal(big.fills(), 1);
+  }));
+
+test("a book order id carried as text is accepted; a 64-bit id is refused, never truncated", () =>
+  run(async (f) => {
+    // Measured live 2026-11-06: the maker passes lot.sourceOrderID as text ("292"), and pos() on a
+    // string answered BLOCKED:NPC_LIFT_REQUEST_INVALID for every real ask.
+    const asText = { ...f.request, orderID: String(ORDER) };
+    assert.equal((await f.lift.liftOnce(asText)).status, "NPC_PURCHASED_PLAYER_GOODS");
+    const huge = await f.lift.liftOnce({ ...f.request, claimKey: "npc-corpbuy:" + "f".repeat(32),
+      orderID: "2257714186837032994" });
+    assert.equal(huge.status, "BLOCKED");
+    assert.equal(huge.reason, "NPC_LIFT_REQUEST_INVALID",
+      "a seed-sized id cannot round-trip through a safe integer, so it is refused");
+  }));
+
+test("a singleton module is bought as one unit, and GetOrder's nested row is read", () =>
+  run(async () => {
+    // Measured live 2026-11-06: 'Gauntlet' Small Focused Beam Laser I is a singleton (quantity -1,
+    // stacksize 1, singleton 1) and GetOrder nests price/station/type/volume under `row`.
+    const f = fixture({ singleton: true, wrapOrder: true, quantity: 1,
+      unitCents: 1_287_000_000, buyerISK: 100_000_000 });
+    const result = await f.lift.liftOnce({ ...f.request, quantity: 1 });
+    assert.equal(result.status, "NPC_PURCHASED_PLAYER_GOODS");
+    assert.equal(f.data.items[ITEM].ownerID, BUYER);
+    assert.equal(f.data.items[ITEM].singleton, 1, "the module stays a module");
+    assert.equal(f.data.corporationRuntime[CKEY].wallet.divisions["1000"].balance,
+      100_000_000 - 12_870_000);
+    assert.equal(f.fills(), 1);
+  }));

@@ -39,8 +39,14 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
  function corp(id){
   const record=read("corporations","/records/"+id);
   const runtime=read("corporationRuntime","/corporations/"+id);
+  // Pinned native EveJS stores the runtime wallet by KEY: measured 2026-11-06, the live row for
+  // 1000035 has no embedded corporationID at all, so demanding one refused every real corporation
+  // (NPC_LIFT_AUTHORITY_UNVERIFIED on the owner's own market). Identity is the keyed read plus the
+  // `corporations` record; an embedded id, when present, must still agree exactly.
+  const embedded=runtime?.corporationID;
   if(record?.corporationID!==id||record.isNPC!==true||
-     runtime?.corporationID!==id||cents(runtime?.wallet?.divisions?.["1000"]?.balance)===null)
+     (embedded!==undefined&&embedded!==null&&Number(embedded)!==id)||
+     cents(runtime?.wallet?.divisions?.["1000"]?.balance)===null)
    throw Error("ALIFE_BUYER_NATIVE_CORPORATION_NOT_VERIFIED");
   return {record,runtime,walletCents:cents(runtime.wallet.divisions["1000"].balance)};
  }
