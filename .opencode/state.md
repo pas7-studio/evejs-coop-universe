@@ -188,6 +188,31 @@ What remains is the world tick itself (~380-450 ms for 46 phases), not a single 
 work there means profiling the phases, which is a separate project. Full suite after all of it:
 7 674 tests, 7 579 pass, 0 fail.
 
+**Telemetry was the biggest self-inflicted stall** (fork `f04bf21`). `EVEJS_COOP_MEMORY_METRICS=1`
+samples once a minute, and it answered four registry questions by DEEP-CLONING the registries:
+`getStateSnapshot()` for the dungeon (1 669 ms for 8 796 instances), `listNativeEntities()` 432 ms,
+`listNativeControllers()` 863 ms, `listNativeWrecks()` 10 ms - **~2.97 s of blocked event loop every
+60 s**, for numbers nobody reads in that instant. The sampler now uses counters that walk the live
+cache: 0.67 / 0.64 / 0.03 / 0.76 ms, every value identical (verified side by side on the live table).
+
+**The missile freeze (client, not server).** The owner's client hung dead at 2026-11-06 17:44:24 while
+firing six Cruise Missile Launchers; the server kept sending updates throughout, so the server was
+fine. The server log shows `[DestinyAuthority] Repaired owner_missile_lifecycle` **every second**
+during the flight, with the ceiling being lowered each time. The engine's own comment explains why:
+with six launchers the missile lifecycle stamps compound ~12 per tick, and the hard cap
+(`ownerCriticalCeilingStamp`) forces them back to near the current session stamp so the client's
+`_current_time` cannot run ahead of wall clock - which is exactly what the 2026-11-04 movement fix
+(`f9d7b92`) had to trade against. **No blind patch was applied**: the lead constant is used in ~40
+places and the cap is load-bearing. Next reproduction needs the missile trace
+(`logs/space-missile-debug.log`, gated by log level >= 2) to capture the exact batch that wedges the
+client.
+
+Open performance picture after the fix: the current window still shows p50 ~1.36 s and a 8.6 s worst
+stall, with RSS climbing to 4.5 GB while **every registry is stable** (8 559 entities, 8 797 dungeon
+instances, 428 wrecks) - that is heap churn, not a leak. Per-phase retained memory is ~46 MB
+(universe-sites) at the top, ~150 MB in total, so the heap is world state, not phases. Profiling the
+46-phase tick is the next real performance task.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
