@@ -3769,3 +3769,8 @@ Evidence: heap sampling attributed: 69.31 MB/min join @ node:path; fork 914befb;
 Why: the heap sampler put 113 MB/min in readShipBaseAttributeMap and part of 147 MB/min in buildShipResourceState, all of it re-normalising static type attributes on every ship resource evaluation
 Where: tests/coop-numeric-attribute-cache.test.mjs
 Evidence: heap sampling attributed (60 s, 32 KB): 113.11 MB readShipBaseAttributeMap, 147.39 MB buildShipResourceState; fork commit; 4 tests pass; AUDIT_OK
+### 2026-11-06T20:17Z · ca31bfb · L1 · test(npc): pin the spawn-rule scope cache and the wormhole state view
+
+Why: the heap sampler charged 88 MB/min to ruleAppliesToSystem rebuilding static scope arrays and 92 MB/min to a wormhole state deep clone made only to iterate pairs read-only
+Where: tests/coop-spawn-rule-scope.test.mjs, tests/coop-wormhole-state-view.test.mjs
+Evidence: heap sampling attributed 60 s: ruleAppliesToSystem 88.03 MB, wormholeRuntimeState.cloneRuntimeState 92.53 MB; 5 tests pass; AUDIT_OK
