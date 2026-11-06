@@ -40,7 +40,7 @@ function createOriginalPresenceReaders({sessionRegistry,npcRegistry,nativeNpcSto
     // remain logged in to hire NPCs, but may not occupy the reserved hull.
     const ids=[session._space?.shipID,session.shipID,session.shipid,
                session.activeShipID];
-    if(ids.some(id=>id===row.shipItemID))return false;
+    if(ids.some(id=>sameID(id,row.shipItemID)))return false;
     // A logged-in owner's in-space session with an UNKNOWN ship ID is
     // not evidence that the original reserved ship is free.
     if(session.characterID===row.ownerCharacterID&&
