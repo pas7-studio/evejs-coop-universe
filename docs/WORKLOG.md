@@ -3724,3 +3724,8 @@ Evidence: fork f04bf21; lister vs counter on the live table: entities 432.5ms->0
 Why: the V8 old-space limit sat at 4.2 GB while the live heap reached 5 GB, so the worst stalls were back-to-back GC
 Where: .opencode/state.md
 Evidence: fork a03a801; heap limit now 6336MB; after restart p50 813ms p90 1422ms worst 1422ms RSS 2.82GB vs p50 1289 p90 5043 worst 8592 RSS 5.4GB
+### 2026-11-06T18:38Z · 4ec823e · L2 · test(trader): the relist undercuts the market instead of pricing above it
+
+Why: the corporation's relisted modules could never sell: they were priced at 140% of the market, i.e. above the cheapest competing ask, with no bids at all on those types
+Where: integration/coopNpcTraderRelist.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-npc-trader-relist.test.mjs
+Evidence: live book type 23803: seed ask 99.43M, corp relist 139.202M, bids none, corp paid 90.46M; relist now undercuts to 99% of the reference with cost+5% floor; 9 relist tests pass; AUDIT_OK
