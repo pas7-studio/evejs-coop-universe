@@ -17,7 +17,12 @@ $pf86 = Join-Path $root 'tests/pf86-presence-and-prewrite.test.cjs'
 if (-not (Test-Path -LiteralPath $pf86 -PathType Leaf)) { throw 'PF86_PRESENCE_GATE_MISSING' }
 $pf87 = Join-Path $root 'tests/pf87-atomic-handoff.test.cjs'
 if (-not (Test-Path -LiteralPath $pf87 -PathType Leaf)) { throw 'PF87_ATOMIC_HANDOFF_TEST_MISSING' }
-$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87)
+$pf88 = @( 'pf88-reciprocal-writers.test.cjs', 'pf88-sourcebound-gating.test.cjs' ) | ForEach-Object {
+  $path = Join-Path $root ('tests/' + $_)
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'PF88_RECIPROCAL_WRITER_TEST_MISSING' }
+  $path
+}
+$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87) + @($pf88)
 & $node --test '--test-concurrency=1' @allNodeTests
 if ($LASTEXITCODE -ne 0) { throw 'PF58_NODE_REGRESSION_FAILED' }
 $python = (Get-Command python -ErrorAction Stop).Source
