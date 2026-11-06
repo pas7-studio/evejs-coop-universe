@@ -21,8 +21,9 @@ const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex'
 const block=reason=>({status:'BLOCKED',reason});
 const terminalKey=assignment=>KEY+assignment;
 const terminalShipKey=ship=>SHIP+ship;
-function validCommand(c){return obj(c)&&TOKEN.test(c.operationID)&&TOKEN.test(c.assignmentID)&&
- PILOT.test(c.pilotID)&&['DOCK','LOSS'].includes(c.mode)&&
+function validCommand(c){return obj(c)&&typeof c.operationID==='string'&&
+ typeof c.assignmentID==='string'&&typeof c.pilotID==='string'&&
+ TOKEN.test(c.operationID)&&TOKEN.test(c.assignmentID)&&PILOT.test(c.pilotID)&&['DOCK','LOSS'].includes(c.mode)&&
  [c.shipItemID,c.ownerCharacterID,c.systemID,c.generation,c.actorGeneration,c.typeID].every(positive)&&
  (c.mode==='DOCK'?positive(c.stationID)&&c.wreckID===undefined:
   positive(c.wreckID)&&c.stationID===undefined);}
@@ -252,7 +253,7 @@ function createTerminalCustody({gameStore,pf52,claimsPolicy,authenticateCommand,
    return {status:'FINALIZED',shipItemID:c.shipItemID};
   });}catch{return block('PF60_FINALIZE_COMMIT_UNKNOWN');}
  }
- function inspect(c){if(!obj(c)||!TOKEN.test(c.assignmentID))return block('PF60_INVALID_INSPECT');
+ function inspect(c){if(!obj(c)||typeof c.assignmentID!=='string'||!TOKEN.test(c.assignmentID))return block('PF60_INVALID_INSPECT');
   try{return atomic.transact([T],tx=>{
    const x=tx.get(T,terminalKey(c.assignmentID));
    return x===undefined?block('PF60_READ_UNKNOWN'):x===null?{status:'NOT_FOUND'}:
