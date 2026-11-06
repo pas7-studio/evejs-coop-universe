@@ -2,9 +2,9 @@
 
 **Status: REVIEW CANDIDATE ONLY. Personal Fleet is OFF. Do not merge PR #350 as gameplay-complete or touch PLAY.**
 
-PF-52 through PF-61 provide reference implementations, isolated SQLite tests and
+PF-52 through PF-66 provide reference implementations, isolated SQLite tests and
 source-pinned patches. They are **not** installed into the real EveJS fork. PF-58,
-PF-59 and PF-61 all patch two overlapping original files; applying their three
+PF-59, PF-61 and PF-66 overlap the two original native source files; applying their three
 patches independently would be unsafe. Their archived modules also rely on
 `.cjs` imports, while the native hooks resolve `.js` by default. PF-61 has an
 archive-relative PF-60 import that cannot work when placed in the native fork.
@@ -13,17 +13,17 @@ PF-62 provides **one reviewed composition pipeline** instead of another patch
 that must be applied manually:
 
 - Pins the unmodified original Git blobs of `npc/nativeNpcService.js` and
-  `npc/nativeNpcStore.js`, checks the original PF-58/59/61 builder pin agreement
+  `npc/nativeNpcStore.js`, checks the original PF-58/59/61/66 builder pin agreement
   and refuses mismatched source.
-- Composes PF-58 then PF-59 into **one** `nativeNpcService.js`, and PF-59
+- Composes PF-58 then PF-59 then PF-66 into **one** `nativeNpcService.js`, and PF-59
   then PF-61 into **one** `nativeNpcStore.js`.
-- Stages **16** distinct PF-52–61 `.js` modules in the native `space/`
+- Stages **17** distinct PF-52–66 `.js` modules in the native `space/`
   directory structure without changing original wallet, ItemStore or GameStore.
   The most recent PF-58 implementation of `OriginalDeployment` is chosen.
 - Rewrites archive-relative `.cjs` imports to genuine local `.js` imports,
   including the PF-61 → PF-60 dependency. Refuses missing sibling modules.
 - Writes **one complete Git review diff containing BOTH original stock changes AND
-  all 16 newly added modules** (18 file paths total), full staged files and an
+  all 17 newly added modules** (19 file paths total), full staged files and an
   SHA256 manifest in a separate **empty output directory**. Rejects a pre-existing
   module path rather than silently overwriting it.
 - Before creating output, runs `git apply --check` against the real native
@@ -107,3 +107,20 @@ newline are normalized in staging only. See `PF63_INTEGRATION_SAFETY.md`.
 
 Combined isolated PF-59–61 Node regression 59/59 PASS; PF-62+63 Python
 composition regression 13/13 PASS. This **does not prove original engine / WORK**.
+
+## PF-66 scoped scene dock composition (2026-11-06)
+
+PF-56's sessionless DOCK_ISSUING previously had no PF59-approved way to
+remove the original physical NPC actor before PF60 prepare. PF-66 adds a
+separate, source-pinned, durable-once docking bridge: original stock ItemStore
+station dock + an original nativeNpcService capability-bound scene detach,
+without touching native persisted entity/controller rows (PF61 later removes
+those under its separate one-shot custody). The PF62 composer now stages the
+PF66 module and source patch **in one 19-file review-only bundle**. A new
+four-way composition test checks exact PF58/PF59/PF61/PF66 anchors.
+
+Isolated PF66 evidence: 27/27 Node PASS (including 2 Linux SIGKILL plus eight
+VM tests of the injected native source) and 6/6 Python PASS. The updated PF62
+14-test suite and the actual native fork checkout have not been executed here.
+This does NOT resolve real station dwell, original writer exclusivity, game
+client integration, or native release approval; keep feature OFF and PR Draft.
