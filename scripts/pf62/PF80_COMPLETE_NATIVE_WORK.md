@@ -183,3 +183,19 @@ PF custody and source-bound native session checks. The *real* original
 activated**. Do not claim acceptance until original engine owner hooks,
 actual SQLite WORK testing and two-client gameplay are complete.
 See `scripts/pf91/PF91_ORIGINAL_CHARACTER_ROWS_AND_ATOMIC_PLAYER_SWITCH.md`.
+
+## PF92 source-bound generic character writer before WORK review
+
+Original EveJS `characterState.writeCharacterRecord()` is called not
+only by player ship switching, but also by generic record updates,
+active ship repair and normalization. PF92 extends the already-bundled
+PF58 native permit authority to check any sensitive original character
+field change in one SQLite owner transaction and leaves wallet/skill
+writes unchanged only if their original before-image is still current.
+An independent native session witness is required for ship identity
+changes, and bootstrap exposure is guarded by feature enabled plus
+verified original writer hook evidence. The manual PF80 WORK staging
+preflight includes PF92 candidate SQLite tests and source-pinned
+original paths. The real engine owner hook is **not** installed;
+activation remains blocked. See
+`scripts/pf92/PF92_ORIGINAL_CHARACTER_GENERIC_WRITE_FENCE.md`.
