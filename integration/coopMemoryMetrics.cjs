@@ -10,6 +10,11 @@
 // Opt-in: EVEJS_COOP_MEMORY_METRICS=1. Every sample goes through coopRuntimeProbe as "coop-memory-sample".
 const enabled = (env = process.env) => String((env && env.EVEJS_COOP_MEMORY_METRICS) || "") === "1";
 
+// The GC observer starts when this module is loaded (the runtime requires it at boot whether or not
+// sampling is on), so a lag event can carry the pause that caused it instead of only the heap size.
+const gcWatch = require("./coopGcWatch");
+gcWatch.start();
+
 function bytesToMb(bytes) {
   return Math.round((Number(bytes) || 0) / 1048576 * 10) / 10;
 }
@@ -22,6 +27,7 @@ function memoryUsage() {
     heapTotalMB: bytesToMb(usage.heapTotal),
     externalMB: bytesToMb(usage.external),
     arrayBuffersMB: bytesToMb(usage.arrayBuffers),
+    gc: gcWatch.snapshot(),
   };
 }
 
