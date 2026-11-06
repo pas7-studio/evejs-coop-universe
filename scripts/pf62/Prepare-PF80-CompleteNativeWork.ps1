@@ -71,6 +71,18 @@ if ($ApplyToWork.IsPresent) {
     if (-not (Test-Path -LiteralPath $pf91 -PathType Leaf)) { throw 'PF91_NATIVE_CHARACTER_ROWS_TEST_MISSING' }
     & $node --test --test-concurrency=1 $pf87Test $pf91
     if ($LASTEXITCODE -ne 0) { throw 'PF91_ORIGINAL_CHARACTER_RACE_GATE_FAILED' }
+    $pf91StockSource = Join-Path $repo 'scripts/pf91/tests/pf91-original-character-owner-source.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf91StockSource -PathType Leaf)) {
+      throw 'PF91_ORIGINAL_CHARACTER_SOURCE_TEST_MISSING'
+    }
+    $priorPf91SourceRoot = [Environment]::GetEnvironmentVariable('PF91_NATIVE_WORKTREE', 'Process')
+    try {
+      $env:PF91_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf91StockSource
+      if ($LASTEXITCODE -ne 0) { throw 'PF91_NATIVE_STOCK_CHARACTER_SOURCE_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF91_NATIVE_WORKTREE', $priorPf91SourceRoot, 'Process')
+    }
     $pf90Owner = Join-Path $repo 'scripts/pf58/tests/pf90-owner-snapshot.test.cjs'
     $pf90Sources = Join-Path $repo 'scripts/pf90/tests/pf90-original-owners.test.cjs'
     $pf90Audit = Join-Path $repo 'scripts/pf90/inspect-original-owner-writes.cjs'
