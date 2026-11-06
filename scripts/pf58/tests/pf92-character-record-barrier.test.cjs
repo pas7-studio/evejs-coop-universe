@@ -197,3 +197,32 @@ test('PF92 old active hull alias corruption denies a wallet plus ship metadata w
  assert.equal(result.reason,'PF92_CHARACTER_ACTIVE_SHIP_ALIAS_INVALID');
  assert.deepEqual(f.get(C,String(F.OWNER)),before);
 }));
+
+test('PF92 first failed witness cannot commit a captured direct character tx.put',()=>fixture(f=>{
+ let captured=null;
+ const original=f.get(C,String(F.OWNER));
+ assert.throws(()=>commit(f,(next,tx)=>{
+  captured=tx;next.shipID=F.SHIP;
+ },{lease:()=>{
+  captured.put(C,String(F.OWNER),{...original,shipID:999999});
+  return false;
+ }}),/PF92_SESSION_WITNESS_MODIFIED_AUTHORITY_ROLLBACK/);
+ assert.deepEqual(f.get(C,String(F.OWNER)),original);
+}));
+test('PF92 second witness cannot change original physical ship and then fail',()=>fixture(f=>{
+ let captured=null,n=0;
+ const original=f.get(I,'items');
+ assert.throws(()=>commit(f,(next,tx)=>{
+  captured=tx;next.shipID=F.SHIP;
+ },{lease:()=>{
+  if(++n===2){
+   const stock=captured.get(I,'items');
+   stock[String(F.SHIP)].ownerID=FOREIGN;
+   captured.put(I,'items',stock);
+   return false;
+  }
+  return true;
+ }}),/PF92_ORIGINAL_OWNER_CHANGED_BY_SESSION_WITNESS_ROLLBACK/);
+ assert.deepEqual(f.get(I,'items'),original);
+ assertNoSelection(f);
+}));
