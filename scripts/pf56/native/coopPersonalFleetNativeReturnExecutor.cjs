@@ -25,13 +25,19 @@ function createOriginalReturnExecutor({npcRuntime,orderBridge,sceneForSystem,
  function execute(row){
   const ctx=context(row);
   if(!ctx)return {success:false,errorMsg:'PF56_ORIGINAL_NATIVE_RETURN_SOURCE_MISSING'};
-  const range=ctx.station.radius+750;
-  const destination={...ctx.station.position,x:ctx.station.position.x+range};
+  // Recompute the canonical station destination inside the fenced callback.
   return orderBridge.issue({entityID:row.shipItemID,systemID:row.systemID,
    owner:'PERSONAL_FLEET',action:'pf-return-base',holdMs:120000,
    execute(){
     const again=context(row);
     if(!again)return {success:false,errorMsg:'PF56_NATIVE_SOURCE_CHANGED'};
+    // PF83: revalidate the live destination inside the original arbiter.
+    // Never send stale or overflowing coordinates into native physics.
+    const range=again.station.radius+750;
+    const destination={x:again.station.position.x+range,
+      y:again.station.position.y,z:again.station.position.z};
+    if(!Number.isFinite(range)||!vec(destination))
+     return {success:false,errorMsg:'PF83_NATIVE_RETURN_DESTINATION_INVALID'};
     return npcRuntime.warpToPoint(row.shipItemID,destination,
      {forceImmediateStart:true,broadcastWarpStartToVisibleSessions:true});
    }});
