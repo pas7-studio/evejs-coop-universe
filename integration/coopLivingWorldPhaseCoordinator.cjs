@@ -40,6 +40,11 @@ function createPhaseCoordinator({execute,clock=()=>Date.now(),onCycle=()=>{}}={}
   active=true;sequence++;
   const names=[],unknownNames=[],groups=Object.create(null);
   let phaseCount=0,status="COMPLETED";
+  // Per-phase wall time. Two clock() calls per phase (46 phases per tick) is nothing next to what a
+  // phase costs, and it turns "the server froze for 3 seconds" into "phase X took 2.9 s" without an
+  // inspector attached. Measured 2026-11-06: the event-loop monitor reports the stall, but nothing
+  // ever named the phase that caused it.
+  const phaseMs=[];
   const phase=(name,fn)=>{
    if(typeof name!=="string"||!VALID_PHASE.test(name)||typeof fn!=="function")
     throw Error("LIVING_WORLD_PHASE_INVALID");
@@ -52,7 +57,14 @@ function createPhaseCoordinator({execute,clock=()=>Date.now(),onCycle=()=>{}}={}
    // Observability is bounded; execution is NOT truncated.
    if(names.length<128)names.push(name);
    // Preserve exactly the old safeNpcPhase error boundary and sync order.
-   return execute(name,fn);
+   const phaseStartedAt=clock();
+   try{
+    return execute(name,fn);
+   }finally{
+    // A throwing phase still gets its time recorded, and its own error still
+    // reaches the caller exactly as before.
+    try{phaseMs.push([name,Math.max(0,clock()-phaseStartedAt)]);}catch(_ignored){}
+   }
   };
   try{
    const result=run(phase);
@@ -70,12 +82,20 @@ function createPhaseCoordinator({execute,clock=()=>Date.now(),onCycle=()=>{}}={}
    active=false;
    let endedAt=startedAt;
    try{endedAt=clock()}catch(_ignored){}
+   // The five most expensive phases of this cycle, worst first. Bounded so a cycle with 46 phases
+   // cannot grow the record, and sorted so the reader does not have to.
+   const slowPhases=phaseMs
+    .slice()
+    .sort((left,right)=>right[1]-left[1])
+    .slice(0,5)
+    .map(([name,ms])=>({name,ms:Math.round(ms)}));
    last=Object.freeze({sequence,status,startedAt,
     durationMs:Number.isFinite(endedAt-startedAt)?
      Math.max(0,endedAt-startedAt):0,phaseCount,
     phaseNames:Object.freeze(names.slice()),
     groups:Object.freeze({...groups}),
     unknownNames:Object.freeze(unknownNames.slice()),
+    slowPhases:Object.freeze(slowPhases),
     source:"DISPATCH_ATTEMPTS_NOT_NATIVE_SETTLEMENT"});
    // Operator telemetry is diagnostic only: never change a game outcome.
    try{onCycle(snapshot().last)}catch(_ignored){}

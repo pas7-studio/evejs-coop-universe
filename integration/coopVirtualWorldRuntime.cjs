@@ -765,11 +765,11 @@ function start(){
  }
  worldPhaseCoordinator=require("./coopLivingWorldPhaseCoordinator").createPhaseCoordinator({
  execute:safeNpcPhase,onCycle:row=>{
-  if(row.sequence%10!==0&&!row.unknownNames.length)return;
-  require("./coopRuntimeProbe").observe("living-world-phase-cycle",null,null,{
-   status:row.status,sequence:row.sequence,phaseCount:row.phaseCount,
-   groups:row.groups,unknownNames:row.unknownNames,
-   source:row.source,nativeSettlementVerified:false});
+  const slow=Number(row.durationMs)>=250; // a slow cycle is reported at once, with its phases
+  if(row.sequence%10!==0&&!row.unknownNames.length&&!slow)return;
+  require("./coopRuntimeProbe").observe("living-world-phase-cycle",null,null,{status:row.status,
+   sequence:row.sequence,phaseCount:row.phaseCount,durationMs:row.durationMs,slowPhases:row.slowPhases||[],
+   groups:row.groups,unknownNames:row.unknownNames,source:row.source,nativeSettlementVerified:false});
  }});
  // Opt-in perf report: which phases really cost time, every minute.
  if(require("./coopPerfMetrics"+(__filename.endsWith(".js")?"":".cjs")).enabled()){
