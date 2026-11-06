@@ -8,6 +8,8 @@ try{
  if(when==='during-scene')f.nativeNpcService.detachScopedPersonalFleetDockSceneActor=({row,capability})=>{
   const p=f.nativeNpcService.rawAuthorize();
   if(p.capability!==capability||!p.authorize(row))process.exit(71);
+  // PF67: crash after the SECOND durable scene permit, before physical removal.
+  if(!p.consumeSceneDetach(row))process.exit(72);
   process.kill(process.pid,'SIGKILL');
  };
  f.build().execute(f.c);
