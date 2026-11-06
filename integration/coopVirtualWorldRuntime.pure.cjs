@@ -1146,7 +1146,9 @@ async function relistBoughtStock(stationID){
      if(!claim||claim.phase!=="SETTLED"||!Number.isSafeInteger(Number(claim.itemID)))continue;
      if(claim.relisted===true)continue;
      rows.push({itemID:Number(claim.itemID),typeID:Number(claim.typeID),
-      quantity:Number(claim.quantity),claimKey:String(claim.claimKey||"")});
+      quantity:Number(claim.quantity),claimKey:String(claim.claimKey||""),
+      // What the corporation really paid per unit: the relist needs it to stay above cost.
+      unitPriceCents:Number(claim.unitPriceCents)||0});
     }
    }catch(_error){/* no journal yet: nothing was bought */}
    return rows;

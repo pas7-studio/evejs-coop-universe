@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { createRequire } from "node:module";
@@ -88,7 +88,8 @@ test("a bought stack is listed at 140 % of the reference, never under 105 %", as
   const result = await f.relist.tick({ corporationID: CORP, stationID: HUB });
   assert.equal(result.status, "TRADER_RELISTED");
   const reserve = f.calls.find((row) => row.method === "ReserveNpcSellOrder");
-  assert.equal(Math.round(reserve.params.price * 100), 550, "140 % of 3.93 ISK = 5.50 ISK");
+  // Undercut the cheapest real ask (3.93 ISK) instead of asking 140 % above it, which never sells.
+  assert.equal(Math.round(reserve.params.price * 100), 389, "99 % of the 3.93 ISK reference");
   assert.equal(reserve.params.is_corp, true);
   assert.equal(reserve.params.wallet_division, 1000);
   assert.equal(reserve.params.bid, false);
@@ -102,7 +103,7 @@ test("the escrow row carries the trade provenance and the price", async () => {
   const escrow = [...f.escrows.values()][0];
   assert.equal(escrow.coopSource, "NATIVE_TRADE");
   assert.equal(escrow.isCorp, true);
-  assert.equal(escrow.coopTradePriceCents, 550);
+  assert.equal(escrow.coopTradePriceCents, 389);
   assert.match(escrow.coopOperationID, /^npc-trade:[0-9a-f]{32}$/);
   assert.equal(escrow.escrowLocationID, ESCROW_BASE + Number(escrow.orderId));
 });
@@ -172,5 +173,18 @@ test("a real module price is relisted: the ceiling is not one million ISK", asyn
   const result = await f.relist.tick({ corporationID: CORP, stationID: HUB });
   assert.equal(result.status, "TRADER_RELISTED");
   const reserve = f.calls.find((call) => call.method === "ReserveNpcSellOrder");
-  assert.equal(reserve.params.price, 139_202_000, "140 % of 99.43 M ISK, in ISK");
+  // Measured live 2026-11-06: 140 % of the 99.43 M reference sat above a cheaper seed ask with no bids,
+  // so nothing could ever buy it. 99 % of the reference still sells.
+  assert.equal(reserve.params.price, 98_435_700, "99 % of the 99.43 M reference");
+});
+
+test("an item whose cost is above the competitive price is not listed at all", async () => {
+  // The corporation paid 4.00 ISK for something the market offers at 3.93: undercutting would be a
+  // loss, and asking 140 % would be dead stock. Neither is done.
+  const f = fixture({ stock: [{ itemID: ITEM, typeID: TYPE, quantity: QTY, unitPriceCents: 400 }] });
+  const result = await f.relist.tick({ corporationID: CORP, stationID: HUB });
+  assert.equal(result.listed[0].status, "BLOCKED");
+  assert.equal(result.listed[0].reason, "TRADER_RELIST_BELOW_COST");
+  assert.equal(f.calls.filter((call) => call.method === "ReserveNpcSellOrder").length, 0,
+    "nothing is put on the book");
 });

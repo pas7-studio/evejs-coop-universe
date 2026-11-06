@@ -187,8 +187,26 @@ function createTraderRelist({
       const referenceCents = await resolvePriceCents(stack.typeID, stationID);
       if (!good(referenceCents)) continue;
       // The owner's band: ask 140 %, never under 105 %.
-      const priceCents = Math.max(Math.round(referenceCents * 1.05),
+      const bandCents = Math.max(Math.round(referenceCents * 1.05),
         Math.round(referenceCents * 1.4));
+      // An ask above the cheapest real offer is never the best offer, so it never sells: measured
+      // 2026-11-06, the corporation's modules sat 40 % above a cheaper seed ask with no bids at all.
+      // Undercut the market instead, but never below cost + 5 % - and if those two cannot both hold,
+      // list nothing rather than park dead stock on the book.
+      const paidCents = good(stack.unitPriceCents) ? stack.unitPriceCents : 0;
+      const floorCents = paidCents > 0 ? Math.ceil(paidCents * 1.05) : 0;
+      const competitiveCents = Math.floor(referenceCents * 0.99);
+      let priceCents = bandCents;
+      if (good(competitiveCents) && competitiveCents < bandCents) {
+        if (floorCents > 0 && floorCents > competitiveCents) {
+          // Undercutting the market would sell at a loss: list nothing instead of dead stock.
+          listed.push({ itemID: stack.itemID, typeID: stack.typeID, quantity: stack.quantity,
+            priceCents: 0, status: "BLOCKED", orderID: null,
+            reason: "TRADER_RELIST_BELOW_COST" });
+          continue;
+        }
+        priceCents = Math.max(floorCents, competitiveCents);
+      }
       const operationID = operationFor(stack.itemID, stack.typeID, stack.quantity);
       const result = await listOnce({
         operationID, ownerID: corporationID, stationID, itemID: stack.itemID,
