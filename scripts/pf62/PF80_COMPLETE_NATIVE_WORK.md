@@ -62,7 +62,8 @@ folder absent. No existing worktree is cleaned up on error; inspect it first.
 - `PF62-MANIFEST.json`, `PF62-NATIVE-REVIEW.patch`, `PF55-NATIVE-OWNER.patch`
   and `PF80-COMPLETE-WORK-REVIEW.json` are in the separate review folder.
 - The receipt must say `totalNativePaths: 22`, `featureEnabled: false`, and
-  `pf77NativeArbiterGate: PASS` only when `-ApplyToWork` succeeded.
+  `pf77NativeArbiterGate: PASS` and `postTestNativeIntegrity: PASS` only when
+  `-ApplyToWork` succeeded and the post-test re-attestation was clean.
 - Native original tracked source remains clean; only the separate local WORK
   worktree and Git's worktree metadata can change.
 - The synthetic Git acceptance has a real `git worktree add` + two `git apply`
@@ -73,3 +74,25 @@ folder absent. No existing worktree is cleaned up on error; inspect it first.
 
 Direct script entrypoint: `python scripts/pf62/prepare_complete_native_work.py --help`.
 Synthetic regression: `python -m unittest discover -s scripts/pf62/tests -p 'test_prepare_complete_native_work.py' -v`.
+
+## PF81 — post-test source integrity (2026-11-06)
+
+PF80 originally attested 22 source paths **before** running PF77. An apparently
+successful Node test could then write a foreign file, corrupt either a PF62
+or PF55 stock native source, or create an ignored file, while the combined
+review receipt still claimed an accepted patch. PF81 reproduced all three
+classes of false positive with real temporary Git worktrees.
+
+After PF77 exits, the same exact 22-path Git inventory and SHA256 hashes are
+checked **again**, against the hashes established **before** the Node test.
+Ignored/untracked paths and symlinks also fail closed. Both original source
+checkouts (native and orchestrator) must still be clean. Only then is
+`postTestNativeIntegrity: PASS` written to the receipt; a failed post-test
+check leaves the untrusted WORK tree for operator inspection and does not
+return an accepted report.
+
+The regression suite includes deliberately mutated PF55 and PF62 source files,
+rogue untracked or ignored files, and modifications to the orchestration
+checkout. This establishes the behavior of PF80's synthetic WORK harness, not
+full native gameplay acceptance or an atomic fencing guarantee against an
+external process changing the real WORK tree after the check returns.
