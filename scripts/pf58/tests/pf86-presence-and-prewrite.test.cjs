@@ -41,7 +41,8 @@ test('PF86 cannot adopt a hull while player or other character session occupies 
   {characterID:9001,_space:{shipID:2001,systemID:row.systemID}},
   {characterID:9002,_space:{shipID:2001,systemID:row.systemID}},
   {characterID:9002,activeShipID:2001},
-  {characterID:9002,shipID:2001}
+  {characterID:9002,shipID:2001},
+  {characterID:9002,shipID:'2001'}
  ]){
   const f=presence();f.state.sessions=[entry];
   assert.equal(f.readers.noActivePlayerSession(row),false);
