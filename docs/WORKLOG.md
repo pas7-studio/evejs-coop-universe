@@ -3699,3 +3699,8 @@ Evidence: fork df86231+e76e66a+df53bba; live 72 stacks refined in 58s, 0 blocked
 Why: the world was late on its own timer (p50 467ms, p90 1994ms, worst 62.9s): three hot dungeon mutators deep-cloned and re-normalized the whole 8674-instance table because they edited records in place instead of replacing them
 Where: .opencode/state.md
 Evidence: fork 6e0a823+5a9d848; deep clone 1533ms cold/431ms warm vs shallow 0.26ms measured on the live table; after deploy p90 939ms, worst 1706ms, RSS 3.65->2.93GB; 22/22 NPC orders still READY
+### 2026-11-06T16:06Z · 5440609 · L1 · test(haul): the heal could never match its own doubled-prefix reason
+
+Why: fleet 960004610 was parked for two days: the readback heal could never match its own reason because the stored string carried a doubled ALIFE10_ prefix, and the other doubt (source-cargo identity conflict) had no way back at all
+Where: .opencode/state.md, integration/coopNativeHaulCargo.cjs, integration/coopNativeHaulTransferAtomic.cjs, tests/coop-haul-readback-heal.test.mjs, tests/coop-haul-source-conflict-heal.test.mjs
+Evidence: fork e5c6134+2038a0a; live reason ALIFE10_ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED:destination_rows=0:cargo=980200450759; after deploy TICK_loaded at 16:00:56Z and no custody block since; 14 heal tests + 103 haul tests pass; AUDIT_OK
