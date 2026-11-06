@@ -70,7 +70,10 @@ const controller={...base,runtimeKind:'nativeAmbient'};
 let count=0;
 function execute(e,c,opts={}){
  const effects={spawn:0,register:0,authorize:0,permitIssuing:null};
- const scene={systemID:opts.sceneSystem??300,getEntityByID:()=>opts.existing?{itemID:1001}:null};
+ const originalActor={itemID:1001,kind:'ship',nativeNpc:true,nativeNpcOccupied:true,
+ npcEntityType:'personalFleet',operatorKind:'PERSONAL_FLEET',selectionKind:'PERSONAL_FLEET',
+ selectionID:'assignment-1',ownerID:202,characterID:0,pilotCharacterID:0,session:null};
+ const scene={systemID:opts.sceneSystem??300,getEntityByID:()=>opts.existing?originalActor:null};
  const store={getNativeEntity:()=>e,getNativeController:()=>c};
  const source=js.replace('const path=require(\'path\');','')
    .replace('const nativeNpcStore={};','').replace('const spaceRuntime={};','');
