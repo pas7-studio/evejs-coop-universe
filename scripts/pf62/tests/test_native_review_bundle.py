@@ -135,6 +135,16 @@ class PF62ReviewCompositionTests(unittest.TestCase):
         self.assertEqual((out/b.SERVICE).read_text().count('pf59.checkOriginalRemoval('),2)
         self.assertEqual((out/b.STORE).read_text().count('pf59.checkOriginalRemoval('),3)
         self.assertTrue((out/'PF62-MANIFEST.json').is_file())
+        self.assertTrue(report['patchIncludesAllModules'])
+        self.assertTrue(report['patchAppliedOnlyInEphemeralVerifier'])
+        full=(out/'PF62-NATIVE-REVIEW.patch').read_text()
+        self.assertEqual(full.count('diff --git a/'),len(b.MODULE_FILES)+2)
+        self.assertEqual(full.count('new file mode 100644'),len(b.MODULE_FILES))
+        for name in b.MODULE_FILES:
+            module=Path(name).name.replace('.cjs','.js')
+            dest='Code/server/src/space/'+module
+            self.assertIn('+++ b/'+dest,full)
+            self.assertTrue((out/dest).is_file())
       finally:
         b.SERVICE_BLOB=old_service;b.STORE_BLOB=old_store;b.load_patches=old_load
 
@@ -154,6 +164,75 @@ class PF62ReviewCompositionTests(unittest.TestCase):
       for out in [engine,engine/'overwrite',repo,repo/'overwrite',root]:
         with self.assertRaisesRegex(ValueError,'NEVER_WRITE'):
           b.validate_paths(engine,repo,out)
+
+ def test_patch_is_complete_and_additions_are_git_apply_compatible(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root=Path(tmp)
+      stock='Code/server/src/space/npc/nativeNpcStore.js'
+      source={stock:('hello\n','hello world\n')}
+      new={'Code/server/src/space/coopPersonalFleetExample.js':"'use strict';\nmodule.exports={};\n"}
+      patch=b.make_review_diff(source,new)
+      self.assertEqual(patch.count('diff --git a/'),2)
+      self.assertIn('new file mode 100644',patch)
+      self.assertIn('--- /dev/null',patch)
+      (root/stock).parent.mkdir(parents=True)
+      (root/stock).write_text('hello\n')
+      pf=root/'complete.patch';pf.write_text(patch)
+      subprocess.run(['git','-C',str(root),'init','-q'],check=True)
+      subprocess.run(['git','-C',str(root),'apply','--check',str(pf)],check=True)
+      subprocess.run(['git','-C',str(root),'apply',str(pf)],check=True)
+      self.assertEqual((root/stock).read_text(),'hello world\n')
+      self.assertEqual((root/next(iter(new))).read_text(),next(iter(new.values())))
+
+ def test_module_collision_does_not_leave_partial_bundle(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root=Path(tmp);engine=root/'engine';repo=root/'repo';out=root/'review'
+      service=engine/b.SERVICE;service.parent.mkdir(parents=True);service.write_text(SERVICE_SRC)
+      store=engine/b.STORE;store.parent.mkdir(parents=True,exist_ok=True);store.write_text(STORE_SRC)
+      collision=engine/b.NATIVE_DIR/'coopPersonalFleetHangarBridge.js'
+      collision.parent.mkdir(parents=True,exist_ok=True)
+      collision.write_text('foreign code\n')
+      for rel in b.MODULE_FILES:
+        file=repo/'scripts'/rel;file.parent.mkdir(parents=True,exist_ok=True)
+        file.write_text("'use strict';\nmodule.exports = {};\n")
+      imported=repo/'scripts/pf61/native/coopPersonalFleetScopedNativeCleanup.cjs'
+      imported.write_text("require('../../pf60/native/coopPersonalFleetTerminalCustody.cjs');\n")
+      subprocess.run(['git','-C',str(engine),'init','-q'],check=True)
+      old_service=b.SERVICE_BLOB;old_store=b.STORE_BLOB;old_load=b.load_patches
+      try:
+        b.SERVICE_BLOB=b.blob(service.read_bytes());b.STORE_BLOB=b.blob(store.read_bytes())
+        b.load_patches=lambda _:make_patches()
+        with self.assertRaises(subprocess.CalledProcessError):b.build(engine,repo,out)
+        self.assertFalse(out.exists())
+        self.assertEqual(collision.read_text(),'foreign code\n')
+      finally:
+        b.SERVICE_BLOB=old_service;b.STORE_BLOB=old_store;b.load_patches=old_load
+
+ def test_refuse_output_parent_of_native_checkout_even_when_repo_elsewhere(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root=Path(tmp);engine=root/'native-parent/engine';repo=root/'separate-repo'
+      file=engine/b.SERVICE;file.parent.mkdir(parents=True,exist_ok=True)
+      file.write_text('source')
+      with self.assertRaisesRegex(ValueError,'NEVER_WRITE'):
+        b.validate_paths(engine,repo,engine.parent)
+
+ def test_archived_module_without_terminal_newline_is_staged_safely(self):
+    original="'use strict';\nmodule.exports={ok:true};"
+    staged=b.normalize_native_module(original,'coopPersonalFleetExample.cjs')
+    self.assertEqual(staged,original+'\n')
+    self.assertEqual(original[-1],';')
+    self.assertIn('new file mode 100644',b.make_review_diff(
+      {'Code/server/src/space/stock.js':('old\n','new\n')},
+      {'Code/server/src/space/coopPersonalFleetExample.js':staged}))
+
+ def test_patch_rejects_missing_newline_or_duplicate_paths(self):
+    original={'Code/server/src/space/stock.js':('a\n','b\n')}
+    with self.assertRaisesRegex(ValueError,'NEW_MODULE_CONTENT'):
+      b.make_review_diff(original,{'Code/server/src/space/new.js':'no newline'})
+    with self.assertRaisesRegex(ValueError,'INVALID_NEW_MODULE_PATH'):
+      b.make_review_diff(original,{'Code/server/src/space/stock.js':'again\n'})
+    with self.assertRaisesRegex(ValueError,'NEWLINE_REQUIRED'):
+      b.make_review_diff({'Code/server/src/space/stock.js':('a','b')})
 
  def test_imports_without_dot_cjs_targets_remain_stdlib_safe(self):
     input="const a=require('./foo.cjs'); const b=require('node:crypto');"
