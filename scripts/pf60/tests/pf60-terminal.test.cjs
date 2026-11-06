@@ -172,3 +172,12 @@ test('missing operationID, assignmentID and malformed pilot are never coerced to
  }
  assert.equal(api.inspect({}).status,'BLOCKED');
 }));
+test('original GameStore rejects put(null) but PF60 finalization uses a durable delete',()=>run(f=>{
+ const a=f.create(),atom=f.root.coopAtomicNativeRows;
+ assert.throws(()=>atom.transact(['corporationRuntime'],tx=>
+  tx.put('corporationRuntime','invalid-null',null)),/NATIVE_ROW_MUST_BE_OBJECT/);
+ assert.equal(f.read('corporationRuntime','invalid-null'),null);
+ a.prepare(f.c);a.issue(f.c);a.reconcile(f.c);f.settle();
+ assert.equal(a.finalize(f.c).status,'FINALIZED');
+ assert.equal(f.read('corporationRuntime',f.LOCK+f.c.shipItemID),null);
+}));
