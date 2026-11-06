@@ -3749,3 +3749,8 @@ Evidence: live log 18:26:58 SessionChange 17 keys, no warfactionid; militia_stat
 Why: a live V8 profile of the play stack showed the scheduler paying a full static-entity walk per call (2.14 s per 120 s), a 45.7 ms full-table deep clone per per-entity index rebuild, and a 20-field JSON built for every movement event with debug off
 Where: tests/coop-hot-path-waste.test.mjs, tests/coop-scene-stargate-index.test.mjs
 Evidence: in-process timings via inspector: getSceneActivityState 0.0079 ms/call of which stargates 0.0079 ms; listNativeModulesForEntity cold 45.7 ms for 0 rows; profile 165 ms/120 s in logMovementDebug with verbose off; fork ea8eaec; 12 tests pass; AUDIT_OK
+### 2026-11-06T19:52Z · 2eb4896 · L1 · chore(integration): sync the read-cache copy with the fork
+
+Why: the native read cache rebuilt 30 times a minute while idle (2 s TTL) and each rebuild sorted 16988 cargo rows and 8544 entity rows, though nothing depends on the order: the cache indexes by key and the one row-picking caller accepts only a unique match
+Where: integration/coopNativeReadCache.cjs
+Evidence: live cache snapshot: cargoBuilds 820->850 in 60 s, peekNativeCargo 6.4 ms, peekNativeEntities 4.4 ms; fork b4a747f; 10 tests pass; AUDIT_OK after trimming the stock comment under 66500 chars
