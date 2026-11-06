@@ -16,12 +16,23 @@ function withNative(action,fn,settings={}){
  try{
   f=F.open(tmp.file);f.makeActive();
   let calls=[], bridges=[], trusted=true, allowed=true;
-  const physical={kind:'ship',itemID:F.SHIP,nativeNpc:true,mode:'STOP',session:null};
-  const controller={entityID:F.SHIP,systemID:F.SYSTEM};
-  const target={kind:'ship',itemID:F.TARGET};
+  // PF82: use the actual PF58/78 original scene presentation, not a bare
+  // numeric itemID. PF75 would otherwise always reject before native calls.
+  const physical={kind:'ship',itemID:F.SHIP,nativeNpc:true,nativeNpcOccupied:true,
+   npcEntityType:'personalFleet',operatorKind:'PERSONAL_FLEET',
+   selectionKind:'PERSONAL_FLEET',selectionID:F.ASSIGNMENT,ownerID:F.OWNER,
+   characterID:0,pilotCharacterID:0,mode:'STOP',session:null};
+  const controller={entityID:F.SHIP,systemID:F.SYSTEM,
+   personalFleetOriginal:true,operatorKind:'PERSONAL_FLEET',
+   entityType:'personalFleet',selectionKind:'PERSONAL_FLEET',
+   selectionID:F.ASSIGNMENT,personalFleetAssignmentID:F.ASSIGNMENT,
+   personalFleetPilotID:F.PILOT,personalFleetGeneration:1,
+   runtimeKind:'nativeAmbient'};
+  const target={kind:'ship',itemID:F.TARGET,ownerID:F.OWNER,position:{x:100,y:0,z:0}};
   const scene={systemID:F.SYSTEM,getEntityByID(id){return id===F.SHIP?physical:id===F.TARGET?target:null}};
   const npcRuntime={
    issueOrder(...v){calls.push(['issueOrder',...v]);return {success:true}},
+   follow(...v){calls.push(['follow',...v]);return {success:true}},
    stop(...v){calls.push(['stop',...v]);return {success:true}},
    issueAttackOrder(...v){calls.push(['attack',...v]);return {success:true}},
    warpToEntity(...v){calls.push(['warp',...v]);return {success:true}}
@@ -49,7 +60,7 @@ function withNative(action,fn,settings={}){
  }finally{f?.close();tmp.cleanup();}
 }
 
-for(const [action,method] of [['FOLLOW','issueOrder'],['HOLD','stop'],
+for(const [action,method] of [['FOLLOW','follow'],['HOLD','stop'],
  ['ATTACK','attack'],['WARP','warp']]){
  test('real PF55 object executor -> durable '+action+' -> original runtime (once)',()=>
   withNative(action,({f,c,orders,calls,bridges})=>{
