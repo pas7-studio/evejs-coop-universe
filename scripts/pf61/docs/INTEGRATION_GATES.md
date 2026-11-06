@@ -14,3 +14,7 @@
 | Original fork branch commit / WORK gameplay / two players | **BLOCKED 403 / NOT RUN** |
 
 Never enable this method from an environment flag alone. Never substitute a caller's boolean for source-authenticated game state. If the native removal commits only one row before SIGKILL, PF60 reconciliation must block pending operator inspection. Do not broaden the generic PF59 destructor with a permanent allowlist exception.
+
+## PF64 P0 correction
+
+The PF61 attempt state must be original-GameStore durable, not only an in-process Set. Check `coop-personal-fleet\u001fterminal-native-attempt-v1:<assignmentID>` before accepting any private native-store callback. PF64 commits the receipt before the first side effect, tested with 2 additional SIGKILL cases. The source-patched native store is NOT installed; real WORK regression remains mandatory.
