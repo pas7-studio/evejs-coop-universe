@@ -92,7 +92,7 @@ assert.equal(ordinary.success,true);assert.equal(ordinary.authorizations,0);
 // Invalid pair must not touch the original durable permit reader.
 const corrupt=check(unmarked,expectedController);
 assert.equal(corrupt.authorizations,0);
-console.log('PF69 VM: 25 scenario assertions PASS');
+console.log('PF69 VM: 26 scenario assertions PASS');
 '''
 
 class NativePairAdmissionTests(unittest.TestCase):
@@ -113,7 +113,7 @@ class NativePairAdmissionTests(unittest.TestCase):
             result=subprocess.run(['node',str(root/'check.cjs'),str(root/'patched.js')],
                 capture_output=True,text=True,timeout=15)
             self.assertEqual(result.returncode,0,result.stderr)
-            self.assertIn('25 scenario assertions PASS',result.stdout)
+            self.assertIn('26 scenario assertions PASS',result.stdout)
 
     def test_patch_rejects_source_anchor_drift_and_double_injection(self):
         with self.assertRaisesRegex(ValueError,'ANCHOR_DRIFT'):
