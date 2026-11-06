@@ -171,6 +171,23 @@ Verified after the deploy: the fleet loaded cargo (`living-mining-blocker TICK_l
 16:00:56Z) and there has been no `living-haul-custody-blocked` event since. Tests: 14 in the two
 heal suites, 103 across the haul suites, 0 failures; `AUDIT_OK`.
 
+**Event loop, measured properly** (fork `2bdf38f`). The monitor only reports a sample when the
+delay is at least 250 ms, so the numbers are about STALLS, not about the loop being busy: ~1 stall
+per minute (2 547 in 44 h), median 446 ms, p90 1 994 ms, worst 62 916 ms before the three dungeon
+fixes. After them: no stall above ~1.3-1.7 s in any measured window, RSS 3.65 GB -> 2.92 GB.
+
+The last fix removed the per-mutation whole-table read: `applyPersistedDiff` called
+`repo.read("dungeonRuntimeState", "/")` (428 ms warm, 1 533 ms cold, measured) to find out which
+rows changed, while the module already held that exact table in memory (`loadState()` is
+`cache.state`, rebuilt after every write, and nothing else writes this table). `mutateState` now
+passes its own base; the initial load and `writeState` still re-read, so the path without in-memory
+state keeps its proof. Verified after the deploy: 8 684 instances, all active, expiry range sane, no
+expired-but-present rows - the diff still writes exactly the changed rows.
+
+What remains is the world tick itself (~380-450 ms for 46 phases), not a single hot spot; further
+work there means profiling the phases, which is a separate project. Full suite after all of it:
+7 674 tests, 7 579 pass, 0 fail.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
