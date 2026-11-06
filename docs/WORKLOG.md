@@ -3719,3 +3719,8 @@ Evidence: fork 826e165; live block 16:33-17:18 destination_rows=0; heal now acce
 Why: the memory sampler deep-cloned four registries once a minute just to print their sizes: ~3s of blocked event loop per minute
 Where: integration/coopMemoryMetrics.cjs
 Evidence: fork f04bf21; lister vs counter on the live table: entities 432.5ms->0.67ms, controllers 863.1ms->0.64ms, wrecks 10.5ms->0.03ms, dungeon 1669.3ms->0.76ms, all counts identical; suite 7677/7582/0
+### 2026-11-06T18:30Z · f4f4ad4 · OPS · docs(state): the heap ceiling was the stall amplifier
+
+Why: the V8 old-space limit sat at 4.2 GB while the live heap reached 5 GB, so the worst stalls were back-to-back GC
+Where: .opencode/state.md
+Evidence: fork a03a801; heap limit now 6336MB; after restart p50 813ms p90 1422ms worst 1422ms RSS 2.82GB vs p50 1289 p90 5043 worst 8592 RSS 5.4GB
