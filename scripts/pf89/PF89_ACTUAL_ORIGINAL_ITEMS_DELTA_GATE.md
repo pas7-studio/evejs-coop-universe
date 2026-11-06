@@ -87,6 +87,7 @@ Local Windows checkout:
 ```powershell
 node --test --test-concurrency=1 scripts/pf58/tests/pf89-actual-item-delta.test.cjs
 python -m unittest discover -s scripts/pf58/tests -p 'test_pf89_*.py' -v
+python -m unittest discover -s scripts/pf89/tests -p 'test_pf89_*.py' -v
 ./scripts/pf58/Test-PF58-Local.ps1
 ```
 
