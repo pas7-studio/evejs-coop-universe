@@ -39,7 +39,11 @@ The new pf86-presence-and-prewrite.test.cjs covers nine positive and negative
 cases, including the real PF54/PF58 isolated SQLite fixture where an occupied
 player session appears *after* permit consumption but *before* ItemStore move.
 The regression requires zero original item moves and a permanently consumed
-permit. The PF58 local runner and PF80 Windows WORK runner now include PF86.
+permit. An additional manual source-pin test validates six unchanged original
+EveJS provider modules (GameStore, atomic adapter, ItemStore, session registry,
+NPC registry and native NPC store) before applying any PF80 patch. A changed
+original source fails closed until separately audited and re-pinned.
+The PF58 local runner and PF80 Windows WORK runner now include both PF86 tests.
 
 From a clean orchestration checkout on Windows PowerShell:
 
