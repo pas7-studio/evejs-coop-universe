@@ -21,7 +21,7 @@ Covered checks:
 
 ## Explicit WORK-only execution
 
-Apply PF62/PF68's complete 19-path patch and PF55's separate two-original-file owner patch **only to isolated WORK**. Then run:
+Apply PF62/PF68's complete 20-path patch and PF55's separate two-original-file owner patch **only to isolated WORK**. Then run:
 
 ```bash
 PF77_NATIVE_WORKTREE=/absolute/path/to/patched/WORK \
