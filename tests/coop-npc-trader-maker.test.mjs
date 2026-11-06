@@ -17,7 +17,7 @@ const HUB = { stationID: STATION, regionID: 10000002, stationName: "Jita IV - 4"
 
 function fixture({ cashCents = 5_000_000_00, mode = "plan", playerAsks = [], seedPrice = 1000,
   executor, wallet = null, buyMaxPct = null, minProfitBps = null, seedStation = STATION,
-  playerEscrow = null } = {}) {
+  playerEscrow = null, ownPrice = 0 } = {}) {
   const journalFile = path.join(os.tmpdir(),
     `trader-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
   const calls = [];
@@ -29,6 +29,11 @@ function fixture({ cashCents = 5_000_000_00, mode = "plan", playerAsks = [], see
       if (seedPrice > 0) {
         sells.push({ order_id: 5001, type_id: params.type_id, station_id: seedStation, price: seedPrice / 100,
           vol_remaining: 1000, source: "seed", bid: false });
+      }
+      if (ownPrice > 0) {
+        // The corporation's own coop-npc offer: buying a player ask at or above this pays ourselves.
+        sells.push({ order_id: 9001, type_id: params.type_id, station_id: STATION,
+          price: ownPrice / 100, vol_remaining: 1, source: "coop-npc", bid: false });
       }
       for (const ask of playerAsks) {
         sells.push({ order_id: ask.orderID, type_id: ask.typeID, station_id: STATION,
@@ -349,4 +354,22 @@ test("a claim with no recorded seller is left for an operator instead of guessin
   assert.equal(calls.length, 0);
   assert.equal(result.status, "TRADER_MAKER_ALREADY_HANDLED");
   fs.rmSync(f.journalFile, { force: true });
+});
+
+test("the trader never buys a player ask at or above its own asking price", async () => {
+  // After the relist learned to undercut the market, a player could buy the corporation's module just
+  // under the market and sell it straight back at the market reference - a drain on the corporation,
+  // for ever. A player ask that is not cheaper than our own offer is not a bargain.
+  const f = fixture({ seedPrice: 1000, ownPrice: 990,
+    playerAsks: [{ orderID: "281", typeID: 23803, remainingQuantity: 1, unitPriceCents: 995 }] });
+  const result = await f.maker.tick({ stationID: STATION, typeIDs: [23803] });
+  assert.equal(result.status, "TRADER_MAKER_NO_BARGAIN", JSON.stringify(result));
+  assert.equal(result.executions.length, 0, "nothing is bought back from ourselves");
+});
+
+test("a player ask cheaper than our own offer is still a real bargain", async () => {
+  const f = fixture({ seedPrice: 1000, ownPrice: 990,
+    playerAsks: [{ orderID: "282", typeID: 23803, remainingQuantity: 1, unitPriceCents: 900 }] });
+  const result = await f.maker.tick({ stationID: STATION, typeIDs: [23803] });
+  assert.notEqual(result.status, "TRADER_MAKER_NO_BARGAIN", JSON.stringify(result));
 });

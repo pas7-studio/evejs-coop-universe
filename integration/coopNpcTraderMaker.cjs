@@ -127,6 +127,7 @@ function createTraderMaker({
     const referenceAsks = []; // real for-sale asks AT THE HUB
     const regionAsks = []; // real for-sale asks elsewhere in the region: a fallback reference
     const playerAsks = [];
+    const ownAsks = []; // the corporation's own coop-npc offers at the hub
     for (const row of sells) {
       if (!row || row.bid === true) continue;
       if (Number(row.type_id) !== Number(typeID)) continue;
@@ -142,6 +143,9 @@ function createTraderMaker({
           unitPriceCents: priceCents, verifiedNative: true, state: "open" });
       } else if (String(row.source) === "coop-npc") {
         // Our own stock is not the market: pricing a buy off our own ask would ratchet the band.
+        // It is still recorded, because buying a player's goods at or above what we already ask
+        // for them is paying ourselves to hold the same item.
+        if (atHub) ownAsks.push({ orderID, priceCents, volume });
         continue;
       } else if (atHub) {
         referenceAsks.push({ orderID, priceCents, volume });
@@ -196,8 +200,9 @@ function createTraderMaker({
         }
       }
     }
+    const ownBestCents = ownAsks.length ? Math.min(...ownAsks.map((ask) => ask.priceCents)) : null;
     return { referenceCents: reference, referenceScope: hubCents !== null ? "HUB" : (regionCents !== null ? "REGION" : "NONE"),
-      playerAsks, seedAsks: referenceAsks.length, regionAsks: regionAsks.length };
+      playerAsks, ownBestCents, seedAsks: referenceAsks.length, regionAsks: regionAsks.length };
   }
 
   async function tick({ stationID, typeIDs = [] } = {}) {
@@ -230,8 +235,15 @@ function createTraderMaker({
     let budgetLeft = Math.min(maxSpendPerTickCents, Math.max(0, cashCents - minReserveCents));
     for (const book of perType) {
       if (!book || !book.referenceCents || !book.playerAsks.length) continue;
+      // Never buy what we already sell at the same price or cheaper: that trade only moves the
+      // corporation's ISK into a player's wallet (measured shape: corp asks 98.4 M, the market
+      // reference 99.4 M, so a player could resell to us at a 1 M profit, for ever).
+      const asks = book.ownBestCents
+        ? book.playerAsks.filter((ask) => ask.unitPriceCents < book.ownBestCents)
+        : book.playerAsks;
+      if (!asks.length) continue;
       const plan = planBargainBuys({
-        asks: book.playerAsks,
+        asks,
         referencePriceCents: book.referenceCents,
         cashCents,
         minReserveCents,
