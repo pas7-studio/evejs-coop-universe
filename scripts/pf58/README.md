@@ -154,3 +154,23 @@ single-owner write, cache indexes, transient cargo and notifications.
 Full details and local tests:
 `scripts/pf89/PF89_ACTUAL_ORIGINAL_ITEMS_DELTA_GATE.md`.
 Feature OFF, PR Draft, no PLAY changes.
+
+## PF90 original ItemStore owner snapshots (2026-11-07)
+
+The bundled PF58 original permit module exposes
+`commitOriginalOwnerSnapshot({tx,writer,expectedBefore,nextItems})`:
+an authoritative original snapshot comparison inside the same GameStore
+SQLite transaction as PF89's actual item diff and the PF88 reciprocal
+ship-custody checks. It rejects stale before-images, malformed snapshots
+and hidden item modifications, then writes only the same original item
+root once. The source-bound bootstrap exports
+`commitStockOwnerSnapshotWithinTransaction`.
+
+**This is a candidate API, NOT an original ItemStore hook**. The
+unchanged stock `readItems()/writeItems()` still exposes a mutable
+cache alias and schedules writes separately, and `characterState`
+owns independent character writes. Native WORK source-pinned audit
+documents and reproduces that hazard. Local regression:
+`tests/pf90-owner-snapshot.test.cjs`; full explanation:
+`scripts/pf90/PF90_ORIGINAL_STOCK_OWNERS.md`.
+Personal Fleet OFF, no original fork or PLAY update.
