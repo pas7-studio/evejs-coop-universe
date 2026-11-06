@@ -18,6 +18,6 @@ Original ship `itemID` is never recreated or changed; a docked ship can enter an
 node --test scripts/pf60/tests/pf60-terminal.test.cjs scripts/pf60/tests/pf60-sigkill.test.cjs
 ```
 
-`Test-PF60-Local.ps1` runs manual tests on Windows; real SIGKILL tests are only supported on Linux/WSL. Node >=22 with `node:sqlite` required. Original native source, scoped cleanup executor, PWERS/WORK, real pilot wallets, stock ammo, and two-client in-game proof are **NOT tested**. Do not merge PR #350 or enable flags from these fixtures.
+`Test-PF60-Local.ps1` runs manual tests on Windows; real SIGKILL tests are only supported on Linux/WSL. Node >=22 with `node:sqlite` required. Original native source, scoped cleanup executor, PLAY/WORK, real pilot wallets, stock ammo, and two-client in-game proof are **NOT tested**. Do not merge PR #350 or enable flags from these fixtures.
 
 Local 2026-11-06: **30/30 PASS**, 6 Linux Node child-process SIGKILL tests, SQLite `journal_mode=WAL`, `synchronous=FULL`; the native API remains an injected test double.
