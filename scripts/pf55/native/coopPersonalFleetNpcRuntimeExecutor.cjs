@@ -5,6 +5,7 @@
  * This module does not fabricate a controller, warp, ship, or proof receipt.
  */
 const {valid}=require('./coopPersonalFleetNativeOrders.cjs');
+const {matchesOriginalPersonalFleetActor}=require('./coopPersonalFleetNativeActorProof.cjs');
 const deny=errorMsg=>({success:false,errorMsg});
 function createNpcRuntimeExecutor({npcRuntime,orderBridge,sceneForSystem,getController,
  verifyPersonalClaim,authorizeTarget,defensiveEscort=null,enabled=()=>false}={}){
@@ -19,9 +20,9 @@ function createNpcRuntimeExecutor({npcRuntime,orderBridge,sceneForSystem,getCont
   const scene=sceneForSystem(row.systemID);
   if(!scene||scene.systemID!==row.systemID||typeof scene.getEntityByID!=='function')return null;
   const entity=scene.getEntityByID(row.shipItemID),controller=getController(row.shipItemID);
-  if(entity?.nativeNpc!==true||entity.kind!=='ship'||entity.itemID!==row.shipItemID||
-   entity.session?.characterID||controller?.entityID!==row.shipItemID||
-   controller.systemID!==row.systemID)return null;
+  // PF78: match the ORIGINAL PF58 physical actor and live controller, not
+  // only a reused numeric itemID. PF54 claims are separately checked above.
+  if(!matchesOriginalPersonalFleetActor(row,entity,controller))return null;
   const mode=String(entity.mode||'').toUpperCase();
   if(mode==='WARP'||entity.warpState||entity.pendingWarp||entity.isWarping===true)return null;
   let target=null;
