@@ -536,7 +536,10 @@ function createOriginalPlayerShipActivation({
  * this single durable SQLite transaction (and preserve cache/notifications).
  * The candidate below is not injected or installed in the original engine.
  */
-function createOriginalCharacterRecordWriteBarrier({pf52}={}){
+function createOriginalCharacterRecordWriteBarrier({pf52,
+ verifyOriginalSessionLease=()=>false}={}){
+ if(typeof verifyOriginalSessionLease!=='function')
+  throw Error('PF92_ORIGINAL_SESSION_LEASE_READER_REQUIRED');
  const fence=createReciprocalWriterFence({pf52});
  const fail=reason=>Object.freeze({status:'BLOCKED',reason,mayCommit:false});
  const cloneJson=value=>{
@@ -560,10 +563,9 @@ function createOriginalCharacterRecordWriteBarrier({pf52}={}){
  const protectedFields=['shipID','shipid','activeShipID',
   'shipTypeID','shipName','storedShips'];
  function inTransaction({tx,characterID,expectedBefore,nextRecord,
-                         session=null,verifyOriginalSessionLease=()=>false}={}){
+                         session=null}={}){
   if(!pos(characterID)||typeof tx?.get!=='function'||
-     typeof tx?.put!=='function'||!obj(expectedBefore)||!obj(nextRecord)||
-     typeof verifyOriginalSessionLease!=='function')
+     typeof tx?.put!=='function'||!obj(expectedBefore)||!obj(nextRecord))
    return fail('PF92_CHARACTER_OWNER_AUTHORITIES_REQUIRED');
   let before,after;
   try{
