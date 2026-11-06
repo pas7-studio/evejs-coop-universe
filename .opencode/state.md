@@ -442,6 +442,28 @@ the economy-v2 shadow lock retry (`Atomics.wait` 10 ms x up to 100 = 1 s, `space
 The second is NOT loaded on the play stack (`coopEconomyV2` is absent from the module cache), so the
 drain is the remaining suspect.
 
+**World health after 12 restarts and 10 perf changes** (verified 2026-11-06 21:15, play stack):
+380 telemetry events in 10 minutes, **0 errors** in the log, `evejs-server-1` healthy.
+Fleet: 5 systems with 11-35 pilots each, all linked (durable 3-5 per system); roles spread
+(patrol / trader / miner / hauler / pirate). Economy: ore and goods moving (Perimeter 139 563 ore /
+41 948 goods, New Caldari 230 216 / 107 475, Jita 12 578 ore against 16 512 demand). Top events:
+`living-npc-refinery-skipped` 96, `living-economy-ore` 40, `living-native-activity` 38,
+`living-mining-cycle-settled` 18, `living-npc-input-bought` 14, `living-distribution-run` 7.
+
+The 96 refinery skips are all `NATIVE_REFINERY_LEFTOVER_TOO_SMALL` (e.g. 99 units of type 17470 left
+at 60000682): the refinery correctly refuses a stack below the minimum batch, so those leftovers stay
+in the hangar instead of being refined. Mining blockers are all normal states (`TICK_depleted`,
+`TICK_loaded`, `FLEET_POST_TICK`).
+
+**Flush cost measured**: a `flushTableSync` with nothing dirty costs 0-0.4 ms for every table
+(npcCargo, npcEntities, npcControllers, items, characters, corporationRuntime), so the
+`Atomics.wait` drain only bites when there ARE pending rows - that needs a measurement taken during
+activity, not on an idle server.
+
+**Important**: the atomic store path (`coopGameStoreAtomic`) does NOT invalidate the native read cache,
+which is exactly why that cache keeps its 2 s TTL. Raising the TTL would be a correctness change, not
+a tuning knob - do not do it without adding post-commit invalidation first.
+
 ## Current state
 
 **The fork had been left on a detached HEAD** (156 commits ahead of `coop/pas7std`,
