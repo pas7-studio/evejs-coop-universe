@@ -8,7 +8,8 @@ const pos=x=>Number.isSafeInteger(x)&&x>0;
 const vec=v=>!!v&&['x','y','z'].every(k=>typeof v[k]==='number'&&Number.isFinite(v[k]));
 function createOriginalReturnExecutor({npcRuntime,orderBridge,sceneForSystem,
  getController,getCanonicalStation,verifyPersonalClaim,enabled=()=>false}={}){
- if(typeof npcRuntime?.warpToPoint!=='function'||typeof orderBridge?.issue!=='function'||
+ if(typeof npcRuntime?.warpToPoint!=='function'||typeof npcRuntime?.stop!=='function'||
+  typeof orderBridge?.issue!=='function'||
   [sceneForSystem,getController,getCanonicalStation,verifyPersonalClaim,enabled]
   .some(x=>typeof x!=='function'))throw Error('PF56_NATIVE_RETURN_RUNTIME_REQUIRED');
  function context(row){
@@ -38,6 +39,23 @@ function createOriginalReturnExecutor({npcRuntime,orderBridge,sceneForSystem,
       y:again.station.position.y,z:again.station.position.z};
     if(!Number.isFinite(range)||!vec(destination))
      return {success:false,errorMsg:'PF83_NATIVE_RETURN_DESTINATION_INVALID'};
+    // PF83-B: original npcBehaviorLoop.issueManualOrder(ATTACK) changes
+    // live controller.runtimeKind to nativeCombat. Merely warping home
+    // leaves its hostile manual ATTACK active, jeopardizing station arrival.
+    // PF56 already committed a durable one-shot dispatch before this call.
+    // Fail closed and never warp unless original STOP is independently
+    // reflected in the same live controller.
+    if(again.controller.runtimeKind==='nativeCombat'){
+      const stopped=npcRuntime.stop(row.shipItemID,{
+       reason:'pf83-return-base',allowSessionlessWarpAbort:false,
+       issueStopOrder:true});
+      if(stopped?.success!==true)
+       return {success:false,errorMsg:'PF83_NATIVE_COMBAT_STOP_UNVERIFIED'};
+      const afterStop=context(row);
+      if(!afterStop||afterStop.controller.manualOrder?.type!=='stop'||
+         afterStop.controller.currentTargetID!==0)
+       return {success:false,errorMsg:'PF83_NATIVE_COMBAT_QUIESCENCE_UNVERIFIED'};
+    }
     return npcRuntime.warpToPoint(row.shipItemID,destination,
      {forceImmediateStart:true,broadcastWarpStartToVisibleSessions:true});
    }});
