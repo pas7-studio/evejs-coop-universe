@@ -262,6 +262,11 @@ function createReciprocalWriterFence({pf52}={}){
   // Intentionally DO NOT swallow a throwing builder: the enclosing original
   // SQLite transaction must abort, even if the closure mutated the tx.
   const ack=buildNext(next);
+  // A builder capturing tx must NEVER sneak a stock write into the same
+  // transaction and then return BLOCKED/NOOP. Throw to rollback any such
+  // write, including when the builder failed to acknowledge synchronously.
+  if(!isDeepStrictEqual(before,tx.get('items','items')))
+   throw Error('PF89_STOCK_ITEMS_CHANGED_DURING_BUILDER_ROLLBACK');
   if(ack!==true)return fail('PF89_BUILDER_NOT_SYNCHRONOUSLY_ACKED');
   if(!rootItem(next))return fail('PF89_INVALID_NEXT_ITEMS_ROOT');
   try{
