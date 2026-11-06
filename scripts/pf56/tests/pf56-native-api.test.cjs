@@ -5,15 +5,23 @@ const {createOriginalReturnExecutor,createNativeStationArrivalReader}=
  require('../native/coopPersonalFleetNativeReturnExecutor.cjs');
 const pf56=require('../native/coopPersonalFleetReturnDock.cjs');
 const row={operationID:'return-1',assignmentID:'assign-1',shipItemID:2001,
- ownerCharacterID:9001,pilotID:'coop-pilot-123',actorGeneration:1,
+ ownerCharacterID:9001,pilotID:'coop-pilot-123',actorGeneration:1,reservationGeneration:3,
  systemID:30000142,stationID:6001};
 function fixture(){
  const station={stationID:row.stationID,systemID:row.systemID,
   position:{x:1000,y:0,z:0},radius:200,canDockPersonalNpc:true};
- const entity={kind:'ship',nativeNpc:true,itemID:row.shipItemID,
+ const entity={kind:'ship',nativeNpc:true,nativeNpcOccupied:true,
+  npcEntityType:'personalFleet',operatorKind:'PERSONAL_FLEET',
+  selectionKind:'PERSONAL_FLEET',selectionID:row.assignmentID,
+  ownerID:row.ownerCharacterID,characterID:0,pilotCharacterID:0,
+  itemID:row.shipItemID,
   position:{x:1300,y:0,z:0},velocity:{x:0,y:0,z:0},radius:100,
   mode:'STOP',session:null,warpState:null,pendingWarp:null};
- const controller={entityID:row.shipItemID,systemID:row.systemID};
+ const controller={entityID:row.shipItemID,systemID:row.systemID,
+  personalFleetOriginal:true,operatorKind:'PERSONAL_FLEET',entityType:'personalFleet',
+  selectionKind:'PERSONAL_FLEET',selectionID:row.assignmentID,
+  personalFleetAssignmentID:row.assignmentID,personalFleetPilotID:row.pilotID,
+  personalFleetGeneration:row.reservationGeneration,runtimeKind:'nativeAmbient'};
  const scene={systemID:row.systemID,getEntityByID(id){return id===row.shipItemID?entity:null;}};
  const calls=[],state={claim:true,enabled:true};
  const orderBridge={issue(c){calls.push(c);return c.execute();}};
