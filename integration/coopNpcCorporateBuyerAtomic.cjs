@@ -61,7 +61,18 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
   const fillKey="corp-buy"+SEP+fillID,orderKey=String(request.orderID);
   return gameStore.transact(TABLES,tx=>{
    const previous=tx.get("npcMarketFills",fillKey);
-   if(previous){
+   // COOP-LIFT: a caller that owns the BOOK fill itself (the daemon has no claim RPC) writes this
+   // marker before it closes the player's order, so an interrupted settlement can be resumed
+   // instead of leaving the seller unpaid. It is only ever our own unfinished work: the identity
+   // has to match this exact fill, and anything else under the key is still a replay.
+   if(previous&&previous.phase==="LIFT_FILL_ISSUED"){
+    if(previous.claimKey!==request.claimKey||previous.fillID!==fillID||
+       previous.orderID!==request.orderID||previous.buyerCorpID!==request.buyerCorpID||
+       previous.sellerID!==sellerID||previous.stationID!==request.stationID||
+       previous.typeID!==request.typeID||previous.quantity!==quantity||
+       previous.priceCents!==priceCents||!pos(previous.issuedAt))
+     throw Error("NPC_CORP_BUY_LIFT_MARKER_CONFLICT");
+   } else if(previous){
     if(previous.phase!=="NATIVE_NPC_BUY_COMMITTED"||
        previous.claimKey!==request.claimKey||previous.fillID!==fillID||
        previous.orderID!==request.orderID||previous.buyerCorpID!==request.buyerCorpID||

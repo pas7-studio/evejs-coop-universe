@@ -1,7 +1,7 @@
 "use strict";
 
 // Pure helpers live in space\coopVirtualWorldRuntime.pure.js (split by scripts/coop-split-module.cjs).
-const { observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, pickFundingCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceTraderMaker, advanceSiteSentries, advanceSiteSentryFire, advanceSiteLootStructures, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity, saleRefusalWindow } = require("./coopVirtualWorldRuntime.pure");
+const { observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, pickFundingCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceTraderMaker, advanceSiteSentries, advanceSiteSentryFire, advanceSiteLootStructures, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity, saleRefusalWindow, payrollCentsForPrice, PAYROLL_SALARY_CENTS } = require("./coopVirtualWorldRuntime.pure");
 const jsonFileCache = require("./coopJsonFileCache");
 // Does a native NPC ship exist in that system right now? This is a read-only
 // question, and it must never load a scene: ensureScene() builds belts, statics,
@@ -3629,18 +3629,6 @@ function pilotPayroll(){
   return payrollInstance;
  }catch(_error){return null;}
 }
-// One bounded salary per pilot, type, hour and AMOUNT: a retry of the same attempt never pays
-// twice, and the wallet is only debited for what the pilot actually receives.
-const PAYROLL_SALARY_CENTS=10000000; // 100 000.00 ISK
-// Measured 2026-10-31: a 175 000 ISK blueprint could never be bought, because every salary was
-// exactly 100 000 ISK and the shortfall was paid by the corporation again and again. The salary
-// is now what the purchase COSTS (plus a small margin), still bounded by the purchase budget.
-function payrollCentsForPrice(price){
- const isk=Math.max(0,Number(price)||0);
- const cents=Math.ceil(isk*100*1.02/100)*100; // whole ISK, 2 % over the ask
- const cap=Math.max(PAYROLL_SALARY_CENTS,Number(process.env.EVEJS_COOP_PAYROLL_MAX_CENTS||500000000));
- return Math.min(cap,Math.max(PAYROLL_SALARY_CENTS,cents));
-}
 function payPilotForPurchase({pilotID,typeID,stationID,systemID,price}={}){
  try{
   const payroll=pilotPayroll();
@@ -3795,6 +3783,18 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
    Number(entry.systemID)===Number(systemID));
  if(!link)link=adoptMerchant(scene||require("./runtime").ensureScene(Number(systemID),
   {refreshStargates:false}),haulerID,systemID);
+ if(!link&&!identityRegistry){
+  // The co-op runtime builds its identity registry while the FIRST scene is wired, and the
+  // economic beat can arrive before that: measured 2026-11-05, every BLOCKED sale of the session
+  // (14:11, 15:23, 16:04) happened within a minute of a restart, and the durable link was present
+  // in the store and in its JSON projection the whole time. "The world is not ready yet" is not
+  // "this hull has no identity", so it is reported as retryable and never as a verdict.
+  noteSaleSkip(systemID,stationID,haulerID,"WORLD_NOT_READY");
+  try{require("./coopRuntimeProbe").observe("living-npc-sale-identity",null,
+   {spaceState:{systemID:Number(systemID)}},{status:"WORLD_NOT_READY",haulerID:Number(haulerID),
+    identityRegistry:false});}catch(_error){}
+  return {status:"NOT_SOLD",reason:"WORLD_NOT_READY"};
+ }
  if(!link){noteSaleSkip(systemID,stationID,haulerID,"HAULER_NOT_NAMED");return {status:"NOT_SOLD",reason:"HAULER_NOT_NAMED"};}
  // Last leg of the loop: the refinery leaves its minerals in the corporation
  // hangar, and a hangar stack cannot be sold by a ship trader. One custody-safe

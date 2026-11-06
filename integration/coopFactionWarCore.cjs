@@ -115,13 +115,13 @@ function transition(source,command,{now=Date.now(),proofs={}}={}){
   const previous=state.enlistments[String(characterID)];
   if(previous?.cooldownUntil>now)return deny("ENLISTMENT_COOLDOWN");
   state.enlistments[String(characterID)]={characterID,factionID,status:"ACTIVE",rank:0,
-   enlistedAt:now,cooldownUntil:0};
+   enlistedAt:now,cooldownUntil:0,updatedAt:now};
   receipt={characterID,factionID,status:"ACTIVE"};
  }else if(type==="LEAVE_MILITIA"){
   const e=state.enlistments[String(command.characterID)];
   if(!e||e.status!=="ACTIVE"||!KEY(command.proofID))return deny("NOT_ENLISTED");
   if(!verify("leave",{enlistment:e,proofID:command.proofID}))return deny("NATIVE_AGENT_LEAVE_UNVERIFIED");
-  e.status="LEFT";e.leftAt=now;e.cooldownUntil=now+24*3600000;
+  e.status="LEFT";e.leftAt=now;e.cooldownUntil=now+24*3600000;e.updatedAt=now;
   receipt={characterID:e.characterID,status:e.status,cooldownUntil:e.cooldownUntil};
  }else return deny("UNKNOWN_WAR_COMMAND");
  const result={status:"APPLIED",type,eventID,...receipt};
@@ -154,9 +154,22 @@ const paperSupply=campaign=>
 function mergeWarRecords(before,next){
  if(!before||!next)return next;
  const merge=(left,right)=>Object.assign({},left||{},right||{});
+ // ENLISTMENTS ARE THE SAME HAZARD. Every war phase writes the WHOLE state after reading it, so a
+ // phase that read before an enlistment changed writes its stale copy back and silently erases the
+ // change: measured 2026-11-05, an ACTIVE Caldari enlistment restored at 19:31Z was back to the
+ // five-day-old LEFT row within minutes, leftAt and all. Recency is per character and explicit
+ // (updatedAt, written by ENLIST and LEAVE_MILITIA); a row without it falls back to the newest
+ // timestamp it does carry, so an old record can never beat a newer one.
+ const stamp=(row)=>Number(row&&(row.updatedAt||row.leftAt||row.enlistedAt))||0;
+ const enlistments={...(next.enlistments||{})};
+ for(const [id,row] of Object.entries(before.enlistments||{})){
+  const mine=enlistments[id];
+  if(!mine||stamp(row)>stamp(mine))enlistments[id]=row;
+ }
  return Object.assign({},next,{
   wars:merge(before.wars,next.wars),
   campaigns:merge(before.campaigns,next.campaigns),
+  enlistments,
  });
 }
 

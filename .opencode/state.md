@@ -1,4 +1,36 @@
-# Co-op handoff (2026-11-05, fork tip `1b5cb47`)
+# Co-op handoff (2026-11-06, fork tip `a461abe`)
+
+## 2026-11-06 — NPC corporations really buy the owner's asks (`a461abe`)
+
+Owner rule: *"make the NPCs buy the asks if they are a reasonable price — I asked for this long ago."*
+The blocker was measured, not guessed:
+
+* the pinned market daemon has **no claim RPC**: `externalservices/market-server/src/rpc.rs` has no
+  `ClaimNpcCorpPlayerSell` / `FinalizeNpcCorpPlayerSell` / `GetNpcCorpPlayerClaim`, so
+  `coopNpcCorporateBuyerAtomic.purchaseOnce` — the executor the maker was wired to — could never
+  settle anything;
+* `ReserveNpcSellOrder` / `ActivateNpcSellOrder` are missing too, so the relist half and every
+  NPC sale through `coopNpcPendingMarketEscrow` are dead until the daemon implements them;
+* `readPlayerAsks` never returned the seller, so `lot.sellerOwnerID` was **0**;
+* `FillOrder` on a player ask closes it and pays nobody (measured on order 281: bid stayed open,
+  wallet unchanged).
+
+New `space/coopNpcPlayerAskLift.js` (COOP-LIFT) is the executor that pays: deterministic fill id
+from the claim key → book/escrow/exact-price agreement → durable `LIFT_FILL_ISSUED` marker →
+`FillOrder` with exact ACK verification → the **unchanged** COOP-048 `atomicSettle` (real corporate
+ISK, real native tax, real item move, durable receipt). Crash between fill and payment resumes
+exactly once; a row somebody else closed is never paid.
+
+Band: `EVEJS_COOP_TRADER_BUY_MAX_PCT=1` (at or below the real ask), `EVEJS_COOP_TRADER_MIN_PROFIT_BPS=300`,
+`EVEJS_COOP_NPC_BUY_PLAYER_ASK=1` — all three are in `Code/compose.coop-probe.yaml`. Lots are never
+truncated (whole escrow stack only) and a `BLOCKED` executor answer is retried 3× then fenced.
+
+Evidence: `tests/coop-npc-player-ask-lift.test.mjs` (10) + 3 trader-maker cases + the full suite.
+**Not yet verified live**: Docker Desktop and the client are both down (last gamelog 12 h old).
+When the stack is up: `node /tmp/verify-owner-asks.js` (read-only: which of his asks the band would
+buy), then watch `space.trader-maker` for `TRADER_MAKER_SETTLED` with `executions[].settled=true`,
+his wallet credited and the corporation's debited. `repair-stale-escrow.js` (dry run first) clears
+the escrow row left behind by the order-281 experiment.
 
 ## Current state
 

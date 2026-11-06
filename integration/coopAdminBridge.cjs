@@ -127,6 +127,74 @@ function executeRequest(request) {
   // One-click way back into a militia after an accidental leave: clears the 24h
   // re-enlistment cooldown on the real war record, then the normal enlist path applies.
   if (action === "militia_restore") return militiaRestore(request);
+  // Push the AUTHORITY's militia state into the live client. The war record is the truth; the
+  // character record and the session's `warfactionid` are caches of it, and a running client keeps
+  // showing its cached copy until it is told otherwise. Measured 2026-11-06: the war record said
+  // ACTIVE while the open ability window still said "not in militia" and offered no rank.
+  if (action === "militia_sync") {
+    const characterID = Number(request.characterID) || 0;
+    if (!(characterID > 0)) return { ok: false, error: "characterID is required" };
+    try {
+      const characters = require("../services/character/characterState");
+      const warStore = require("./coopFactionWarStore" + siblingSuffix);
+      const gameStore = require("../gameStore");
+      const wantedFaction = Number(request.factionID) || 0;
+      // THE FLAT ATOMIC ROW IS THE AUTHORITY. `readRow` walks the JSON path
+      // /coop-faction-war/state-v1, which is a different view of this row GROUP from the flat key
+      // the store itself uses ("coop-faction-war\u001fstate-v1"), and they can disagree: measured
+      // 2026-11-06, the flat row held an ACTIVE enlistment while the JSON-path reader returned
+      // nothing, so this action tried to re-enlist (correctly denied, already active) and then
+      // pushed a null faction to the client.
+      const readWarState = () => gameStore.coopAtomicNativeRows
+        .transact([warStore.TABLE], (tx) => tx.get(warStore.TABLE, warStore.KEY));
+      let state = readWarState();
+      let row = state && state.enlistments ? state.enlistments[String(characterID)] || null : null;
+      // AN OUT-OF-PROCESS WRITE IS NOT DURABLE. Measured 2026-11-06: two restores written straight
+      // into the atomic row were gone after the next flush, because the row group is rebuilt from
+      // the server's own cache. The only durable way to give service back is the transition the
+      // militia desk uses, executed here, inside the server.
+      if ((!row || String(row.status) !== "ACTIVE") && wantedFaction > 0) {
+        const store = warStore.createFactionWarStore({gameStore,
+          proofs: {
+            enlistment: (proposal) => Number(proposal && proposal.characterID) === characterID &&
+              Number(proposal && proposal.factionID) === wantedFaction,
+            leave: () => false,
+          }});
+        const outcome = store.execute({type: "ENLIST",
+          eventID: "operator-enlist:" + characterID + ":" + Date.now(),
+          characterID, factionID: wantedFaction, agentID: 1});
+        emitEvent("living-militia-operator-enlist", {characterID, factionID: wantedFaction,
+          status: String((outcome && outcome.status) || "UNKNOWN"),
+          reason: String((outcome && outcome.reason) || "")});
+        state = readWarState();
+        row = state && state.enlistments ? state.enlistments[String(characterID)] || null : null;
+      }
+      const active = row && String(row.status) === "ACTIVE" ? row : null;
+      const factionID = active ? Number(active.factionID) || 0 : 0;
+      characters.updateCharacterRecord(characterID, (record) => ({
+        ...record,
+        warFactionID: factionID || null,
+        directFactionID: factionID || null,
+      }));
+      const session = liveSessionFor(characterID);
+      let pushed = false;
+      let previous = null;
+      if (session && typeof session.sendSessionChange === "function") {
+        previous = session.warFactionID ?? session.warfactionid ?? null;
+        session.warFactionID = factionID || null;
+        session.warfactionid = factionID || null;
+        session.sendSessionChange({ warfactionid: [previous, factionID || null] });
+        pushed = true;
+      }
+      emitEvent("living-militia-synced", { characterID, factionID: factionID || 0,
+        status: active ? "ACTIVE" : "NOT_ACTIVE", sessionPushed: pushed, previous: previous || null });
+      return { ok: true, characterID, factionID: factionID || 0,
+        status: active ? "ACTIVE" : String((row && row.status) || "NONE"),
+        sessionFound: Boolean(session), sessionPushed: pushed, previous };
+    } catch (error) {
+      return { ok: false, error: "militia sync failed: " + String(error && error.message || error) };
+    }
+  }
   if (action === "skill_restore_points") return restoreSkillPoints(request);
   if (action === "release_identity") return releaseIdentity(request);
   if (action === "assign_identity") return assignIdentity(request);

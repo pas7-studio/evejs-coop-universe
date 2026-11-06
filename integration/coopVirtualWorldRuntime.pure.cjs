@@ -1279,14 +1279,25 @@ function advanceTraderMaker(){
       // The escrow row prices in ISK; the maker works in cents.
       const priceIsk=Number(row.price);
       if(!Number.isFinite(priceIsk)||priceIsk<=0)continue;
+      // The seller is part of the offer, not a detail: the settlement pays exactly this owner.
+      const sellerOwnerID=Number(row.ownerId);
+      if(!Number.isSafeInteger(sellerOwnerID)||sellerOwnerID<=0)continue;
       out.push({orderID:String(row.orderId),remainingQuantity:qty,
-       unitPriceCents:Math.round(priceIsk*100)});
+       unitPriceCents:Math.round(priceIsk*100),sellerOwnerID});
      }
      return out;
     },
-    buyAsk:args=>buyBindings.purchaseAsk(args),
+    // The pinned daemon has no claim RPC, so the maker lifts the ask itself: `FillOrder` closes the
+    // player's order and the unchanged atomic settlement pays him from the corporation's wallet.
+    buyAsk:args=>buyBindings.liftAsk(args),
     journalFile:process.env.EVEJS_COOP_TRADER_JOURNAL||"/var/lib/evejs/coop-trader-maker.json",
     clock:()=>Date.now(),
+    // Owner rule 2026-11-06: "buy the asks if they are a reasonable price". 1.0 = at or below the
+    // cheapest real ask for that type; below 1 it is the original bargain-only behaviour.
+    buyMaxPct:(()=>{const v=Number(process.env.EVEJS_COOP_TRADER_BUY_MAX_PCT);
+     return Number.isFinite(v)&&v>0?Math.min(1,v):null;})(),
+    minProfitBps:(()=>{const v=Number(process.env.EVEJS_COOP_TRADER_MIN_PROFIT_BPS);
+     return Number.isFinite(v)&&v>=0?Math.trunc(v):null;})(),
     // The owner's scale: a tick may buy several lots and spend real money, bounded by env.
     maxBuysPerTick:Math.max(1,Math.min(4,Number(process.env.EVEJS_COOP_TRADER_MAX_BUYS_PER_TICK||1))),
     minReserveCents:Math.max(0,Math.round(Number(process.env.EVEJS_COOP_TRADER_RESERVE_ISK||10000)*100)),
@@ -1525,4 +1536,17 @@ function releaseSpawnedIdentity({pilotID,entityID=0,reason=""}={}){
  return {...released,reason:String(reason||"IDENTITY_REASSIGNED")};
 }
 
-module.exports = {saleRefusalWindow, projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceTraderMaker, advanceSiteSentries, advanceSiteSentryFire, advanceSiteLootStructures, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};
+// One bounded salary per pilot, type, hour and AMOUNT: a retry of the same attempt never pays
+// twice, and the wallet is only debited for what the pilot actually receives.
+const PAYROLL_SALARY_CENTS=10000000; // 100 000.00 ISK
+// Measured 2026-10-31: a 175 000 ISK blueprint could never be bought, because every salary was
+// exactly 100 000 ISK and the shortfall was paid by the corporation again and again. The salary
+// is now what the purchase COSTS (plus a small margin), still bounded by the purchase budget.
+function payrollCentsForPrice(price){
+ const isk=Math.max(0,Number(price)||0);
+ const cents=Math.ceil(isk*100*1.02/100)*100; // whole ISK, 2 % over the ask
+ const cap=Math.max(PAYROLL_SALARY_CENTS,Number(process.env.EVEJS_COOP_PAYROLL_MAX_CENTS||500000000));
+ return Math.min(cap,Math.max(PAYROLL_SALARY_CENTS,cents));
+}
+
+module.exports = {PAYROLL_SALARY_CENTS, payrollCentsForPrice, saleRefusalWindow, projectWarPresence, pickFundingCorporation, warRefundAuthorization, bindWarRuntime, observedNpcIDs, visitedSystems, raidDiagnose, initializedNativeMiningScenes, destroyedNativeShips, wreckCustodyNotes, worldBootAtMs, courierPilotIDs, nativeWarFleetRegistry, warSkipReasons, warSkip, warFrontChatSent, siblingSuffix, warFrontChat, warTreasuryStore, warPilotFaction, warPresencePilots, warFactionCorporation, presenceSummary, advanceNativeAmmoBankRecovery, ensureWarRecoverySocket, diagnoseNativeRaids, npcRealPoints, syncNativeDeliveries, hasPhysicalWreckClaim, nextHeadlessRetryMs, isHeadlessNativeReady, ensureNativeGateTransfer, observeNativeAmmoConsumption, wreckRecoveryNotes, lockedTargets, npcModuleSummary, distanceBetween, nearestBeltMeters, mineableSummary, mineableBeltSummary, miningShipDetail, observeEconomyOre, nativeMarketAllowlist, nativeWarpPoint, raidLeashNotes, raidLeashWrite, raidLeashScope, raidLeashRestore, advanceNativePveBossWreck, advanceNativePveObjectiveDoctrine, advanceNativePveWaveReinforcements, advanceNativePveSiteDefense, advanceTraderMaker, advanceSiteSentries, advanceSiteSentryFire, advanceSiteLootStructures, advanceNpcRecognition, confirmedWreck, arrivalSales, saleNotes, noteSaleSkip, createWarRecoveryAdmin, witnessedNativeBossWreck, releaseSpawnedIdentity};

@@ -22,8 +22,17 @@ test("traders prefer real stations; Jita fallback uses its real gate",()=>{
 });
 test("never invent physical POIs or accept invalid belt coordinates",()=>{
  assert.equal(anchorOptionsForRole({staticEntities:[]}, "pirate"),null);
- assert.equal(anchorOptionsForRole({staticEntities:[
+ const mixed={staticEntities:[
   {itemID:13,kind:"asteroidBelt",itemName:"Fake",position:{x:NaN,y:0,z:0}},
   {itemID:14,kind:"station",itemName:"Real",position:{x:4,y:0,z:0}}
- ]},"pirate").anchorDescriptor.itemID,14);
+ ]};
+ // A pirate never anchors on a station (anti-farming rule measured on the Jita 4-4 undock), so a
+ // scene whose only real POI is a station gives it nowhere to sit.
+ assert.equal(anchorOptionsForRole(mixed,"pirate"),null);
+ // Every other role may use that real station; the fake belt is still refused for all of them.
+ assert.equal(anchorOptionsForRole(mixed,"patrol").anchorDescriptor.itemID,14);
+ assert.equal(anchorOptionsForRole(mixed,"trader").anchorDescriptor.itemID,14);
+ // The old station-anchored pirate exists only behind its explicit operator flag.
+ assert.equal(anchorOptionsForRole(mixed,"pirate",
+  {env:{EVEJS_COOP_PIRATE_ALLOW_STATION_ANCHOR:"1"}}).anchorDescriptor.itemID,14);
 });

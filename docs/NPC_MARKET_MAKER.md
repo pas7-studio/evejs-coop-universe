@@ -181,3 +181,65 @@ five types "held" for the whole 3 h TTL and the book stayed empty with no way ba
    `NPC_PLAYER_PURCHASE_SETTLED` with a `fillID`/`itemID`, the seller's wallet credited, the
    corporation's debited, and the item physically in the corporation's hangar. Anything less is
    `UNVERIFIED`.
+
+## 9. 2026-11-06: the executor that really pays (`COOP-LIFT`)
+
+Owner rule that day: *"make the NPCs buy the asks if they are a reasonable price — I asked for this
+long ago."* The first honest finding is why it never happened:
+
+| measured | evidence |
+|---|---|
+| the pinned market daemon has **no claim RPC at all** | `externalservices/market-server/src/rpc.rs` dispatch list: `StartupCheck`, `Health`, `GetManifest`, `GetDiagnostics`, `GetRegion*`, `GetSystem*`, `GetStation*`, `GetOrders`, `GetOrder`, `PlaceOrder`, `ModifyOrder`, `CancelOrder`, `CancelStationOrders`, `FillOrder`, `AdjustSeedStock`, `RecordTrade`, `SweepExpiredOrders`, `GetOrderEvents`, `RebuildRegionSummaries`. `ClaimNpcCorpPlayerSell` / `FinalizeNpcCorpPlayerSell` / `GetNpcCorpPlayerClaim` answer `unsupported market RPC method`. So `coopNpcCorporateBuyerAtomic.purchaseOnce` — the executor the maker was wired to — could never settle anything. |
+| `ReserveNpcSellOrder` / `ActivateNpcSellOrder` are **also absent** | same list. The relist half (§7) and the industry/salvage NPC sale paths call them and cannot list until the daemon implements them. |
+| the maker never had the seller | `readPlayerAsks` (runtime) returned the escrow price and quantity but not `ownerId`, so `lot.sellerOwnerID` was `0` and the buyer would have been asked to pay character 0. |
+| `FillOrder` alone does **not** pay | measured on the owner's own order 281 (109 500 000 ISK, 1 unit): the order went `filled`, the maker's bid at the same price stayed `open`, the seller's wallet did not move. A naive "NPC buys your ask" = minted ISK and a lost item. |
+
+### The executor
+
+`space/coopNpcPlayerAskLift.js` supplies the missing authority and leaves the money where it already
+lives — the audited COOP-048 transaction:
+
+1. the receipt key is a **deterministic** function of the claim key (`deriveFillID`), so a retry lands
+   on the same row and never on a second wallet transaction;
+2. the book row (`GetOrder`) and the physical escrow (`marketEscrow` + the one item stack) must name
+   the same order, owner, type, station, quantity and **exact price in cents**;
+3. a durable `LIFT_FILL_ISSUED` marker is written **before** the book changes;
+4. `FillOrder` closes the whole remaining quantity and the exact ACK is verified field by field;
+5. `atomicSettle` (unchanged) debits the corporation, credits the seller net of the real native tax,
+   moves the stack and writes the `NATIVE_NPC_BUY_COMMITTED` receipt.
+
+Crash windows: marker without a fill → the row is still open, the next call fills it; fill without a
+settlement → the next call finds **our** marker and settles exactly once; a row somebody else closed
+with no marker of ours → `NPC_LIFT_FOREIGN_FILL`, nothing is paid.
+
+### The band
+
+The buy ceiling is now a number, not a constant: `EVEJS_COOP_TRADER_BUY_MAX_PCT` (`1` = at or below
+the real ask of that type, anything above 1 refused), and `EVEJS_COOP_TRADER_MIN_PROFIT_BPS` (`300`,
+because 100 % buy against the 105 % resale floor is a 5 % gross gap). Defaults keep the original
+bargain-only 90 %/800 bps behaviour. A lot is also **never truncated**: the settlement pays for one
+whole escrow stack, so an ask bigger than the lot cap is skipped as `LOT_REQUIRES_PARTIAL_SETTLEMENT`
+instead of being shrunk and then failing.
+
+The maker's journal now separates two outcomes that used to look identical: `BLOCKED` means the
+executor did nothing at all (no claim, no fill, no money) and is retried up to 3 times, while a
+throw stays `PREPARED` and is never retried by the scheduler.
+
+The reference price also had a dead end: `bookFor` only looked at asks **at the hub**, and the seeded
+stock for a junk type often sits at another station in The Forge, so the type was skipped entirely.
+The cheapest real ask anywhere in the region is still a real market price; the hub stays authoritative
+when it has one, and every candidate reports `referenceScope: "HUB" | "REGION"`.
+
+### Tests
+
+`tests/coop-npc-player-ask-lift.test.mjs` (10) and three new cases in
+`tests/coop-npc-trader-maker.test.mjs`: the money conservation, the double-pay guard, the crash
+resume, the foreign fill, the price-authority disagreement, the ceiling, the ACK lie, the disabled
+flag, the market-price band, the bounded retry and the partial-lot skip.
+
+### Still open (measured, not guessed)
+
+* the daemon needs `ReserveNpcSellOrder` / `ActivateNpcSellOrder` before the trader can relist what
+  it buys (§7) or the industry/salvage NPCs can sell theirs;
+* the claim RPCs remain the cleaner long-term authority for `COOP-048`; the lift path is what works
+  today and `purchaseAsk` stays available for the day they exist.

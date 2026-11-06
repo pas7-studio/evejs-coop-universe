@@ -16,7 +16,7 @@ const STATION = 60003760;
 const HUB = { stationID: STATION, regionID: 10000002, stationName: "Jita IV - 4" };
 
 function fixture({ cashCents = 5_000_000_00, mode = "plan", playerAsks = [], seedPrice = 1000,
-  executor, wallet = null } = {}) {
+  executor, wallet = null, buyMaxPct = null, minProfitBps = null, seedStation = STATION } = {}) {
   const journalFile = path.join(os.tmpdir(),
     `trader-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
   const calls = [];
@@ -26,7 +26,7 @@ function fixture({ cashCents = 5_000_000_00, mode = "plan", playerAsks = [], see
       if (method !== "GetOrders") throw new Error("unexpected " + method);
       const sells = [];
       if (seedPrice > 0) {
-        sells.push({ order_id: 5001, type_id: params.type_id, station_id: STATION, price: seedPrice / 100,
+        sells.push({ order_id: 5001, type_id: params.type_id, station_id: seedStation, price: seedPrice / 100,
           vol_remaining: 1000, source: "seed", bid: false });
       }
       for (const ask of playerAsks) {
@@ -46,6 +46,8 @@ function fixture({ cashCents = 5_000_000_00, mode = "plan", playerAsks = [], see
     minReserveCents: 10_000_00,
     maxSpendPerTickCents: 1_000_000_00,
     maxLotUnits: 50,
+    buyMaxPct,
+    minProfitBps,
   });
   return { maker, journalFile, calls };
 }
@@ -209,4 +211,67 @@ test("an escrowed ask outside the band is read but not bought", async () => {
   assert.equal(result.typesWithPlayerAsks, 1);
   assert.equal(result.candidates.length, 0);
   fs.rmSync(journalFile, { force: true });
+});
+
+// Owner rule 2026-11-06: "buy the asks if they are a reasonable price". The band is a number: 1.0
+// means "at or below the real ask", so a player asking the market price still gets bought, and the
+// 3 % spread floor is what makes that a trade instead of a gift.
+test("a reasonable price is bought: the band can be the market itself", async () => {
+  const seen = [];
+  const f = fixture({ mode: "live", buyMaxPct: 1, minProfitBps: 300,
+    playerAsks: [{ typeID: 34, orderID: 9001, remainingQuantity: 50, unitPriceCents: 1000 }],
+    executor: async (args) => { seen.push(args);
+      return { status: "NPC_PURCHASED_PLAYER_GOODS", fillID: 7, itemID: 34 }; } });
+  const result = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(result.status, "TRADER_MAKER_SETTLED");
+  assert.equal(seen[0].maxUnitPriceCents, 1000, "100 % of the reference is inside a 100 % ceiling");
+  fs.rmSync(f.journalFile, { force: true });
+});
+
+test("a clean refusal is retried a bounded number of times, then fenced", async () => {
+  let buys = 0;
+  const f = fixture({ mode: "live",
+    playerAsks: [{ typeID: 34, orderID: 9001, remainingQuantity: 50, unitPriceCents: 850 }],
+    executor: async () => { buys += 1;
+      return { status: "BLOCKED", reason: "NPC_LIFT_ORDER_BUSY" }; } });
+  for (let tick = 0; tick < 3; tick += 1) await f.maker.tick({ stationID: STATION, typeIDs: [34] });
+  const journal = JSON.parse(fs.readFileSync(f.journalFile, "utf8"));
+  assert.equal(journal.claims["9001"].phase, "REFUSED");
+  assert.equal(journal.claims["9001"].refusals, 3);
+  assert.equal(journal.claims["9001"].reason, "NPC_LIFT_ORDER_BUSY");
+  const fenced = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(buys, 3, "a refused order that keeps refusing is not hammered forever");
+  assert.equal(fenced.status, "TRADER_MAKER_ALREADY_HANDLED");
+  fs.rmSync(f.journalFile, { force: true });
+});
+
+test("a stack bigger than the lot cap is skipped, never silently shrunk", async () => {
+  let buys = 0;
+  const f = fixture({ mode: "live",
+    playerAsks: [{ typeID: 34, orderID: 9001, remainingQuantity: 500, unitPriceCents: 850 }],
+    executor: async () => { buys += 1;
+      return { status: "NPC_PURCHASED_PLAYER_GOODS", fillID: 1, itemID: 2 }; } });
+  const result = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(buys, 0, "a 500-unit ask cannot be paid for 50 units: it is one whole escrow stack");
+  assert.equal(result.status, "TRADER_MAKER_SKIPPED");
+  assert.equal(result.refused[0].reason, "LOT_REQUIRES_PARTIAL_SETTLEMENT");
+  fs.rmSync(f.journalFile, { force: true });
+});
+
+test("a hub with no ask of its own still gets a price from the region, not from nowhere", async () => {
+  // The seeded stock for a junk type often sits at another station in The Forge. That is still a
+  // real market price, and refusing to look at it was another way the owner's goods never sold.
+  const f = fixture({ seedStation: 60003761,
+    playerAsks: [{ typeID: 34, orderID: 9001, remainingQuantity: 50, unitPriceCents: 850 }] });
+  const result = await f.maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(result.status, "TRADER_MAKER_PLAN");
+  assert.equal(result.candidates[0].referenceCents, 1000, "the regional ask is the reference");
+  assert.equal(result.candidates[0].referenceScope, "REGION");
+  fs.rmSync(f.journalFile, { force: true });
+
+  const hub = fixture({ playerAsks: [{ typeID: 34, orderID: 9001, remainingQuantity: 50,
+    unitPriceCents: 850 }] });
+  const atHub = await hub.maker.tick({ stationID: STATION, typeIDs: [34] });
+  assert.equal(atHub.candidates[0].referenceScope, "HUB", "the hub always wins when it has an ask");
+  fs.rmSync(hub.journalFile, { force: true });
 });

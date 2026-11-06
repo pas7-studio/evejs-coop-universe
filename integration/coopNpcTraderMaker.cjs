@@ -47,6 +47,11 @@ function createTraderMaker({
   minReserveCents = 1_000_000, // 10 000 ISK is real money in this world: never spend it by accident
   maxSpendPerTickCents = 100_000_000, // 1 M ISK per tick ceiling
   maxLotUnits = 50,
+  // Owner rule 2026-11-06: "buy the asks if they are a reasonable price". The band is a number, not
+  // a constant: 0.9 keeps the original "bargain only" behaviour, 1.0 means "at or below the market
+  // ask", and anything above 1 is refused because that is no longer a reasonable price.
+  buyMaxPct = null,
+  minProfitBps = null,
 } = {}) {
   if (typeof call !== "function" || typeof getStation !== "function" ||
       typeof readWalletCents !== "function" || typeof clock !== "function" ||
@@ -60,6 +65,17 @@ function createTraderMaker({
       !Number.isSafeInteger(minReserveCents) || minReserveCents < 0 ||
       !Number.isSafeInteger(maxSpendPerTickCents) || maxSpendPerTickCents < 1)
     throw Error("TRADER_MAKER_LIMITS_INVALID");
+  if (buyMaxPct !== null && !(Number.isFinite(buyMaxPct) && buyMaxPct > 0 && buyMaxPct <= 1))
+    throw Error("TRADER_MAKER_BUY_BAND_INVALID");
+  if (minProfitBps !== null && !(Number.isSafeInteger(minProfitBps) && minProfitBps >= 0))
+    throw Error("TRADER_MAKER_PROFIT_BAND_INVALID");
+  const band = {
+    ...(buyMaxPct === null ? {} : { maxBuyPct: buyMaxPct }),
+    ...(minProfitBps === null ? {} : { minProfitBps }),
+  };
+  // One lot is one whole escrow stack: the atomic settlement moves ONE stack and pays ONE exact
+  // quantity, so a truncated lot can never settle. It is skipped, not silently shrunk.
+  const MAX_REFUSALS = 3;
 
   const lock = journalFile + ".lock";
 
@@ -101,27 +117,39 @@ function createTraderMaker({
   async function bookFor(regionID, typeID, stationID) {
     const result = await call("GetOrders", { region_id: regionID, type_id: typeID });
     const sells = Array.isArray(result && result.sells) ? result.sells : [];
-    const referenceAsks = [];
+    const referenceAsks = []; // real for-sale asks AT THE HUB
+    const regionAsks = []; // real for-sale asks elsewhere in the region: a fallback reference
     const playerAsks = [];
     for (const row of sells) {
       if (!row || row.bid === true) continue;
-      if (Number(row.type_id) !== Number(typeID) || Number(row.station_id) !== Number(stationID))
-        continue;
+      if (Number(row.type_id) !== Number(typeID)) continue;
       const priceCents = cents(row.price);
       const volume = pos(row.vol_remaining);
       const orderID = String(row.order_id === null || row.order_id === undefined ? "" : row.order_id);
       if (priceCents === null || !volume || !/^[0-9]{1,20}$/.test(orderID)) continue;
+      const atHub = Number(row.station_id) === Number(stationID);
       if (String(row.source) === "player") {
+        // A player's ask is only ever settled at the hub, where its escrow lives.
+        if (!atHub) continue;
         playerAsks.push({ typeID, orderID, stationID, remainingQuantity: volume,
           unitPriceCents: priceCents, verifiedNative: true, state: "open" });
-      } else {
+      } else if (atHub) {
         referenceAsks.push({ orderID, priceCents, volume });
+      } else {
+        regionAsks.push({ orderID, priceCents, volume });
       }
     }
-    // The market price for this type is what the world itself asks for it.
-    const reference = referenceAsks.length
+    // The market price for this type is what the world itself asks for it. The hub is the truth;
+    // when nothing is offered at the hub at all, the cheapest real ask anywhere in the region is
+    // still a real market price (and the only honest number available), so a seller who really
+    // offers something at the hub is not refused just because the seeded stock sits elsewhere.
+    const hubCents = referenceAsks.length
       ? Math.min(...referenceAsks.map((ask) => ask.priceCents))
       : null;
+    const regionCents = regionAsks.length
+      ? Math.min(...regionAsks.map((ask) => ask.priceCents))
+      : null;
+    const reference = hubCents !== null ? hubCents : regionCents;
     // Ask rows the public book cannot show: read them from the escrow authority when the caller
     // provides one, and never trust a row it would not name.
     if (typeof readPlayerAsks === "function") {
@@ -138,7 +166,8 @@ function createTraderMaker({
         known.add(orderID);
       }
     }
-    return { referenceCents: reference, playerAsks, seedAsks: referenceAsks.length };
+    return { referenceCents: reference, referenceScope: hubCents !== null ? "HUB" : (regionCents !== null ? "REGION" : "NONE"),
+      playerAsks, seedAsks: referenceAsks.length, regionAsks: regionAsks.length };
   }
 
   async function tick({ stationID, typeIDs = [] } = {}) {
@@ -179,9 +208,11 @@ function createTraderMaker({
         maxSpendCents: budgetLeft,
         maxLotUnits,
         openTypeIDs: ownedByUs(book.playerAsks[0].typeID) ? [book.playerAsks[0].typeID] : [],
+        ...band,
       });
       if (plan.status === "PLANNED") {
         plans.push({ typeID: book.playerAsks[0].typeID, referenceCents: book.referenceCents,
+          referenceScope: book.referenceScope,
           seedAsks: book.seedAsks, lots: plan.lots, buyCeilingCents: plan.buyCeilingCents,
           sellFloorCents: plan.sellFloorCents });
         budgetLeft -= plan.spentCents;
@@ -202,10 +233,12 @@ function createTraderMaker({
       typesWithPlayerAsks: perType.filter((book) => book && book.playerAsks && book.playerAsks.length).length,
       errors: perType.filter((book) => book && book.error).map((book) => ({ typeID: book.typeID, error: book.error })).slice(0, 6),
       candidates: plans.slice(0, 4).map((plan) => ({
-        typeID: plan.typeID, referenceCents: plan.referenceCents, buyCeilingCents: plan.buyCeilingCents,
+        typeID: plan.typeID, referenceCents: plan.referenceCents, referenceScope: plan.referenceScope,
+        buyCeilingCents: plan.buyCeilingCents,
         sellFloorCents: plan.sellFloorCents, lot: plan.lots[0],
       })),
       executions: [],
+      refused: [],
     };
     if (!live || !plans.length) {
       probe.observe("space.trader-maker", null, null, {
@@ -235,12 +268,22 @@ function createTraderMaker({
         const lot = plan.lots[0];
         const key = String(lot.sourceOrderID);
         const existing = journal.claims[key];
-        if (existing && existing.phase !== "SETTLED") continue; // never retry an unresolved claim
         if (existing && existing.phase === "SETTLED") { alreadyHandled += 1; continue; }
+        // A PREPARED claim may already have closed the book row: never touch it again. A REFUSED
+        // claim moved nothing at all, so a later tick may retry it - a bounded number of times.
+        if (existing && existing.phase === "PREPARED") continue;
+        if (existing && existing.phase === "REFUSED" &&
+            (existing.refusals || 0) >= MAX_REFUSALS) continue;
+        // Whole escrow only: the settlement pays for exactly one whole physical stack.
+        if (lot.quantity !== lot.offerQuantity) {
+          summary.refused.push({ orderID: key, typeID: lot.typeID, quantity: lot.quantity,
+            offerQuantity: lot.offerQuantity, reason: "LOT_REQUIRES_PARTIAL_SETTLEMENT" });
+          continue;
+        }
         const claimKey = "npc-corpbuy:" + crypto.randomUUID().replace(/-/g, "");
         journal.claims[key] = { phase: "PREPARED", claimKey, typeID: lot.typeID,
           stationID: lot.stationID, quantity: lot.quantity, unitPriceCents: lot.buyUnitPriceCents,
-          createdAt: clock() };
+          createdAt: clock(), refusals: existing ? (existing.refusals || 0) : 0 };
         saveJournal(journal); // write-ahead, same rule the coordinator uses
         let result;
         try {
@@ -253,10 +296,17 @@ function createTraderMaker({
           result = { status: "TRADER_EXECUTOR_THROW", reason: String(error && error.message || error).slice(0, 90) };
         }
         const settled = result && result.status === "NPC_PURCHASED_PLAYER_GOODS";
+        // BLOCKED is the executor saying "I did nothing": no claim, no fill, no money. That is the
+        // only non-settled outcome a later tick may retry; a throw or any other status is treated
+        // as ambiguous and stays PREPARED forever, for an operator.
+        const refused = !settled && result && result.status === "BLOCKED";
         journal.claims[key] = {
           ...journal.claims[key],
-          phase: settled ? "SETTLED" : "PREPARED",
+          phase: settled ? "SETTLED" : (refused ? "REFUSED" : "PREPARED"),
+          refusals: refused ? ((existing ? (existing.refusals || 0) : 0) + 1)
+            : (journal.claims[key].refusals || 0),
           result: String(result && result.status || "NO_RESULT"),
+          reason: refused ? String(result.reason || "NO_REASON").slice(0, 90) : null,
           fillID: settled ? result.fillID : null,
           itemID: settled ? result.itemID : null,
           atMs: clock(),
@@ -264,7 +314,8 @@ function createTraderMaker({
         saveJournal(journal);
         summary.executions.push({ typeID: lot.typeID, orderID: lot.sourceOrderID, quantity: lot.quantity,
           buyUnitPriceCents: lot.buyUnitPriceCents, settled, fillID: settled ? result.fillID : null,
-          outcome: String(result && result.status || "NO_RESULT") });
+          outcome: String(result && (result.status === "BLOCKED"
+            ? "BLOCKED:" + (result.reason || "NO_REASON") : result.status) || "NO_RESULT") });
         if (!settled) break; // one ambiguous outcome stops the tick, never a cascade
       }
     } finally {
@@ -274,10 +325,11 @@ function createTraderMaker({
     summary.status = summary.executions.some((row) => row.settled)
       ? "TRADER_MAKER_SETTLED"
       : (summary.executions.length ? "TRADER_MAKER_NOT_SETTLED"
-        : "TRADER_MAKER_ALREADY_HANDLED");
+        : (summary.refused.length ? "TRADER_MAKER_SKIPPED" : "TRADER_MAKER_ALREADY_HANDLED"));
     probe.observe("space.trader-maker", null, null, {
       status: summary.status, mode: summary.mode, hub: summary.hub, buyerCorpID: summary.buyerCorpID,
       cashCents: summary.cashCents, executions: summary.executions,
+      refused: summary.refused.map((row) => ({ typeID: row.typeID, reason: row.reason })),
     });
     return summary;
   }

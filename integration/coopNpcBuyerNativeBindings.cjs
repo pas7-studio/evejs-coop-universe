@@ -2,6 +2,7 @@
 // COOP-049: native read/adapt only; delegates every paid write to COOP-048.
 // No NPC session impersonation, virtual wallet, synthetic cargo, or new timer.
 const {createNpcCorporateBuyer}=require("./coopNpcCorporateBuyerAtomic"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
+const {createNpcPlayerAskLift}=require("./coopNpcPlayerAskLift"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const {createNpcBuyerCoordinator}=require("./coopNpcBuyerCoordinator"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const {verifyNativeBookAsk,normalizeNativeOrderForCoordinator}=require("./coopNpcRustOrderAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const {createNativeNpcSellerTaxQuote}=require("./coopNpcSellerTaxAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
@@ -233,7 +234,20 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
   // into a failed buyer tick and NEVER calls RecordTrade.
   return {...result,notification:sent?.status||"NOT_SENT"};
  }
+ // COOP-LIFT: the executor the market maker really uses today. The pinned daemon implements no
+ // claim RPC, so the book authority is `FillOrder` (which closes the ask and pays nobody) and the
+ // money authority is the unchanged COOP-048 settlement, keyed by a deterministic fill id.
+ let askLift=null;
+ function playerAskLift(){
+  if(!askLift)askLift=createNpcPlayerAskLift({gameStore,itemStore,marketClient,buyer,
+   verifyBuyerCorporation:verifyCorp,verifyPlayerSeller:verifySeller,clock,
+   recordTrade:({typeID,price,quantity})=>marketClient.call("RecordTrade",{
+    type_id:typeID,price,quantity})});
+  return askLift;
+ }
  return Object.freeze({
+  liftAsk:args=>playerAskLift().liftOnce(args)
+   .then(r=>withSellerNotification(r,"NPC_PURCHASED_PLAYER_GOODS")),
   // COOP-MMD: the market maker buys ONE whole verified player ask through the same atomic buyer the
   // A-Life path uses (real corporate ISK, real item, Rust claim + GameStore receipt). It does not go
   // through the coordinator, because that one is fenced to an attested *material deficit* proof while
