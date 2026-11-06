@@ -56,6 +56,23 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: PF79 unique native module and dependency closure before network work
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from scripts.pf62 import build_native_review_bundle as pf62
+          paths=pf62.MODULE_FILES
+          assert len(paths)==18 and len(set(paths))==18, 'PF79_DUPLICATE_OR_MISSING_SOURCE'
+          staged=pf62.plan_modules(Path.cwd())
+          assert len(staged)==18, 'PF79_STAGE_MODULE_COUNT_MISMATCH'
+          required={'coopPersonalFleetNativeReturnExecutor.js',
+                    'coopPersonalFleetNativeActorProof.js'}
+          assert required.issubset(set(staged)), 'PF79_RETURN_OR_AUTHORITY_MISSING'
+          print('PF79_SOURCE_INVENTORY_OK: 18 distinct modules, 20 PF62 patch paths')
+          PY
+
       - name: Fetch real public EveJS original, no credentials or changes
         shell: bash
         run: |
