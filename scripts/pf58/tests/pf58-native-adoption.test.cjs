@@ -48,6 +48,11 @@ test('adopts exact existing physical original ship with zero new modules, cargo 
  const result=f.pending();assert.equal(result.executorStatus,'REPORTED_COMPLETED');
  assert.equal(nativeRows.entity.entityID,F.SHIP);assert.equal(nativeRows.entity.ownerID,F.OWNER);
  assert.equal(nativeRows.entity.personalFleetOriginal,true);
+ assert.equal(nativeRows.entity.selectionKind,'PERSONAL_FLEET');
+ assert.equal(nativeRows.entity.selectionID,F.ASSIGNMENT);
+ assert.equal(nativeRows.controller.selectionKind,'PERSONAL_FLEET');
+ assert.equal(nativeRows.controller.selectionID,F.ASSIGNMENT);
+ assert.equal(nativeRows.entity.selectionID,nativeRows.controller.selectionID);
  assert.equal(nativeRows.controller.runtimeKind,'nativeAmbient');
  assert.equal(nativeRows.controller.behaviorOverrides.allowWeapons,false);
  assert.deepEqual([...sceneEntities.keys()],[F.SHIP]);
