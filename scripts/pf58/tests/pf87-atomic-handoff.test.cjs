@@ -8,6 +8,15 @@ function fixture(action){
  const tmp=F.tempDb(),f=setup(tmp.file);
  try{
   f.prepare();
+  // PF91: the original stock characterState writes individual SQLite rows,
+  // not a synthetic key='characters' map. PF54/PF53 onboarding used the
+  // legacy aggregate fixture above; migrate ONLY this strict PF87 fixture
+  // after all its onboarding writes have completed.
+  const legacy=f.get('characters','characters');
+  const owner=legacy?.[String(F.OWNER)];
+  if(!owner)throw Error('PF91_FIXTURE_OWNER_RECORD_MISSING');
+  f.db.prepare('DELETE FROM "characters" WHERE key=?').run('characters');
+  f.put('characters',String(F.OWNER),owner);
   let postCommitMoves=0,atomicMoves=0;
   const state={falseAck:false,throwAfterWrite:false,denyAtomic:false,
    sessionChecks:0,sessionOccupiedOnSecondRead:false};
@@ -47,7 +56,7 @@ const permit=f=>f.get('corporationRuntime',
 
 test('PF87 atomic transfer commits permit and exact original ship in one SQLite transaction',()=>fixture(h=>{
  const beforeKeys=Object.keys(h.f.get('items','items')).sort();
- const beforeAccount=h.f.get('characters','characters')[String(F.OWNER)];
+ const beforeAccount=h.f.get('characters',String(F.OWNER));
  const result=h.f.pending();
  assert.equal(result.executorStatus,'REPORTED_COMPLETED');
  assert.equal(h.atomicMoves,1);
@@ -58,7 +67,7 @@ test('PF87 atomic transfer commits permit and exact original ship in one SQLite 
  assert.equal(permit(h.f).status,'CONSUMED');
  assert.deepEqual(Object.keys(h.f.get('items','items')).sort(),beforeKeys,
   'only original item ID may exist');
- assert.deepEqual(h.f.get('characters','characters')[String(F.OWNER)],beforeAccount,
+ assert.deepEqual(h.f.get('characters',String(F.OWNER)),beforeAccount,
   'title transfer must never debit wallet or silently reassign active ship');
  assert.equal(h.f.bridge.reconcile(h.f.c).status,'ACTIVE');
  assert.equal(h.f.pending().status,'BLOCKED');
@@ -89,18 +98,15 @@ test('PF87 reject callback before any mutation does not create permit or origina
  assert.equal(h.postCommitMoves,0);
 }));
 test('PF87 rejects the reserved original hull already active for its owner',()=>fixture(h=>{
- const users=h.f.get('characters','characters');
- users[String(F.OWNER)].shipID=F.SHIP;
- h.f.put('characters','characters',users);
+ const original=h.f.get('characters',String(F.OWNER));
+ h.f.put('characters',String(F.OWNER),{...original,shipID:F.SHIP});
  assert.equal(h.f.pending().executorStatus,'UNVERIFIED');
  assert.equal(h.atomicMoves,0);
  assert.equal(permit(h.f),null);
  assert.equal(originalShip(h.f).flagID,4);
 }));
 test('PF87 rejects a hull active for another original character',()=>fixture(h=>{
- const chars=h.f.get('characters','characters');
- chars['90000002']={characterID:90000002,shipID:String(F.SHIP)};
- h.f.put('characters','characters',chars);
+ h.f.put('characters','90000002',{characterID:90000002,shipID:String(F.SHIP)});
  assert.equal(h.f.pending().executorStatus,'UNVERIFIED');
  assert.equal(h.atomicMoves,0);
  assert.equal(originalShip(h.f).locationID,F.STATION);
