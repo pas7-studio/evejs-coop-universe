@@ -3789,3 +3789,8 @@ Evidence: fork 987f785 amended; per-phase timing + slowPhases in living-world-ph
 Why: the event-loop monitor could report a 1.2 s stall with heap numbers only, so the stall could not be tied to any world work
 Where: .opencode/state.md
 Evidence: lag record now carries the last world cycle (sequence, durationMs, slowPhases); module at 4100 lines, the ratchet ceiling; 2 tests; AUDIT_OK
+### 2026-11-06T20:41Z · b5458ad · L1 · test(world): pin the GC pause observer
+
+Why: lags of 1.6-3.8 s could not be attributed: the world cycle is 226-1871 ms and the record only carried heap size, never a GC duration
+Where: integration/coopMemoryMetrics.cjs, tests/coop-gc-watch.test.mjs
+Evidence: coopGcWatch via node:perf_hooks gc entries; coop-event-loop-lag now carries gc{last,worst,count}; 4 tests; AUDIT_OK
