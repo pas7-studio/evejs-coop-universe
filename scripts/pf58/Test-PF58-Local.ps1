@@ -1,0 +1,29 @@
+#Requires -Version 5.1
+# No mutation of original EveJS. SIGKILL tests are Linux-only.
+[CmdletBinding()]
+param([string]$NativeCheckout = '')
+$ErrorActionPreference = 'Stop'
+$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$node = (Get-Command node -ErrorAction Stop).Source
+$tests = @(Get-ChildItem -LiteralPath (Join-Path $root 'tests') -Filter 'pf58-*.test.cjs' -File)
+if ($tests.Count -ne 5) { throw 'PF58_EXPECTED_FIVE_NODE_TEST_FILES' }
+if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+  Write-Warning 'SIGKILL needs Linux/WSL. Skipping pf58-sqlite-sigkill.test.cjs.'
+  $tests = @($tests | Where-Object {$_.Name -ne 'pf58-sqlite-sigkill.test.cjs'})
+}
+& $node --test '--test-concurrency=1' @($tests.FullName)
+if ($LASTEXITCODE -ne 0) { throw 'PF58_NODE_REGRESSION_FAILED' }
+$python = (Get-Command python -ErrorAction Stop).Source
+& $python -m unittest discover -s (Join-Path $root 'tests') -p 'test_*.py' -v
+if ($LASTEXITCODE -ne 0) { throw 'PF58_PATCH_TESTS_FAILED' }
+if ($NativeCheckout) {
+  $native = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+  $patch = Join-Path ([System.IO.Path]::GetTempPath()) 'pf58-native-stock-fittings-review.patch'
+  & $python (Join-Path $root 'build_native_stock_fittings_patch.py') $native --output $patch
+  if ($LASTEXITCODE -ne 0) { throw 'PF58_NATIVE_SOURCE_PIN_FAILED' }
+  $git = (Get-Command git -ErrorAction Stop).Source
+  & $git -C $native apply --check $patch
+  if ($LASTEXITCODE -ne 0) { throw 'PF58_GIT_APPLY_CHECK_FAILED' }
+  Write-Host "Review-only patch at $patch (NOT applied)"
+}
+Write-Host 'PF58 local PASS. Original WORK server and PLAY NOT RUN; feature remains OFF.'
