@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   exact-native-worktree:
-    name: 23-path source-pinned native WORK gate (no deploy)
+    name: 22-path source-pinned native WORK gate (no deploy)
     if: >-
       (github.event_name == 'push' &&
        github.ref == 'refs/heads/docs/personal-fleet-contract-freeze-v1-4-20261104') ||
@@ -81,7 +81,7 @@ jobs:
           git -C "$RUNNER_TEMP/pf74-native-work" diff --check
           node --check "$RUNNER_TEMP/pf74-native-work/Code/server/src/space/npc/nativeNpcService.js"
           node --check "$RUNNER_TEMP/pf74-native-work/Code/server/src/space/npc/nativeNpcStore.js"
-          test "$(python3 -c 'import json,os; p=os.path.join(os.environ["RUNNER_TEMP"],"pf74-native-review","PF62-MANIFEST.json");m=json.load(open(p));print(len(m["files"])-1)')" = 21
+          test "$(python3 -c 'import json,os; p=os.path.join(os.environ["RUNNER_TEMP"],"pf74-native-review","PF62-MANIFEST.json");m=json.load(open(p));print(len(m["files"])-1)')" = 20
 
       - name: PF55 original command arbiter and claim ownership patch (WORK only)
         shell: bash
