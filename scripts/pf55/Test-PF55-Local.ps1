@@ -13,7 +13,7 @@ Push-Location $root
 try {
     $node = Get-Command node -ErrorAction Stop
     $python = Get-Command python -ErrorAction Stop
-    & $node.Source --test tests/pf55-orders.test.cjs tests/pf55-native-executor.test.cjs tests/pf55-sqlite-sigkill.test.cjs tests/pf75-runtime-durable-contract.test.cjs tests/pf76-order-vs-dock.test.cjs
+    & $node.Source --test tests/pf55-orders.test.cjs tests/pf55-native-executor.test.cjs tests/pf55-sqlite-sigkill.test.cjs tests/pf75-runtime-durable-contract.test.cjs tests/pf76-order-vs-dock.test.cjs tests/pf78-actor-identity.test.cjs
     if ($LASTEXITCODE -ne 0) { throw 'PF55_NODE_TESTS_FAILED' }
     & $python.Source tests/pf55-patch-builder.test.py
     if ($LASTEXITCODE -ne 0) { throw 'PF55_NATIVE_PATCH_BUILDER_TESTS_FAILED' }
