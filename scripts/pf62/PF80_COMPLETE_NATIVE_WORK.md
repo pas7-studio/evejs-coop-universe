@@ -130,3 +130,18 @@ provided original writer hook witness. A read-only, source-pinned audit
 of those six original domains is available at
 `scripts/pf88/inspect-original-writer-hooks.cjs`, and never exits
 successfully for activation. See the PF88 contract document.
+
+## PF89 — actual stock item mutation delta preflight (2026-11-07)
+
+The PF80 Windows `-ApplyToWork` preflight also runs the PF89 original
+inventory before/after delta tests **before** applying any WORK review
+patch. PF89 extends the PF58 native permit module already included in
+the exact 22-file bundle; no extra native file or second installer is
+introduced. The candidate bootstrap exports
+`mutateForeignOriginalItemsWithinTransaction`, but the original
+`itemStore.writeItems` and `characterState.writeCharacterRecord`
+writer owners still need genuine fork commits to call the custody gateway
+from their own SQLite transaction. This is NOT installed or activated
+by the PF80 review builder.
+
+See `scripts/pf89/PF89_ACTUAL_ORIGINAL_ITEMS_DELTA_GATE.md`.
