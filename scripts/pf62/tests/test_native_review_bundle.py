@@ -68,7 +68,7 @@ class PF62ReviewCompositionTests(unittest.TestCase):
     self.assertEqual(service.count('PF58_ORIGINAL_ITEMSTORE_BRIDGE_V1:'),1)
     self.assertEqual(service.count('pf59.checkOriginalRemoval('),2)
     self.assertEqual(store.count('PF61_SCOPED_ORIGINAL_NATIVE_CLEANUP_V1:'),1)
-    self.assertEqual(len(b.MODULE_FILES),17)
+    self.assertEqual(len(b.MODULE_FILES),19)
     self.assertIn('pf66/native/coopPersonalFleetScopedDock.cjs',b.MODULE_FILES)
     old=pf66.PIN
     try:
