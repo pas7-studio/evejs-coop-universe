@@ -165,3 +165,21 @@ module. Real original owner hooks still require reviewed commits in
 `pas7-studio/EveJS`, preserving cache invalidation, original owner
 repository, transfer/transaction semantics and client notifications.
 Full spec: `scripts/pf90/PF90_ORIGINAL_STOCK_OWNERS.md`.
+
+## PF91 original per-character row and player activation gate
+
+The original `characterState` writes `characters/<characterID>`,
+not synthetic `characters/characters`. PF91 corrects the PF87 strict
+handoff's character scan within the **same** GameStore transaction.
+PF80 `-ApplyToWork` runs nine corrected strict PF87 cases, 22 PF91
+original-row/atomic-activation cases and four local original-source
+pin tests before any review-only WORK output. The original source test
+environment variable is safely restored afterwards.
+
+The bundled PF58 permit module now also has a default-OFF player
+activation candidate using real per-character rows, current/target
+PF custody and source-bound native session checks. The *real* original
+`characterState.activateShipForSession` is **not patched or
+activated**. Do not claim acceptance until original engine owner hooks,
+actual SQLite WORK testing and two-client gameplay are complete.
+See `scripts/pf91/PF91_ORIGINAL_CHARACTER_ROWS_AND_ATOMIC_PLAYER_SWITCH.md`.
