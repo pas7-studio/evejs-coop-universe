@@ -33,7 +33,7 @@ entity+controller+PF actor claim before an order can be admitted.
 Node.js 22+:
 
 ```sh
-node --test tests/pf55-orders.test.cjs tests/pf55-native-executor.test.cjs tests/pf55-sqlite-sigkill.test.cjs
+node --test tests/pf55-orders.test.cjs tests/pf55-native-executor.test.cjs tests/pf55-sqlite-sigkill.test.cjs tests/pf75-runtime-durable-contract.test.cjs
 python tests/pf55-patch-builder.test.py
 ```
 
