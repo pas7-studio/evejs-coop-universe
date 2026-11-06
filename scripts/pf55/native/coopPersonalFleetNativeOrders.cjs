@@ -14,6 +14,10 @@ const LEDGER_PREFIX='coop-personal-fleet'+SEP+'manual-order-v1:';
 const OP_INDEX='coop-personal-fleet'+SEP+'manual-order-operations-v1';
 const DEPLOY_PREFIX='coop-personal-fleet'+SEP+'deploy-v1:';
 const CLAIMS='coop-personal-fleet'+SEP+'actor-claims-v1';
+const RETURN='coop-personal-fleet'+SEP+'return-dock-v1:';
+const DOCK_ATTEMPT='coop-personal-fleet'+SEP+'dock-native-attempt-v1:';
+const SCENE_ATTEMPT='coop-personal-fleet'+SEP+'dock-scene-attempt-v1:';
+const TERMINAL='coop-personal-fleet'+SEP+'terminal-v1:';
 const PILOT=/^coop-pilot-[0-9]{3,}$/;
 const TOKEN=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const HASH=/^[a-f0-9]{64}$/;
@@ -63,6 +67,16 @@ function validateLedger(row){
  return row;
 }
 function validateSource(c,tx,pf52){
+ // PF76: a manual order must not overtake return, original ItemStore docking,
+ // native scene-detach, or terminal cleanup. PF56 separately fences pending
+ // PF55 ISSUING orders inside this same corporationRuntime SQLite authority.
+ // Unknown reads are NOT proof of absence; never clear these durable rows.
+ for(const key of [RETURN+c.assignmentID,DOCK_ATTEMPT+c.assignmentID,
+                   SCENE_ATTEMPT+c.assignmentID,TERMINAL+c.assignmentID]){
+  const value=tx.get(TABLE,key);
+  if(value===undefined)return 'PF55_RETURN_DOCK_CUSTODY_READ_UNKNOWN';
+  if(value!==null)return 'PF55_RETURN_DOCK_OR_TERMINAL_PENDING';
+ }
  const dep=tx.get(TABLE,DEPLOY_PREFIX+c.assignmentID);
  const claims=tx.get(TABLE,CLAIMS);
  const index=tx.get(TABLE,pf52.REGISTRY_KEY);
