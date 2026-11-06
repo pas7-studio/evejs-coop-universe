@@ -3704,3 +3704,8 @@ Evidence: fork 6e0a823+5a9d848; deep clone 1533ms cold/431ms warm vs shallow 0.2
 Why: fleet 960004610 was parked for two days: the readback heal could never match its own reason because the stored string carried a doubled ALIFE10_ prefix, and the other doubt (source-cargo identity conflict) had no way back at all
 Where: .opencode/state.md, integration/coopNativeHaulCargo.cjs, integration/coopNativeHaulTransferAtomic.cjs, tests/coop-haul-readback-heal.test.mjs, tests/coop-haul-source-conflict-heal.test.mjs
 Evidence: fork e5c6134+2038a0a; live reason ALIFE10_ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED:destination_rows=0:cargo=980200450759; after deploy TICK_loaded at 16:00:56Z and no custody block since; 14 heal tests + 103 haul tests pass; AUDIT_OK
+### 2026-11-06T16:30Z · 9457919 · L1 · docs(state): stalls, not duty cycle - and the last dungeon read is gone
+
+Why: every dungeon mutation re-read and deep-cloned the whole 8684-instance table just to diff it, while the module already held that state
+Where: .opencode/state.md
+Evidence: fork 2bdf38f; read measured 428ms warm/1533ms cold; after deploy no stall above 1.3s, RSS 2.92GB, 8684 instances consistent; suite 7674/7579/0
