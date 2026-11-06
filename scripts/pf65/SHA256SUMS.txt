@@ -1,0 +1,5 @@
+df7a0fd31d8be5d76575985dd46cb4b6c39bd105ebe5162bb6e420970ec13b68  scripts/pf58/native/coopPersonalFleetOriginalNativePermit.cjs
+e26c3f8ae703c6a05566bd054895dce67a5e3b0d27d3d0857f1dc46ff40942cf  scripts/pf65/README.md
+3cfaf9049df56ca2b137a0e88f3225e90aa379dc225e0c5223ac70161893c6e6  scripts/pf65/Test-PF65-Local.ps1
+e5e8b04928d4be6220034ea48cca337b9661821bb6330edf1b6206ada49e9af8  scripts/pf65/tests/pf65-permit.test.cjs
+53b6b40227bde3dafa1c8a5226d9cedb70a5aeed6f6669854ceb310976e16dd1  scripts/pf65/tests/pf65-sqlite.test.cjs
