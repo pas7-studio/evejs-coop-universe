@@ -103,7 +103,13 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
    safeObserve(probe,"living-haul-custody-blocked",
     {itemID:miner.itemID,systemID:scene?.systemID},
     {fleetID:fleet?.fleetID,cargoID,reason,operatorRepairRequired:uncertain,nativeMutation:false,
-     suppressedSinceLast:gate.suppressed});
+     suppressedSinceLast:gate.suppressed,
+     // The clause says WHICH check failed; this says WHY the fleet was parked in the first place.
+     // Measured 2026-11-06: fleet 960004610 had been blocked since 2026-11-04 19:27 (639 attestation
+     // events) and nothing in the event stream named the original failure.
+     repairReason:String(miner?.coopHaulCargoNeedsOperatorRepair||
+      fleet?.coopHaulCargoNeedsOperatorRepair||hauler?.coopHaulCargoNeedsOperatorRepair||"")
+      .slice(0,140)});
   return 0;
  };
  if(!flags.on("EVEJS_COOP_NATIVE_HAUL_CARGO")||
