@@ -48,9 +48,9 @@ not 19 modules. Source inventory and local module dependencies fail closed
 before network/WORK activity. With the separate source-pinned PF55 arbiter and
 bridge updates, the complete review covers **22 native source paths**.
 
-**Preferred full native review:** `Prepare-PF80-CompleteNativeWork.ps1` uses the
-same two exact patches as GitHub Actions in one isolated WORK worktree and
-runs PF77 against the patched original native bridge. See
+**Preferred full native review:** `Prepare-PF80-CompleteNativeWork.ps1` uses both exact source-pinned patches in one isolated *local* WORK worktree and
+runs PF77 against the patched original native bridge. Remote GitHub Actions
+are prohibited by `AGENTS.md`; see `PF83_RETURN_SOURCE_AND_MANUAL_GATE.md`. See
 `PF80_COMPLETE_NATIVE_WORK.md`. Legacy PF68 prepares only PF62's 20-path
 portion; it is not a complete original-command integration.
 
