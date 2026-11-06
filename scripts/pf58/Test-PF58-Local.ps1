@@ -22,7 +22,9 @@ $pf88 = @( 'pf88-reciprocal-writers.test.cjs', 'pf88-sourcebound-gating.test.cjs
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'PF88_RECIPROCAL_WRITER_TEST_MISSING' }
   $path
 }
-$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87) + @($pf88)
+$pf89 = Join-Path $root 'tests/pf89-actual-item-delta.test.cjs'
+if (-not (Test-Path -LiteralPath $pf89 -PathType Leaf)) { throw 'PF89_ORIGINAL_ITEMS_DELTA_TEST_MISSING' }
+$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87) + @($pf88) + @($pf89)
 & $node --test '--test-concurrency=1' @allNodeTests
 if ($LASTEXITCODE -ne 0) { throw 'PF58_NODE_REGRESSION_FAILED' }
 $python = (Get-Command python -ErrorAction Stop).Source
