@@ -24,7 +24,7 @@ A separate patch changes PF53 and PF57 native wallet candidate code from
 the obsolete synthetic aggregate characters map to actual individual original
 characters/<characterID> SQLite rows.
 
-The combined native WORK assembler builds seven modified/new native paths on
+The combined native WORK assembler builds eight modified/new native paths on
 top of PF80's 22-path candidate, for a total of 27. It requires an isolated
 linked Git worktree on a work/* branch, a valid PF62 source manifest, exact
 original chat source pin 5f4dd4d34a398dde3120e8640a7058d2bd3bb038,
@@ -56,7 +56,7 @@ Then stage the additional source-pinned chat, wallet and owner modules:
 
     python scripts/personal-fleet-firstplay/tools/prepare_firstplay_work.py --worktree 'O:\tmp\pf-firstplay-native-work' --source-root . --pf62-manifest 'O:\tmp\pf-firstplay-pf80-review\PF62-MANIFEST.json' --review-output 'O:\tmp\pf-firstplay-native-review' --apply-to-work --confirm-work-only 'WORK-NOT-PLAY'
 
-Review PERSONAl-FLEET-FIRST-PLAY-REVIEW.json and the 7-path patch in the
+Review PERSONAl-FLEET-FIRST-PLAY-REVIEW.json and the 8-path patch in the
 separate review directory. The review receipt intentionally reports
 nativeAuthorityWired:false, featureEnabled:false and gameplayE2E:NOT_RUN.
 
@@ -201,3 +201,19 @@ must supply these exact methods to the existing PF52/PF58 constructors,
 and original NPC controllers/scene adoption and return need actual WORK
 evidence. This is not a claim that actor spawning and docking are
 already connected to the running engine.
+
+
+### PF52 original-characters transaction boundary (2026-11-07)
+
+A source-authorized PF52 `RESERVE_HANGAR_SHIP` invokes the paid NPC
+hull-type verifier **inside** its native GameStore transaction. Original
+PF52 used only `[corporationRuntime, items]`; that scope cannot read
+`characters/<characterID>`, which is required to verify live ownership
+and PF53's paid wallet receipt. The first-play native patch now changes
+PF52's exact one reserve/release transaction scope to
+`[corporationRuntime, items, characters]` while preserving the
+original PF52 compare-and-set ledger and reserve keys. Source-pinned
+Python/Git tests prove the patch is applied to the PF80 staged file.
+The incremental patch now has **8** affected source paths over PF80's
+already staged 22, with **27 unique changed native paths** total.
+No source row is silently skipped or validated via nested transactions.
