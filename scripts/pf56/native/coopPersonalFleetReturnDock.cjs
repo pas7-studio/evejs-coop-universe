@@ -160,21 +160,21 @@ function createPersonalFleetReturnDock({gameStore,pf52,claimsPolicy,access,
   if(inSpace&&!stockSpace(item,d))return {error:'PF56_ORIGINAL_SHIP_NOT_IN_SPACE'};
   return {index,roster,claims,dep:d,item,root,pilot};
  }
- function withTx(c,fn){
+ function withTx(c,fn,extras=[]){
   const fail=admit(c);if(fail)return fail;
-  try{return atomic.transact([T,ITEMS,'characters'],tx=>{
+  try{return atomic.transact([T,ITEMS,'characters',...extras],tx=>{
    const blocked=guard(c,tx);return blocked?deny(blocked):fn(tx);
   });}catch{return deny('PF56_ATOMIC_COMMIT_OR_READ_UNCERTAIN');}
  }
  // Internal server continuation: only after the original player-authorized
  // RETURN_ISSUING has committed. Never fabricate a disconnected session.
- function withServerTx(c,fn){
+ function withServerTx(c,fn,extras=[]){
   if(enabled()!==true||allWritersFenced()!==true||atomic.isPoisoned())
    return deny('PF56_SERVER_RETURN_DISABLED');
   if(!obj(c)||!TOKEN.test(c.assignmentID)||!TOKEN.test(c.operationID)||
      !id(c.ownerCharacterID)||!id(c.shipItemID)||!id(c.actorGeneration))
    return deny('PF56_SERVER_RETURN_ROW_INVALID');
-  try{return atomic.transact([T,ITEMS,'characters'],tx=>{
+  try{return atomic.transact([T,ITEMS,'characters',...extras],tx=>{
    const saved=tx.get(T,key(c.assignmentID));
    if(!obj(saved)||saved.signature!==signature(saved)||
       saved.signature!==c.signature||saved.operationID!==c.operationID||
@@ -249,7 +249,7 @@ function createPersonalFleetReturnDock({gameStore,pf52,claimsPolicy,access,
   const next={...row,phase:'RETURNING',returnProofHash:sha(proof)};
   tx.put(T,key(c.assignmentID),next);
   return {status:'RETURNING',shipItemID:c.shipItemID};
- });}
+ },['npcEntities']);}
  function observeArrival(c,run=withTx){return run(c,tx=>{
   const row=tx.get(T,key(c.assignmentID));
   if(!obj(row)||row.signature!==signature(c))return deny('PF56_RETURN_NOT_FOUND');
