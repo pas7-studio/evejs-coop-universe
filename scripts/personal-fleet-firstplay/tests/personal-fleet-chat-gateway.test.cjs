@@ -19,7 +19,7 @@ function fixture(work){
  vm.runInNewContext(source,sandbox,{filename:'coopPersonalFleetChatGateway.js'});
  const api=sandbox.module.exports;
  const provider={source:'ORIGINAL_EVEJS_PERSONAL_FLEET_OWNER_V1',enabled:()=>true};
- for(const name of ['offers','status','roster','hire','assign','deploy','follow','hold','returnToBase','dismiss'])
+ for(const name of ['offers','status','roster','hire','assign','deploy','follow','hold','returnToBase','salary','dismiss'])
    provider[name]=ctx=>{pending++;calls.push({name,ctx});return {status:'ACKED',shipItemID:2001};};
  const run=(command,who=session)=>api.handleChat({session:who,argumentText:command});
  try{work({api,provider,run,session,calls,readCalls:()=>pending,
@@ -122,4 +122,13 @@ test('missing native receipt is reported as unknown, not success',()=>fixture(f=
 }));
 test('help is documented even before provider installation',()=>fixture(f=>{
  assert.match(f.run('help').message,/hire .*assign .*deploy .*follow .*hold .*return/);
+}));
+test('PF91 salary chat requires one canonical named NPC pilot ID',()=>fixture(f=>{
+ assert.equal(f.api.installServerAuthority(f.provider),true);
+ assert.match(f.run('salary coop-pilot-123').message,/ACKED/);
+ assert.equal(f.calls.at(-1).name,'salary');
+ assert.equal(f.readCalls(),1);
+ assert.match(f.run('salary 123').message,/INVALID_COMMAND/);
+ assert.match(f.run('salary coop-pilot-123 9900').message,/INVALID_COMMAND/);
+ assert.equal(f.readCalls(),1);
 }));
