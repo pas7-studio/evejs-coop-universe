@@ -174,6 +174,26 @@ if ($ApplyToWork.IsPresent) {
     if ($LASTEXITCODE -ne 0) { throw 'PF98_NATIVE_OWNER_WITNESS_BRIDGE_GATE_FAILED' }
     & $python -m unittest discover -s (Join-Path $repo 'scripts/pf98/tests') -p 'test_pf98_*.py' -v
     if ($LASTEXITCODE -ne 0) { throw 'PF98_NATIVE_SOURCE_ARCHIVE_INTEGRITY_FAILED' }
+    # PF99: original authoritative registry membership, accountId -> userid
+    # equality, real station/structure docking and current physical ship title.
+    # This reads exact source-pinned WORK originals but edits only temp copies.
+    $pf99Auth = Join-Path $repo 'scripts/pf99/tests/pf99-authenticated-original-session.test.cjs'
+    $pf99SQLite = Join-Path $repo 'scripts/pf99/tests/pf99-source-bound-pf91-pf92-sqlite.test.cjs'
+    foreach ($file in @($pf99Auth,$pf99SQLite)) {
+      if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+        throw 'PF99_AUTHENTICATED_ORIGINAL_SESSION_TEST_MISSING'
+      }
+    }
+    $oldPf99Root = [Environment]::GetEnvironmentVariable('PF99_NATIVE_WORKTREE','Process')
+    try {
+      $env:PF99_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf99Auth $pf99SQLite
+      if ($LASTEXITCODE -ne 0) { throw 'PF99_ORIGINAL_SESSION_BOUND_PF91_PF92_SQLITE_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF99_NATIVE_WORKTREE',$oldPf99Root,'Process')
+    }
+    & $python -m unittest discover -s (Join-Path $repo 'scripts/pf99/tests') -p 'test_pf99_*.py' -v
+    if ($LASTEXITCODE -ne 0) { throw 'PF99_AUTHENTICATED_SESSION_SOURCE_ARCHIVE_INVALID' }
     $pf90Owner = Join-Path $repo 'scripts/pf58/tests/pf90-owner-snapshot.test.cjs'
     $pf90Sources = Join-Path $repo 'scripts/pf90/tests/pf90-original-owners.test.cjs'
     $pf90Audit = Join-Path $repo 'scripts/pf90/inspect-original-owner-writes.cjs'
