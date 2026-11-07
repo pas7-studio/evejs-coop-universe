@@ -24,6 +24,7 @@ const offers=require('./coopPersonalFleetOriginalOfferAuthority');
 const commands=require('./coopPersonalFleetWorkCommandOwner');
 const originalOrderWitness=require('./coopPersonalFleetOriginalOrderWitness');
 const originalOrderExecutor=require('./coopPersonalFleetOriginalOrderExecutor');
+const originalStationDwell=require('./coopPersonalFleetOriginalStationDwell');
 const chat=require('./coopPersonalFleetChatGateway');
 const pf52=require('./coopPersonalFleetHangarBridge');
 const pf53=require('./coopPersonalFleetPaidHiring');
@@ -47,9 +48,8 @@ const HOOKS=Object.freeze([
  'verifyOriginalActor','independentOriginalActorWitness',
  'originalStationUndockPoint','originalOwnershipWitness',
  'verifyNativeFlight','verifyOriginalReturnOrder',
- 'verifyStationArrival','verifyContinuousDwell','verifyOriginalManifest',
- 'verifyFinalOriginalManifest','verifyOriginalDockReady',
- 'executeNativeReturn','verifyOriginalDockedPlayerSession',
+ 'verifyOriginalManifest','verifyFinalOriginalManifest',
+ 'verifyOriginalDockedPlayerSession',
  'readOriginalWarShipClaim',
 ]);
 let booted=false;
@@ -168,6 +168,11 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     sharedOriginalArbiter:originalHooks.sharedOriginalNpcOrderArbiter,
     readOriginalWarShipClaim:originalHooks.readOriginalWarShipClaim,
     orderWitness,orderReceipt:durableOrderAck,enabled,allWritersFenced:originalHooks.allWritersFenced});
+  // Original stock ItemStore, scene/registry and SDE station geometry must
+  // agree on each tick. A process restart changes the unforgeable scene epoch;
+  // no prior dwell can authorize the new process to dock.
+  const stationDwell=originalStationDwell.createOriginalStationDwell({
+    orderWitness,enabled,allWritersFenced:originalHooks.allWritersFenced});
   const orders=pf55.createPersonalFleetNativeOrders({gameStore,pf52,access,
     verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
     verifyNativeActor:orderWitness.verifyNativeActor,
@@ -182,7 +187,7 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
   const scopedDock=nativeScopedDock.createScopedDock({gameStore,
     originalItemStore:stockItemStore,nativeNpcService:originalNpcService,
     claimsPolicy:originalHooks.claimsPolicy,
-    verifyOriginalDockReady:originalHooks.verifyOriginalDockReady,
+    verifyOriginalDockReady:stationDwell.verifyOriginalDockReady,
     verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   // PF60/PF61 are the ONLY original native cleanup writers after PF66's
@@ -216,12 +221,12 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
     verifyNativeFlight:originalHooks.verifyNativeFlight,
     verifyOriginalReturnOrder:originalHooks.verifyOriginalReturnOrder,
-    verifyStationArrival:originalHooks.verifyStationArrival,
-    verifyContinuousDwell:originalHooks.verifyContinuousDwell,
+    verifyStationArrival:stationDwell.verifyStationArrival,
+    verifyContinuousDwell:stationDwell.verifyContinuousDwell,
     verifyOriginalManifest:originalHooks.verifyOriginalManifest,
     verifyOriginalDockReceipt:dockCompletion.verifyOriginalDockReceipt,
     verifyFinalOriginalManifest:originalHooks.verifyFinalOriginalManifest,
-    executeNativeReturn:originalHooks.executeNativeReturn,
+    executeNativeReturn:originalPhysicalOrders.executeNativeReturn,
     executeNativeDock:dockCoordinator.execute,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   // First-play excludes recurring PF57 salary / dismiss until its ORIGINAL
@@ -259,6 +264,9 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     mayEnable:enabled,originalHandoff:nativeHandoff,
     // Only trusted original WORK startup may call these; never publish in /pf.
     originalDockCoordinator:dockCoordinator,
+    // Server-internal tick entry only: requires the original return intent;
+    // it is not an in-game, chat or HTTP command handler.
+    sampleOriginalStationDwell:stationDwell.sample,
     getOperationalStatus:()=>Object.freeze({ready:enabled(),booted})});
  }catch(error){
   // Inability to install a required hook is NOT a partial success.
