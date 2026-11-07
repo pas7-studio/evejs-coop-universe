@@ -9,6 +9,7 @@ const gameStore=require('../gameStore');
 const sessionRegistry=require('../services/chat/sessionRegistry');
 const locations=require('../services/structure/structureLocation');
 const stations=require('../services/_shared/stationStaticData');
+const corporations=require('../services/corporation/corporationState');
 const spaceRuntime=require('./runtime');
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -20,7 +21,8 @@ function createOriginalSourceBindings(){
     typeof sessionRegistry.findSessionByCharacterID!=='function'||
     typeof locations.getSessionStationID!=='function'||
     typeof locations.getSessionStructureID!=='function'||
-    typeof stations.getStationRecord!=='function')
+    typeof stations.getStationRecord!=='function'||
+    typeof corporations.getCorporationRecord!=='function')
   throw Error('PF_FIRSTPLAY_SOURCE_BOUND_EVEJS_SERVICES_REQUIRED');
  function liveIdentity(session,owner){
   if(!obj(session)||!pos(owner)||session.characterID!==owner||
@@ -86,8 +88,20 @@ function createOriginalSourceBindings(){
      entity.itemID!==ship||entity.transient===true)return null;
   return Object.freeze({shipItemID:ship,systemID,nativeVerified:true});
  }
+ function resolveOwnerCorporation(owner){
+  if(!pos(owner)||atomic.isPoisoned())return null;
+  let row;
+  try{row=atomic.transact(['characters'],tx=>tx.get('characters',String(owner)));}
+  catch{return null;}
+  if(!obj(row)||row.characterID!==owner||row.isDeleted===true||
+     !pos(row.corporationID))return null;
+  let corporation;
+  try{corporation=corporations.getCorporationRecord(row.corporationID);}catch{return null;}
+  return corporation?.corporationID===row.corporationID?row.corporationID:null;
+ }
  return Object.freeze({gameStore,access,
    resolveOriginalDockContext:(session,owner)=>verifiedDock({session,owner}),
-   resolveOriginalFollowTarget:originalFollowTarget});
+   resolveOriginalFollowTarget:originalFollowTarget,
+   resolveOwnerCorporation});
 }
 module.exports=Object.freeze({createOriginalSourceBindings});
