@@ -1,5 +1,6 @@
 'use strict';
 const {test}=require('node:test'),a=require('node:assert/strict');
+const consent=require('../native/coopPersonalFleetOriginalPayrollConsent');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const source=fs.readFileSync(path.join(__dirname,'../native/coopPersonalFleetOriginalSalaryTerms.js'),'utf8');
 const SEP='\u001f',T='corporationRuntime',PID='coop-pilot-123456',
@@ -13,7 +14,17 @@ function f({authoredPolicies=terms}={}){
   characterName='Authentic NPC',definitionValid=true;
  const paid={status:'PAID',operationID:'pf-hire-1',pilotID:PID,
   ownerCharacterID:OWNER,contractID:CONTRACT,employerCorpID:EMPLOYER,
-  hireReceiptHash:'a'.repeat(64),createdAtMs:CREATED};
+  hireReceiptHash:'a'.repeat(64),createdAtMs:CREATED,
+  offerID:'pf-offer-500-123456',offerRevision:1,amountCents:9900};
+ const wage=consent.captureOfferWageConsent({
+  salaryConsentRequired:true,salaryCents:2500,periodMs:PERIOD,sourceProof:'a'.repeat(64),
+  expiresAtMs:CREATED+900000,ownerCharacterID:OWNER,offerID:paid.offerID,
+  revision:1,contractID:CONTRACT,pilotID:PID,employerCorpID:EMPLOYER,amountCents:9900
+ },{operationID:paid.operationID,offerID:paid.offerID,offerRevision:1,
+   contractID:CONTRACT,pilotID:PID,ownerCharacterID:OWNER,
+   session:{characterID:OWNER,userid:900,socket:{destroyed:false}}},CREATED);
+ if(!wage)throw Error('PF92_TEST_CONSENT_NOT_CREATED');
+ paid.payrollConsent=wage;
  const idx={version:1,pilots:{[PID]:{pilotID:PID,ownerCharacterID:OWNER,
   contractID:CONTRACT,hireReceiptHash:paid.hireReceiptHash}},
   contracts:{[CONTRACT]:PID},processed:{'pf-hire-1':{
@@ -22,8 +33,10 @@ function f({authoredPolicies=terms}={}){
  const store={
   ['coop-personal-fleet'+SEP+'hangar-reservations-v1']:idx,
   ['coop-personal-fleet'+SEP+'contract-lifecycle-v1']:ledger,
-  ['coop-personal-fleet'+SEP+'paid-hire-v1:pf-hire-1']:paid};
+  ['coop-personal-fleet'+SEP+'paid-hire-v1:pf-hire-1']:paid,
+  [consent.consentKey(paid.operationID)]:wage};
  const original={
+  './coopPersonalFleetOriginalPayrollConsent':consent,
   './coopPersonalFleetPaidHiring':{
    verifyPaidReceipt:()=>paidOK,paidKey:id=>'coop-personal-fleet'+SEP+'paid-hire-v1:'+id},
   './coopPersonalFleetHangarBridge':{REGISTRY_KEY:'coop-personal-fleet'+SEP+'hangar-reservations-v1',
@@ -119,4 +132,15 @@ test('wage authorizer is strictly read only',()=>{
  m.readOriginalHire(x.c,tx);m.resolveNativeSalary(x.c,x.paid,tx);
  m.verifyDismissalSettlement(x.c,tx);m.verifyNativePilotReleased(x.c,tx);
  a.deepEqual(writes,[]);
+});
+
+test('PF92 changed recurring salary policy cannot charge an existing accepted contract',()=>{
+ const x=f({authoredPolicies:[{...terms[0],salaryCents:9999}]});
+ const m=x.create();
+ a.equal(m.resolveNativeSalary(x.c,x.paid,x.tx),null);
+ a.equal(m.verifyDismissalSettlement(x.c,x.tx),false);
+});
+test('PF92 missing durable consent row blocks source-paid NPC salary',()=>{
+ const x=f();delete x.store[consent.consentKey(x.paid.operationID)];
+ a.equal(x.create().resolveNativeSalary(x.c,x.paid,x.tx),null);
 });
