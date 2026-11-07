@@ -10,9 +10,9 @@ const docking = require('../services/structure/structureLocation');
 const own = (o,k) => Object.prototype.hasOwnProperty.call(o,k);
 const obj = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 const id = x => {
- const n=Number(x);
- return Number.isSafeInteger(n) && n>0 &&
-  (typeof x==='number' || typeof x==='string' && /^[1-9][0-9]*$/.test(x)) ? n : 0;
+ if(typeof x==='number')return Number.isSafeInteger(x)&&x>0?x:0;
+ if(typeof x!=='string'||!/^[1-9][0-9]*$/.test(x))return 0;
+ const n=Number(x);return Number.isSafeInteger(n)?n:0;
 };
 function alias(o,keys,allowMissing=false) {
  if(!obj(o)) return null;
@@ -27,7 +27,7 @@ function alias(o,keys,allowMissing=false) {
  return seen.every(n=>n===seen[0])?seen[0]:null;
 }
 const block = reason => Object.freeze({status:'BLOCKED',reason,mayPublish:false});
-function verifyOriginalPostCommitPlayerShip(request,reader) {
+function verifyOriginalPostCommitCore(request,reader) {
  if(process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS!=='1' ||
     process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS!=='1')
   return block('PF100_NATIVE_OWNER_DISABLED');
@@ -90,5 +90,9 @@ function verifyOriginalPostCommitPlayerShip(request,reader) {
  const phase=sessionShip===targetShipItemID?'ALREADY_SYNCED':'READY_FOR_NATIVE_SESSION_APPLY';
  return Object.freeze({status:phase,mayPublish:phase==='READY_FOR_NATIVE_SESSION_APPLY',
    characterID,previousShipID,targetShipItemID,stationID});
+}
+function verifyOriginalPostCommitPlayerShip(request,reader) {
+ try{return verifyOriginalPostCommitCore(request,reader);}
+ catch{return block('PF100_UNEXPECTED_AUTHORITY_EXCEPTION');}
 }
 module.exports=Object.freeze({verifyOriginalPostCommitPlayerShip});
