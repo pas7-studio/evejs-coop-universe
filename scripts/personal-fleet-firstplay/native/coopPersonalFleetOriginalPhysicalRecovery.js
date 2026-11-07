@@ -127,6 +127,7 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
  // These fields are written by the original PF58 stock ship materializer.
  function originalSceneShip(row,e){
   return obj(e)&&e.kind==='ship'&&e.itemID===row.shipItemID&&
+   e.typeID===row.typeID&&
    e.nativeNpc===true&&e.nativeNpcOccupied===true&&
    e.npcEntityType==='personalFleet'&&e.transient!==true&&
    e.operatorKind==='PERSONAL_FLEET'&&
