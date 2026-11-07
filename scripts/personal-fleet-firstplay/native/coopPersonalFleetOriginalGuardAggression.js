@@ -75,4 +75,83 @@ function read({ownerCharacterID,ownerShipItemID,systemID}={}){
   ownerCharacterID,ownerShipItemID,systemID,
   attackerEntityID:found.attackerEntityID,damageAtMs:found.atMs});
 }
-module.exports=Object.freeze({note,read});
+function listRecent(){
+ if(!on())return [];
+ prune(Date.now());
+ const out=[];
+ for(const w of evidence.values()){
+  const r=read({ownerCharacterID:w.ownerCharacterID,
+   ownerShipItemID:w.ownerShipItemID,systemID:w.systemID});
+  if(r)out.push(r);
+  if(out.length>=32)break;
+ }
+ return out;
+}
+// PF97 narrow ORIGINAL behavior-loop exception: after a real hit on our
+// physical player ship, a genuinely issued Personal Fleet retaliation may
+// target precisely THAT native NPC. No player, friendly NPC or arbitrary
+// attack order obtains permission here.
+function allowsRetaliation(source,target){
+ if(!on()||source?.kind!=='ship'||target?.kind!=='ship'||
+    source.nativeNpc!==true||source.personalFleetOriginal!==true||
+    target.nativeNpc!==true||target.personalFleetOriginal===true||
+    String(target.npcEntityType||'').toLowerCase()!=='npc'||
+    !positive(source.itemID)||!positive(target.itemID)||
+    source.itemID===target.itemID||
+    !positive(source.ownerID)||!positive(source.systemID)||
+    target.systemID!==source.systemID||
+    target.transient===true||target.session!=null||
+    (positive(source.corporationID)&&
+     source.corporationID===target.corporationID))return false;
+ const owner=source.ownerID;
+ const evt=[...evidence.values()].find(x=>x.ownerCharacterID===owner&&
+    x.attackerEntityID===target.itemID&&
+    x.systemID===source.systemID&&x.attacker===target);
+ if(!evt||Date.now()-evt.atMs>TTL||
+    !read({ownerCharacterID:owner,ownerShipItemID:evt.ownerShipItemID,
+      systemID:source.systemID}))return false;
+ try{
+  const store=require('../gameStore'),pf55=require('./coopPersonalFleetNativeOrders'),
+   nativeStore=require('./npc/nativeNpcStore');
+  const atomic=store.coopAtomicNativeRows;
+  if(atomic?.mode!=='SERVER_INTERNAL_FLAGGED'||atomic.isPoisoned()||
+     typeof atomic.transact!=='function')return false;
+  const controller=registry.getControllerByEntityID(source.itemID);
+  if(controller?.entityID!==source.itemID||
+     controller.personalFleetOriginal!==true||
+     controller.manualOrder?.type!=='attack'||
+     controller.manualOrder.targetID!==target.itemID||
+     controller.manualOrder.allowWeapons!==true||
+     controller.manualOrder.allowPodKill===true||
+     controller.operatorKind==='WAR')return false;
+  const stock=nativeStore.getNativeEntity(source.itemID);
+  if(stock?.personalFleetOriginal!==true||stock.ownerID!==owner||
+     stock.systemID!==source.systemID||
+     stock.personalFleetAssignmentID!==controller.personalFleetAssignmentID||
+     stock.personalFleetPilotID!==controller.personalFleetPilotID)return false;
+  return atomic.transact(['corporationRuntime','items'],tx=>{
+   const T='corporationRuntime',F='coop-personal-fleet\u001f',
+    row=tx.get(T,pf55.key(source.itemID)),
+    op=tx.get(T,pf55.OP_INDEX)?.operations?.[row?.operationID],
+    claims=tx.get(T,F+'actor-claims-v1'),
+    claim=claims?.claims?.[String(source.itemID)],
+    dep=tx.get(T,F+'deploy-v1:'+row?.assignmentID),
+    original=tx.get('items','items')?.[String(source.itemID)];
+   return !!row&&['ISSUING','ACKED'].includes(row.phase)&&
+    row.action==='ATTACK'&&row.targetEntityID===target.itemID&&
+    row.shipItemID===source.itemID&&row.ownerCharacterID===owner&&
+    row.systemID===source.systemID&&
+    row.signature===pf55.signature(row)&&op?.phase===row.phase&&
+    op.signature===row.signature&&
+    row.assignmentID===controller.personalFleetAssignmentID&&
+    row.pilotID===controller.personalFleetPilotID&&
+    dep?.phase==='ACTIVE'&&dep.actorGeneration===row.actorGeneration&&
+    claim?.ownerType==='PERSONAL_FLEET'&&
+    claim.entityID===source.itemID&&claim.ownerCharacterID===owner&&
+    claim.generation===row.actorGeneration&&
+    original?.itemID===source.itemID&&original.ownerID===owner&&
+    original.categoryID===6&&original.locationID===source.systemID;
+  })===true;
+ }catch{return false;}
+}
+module.exports=Object.freeze({note,read,listRecent,allowsRetaliation});
