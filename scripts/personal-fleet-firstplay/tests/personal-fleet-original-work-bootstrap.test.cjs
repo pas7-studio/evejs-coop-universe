@@ -136,3 +136,10 @@ test('native hook catalogue keys are exact and complete',()=>fixture(f=>{
  assert.equal(f.api.HOOKS.length,hooksList.length);
  for(const name of hooksList)assert.ok([...f.api.HOOKS].includes(name));
 }));
+
+test('failed source install is sticky and cannot double-publish PF58',()=>fixture(f=>{
+ f.setBroken('chat');assert.throws(()=>call(f),/CHAT_AUTHORITY_ALREADY_INSTALLED/);
+ const count=f.events.length;
+ assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
+ assert.equal(f.events.length,count);
+}));
