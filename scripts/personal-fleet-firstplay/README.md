@@ -5,6 +5,51 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF105 — original PF58 claims validator and true native SDE resolver (2026-11-08)
+
+**Source integration changes in Draft PR #350:**
+
+- `coopPersonalFleetOriginalClaimsPolicy.js` imports the **same actual
+  `coopPersonalFleetOriginalNativePermit.validateOriginalClaimsIndex`**
+  installed by PF58's original native work package. Every PF54/PF57
+  claim lookup now uses a single canonical parser; no new, weaker
+  claims schema is injected by a writer owner. `null` means proven
+  absent, `undefined` means uncertain and **throws**, corrupt/foreign
+  actor claims fail closed. The original mutable root is handed back
+  only to its authorized one-transaction native writer.
+- `coopPersonalFleetOriginalNativeWriterBoundary.js` attaches that
+  canonical parser and the already source-bound original WAR claim.
+  Its future `ReciprocalWriterOwners` source may **not provide its own**
+  `claimsPolicy` or `readOriginalWarShipClaim` callback. All other
+  real native writer/actor/ItemStore/Mining/Exploration/wallet functions
+  still require source implementation and verified reciprocal fences.
+- PF104 source-authored NPC selection now observes the **same original
+  `EVEJS_STATIC_JSONL_ROOT` override** and version-selection rule as
+  original `corporationState`; name localization also uses its
+  English-then-first-valid-localization fallback. No client code,
+  untrusted policy imports, SDE IDs or fake profile is introduced.
+- Original `WorkStarter` now reports actual native source/SDE failures
+  rather than incorrectly saying its configuration module was absent.
+  A direct truly missing configuration source is still a fatal error
+  *before* TCP listens.
+
+**Evidence:** 123/123 focused source test cases across seven groups
+passed in the **controlled V8** source harness, including 14
+`claims-policy` cases executing the checked-in PF58 native validator.
+These tests are NOT real Node/SQLite or first-play gameplay evidence.
+
+**Bundle:** PF80 22 baseline original paths + **45** first-play
+delta paths (4 overlapping) = **63 unique native WORK source paths**.
+The source checksum inventory now holds **88** pinned files.
+
+**Still blocking actual WORK gameplay:** no installed
+`coopPersonalFleetOriginalReciprocalWriterOwners.js` that verifies
+the original competing player/ItemStore/Mining/WAR/Exploration/wallet
+writers and the SAME original NPC order arbiter. No original WORK
+server startup, real SDE candidate scan, on-disk SQLite/SIGKILL,
+two logged-in clients or physical gameplay is claimed. Keep Draft,
+all PF flags OFF, main and PLAY untouched.
+
 ## PF104 — genuine original SDE NPC offer policy, no synthetic IDs (2026-11-08)
 
 The original native WORK patch now includes
@@ -89,6 +134,8 @@ package, not to the owner PLAY deployment:
    writer/actor/equipment/ownership/wallet/Mining/Exploration hooks and
    the same shared NPC arbiter must come from the explicitly
    source-owned `coopPersonalFleetOriginalReciprocalWriterOwners.js`.
+   PF105 separately supplies the stock PF58 canonical `claimsPolicy`;
+   the reciprocal writer module is **forbidden** from replacing it.
    Missing/partial original owners block startup before writer publication.
 
 **Crucial remaining P0:** there is still no authenticated
