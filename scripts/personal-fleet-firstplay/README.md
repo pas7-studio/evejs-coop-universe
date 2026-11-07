@@ -5,6 +5,68 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF92/PF93 native recurring wage consent + unattended payroll — 2026-11-08
+
+**Latest source revision:** PF80 **22** baseline native paths + first-play
+**30** incremental WORK patch paths, 4 overlaps = **48 distinct staged native
+paths**. **58** source/test/tool SHA256 entries. This replaces all older dated
+counts below; the package is still **OFF** until installed and tested on the
+real original native server.
+
+**PF92 — immutable informed recurring salary acceptance.**
+
+- The genuine original SDE NPC offer explicitly contains a hire payment,
+  `salaryCents` and `periodMs`; the quote source proof binds both terms.
+  `/pf offers` shows recurring wage, not only the one-off hiring tariff.
+- The client command is now
+  **`/pf hire <offerID> accept-recurring`**. The previous one-argument
+  hire is rejected at both original chat ingress and the command owner.
+  The consent token cannot set wage, employer, period or account.
+- PF53's **source-pinned native** transaction atomically persists the exact
+  accepted original wage offer as `payrollConsent` in the real PAID receipt
+  and as a separate keyed durable SQLite consent row. A missing, altered or
+  unrelated consent row makes `verifyPaidReceipt()` fail. Original PF53
+  archive tests remain independent of the native shape transformation.
+- PF57 salary checks the *accepted* rate against the current server policy,
+  refusing silent repricing after a configuration change. Unconsented
+  historical hires cannot be automatically charged.
+
+**PF93 — server-owned automatic NPC salary.**
+
+- PF57's native WORK version now has a private symbol-capability
+  `salaryServer` separate from the authenticated public `salary`.
+  It verifies the **real** original character/account row inside the
+  GameStore transaction, all original writer fences, the source-paid PF53
+  hire, and the due PF57 period. It never creates a fake player session.
+- `coopPersonalFleetOriginalPayrollScheduler.js` reads PF52 roster/index,
+  PF53 receipt, PF57 ledger and immutable PF92 consent in the same original
+  SQLite snapshot. Uses deterministic per-contract/per-period operation IDs
+  and original PF57 wallet journal settlement.
+- A bounded round-robin scans due NPCs. The existing PF56 source-owned
+  station timer calls payroll **at most once per 30 seconds** — no separate
+  scheduler thread. An unknown COMMIT is process-sticky fenced; after restart
+  the original ledger determines whether a period has already settled.
+- A previous unpaid period must settle before the next. Missing source
+  consent, revoked writer fencing, inconsistent character ownership and
+  missing original NPC profile all **fail closed**. No replacement ISK
+  ledger is introduced.
+
+**Isolated source checks performed:** consent **14/14**, due payroll
+**13/13**, wage-bound offer **48/48**, salary terms **14/14**, original
+chat gateway **43/43**, command owner **31/31**, bootstrap **42/42** in
+controlled V8/fake-SQL harnesses. These are NOT original server or
+real-client E2E measurements, and should not be interpreted as such.
+
+**Remaining full-scope blockers:** original WORK source configuration and
+independent native ownership/wallet/kill witnesses, actual original
+Node/SQLite and SIGKILL payroll verification, real player-client hiring
+and payment E2E, source-verified in-flight warp continuation, native
+Personal Fleet ATTACK/GUARD, physical mining/hauling, and exploration/
+wormhole execution. No original `pas7-studio/EveJS` branch can be
+pushed through the current integration (GitHub create-branch returns 403).
+The actual source installation, main, PLAY and live feature flags remain
+untouched; this is **not yet gameplay-ready**.
+
 ## PF91 native payment and employment progress — 2026-11-08
 
 **Current staging inventory:** PF80 22-path base + 28-path first-play
