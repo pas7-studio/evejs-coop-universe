@@ -15,6 +15,7 @@ function load({flags={},config,bootstrap={},missing=false}={}){
  const m={exports:{}};
  const working={source:'ORIGINAL_EVEJS_PERSONAL_FLEET_WORK_CONFIGURATION_V1',
   loadNativeAuthoredCatalog(){events.push('catalog');return [{npcCharacterID:12345}];},
+  loadNativeSalaryPolicies(){events.push('salary-policies');return [{npcCharacterID:12345,salaryCents:100,periodMs:86400000}];},
   createNativeWriterHooks(){events.push('hooks');return {
    source:'ORIGINAL_EVEJS_PERSONAL_FLEET_BOOT_OWNER_V1',
    verifyOriginalWriterHooks(){return true;},
@@ -39,7 +40,7 @@ test('PF88 original WorkStarter enables once only with verified server configura
  const f=load();
  const result=f.starter.bootstrapOriginalWorkFromServer();
  assert.equal(result.status,'ORIGINAL_WORK_READY');
- assert.deepEqual(f.events,['catalog','hooks','bootstrap']);
+ assert.deepEqual(f.events,['catalog','salary-policies','hooks','bootstrap']);
  assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/ATTEMPTED_STICKY/);
 });
 test('PF88 missing original WORK configuration fails before bootstrap',()=>{
@@ -60,6 +61,7 @@ test('PF88 transient isolation flag is mandatory',()=>{
 test('PF88 missing original writer proof aborts before publishing Personal Fleet',()=>{
  const f=load({config:{source:'ORIGINAL_EVEJS_PERSONAL_FLEET_WORK_CONFIGURATION_V1',
   loadNativeAuthoredCatalog:()=>[{npcCharacterID:12345}],
+  loadNativeSalaryPolicies:()=>[{npcCharacterID:12345,salaryCents:100,periodMs:86400000}],
   createNativeWriterHooks:()=>({source:'ORIGINAL_EVEJS_PERSONAL_FLEET_BOOT_OWNER_V1',
    verifyOriginalWriterHooks:()=>false,allWritersFenced:()=>true,
    allWalletWritersFenced:()=>true})}});
@@ -68,7 +70,7 @@ test('PF88 missing original writer proof aborts before publishing Personal Fleet
 });
 test('PF88 empty authored catalog fails before creating hooks',()=>{
  const f=load({config:{source:'ORIGINAL_EVEJS_PERSONAL_FLEET_WORK_CONFIGURATION_V1',
-  loadNativeAuthoredCatalog:()=>[],createNativeWriterHooks:()=>{throw Error('SHOULD_NOT_LOAD');}}});
+  loadNativeAuthoredCatalog:()=>[],loadNativeSalaryPolicies:()=>[],createNativeWriterHooks:()=>{throw Error('SHOULD_NOT_LOAD');}}});
  assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/CATALOG_UNAVAILABLE/);
 });
 test('PF88 only real original source config accepted',()=>{
@@ -80,10 +82,16 @@ test('PF88 unsuccessful original native composition cannot report READY',()=>{
  const f=load({bootstrap:{createOriginalWorkBootstrap:()=>({status:'REVIEW_ONLY',
   mayEnable:()=>true,getOperationalStatus:()=>({ready:true})})}});
  assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/BOOT_NOT_OPERATIONAL/);
- assert.deepEqual(f.events,['catalog','hooks','bootstrap']);
+ assert.deepEqual(f.events,['catalog','salary-policies','hooks','bootstrap']);
 });
 test('PF88 post-bootstrap revoked operational gate prevents false READY',()=>{
  const f=load({bootstrap:{createOriginalWorkBootstrap:()=>({status:'INSTALLED_WORK_SOURCE_BOUND',
   mayEnable:()=>false,getOperationalStatus:()=>({ready:false})})}});
  assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/BOOT_NOT_OPERATIONAL/);
+});
+test('PF91 missing explicitly authored salary policies fails before native hooks',()=>{
+ const f=load({config:{source:'ORIGINAL_EVEJS_PERSONAL_FLEET_WORK_CONFIGURATION_V1',
+  loadNativeAuthoredCatalog:()=>[{npcCharacterID:12345}],
+  loadNativeSalaryPolicies:()=>[],createNativeWriterHooks:()=>{throw Error('NO_HOOKS');}}});
+ assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/SALARY_POLICIES_UNAVAILABLE/);
 });
