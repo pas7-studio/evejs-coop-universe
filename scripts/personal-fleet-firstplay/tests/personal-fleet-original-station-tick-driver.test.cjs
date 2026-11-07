@@ -3,7 +3,7 @@ const {test}=require('node:test'),a=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const source=fs.readFileSync(path.join(__dirname,'../native/coopPersonalFleetOriginalStationTickDriver.js'),'utf8');
 const R={assignmentID:'job-001',operationID:'pfret-001',signature:'a'.repeat(64),phase:'RETURNING',shipItemID:1400,stationID:60000002,systemID:30000001};
-function f(){let alive=true,fenced=true,poison=false,rows=[{...R}],throwTx=false,throwSample=false,calls=0,advances=0,terminalPhase='FINALIZED',scheduled=null,cleared=0,now=60000,payrollCalls=0,throwPayroll=false;
+function f(){let alive=true,fenced=true,poison=false,rows=[{...R}],throwTx=false,throwSample=false,calls=0,advances=0,terminalPhase='FINALIZED',scheduled=null,cleared=0,now=60000,payrollCalls=0,throwPayroll=false,combatCalls=0,throwCombat=false;
  let index={version:1,operations:{'pfret-001':{assignmentID:R.assignmentID,signature:R.signature,phase:'RETURN_ISSUING'}}};
  const t='coop-personal-fleet\u001freturn-dock-v1:',root='coop-personal-fleet\u001freturn-ops-v1',
   terminalKey='coop-personal-fleet\u001fterminal-v1:';
@@ -18,13 +18,15 @@ function f(){let alive=true,fenced=true,poison=false,rows=[{...R}],throwTx=false
    Object,Array,Number,Set,Map,Date:{now:()=>now},structuredClone,setInterval,clearInterval}, {filename:'station-tick.js'});
  const driver=module.exports.createOriginalStationTickDriver({
  settlePayroll:()=>{payrollCalls++;if(throwPayroll)throw Error('PAYROLL_ERROR');return {status:'PAYROLL_RECONCILED'};},
+ recoverCombat:()=>{combatCalls++;if(throwCombat)throw Error('COMBAT_RECOVERY_ERROR');return {status:'RECOVERY_SCANNED'};},
  advanceReturn:()=>{advances++;return {status:'RETURNING'}},
  stationDwell:{sample:()=>{calls++;if(throwSample)throw Error('SAMPLE');return {status:'OBSERVED'}}},
  enabled:()=>alive,allWritersFenced:()=>fenced,scheduler:{setInterval:(cb,ms)=>{scheduled={cb,ms,unref(){}};return scheduled},clearInterval:()=>{cleared++}}});
  return {driver,db,R,rows,setRows:v=>rows=v,setIndex:v=>index=v,setAlive:v=>alive=v,setFenced:v=>fenced=v,setPoison:v=>poison=v,
  setThrowTx:v=>throwTx=v,setThrowSample:v=>throwSample=v,setTerminalPhase:v=>terminalPhase=v,
  getCalls:()=>calls,getAdvances:()=>advances,getScheduled:()=>scheduled,getCleared:()=>cleared,
- setNow:v=>now=v,getPayrollCalls:()=>payrollCalls,throwPayroll:()=>throwPayroll=true};}
+ setNow:v=>now=v,getPayrollCalls:()=>payrollCalls,throwPayroll:()=>throwPayroll=true,
+ getCombatCalls:()=>combatCalls,throwCombat:()=>throwCombat=true};}
 const tt=(name,fn)=>test(name,()=>fn(f()));
 tt('source tick does not start a timer during construction',f=>a.equal(f.getScheduled(),null));
 tt('source tick starts exactly one 100ms unrefd server timer',f=>{
@@ -102,4 +104,19 @@ tt('PF93 failed payroll cannot fake a good return observation',f=>{
  const result=f.driver.tick();
  a.equal(result.observed,1);
  a.equal(f.driver.getStatus().payroll,'BLOCKED');
+});
+
+tt('PF96 recovery readopts from original source at most once a second',f=>{
+ a.equal(f.driver.tick().status,'SAMPLED');
+ a.equal(f.getCombatCalls(),1);
+ f.driver.tick();a.equal(f.getCombatCalls(),1);
+ f.setNow(61000);f.driver.tick();a.equal(f.getCombatCalls(),2);
+ a.equal(f.driver.getStatus().combat,'RECOVERY_SCANNED');
+});
+tt('PF96 combat restart is disabled if original writer fencing fails',f=>{
+ f.setFenced(false);f.driver.tick();a.equal(f.getCombatCalls(),0);
+});
+tt('PF96 failed native resume never alters return-dock outcome',f=>{
+ f.throwCombat();const r=f.driver.tick();
+ a.equal(r.observed,1);a.equal(f.driver.getStatus().combat,'BLOCKED');
 });
