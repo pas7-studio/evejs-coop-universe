@@ -8,7 +8,7 @@ non-spoofed, crash-fenced Return-to-Base and sessionless docking protocol.
 
 ## Code
 
-- `native/coopPersonalFleetReturnDock.cjs` — original SQLite `corporationRuntime` + `items` single-flight RETURN_ISSUING/RETURNING/ARRIVAL_OBSERVED/DOCK_ISSUING/DOCKED and one-commit PF actor + roster + hangar release.
+- `native/coopPersonalFleetReturnDock.cjs` — original SQLite `corporationRuntime` + `items` + `characters` single-flight RETURN_ISSUING/RETURNING/ARRIVAL_OBSERVED/DOCK_ISSUING/DOCKED and one-commit PF actor + roster + hangar release.
 - `native/coopPersonalFleetNativeReturnExecutor.cjs` — included in the PF78 source-pinned WORK bundle (previously omitted); actual EveJS `npcRuntime.warpToPoint` API adapter routed through `PERSONAL_FLEET` order bridge; live native station observation gate. Neither invents a ship or spoofs a character session.
 - `deps/*` — pinned reference dependencies solely for local tests. Never register these as original live server authorities.
 - `tests/*` — Node 22 `node:sqlite` tests with real `SIGKILL` child processes and a **synthetic native controller, ItemStore and station**. Native stock source and WORK E2E are **not** executed.
@@ -67,3 +67,23 @@ PF83's separate current-station-position read remains inside the native
 order-bridge callback. This is unit/ABI coverage, not actual game docking.
 Run `node --test scripts/pf56/tests/pf56-native-api.test.cjs` manually.
 Read `scripts/pf62/PF83_RETURN_SOURCE_AND_MANUAL_GATE.md` for evidence.
+
+## PF84 — offline original-owner reauthorization (2026-11-07)
+
+The initial `requestReturn` is still a real session-authenticated
+player command. It now persists `requestedByAccountID` in the one-shot
+`RETURN_ISSUING` row. After the player disconnects, the internal-only
+`advanceServer(row)` refuses to proceed without that previously committed
+intent and an independent read of the original `characters` SQLite row
+proving the same account still owns a non-deleted character.
+
+An original server scheduler may reconcile the persisted return, validate
+station arrival and continuous dwell, then dispatch one authorized dock
+and independently reconcile the physical hull and controller cleanup.
+There is no synthetic player session and no second native warp/dock after
+an uncertain external effect.
+
+**The original durable RETURN flight/receipt authority remains unimplemented**
+in this staging package; source binding and true WORK gameplay are not
+confirmed. The new fixture tests and first-play PowerShell runner provide
+local verification paths, not evidence of live gameplay.
