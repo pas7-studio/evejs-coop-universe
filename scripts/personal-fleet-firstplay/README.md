@@ -6,8 +6,9 @@
 ## Actually implemented
 
 The package contains an authenticated in-game /pf chat gateway, a native server command
-conductor, source-pinned chat/character-wallet patches, a combined isolated WORK
-patch assembler, and local regression tests.
+conductor, source-pinned chat/character-wallet patches, a source-bound original EveJS
+session/station/physical-player-ship adapter, a **durable SDE NPC hire offer source**,
+a combined isolated WORK patch assembler, and local regression tests.
 
 The original EVE XMPP path already uses the same chatCommands.js dispatcher as LSC.
 Available /pf commands are offers, roster, status, hire, assign, deploy, follow,
@@ -23,14 +24,14 @@ A separate patch changes PF53 and PF57 native wallet candidate code from
 the obsolete synthetic aggregate characters map to actual individual original
 characters/<characterID> SQLite rows.
 
-The combined native WORK assembler builds five modified/new native paths on
-top of PF80's 22-path candidate, for a total of 25. It requires an isolated
+The combined native WORK assembler builds seven modified/new native paths on
+top of PF80's 22-path candidate, for a total of 27. It requires an isolated
 linked Git worktree on a work/* branch, a valid PF62 source manifest, exact
 original chat source pin 5f4dd4d34a398dde3120e8640a7058d2bd3bb038,
 and explicit WORK-NOT-PLAY confirmation. It never creates native business
 authorities or enables feature flags.
 
-**Evidence:** 62/62 Node/SQLite/VM tests and 18/18 Python/Git tests PASS on
+**Evidence:** 118/118 Node/SQLite/VM tests and 18/18 Python/Git tests PASS on
 Node.js 22.16.0, Python 3.13.5, Git. All ten code/test files have exact
 Git blob SHA matches with the locally tested source. No native original
 EveJS runtime or Windows PowerShell test was run.
@@ -55,7 +56,7 @@ Then stage the additional source-pinned chat, wallet and owner modules:
 
     python scripts/personal-fleet-firstplay/tools/prepare_firstplay_work.py --worktree 'O:\tmp\pf-firstplay-native-work' --source-root . --pf62-manifest 'O:\tmp\pf-firstplay-pf80-review\PF62-MANIFEST.json' --review-output 'O:\tmp\pf-firstplay-native-review' --apply-to-work --confirm-work-only 'WORK-NOT-PLAY'
 
-Review PERSONAl-FLEET-FIRST-PLAY-REVIEW.json and the 5-path patch in the
+Review PERSONAl-FLEET-FIRST-PLAY-REVIEW.json and the 7-path patch in the
 separate review directory. The review receipt intentionally reports
 nativeAuthorityWired:false, featureEnabled:false and gameplayE2E:NOT_RUN.
 
@@ -92,3 +93,70 @@ approves a separate restart window.
 Reference docs:
 - docs/PERSONAL_FLEET_FIRST_PLAY_WORK_HANDOFF.md
 - docs/TWO_STACKS_PLAY_AND_WORK.md
+
+
+## Real original NPC catalogue and offer-to-PF53 wiring
+
+The new file `native/coopPersonalFleetOriginalOfferAuthority.js` constructs
+quotes only when **all** of these original authorities agree:
+
+- `services/corporation/corporationState.getNpcCharacterOwnerRecord(npcCharacterID)`
+  identifies a named existing NPC character from Eve SDE (not a generated alias);
+- `space/npc/npcData.buildNpcDefinition(profileID)` resolves a genuinely
+  authored profile, native loadout and behavior profile;
+- the same original corporation owner is an NPC corporation, and the
+  `corporationRuntime` SQLite row `corporations\\u001f<corporationID>`
+  has a real division-1000 wallet;
+- the player has an original live account/character row and PF52 does not
+  already employ the named NPC. The operator controls the **fixed
+  amountCents** in an explicit server-owned `authoredCatalog` (maximum 12
+  entries); clients never specify ISK or a fabricated pilot.
+
+The live quote gets a durable unique `offerID`, revision, expiry and
+`sourceProof` in the original `corporationRuntime` SQLite transaction.
+Expired **unpaid** quotes rotate revisions, while historically paid
+contract IDs cannot be silently re-hired. PF53 subsequently reads the same
+quote under its own original SQLite transaction and independently verifies
+the NPC, native employer and amount; PF53 alone debits the original wallet.
+
+**There is deliberately no preconfigured/fake hireable character** in
+this repository. An operator on the real native WORK server must select
+NPC character IDs and native profile IDs that genuinely exist in its
+installed SDE. An empty catalogue gives `/pf offers: No native offers`
+rather than invented pilots.
+
+Actual connection for the native composition root (reference only, not
+automatically installed):
+
+```js
+const bind = require('./coopPersonalFleetOriginalSourceBindings')
+  .createOriginalSourceBindings();
+const offerAuthority = require('./coopPersonalFleetOriginalOfferAuthority')
+  .createSourceBoundOriginalOfferAuthority({
+    gameStore: bind.gameStore,
+    pf52: require('./coopPersonalFleetHangarBridge'),
+    pf53: require('./coopPersonalFleetPaidHiring'),
+    access: bind.access,
+    authoredCatalog: verifiedOperatorWorkCatalogue,
+    enabled: nativePersonalFleetEnabled,
+    allWalletWritersFenced: verifiedOriginalWriterHooks,
+  });
+// Supply offerAuthority.resolveNativeOffer/verifyOriginalNpcPilot/
+// verifyNativeEmployer to PF53's real constructor.
+// Supply listNativeOffers/lookupNativeOffer to the command owner.
+// Supply bind.resolveOriginalDockContext / bind.resolveOriginalFollowTarget
+// and bind.access to the remaining PF52/PF54/PF55/PF56 constructors.
+// Install the /pf gateway only after EVERY real native owner is ready.
+```
+
+The `coopPersonalFleetOriginalSourceBindings` file imports exactly
+original GameStore, sessionRegistry, structureLocation, stationStaticData
+and space runtime; it never accepts client-supplied equivalents.
+It requires the original character row/account, a single live session,
+real docked station or real physical in-space player ship, and a matching
+scene entity before producing a FOLLOW target.
+
+**Test evidence this continuation:** 34 real-SQLite native offer cases,
+21 source-bound owner/session/ItemStore/scene cases, plus the updated
+63 prior Node cases = **118 Node PASS**; 18 Python/Git PASS;
+**136 total PASS**. Original actual native EVE gameplay still NOT RUN.
