@@ -238,3 +238,43 @@ Python/Git tests prove the patch is applied to the PF80 staged file.
 The incremental patch now has **8** affected source paths over PF80's
 already staged 22, with **27 unique changed native paths** total.
 No source row is silently skipped or validated via nested transactions.
+
+## Native WORK composition + original wallet IDs — 2026-11-07
+
+The latest concrete installation package is
+`scripts/personal-fleet-firstplay/`.
+It now includes original source-owned
+`coopPersonalFleetOriginalWorkBootstrap.js` and
+`coopPersonalFleetOriginalWalletAuthority.js`, with **10 native
+source paths** over the PF80 22-path staged candidate and
+**29 unique changed native paths total**. The source-bound composition
+creates actual original adapters for paid hire, hanger ship reservation,
+PF54/PF58 physical handoff, PF55 friendly orders, PF56 return and
+source-owned `/pf` chat, then only publishes the chat endpoint once
+every dependency was built. Unsafe partial installs fail-sticky for
+the native process; there is NO automatic reinstallation.
+
+Original wallet ID and notification hooks are now *implemented in
+source-bound code*: original `plexVaultLogState.getTransactionID`
+provides the one-use native journal number under the same SQLite
+transaction; wallet changes are still made only by PF53, while
+notifications are sent through stock player and corporation wallet
+services after verified commit. Three generic wallet callbacks were
+removed from the composition contract.
+
+**Actually executed here:** 169/169 Node SQLite/VM and 18/18
+Python/Git => **187/187 PASS**. All 18 candidate/test Git files
+have matching tested source byte hashes. Manual Windows PowerShell,
+original native server startup, client-visible wallet transfer, NPC
+physics and return-to-station gameplay remain **NOT RUN**.
+
+**Still missing CODE, not just debugging:** a trusted original
+`Code/server/src/space/coopPersonalFleetOriginalWorkHooks.js`
+implementation and server startup invocation, which must bind the
+true stock ItemStore and player/Mining/WAR/Exploration writers,
+actual native actor proofs, controller orders, return/docking and
+existing SDE NPC catalog. The first-play bootstrap explicitly blocks
+PF57 salary/dismiss until original source-owned payroll hooks exist.
+Do not enable Personal Fleet before these native source changes and
+independent WORK E2E. Current GitHub connection still receives 403
+on `pas7-studio/EveJS` branch writes.
