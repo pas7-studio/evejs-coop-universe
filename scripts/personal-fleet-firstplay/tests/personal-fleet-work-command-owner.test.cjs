@@ -222,3 +222,11 @@ test('PF92 original native command owner refuses one-token hire without wage con
  assert.equal(f.invoke('hire',['offer-1','wrong']).status,'BLOCKED');
  assert.equal(f.calls.length,0);
 }));
+test('PF94 paid hire sends a true consent bit into original PF53 wallet transaction',()=>fixture(f=>{
+ const result=f.invoke('hire',['offer-1','accept-recurring']);
+ assert.equal(result.status,'APPLIED');
+ const c=f.calls.find(x=>x.name==='hire')?.c;
+ assert.equal(c.recurringSalaryAcknowledged,true);
+ assert.equal(c.amountCents,undefined);
+ assert.equal(c.periodMs,undefined);
+}));
