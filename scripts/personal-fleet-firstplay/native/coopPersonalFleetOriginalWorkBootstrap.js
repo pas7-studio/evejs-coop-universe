@@ -13,6 +13,7 @@
  */
 const core=require('./coopPersonalFleetOriginalSourceBindings');
 const originalWalletAuthority=require('./coopPersonalFleetOriginalWalletAuthority');
+const originalOrderAck=require('./coopPersonalFleetOriginalDurableOrderAck');
 const offers=require('./coopPersonalFleetOriginalOfferAuthority');
 const commands=require('./coopPersonalFleetWorkCommandOwner');
 const originalOrderWitness=require('./coopPersonalFleetOriginalOrderWitness');
@@ -39,7 +40,7 @@ const HOOKS=Object.freeze([
  'verifyOriginalDeploymentAuthority','verifyExclusiveOwnership',
  'verifyOriginalActor','independentOriginalActorWitness',
  'originalStationUndockPoint','originalOwnershipWitness',
- 'verifyPersistedNativeOrder','verifyNativeFlight','verifyOriginalReturnOrder',
+ 'verifyNativeFlight','verifyOriginalReturnOrder',
  'verifyStationArrival','verifyContinuousDwell','verifyOriginalManifest',
  'verifyOriginalDockReceipt','verifyFinalOriginalManifest',
  'executeNativeReturn','executeNativeDock','verifyOriginalDockedPlayerSession',
@@ -151,17 +152,19 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   // The physical command bridge uses the EXISTING shared stock order arbiter,
   // never creates a second independent arbiter for Personal Fleet.
+  const durableOrderAck=originalOrderAck.createOriginalDurableOrderAck({
+    orderWitness,enabled,allWritersFenced:originalHooks.allWritersFenced});
   const originalPhysicalOrders=originalOrderExecutor.createOriginalOrderExecutor({
     sharedOriginalArbiter:originalHooks.sharedOriginalNpcOrderArbiter,
     readOriginalWarShipClaim:originalHooks.readOriginalWarShipClaim,
-    orderWitness,enabled,allWritersFenced:originalHooks.allWritersFenced});
+    orderWitness,orderReceipt:durableOrderAck,enabled,allWritersFenced:originalHooks.allWritersFenced});
   const orders=pf55.createPersonalFleetNativeOrders({gameStore,pf52,access,
     verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
     verifyNativeActor:orderWitness.verifyNativeActor,
     verifyTarget:orderWitness.verifyTarget,
     verifyOriginalControl:orderWitness.verifyOriginalControl,
     nativeExecutor:originalPhysicalOrders,
-    verifyPersistedNativeOrder:originalHooks.verifyPersistedNativeOrder,
+    verifyPersistedNativeOrder:durableOrderAck.verifyPersistedNativeOrder,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   const returnDock=pf56.createPersonalFleetReturnDock({gameStore,pf52,
     claimsPolicy:originalHooks.claimsPolicy,access,
