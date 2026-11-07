@@ -4,7 +4,7 @@ const {DatabaseSync}=require('node:sqlite');
 const {createOriginalOfferAuthority,key}=require('../native/coopPersonalFleetOriginalOfferAuthority.js');
 const SEP='\u001f',T='corporationRuntime',CHAR='characters';
 const NPC=30001001,CORP=1000110,OWNER=90000111,OWNER2=90000222;
-const ENTRY=Object.freeze({npcCharacterID:NPC,employerCorpID:CORP,profileID:'cooperative_friendly_a',amountCents:75000});
+const ENTRY=Object.freeze({npcCharacterID:NPC,employerCorpID:CORP,profileID:'cooperative_friendly_a',shipTypeID:606,amountCents:75000});
 const eRow=()=>({corporationID:CORP,wallet:{divisions:{'1000':{balance:1000,journal:[],transactions:[]}}}});
 function fixture(cb,{catalog=[ENTRY]}={}){
  const db=new DatabaseSync(':memory:');
@@ -32,7 +32,7 @@ function fixture(cb,{catalog=[ENTRY]}={}){
  const originalNpcCharacters={getNpcCharacterOwnerRecord:c=>state.originalNpc&&c===NPC?
   {ownerID:NPC,ownerName:'Authored SDE Person',typeID:1373}:null};
  const originalNpcData={buildNpcDefinition:p=>state.originalProfile&&p===ENTRY.profileID?{
-  profile:{profileID:p,loadoutID:'loadout_a',behaviorProfileID:'behavior_a'},loadout:{slots:[2]},behaviorProfile:{type:'follow'}}:null};
+  profile:{profileID:p,shipTypeID:606,loadoutID:'loadout_a',behaviorProfileID:'behavior_a'},loadout:{slots:[2]},behaviorProfile:{type:'follow'}}:null};
  const originalCorporations={getCorporationRecord:c=>state.originalCorporation&&c===CORP?
   {corporationID:CORP,isNPC:true}:null,isNpcCorporationID:c=>state.originalCorporation&&c===CORP};
  const owner=createOriginalOfferAuthority({gameStore:{coopAtomicNativeRows:atomic},pf52,pf53,access,
@@ -202,3 +202,74 @@ test('source-bound factory lazy-loads only original EveJS corporation and NPC-da
  assert.throws(()=>sandbox.module.exports.createSourceBoundOriginalOfferAuthority({}),/AUTHORITIES_REQUIRED/);
  assert.deepEqual(names.slice(2),['../services/corporation/corporationState','./npc/npcData']);
 });
+function withPaid(f){
+ const offer=f.quote(),op='pf-uuid-1';
+ const ix=f.get(T,'coop-personal-fleet'+SEP+'hangar-reservations-v1');
+ ix.pilots[offer.pilotID]={pilotID:offer.pilotID,ownerCharacterID:OWNER,
+  contractID:offer.contractID,hireReceiptHash:'digest-paid'};
+ ix.processed[op]={receipt:{type:'HIRED',pilotID:offer.pilotID,
+  contractID:offer.contractID},signature:'receipt'};
+ f.put(T,'coop-personal-fleet'+SEP+'hangar-reservations-v1',ix);
+ const paid={status:'PAID',operationID:op,offerID:offer.offerID,offerRevision:offer.revision,
+  pilotID:offer.pilotID,contractID:offer.contractID,ownerCharacterID:OWNER,
+  employerCorpID:offer.employerCorpID,amountCents:offer.amountCents,
+  hireReceiptHash:'digest-paid'};
+ f.put(T,f.pf53.paidKey(op),paid);
+ return {offer,op,paid};
+}
+test('hired pilot accepts ONLY exact authored original physical ship type',()=>fixture(f=>{
+ const {offer}=withPaid(f);const command={session:f.session,ownerCharacterID:OWNER,
+  pilotID:offer.pilotID,shipTypeID:606};
+ assert.equal(f.owner.verifyHiredPilotHull(command),true);
+ assert.equal(f.owner.verifyHiredPilotHull({...command,shipTypeID:607}),false);
+}));
+test('hired original native profile is resolved only from paid PF53 receipt',()=>fixture(f=>{
+ const {offer}=withPaid(f);
+ const def=f.owner.resolvePaidNativeProfile({ownerCharacterID:OWNER,
+  shipItemID:2001,contractID:offer.contractID,pilotID:offer.pilotID,typeID:606});
+ assert.equal(def.profile.profileID,ENTRY.profileID);
+ assert.equal(def.profile.shipTypeID,606);
+}));
+test('adoption refuses mismatched original hull ship type even if NPC was hired',()=>fixture(f=>{
+ const {offer}=withPaid(f);
+ assert.equal(f.owner.resolvePaidNativeProfile({ownerCharacterID:OWNER,shipItemID:2001,
+  contractID:offer.contractID,pilotID:offer.pilotID,typeID:607}),null);
+}));
+test('original native actor cannot adopt an unpaid NPC contract',()=>fixture(f=>{
+ const offer=f.quote();assert.equal(f.owner.resolvePaidNativeProfile({ownerCharacterID:OWNER,
+  shipItemID:2001,contractID:offer.contractID,pilotID:offer.pilotID,typeID:606}),null);
+}));
+test('tampered original PF53 payment blocks physical actor and spare hull assignment',()=>fixture(f=>{
+ const {offer}=withPaid(f);f.state.paidReceiptValid=false;
+ assert.equal(f.owner.verifyHiredPilotHull({session:f.session,ownerCharacterID:OWNER,
+  pilotID:offer.pilotID,shipTypeID:606}),false);
+ assert.equal(f.owner.resolvePaidNativeProfile({ownerCharacterID:OWNER,
+  shipItemID:2001,contractID:offer.contractID,pilotID:offer.pilotID,typeID:606}),null);
+}));
+test('hired original pilot cannot be assigned by another account',()=>fixture(f=>{
+ const {offer}=withPaid(f);
+ assert.equal(f.owner.verifyHiredPilotHull({session:f.session2,ownerCharacterID:OWNER2,
+  pilotID:offer.pilotID,shipTypeID:606}),false);
+}));
+test('hired pilot cannot be assigned with stale owner registry/contract',()=>fixture(f=>{
+ const {offer}=withPaid(f);
+ const ix=f.get(T,'coop-personal-fleet'+SEP+'hangar-reservations-v1');
+ ix.pilots[offer.pilotID].contractID='wrong';
+ f.put(T,'coop-personal-fleet'+SEP+'hangar-reservations-v1',ix);
+ assert.equal(f.owner.verifyHiredPilotHull({session:f.session,ownerCharacterID:OWNER,
+  pilotID:offer.pilotID,shipTypeID:606}),false);
+}));
+test('hired actor refuses profile drift after PF53 payment',()=>fixture(f=>{
+ const {offer}=withPaid(f);f.state.originalProfile=false;
+ assert.equal(f.owner.resolvePaidNativeProfile({ownerCharacterID:OWNER,shipItemID:2001,
+  contractID:offer.contractID,pilotID:offer.pilotID,typeID:606}),null);
+}));
+test('hired profile rejects wrong native contract ID even when ship ID matches',()=>fixture(f=>{
+ const {offer}=withPaid(f);
+ assert.equal(f.owner.resolvePaidNativeProfile({ownerCharacterID:OWNER,shipItemID:2001,
+  contractID:'pf-foreign',pilotID:offer.pilotID,typeID:606}),null);
+}));
+test('source authored NPC has to be eligible for original ship type before quote',()=>fixture(f=>{
+ const a={...ENTRY,shipTypeID:607};
+ assert.deepEqual(f.offers(),[]);
+}, {catalog:[{...ENTRY,shipTypeID:607}]}));
