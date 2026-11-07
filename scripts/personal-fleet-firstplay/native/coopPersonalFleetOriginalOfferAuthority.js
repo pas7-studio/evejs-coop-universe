@@ -162,11 +162,11 @@ function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
      !POS(command.offerRevision))return null;
   const entry=catalog.find(e=>offerID(command.ownerCharacterID,e.npcCharacterID)===command.offerID);
   if(!entry||!guard(command.session,command.ownerCharacterID,tx))return null;
-  const proof=sourceProof(entry,tx),row=tx.get(T,key(command.offerID));
-  if(!proof||!OBJ(row)||!integrity(row,entry,command.ownerCharacterID,proof)||
+  const proof=sourceProof(entry,tx),row=tx.get(T,key(command.offerID)),now=clock();
+  if(!POS(now)||!proof||!OBJ(row)||!integrity(row,entry,command.ownerCharacterID,proof)||
      row.revision!==command.offerRevision||row.agentID!==command.agentID||
      row.pilotID!==command.pilotID||row.contractID!==command.contractID||
-     row.expiresAtMs<=clock())return null;
+     row.expiresAtMs<=now)return null;
   return clone(row);
  }
  function verifyOriginalNpcPilot(command,offer,tx){
@@ -182,4 +182,14 @@ function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
  return Object.freeze({listNativeOffers,lookupNativeOffer,resolveNativeOffer,
   verifyOriginalNpcPilot,verifyNativeEmployer});
 }
-module.exports=Object.freeze({createOriginalOfferAuthority,validCatalogEntry,key});
+// Bind real original EveJS ownership services; never inject client-provided
+// NPC identities, corporations, profile rows or wallet values at install time.
+function createSourceBoundOriginalOfferAuthority(options={}){
+ const corporations=require('../services/corporation/corporationState');
+ const npcData=require('./npc/npcData');
+ return createOriginalOfferAuthority({...options,
+  originalNpcCharacters:corporations,originalNpcData:npcData,
+  originalCorporations:corporations});
+}
+module.exports=Object.freeze({createOriginalOfferAuthority,
+ createSourceBoundOriginalOfferAuthority,validCatalogEntry,key});
