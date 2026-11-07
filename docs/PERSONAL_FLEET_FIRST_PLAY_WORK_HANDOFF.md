@@ -151,3 +151,34 @@ PASS or PF80's 22-path review as player-visible gameplay. Report the
 first **real** failing native bootstrap/ingress/ship runtime step.
 If you cannot access the local engine, leave `BLOCKED_NATIVE_INSTALL`
 and hand this file to the agent that can; do not invent completion.
+
+
+## Executable first-play source package — 2026-11-07
+
+The new production-facing candidate is in
+[scripts/personal-fleet-firstplay/README.md](../scripts/personal-fleet-firstplay/README.md).
+This adds an authenticated real XMPP/LSC /pf gateway, source-bound server
+command conductor, native stock chat source patch, and PF53/PF57 per-character
+wallet row fixes. All ten exact published tested source/test files are
+SHA256-pinned. Node.js 22.16.0: **62/62 PASS**, Python 3.13.5: **18/18 PASS**,
+total **80/80** isolated component checks. No original native engine boot,
+Windows PowerShell runner, client gameplay or true native payment/actor test.
+
+The combined WORK-only patch assembler starts from PF80's isolated
+22-path staged native worktree and adds FIVE native source paths
+(two existing PF53/PF57, three new: chat hook, /pf gateway, command
+conductor). It verifies the exact final 25-path WORK inventory; both
+review and explicit apply modes keep all flags OFF. Read the README
+for a safe two-command staging sequence. These additional paths are
+**staging**, not a runtime boot or server-side original owner installation.
+
+**Still P0 code missing:** original native composition root and shared
+GameStore/wallet/stock ItemStore writer authority; authentic
+available NPC pilot/agent/offer source (original npcEntities stores
+native entities, not the synthetic fixture pilots map); original
+PF54/PF55/PF56 physical actor and docking effects, original
+session/actor/WAR/Mining/Exploration guards, and payroll/loss/advanced
+fleet policies. The original native repository still rejects GitHub
+writes (HTTP 403). Thus status remains **BLOCKED_NATIVE_INSTALL**,
+**NOT** only debugging. The first legitimate WORK gameplay test
+must be on a real original engine fork commit and authenticated EVE client.
