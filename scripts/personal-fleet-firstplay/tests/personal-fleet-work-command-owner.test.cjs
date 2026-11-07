@@ -51,7 +51,10 @@ function fixture(callback){
   inspect:()=>({status:'OK'})};
  const pf56={requestReturn:c=>{record('return',c);return {status:'RETURN_ISSUING',operationID:c.operationID};},
   inspect:()=>({status:'OK'})};
- const pf57={dismiss:c=>{record('dismiss',c);return {status:'APPLIED'};}};
+ const pf57={dismiss:c=>{record('dismiss',c);return {status:'APPLIED'};},
+  inspect:c=>{record('inspectSalary',c);
+   return state.salaryInspected??{status:'NOT_FOUND'};},
+  salary:c=>{record('salary',c);return {status:'APPLIED',periodIndex:c.periodIndex};}};
  const lookupNativeOffer=()=>state.originalOffer?{offerID:'offer-1',revision:1,pilotID:PILOT,
   ownerCharacterID:CHAR,contractID:'contract-1',agentID:200,employerCorpID:1000120,
   amountCents:14000,expiresAtMs:Date.now()+900000}:null;
@@ -177,4 +180,33 @@ test('assign refuses mismatched original hull type before PF52 reservation',()=>
  const stored=f.get('items','items');stored[String(SHIP)].typeID=607;f.put('items','items',stored);
  assert.equal(f.invoke('assign',[PILOT,SHIP]).reason,'PF_FIRSTPLAY_PAID_PILOT_SHIP_TYPE_UNVERIFIED');
  assert.equal(f.calls.filter(x=>x.name==='reserve').length,0);
+}));
+
+test('PF91 salary selects first period from original empty lifecycle ledger',()=>fixture(f=>{
+ f.invoke('hire',['offer-1']);const r=f.invoke('salary',[PILOT]);
+ assert.equal(r.status,'APPLIED');
+ assert.equal(r.periodIndex,1);
+ const calls=f.calls.filter(x=>x.name==='salary');
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].c.contractID,'contract-1');
+ assert.equal(calls[0].c.periodIndex,1);
+ assert.equal(calls[0].c.ownerCharacterID,CHAR);
+ assert.equal(calls[0].c.amountCents,undefined);
+}));
+test('PF91 salary cannot accept client-selected amount or pay period',()=>fixture(f=>{
+ f.invoke('hire',['offer-1']);
+ assert.equal(f.invoke('salary',[PILOT,'999999']).status,'BLOCKED');
+ assert.equal(f.calls.filter(x=>x.name==='salary').length,0);
+}));
+test('PF91 salary uses next ledger period without reusing period 1',()=>fixture(f=>{
+ f.invoke('hire',['offer-1']);
+ f.state.salaryInspected={status:'OK',contract:{lastPeriod:3}};
+ const r=f.invoke('salary',[PILOT]);
+ assert.equal(r.periodIndex,4);
+ assert.equal(f.calls.find(x=>x.name==='salary').c.periodIndex,4);
+}));
+test('PF91 corrupted original salary period blocks all wallet writes',()=>fixture(f=>{
+ f.invoke('hire',['offer-1']);f.state.salaryInspected={status:'OK',contract:{lastPeriod:NaN}};
+ assert.equal(f.invoke('salary',[PILOT]).status,'BLOCKED');
+ assert.equal(f.calls.filter(x=>x.name==='salary').length,0);
 }));
