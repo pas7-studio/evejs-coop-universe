@@ -37,8 +37,14 @@ $tests=Join-Path $root 'tests'
 $prior=[Environment]::GetEnvironmentVariable('PYTHONDONTWRITEBYTECODE','Process')
 try{
  $env:PYTHONDONTWRITEBYTECODE='1'
- & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-chat-gateway.test.cjs') (Join-Path $tests 'personal-fleet-work-command-owner.test.cjs') (Join-Path $tests 'personal-fleet-original-offers.test.cjs') (Join-Path $tests 'personal-fleet-original-source-bindings.test.cjs') (Join-Path $tests 'personal-fleet-original-work-bootstrap.test.cjs') (Join-Path $tests 'personal-fleet-original-wallet-authority.test.cjs') (Join-Path $tests 'personal-fleet-original-order-witness.test.cjs') (Join-Path $tests 'personal-fleet-original-order-executor.test.cjs') (Join-Path $tests 'personal-fleet-original-durable-order-ack.test.cjs') (Join-Path $tests 'personal-fleet-original-dock-completion.test.cjs') (Join-Path $tests 'personal-fleet-original-terminal-dock-sources.test.cjs') (Join-Path $tests 'personal-fleet-original-dock-coordinator.test.cjs') (Join-Path $tests 'personal-fleet-original-station-dwell.test.cjs') (Join-Path $tests 'personal-fleet-original-station-tick-driver.test.cjs')
+ & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-chat-gateway.test.cjs') (Join-Path $tests 'personal-fleet-work-command-owner.test.cjs') (Join-Path $tests 'personal-fleet-original-offers.test.cjs') (Join-Path $tests 'personal-fleet-original-source-bindings.test.cjs') (Join-Path $tests 'personal-fleet-original-work-bootstrap.test.cjs') (Join-Path $tests 'personal-fleet-original-wallet-authority.test.cjs') (Join-Path $tests 'personal-fleet-original-order-witness.test.cjs') (Join-Path $tests 'personal-fleet-original-order-executor.test.cjs') (Join-Path $tests 'personal-fleet-original-durable-order-ack.test.cjs') (Join-Path $tests 'personal-fleet-original-dock-completion.test.cjs') (Join-Path $tests 'personal-fleet-original-terminal-dock-sources.test.cjs') (Join-Path $tests 'personal-fleet-original-dock-coordinator.test.cjs') (Join-Path $tests 'personal-fleet-original-station-dwell.test.cjs') (Join-Path $tests 'personal-fleet-original-station-tick-driver.test.cjs') (Join-Path $tests 'personal-fleet-original-native-entity-isolation.test.cjs')
  if($LASTEXITCODE -ne 0){throw 'PF_FIRSTPLAY_NODE_TEST_FAILED'}
+ # PF55 receipt and ACK must use the same original per-entity SQLite scope.
+ $pf55Tests=Join-Path (Join-Path $root '..') 'pf55/tests'
+ & $node --test --test-concurrency=1 `
+   (Join-Path $pf55Tests 'pf55-orders.test.cjs') `
+   (Join-Path $pf55Tests 'pf55-sqlite-sigkill.test.cjs')
+ if($LASTEXITCODE -ne 0){throw 'PF87_PF55_SQLITE_RECONCILE_TEST_FAILED'}
  # PF84 changes PF56's original transaction and sessionless transitions.
  # Do not declare first-play PASS from only the source-bound VM suites.
  $pf56Tests=Join-Path (Join-Path $root '..') 'pf56/tests'
@@ -70,6 +76,7 @@ if($NativeCheckout){
   'Code/server/src/services/_shared/stationStaticData.js'='15512a5320dc7979f3bab90cab0281d9fff15332'
   'Code/server/src/space/runtime.js'='0de66d2ab0499bfcff2b1bb57176e775c9b8df22'
   'Code/server/src/gameStore/sqliteStore.js'='d851fb5a84added2d4527c34407879e8a009bb74'
+  'Code/server/src/space/coopGameStoreAtomic.js'='2b28b48145f3fbc989ce7346384487ee75e52280'
   'Code/server/src/services/account/plexVaultLogState.js'='62a03b8578a390f5614fc67b6693ffa74b2b2ee5'
   'Code/server/src/services/account/walletState.js'='ef4799d896ce8dbb854e75b810057b1208932e13'
   'Code/server/src/services/corporation/corpWalletState.js'='42f7f3ba3d1c66824ce566523df2da19d9da26cf'
