@@ -14,7 +14,7 @@ const positive=x=>Number.isSafeInteger(x)&&x>0;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const token=x=>typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x);
 const no=reason=>Object.freeze({status:'BLOCKED',reason});
-function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF56_SERVER_CONTINUATION_NOT_INSTALLED'),recoverPhysical=()=>null,enabled=()=>false,
+function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF56_SERVER_CONTINUATION_NOT_INSTALLED'),recoverPhysical=()=>null,settlePayroll=()=>null,enabled=()=>false,
  allWritersFenced=()=>false,scheduler={setInterval,clearInterval}}={}){
  const atomic=gameStore?.coopAtomicNativeRows;
  if(atomic?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof atomic.transact!=='function'||
@@ -22,9 +22,10 @@ function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF5
     typeof pf56.key!=='function'||typeof pf56.signature!=='function'||
     typeof terminal.terminalKey!=='function'||
     typeof stationDwell?.sample!=='function'||
-    [advanceReturn,recoverPhysical,enabled,allWritersFenced,scheduler?.setInterval,scheduler?.clearInterval].some(f=>typeof f!=='function'))
+    [advanceReturn,recoverPhysical,settlePayroll,enabled,allWritersFenced,scheduler?.setInterval,scheduler?.clearInterval].some(f=>typeof f!=='function'))
   throw Error('PF56_ORIGINAL_STATION_NATIVE_TICK_SOURCE_REQUIRED');
- let handle=null,busy=false,started=false,lastRecoveryAtMs=0,lastRecovery=null;
+ let handle=null,busy=false,started=false,lastRecoveryAtMs=0,lastRecovery=null,
+    lastPayrollAtMs=0,lastPayroll=null;
  const live=()=>enabled()===true&&allWritersFenced()===true&&atomic.isPoisoned()===false;
  function openReturns(){
   return atomic.transact([T],tx=>{
@@ -76,6 +77,11 @@ function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF5
     try{lastRecovery=recoverPhysical();}
     catch{lastRecovery=no('PF90_RECOVERY_EXCEPTION');}
    }
+   if(now>=lastPayrollAtMs+30000){
+    lastPayrollAtMs=now;
+    try{lastPayroll=settlePayroll();}
+    catch{lastPayroll=no('PF93_SERVER_PAYROLL_EXCEPTION');}
+   }
    const rows=openReturns();
    if(!Array.isArray(rows))return no('PF56_MONITOR_ORIGINAL_RETURN_ROWS_UNCERTAIN');
    let observed=0,blocked=0,advanced=0,pending=0;
@@ -110,6 +116,6 @@ function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF5
   // Sticky start fence: never create overlapping timers in one process.
   return true;
  }
- return Object.freeze({start,stop,tick,getStatus:()=>({started,active:handle!==null,recovery:lastRecovery?.status||'NOT_SAMPLED'})});
+ return Object.freeze({start,stop,tick,getStatus:()=>({started,active:handle!==null,recovery:lastRecovery?.status||'NOT_SAMPLED',payroll:lastPayroll?.status||'NOT_SAMPLED'})});
 }
 module.exports=Object.freeze({createOriginalStationTickDriver,INTERVAL_MS,MAX_OPEN});
