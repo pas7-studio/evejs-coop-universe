@@ -27,7 +27,8 @@ function fixture(cb){
  const deps={
   './coopPersonalFleetOriginalSourceBindings':{createOriginalSourceBindings(){events.push('source');
    return {gameStore,access:{isOwner:()=>false},resolveOwnerCorporation:()=>1,
-    resolveOriginalDockContext:()=>null,resolveOriginalFollowTarget:()=>null};}},
+    resolveOriginalDockContext:()=>null,resolveOriginalFollowTarget:()=>null,
+    verifyServerReturnOwner:()=>false};}},
   './coopPersonalFleetOriginalDurableOrderAck':{createOriginalDurableOrderAck(args){events.push('order-ack');
    if(broken==='order-ack')throw Error('DURABLE_ACK_ORIGINAL_SOURCE_MISSING');
    assert.equal(args.enabled(),false);
@@ -42,6 +43,7 @@ function fixture(cb){
   './coopPersonalFleetOriginalStationTickDriver':{createOriginalStationTickDriver(args){
    events.push('station-tick-source');
    assert.equal(typeof args.stationDwell.sample,'function');
+   assert.equal(typeof args.advanceReturn,'function');
    assert.equal(args.enabled(),false);
    if(broken==='station-tick-source')throw Error('PF56_NATIVE_STATION_TICK_SOURCE_MISSING');
    return {start(){events.push('station-tick-start');
@@ -122,13 +124,14 @@ function fixture(cb){
   './coopPersonalFleetReturnDock':{createPersonalFleetReturnDock(args){events.push('return');
    assert.equal(args.enabled(),false);
    assert.equal(typeof args.verifyOriginalDockReceipt,'function');
+   assert.equal(typeof args.verifyServerReturnOwner,'function');
    assert.equal(typeof args.verifyStationArrival,'function');
    assert.equal(typeof args.verifyContinuousDwell,'function');
    assert.equal(typeof args.executeNativeReturn,'function');
    assert.notEqual(args.executeNativeReturn,hooks.executeNativeReturn);
    assert.equal(typeof args.executeNativeDock,'function');
    assert.notEqual(args.executeNativeDock,hooks.executeNativeDock);
-   return {requestReturn:()=>{},inspect:()=>{}};}},
+   return {requestReturn:()=>{},inspect:()=>{},advanceServer:()=>({status:'BLOCKED'})};}},
   './coopPersonalFleetNativeBootstrap':{createSourceBoundNativeBootstrap(args){events.push('PF58');
    assert.equal(args.enabled(),false);assert.equal(args.atomicOriginalTransfer,true);
    assert.equal(args.originalItemStore,stockItemStore);
@@ -158,7 +161,7 @@ const call=(f)=>f.api.createOriginalWorkBootstrap({originalHooks:f.hooks,authore
 test('composition builds original source owners and publishes chat LAST',()=>fixture(f=>{
  const b=call(f);assert.equal(b.status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.equal(b.getOperationalStatus().ready,true);
- assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','order-ack','physical-order','station-dwell','station-tick-source','orders','scoped-dock','terminal-sources','scoped-cleanup','terminal-custody','dock-coordinator','dock-witness','return','owner','PF58','chat','station-tick-start']);
+ assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','order-ack','physical-order','station-dwell','orders','scoped-dock','terminal-sources','scoped-cleanup','terminal-custody','dock-coordinator','dock-witness','return','station-tick-source','owner','PF58','chat','station-tick-start']);
 }));
 test('flags OFF after install prevent action even after previously ready',()=>fixture(f=>{
  const b=call(f);delete process.env.EVEJS_COOP_PERSONAL_FLEET_CHAT;
