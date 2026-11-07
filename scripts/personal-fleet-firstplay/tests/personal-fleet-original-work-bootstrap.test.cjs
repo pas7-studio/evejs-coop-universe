@@ -54,8 +54,14 @@ function fixture(cb){
    assert.equal(typeof args.resolveNativeSalary,'function');
    assert.equal(typeof args.notifyOriginalWallet,'function');
    assert.equal(typeof args.verifyNativeWreckLoss,'function');
-   return {salary:()=>({status:'DISABLED'}),dismiss:()=>({status:'DISABLED'}),
+   assert.equal(typeof args.serverPayrollCapability,'symbol');
+   return {salary:()=>({status:'DISABLED'}),salaryServer:()=>({status:'DISABLED'}),dismiss:()=>({status:'DISABLED'}),
     loss:()=>({status:'DISABLED'}),inspect:()=>({status:'DISABLED'})};}},
+  './coopPersonalFleetOriginalPayrollScheduler':{createOriginalPayrollScheduler(args){
+   assert.equal(args.enabled(),false);
+   assert.equal(typeof args.serverPayrollCapability,'symbol');
+   assert.equal(typeof args.lifecycle.salaryServer,'function');
+   return {tick:()=>({status:'PAYROLL_RECONCILED',due:0,applied:0})};}},
   './coopPersonalFleetOriginalPhysicalRecovery':{createOriginalPhysicalRecovery(args){
    assert.equal(args.enabled(),false);
    return {recover:()=>({status:'RECOVERY_OFF'})};}},
@@ -64,6 +70,7 @@ function fixture(cb){
    assert.equal(typeof args.stationDwell.sample,'function');
    assert.equal(typeof args.advanceReturn,'function');
    assert.equal(typeof args.recoverPhysical,'function');
+   assert.equal(typeof args.settlePayroll,'function');
    assert.equal(args.enabled(),false);
    if(broken==='station-tick-source')throw Error('PF56_NATIVE_STATION_TICK_SOURCE_MISSING');
    return {start(){events.push('station-tick-start');
