@@ -59,7 +59,7 @@ function fixture(fn) {
     stock, nativeEntity:null,nativeController:null,runtimeController:null,
     modules:[],cargo:[], sceneEntity:null,
     duplicateScene:false, manifest:row.manifest, manifestCalls:0};
-  const scene=()=>({getEntityByID:()=>state.sceneEntity});
+  const scene=()=>({systemID:row.systemID,getEntityByID:()=>state.sceneEntity});
   const scene2=()=>({getEntityByID:()=>state.duplicateScene?{itemID:50001}:null});
   const originals={
     '../services/inventory/itemStore':{findItemById:()=>state.stock},
@@ -143,6 +143,7 @@ const negative=[
  ['native cargo remains',f=>{f.state.cargo=[{cargoID:1001}]}],
  ['physical actor still in scene',f=>{f.state.sceneEntity={itemID:50001}}],
  ['duplicate physical actor another scene',f=>{f.state.duplicateScene=true}],
+ ['original system scene unmounted',f=>{f.originals['./runtime'].scenes.delete(f.row.systemID)}],
  ['fitting/cargo manifest changed',f=>{f.state.manifest={...f.state.manifest,cargoItemIDs:[111,999]}}],
  ['unknown item root',f=>{f.rows.delete('items\titems')}],
 ];
