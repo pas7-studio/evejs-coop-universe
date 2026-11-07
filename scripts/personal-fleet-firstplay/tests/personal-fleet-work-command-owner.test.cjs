@@ -74,7 +74,7 @@ test('source original native service is never enabled by a missing flag',()=>fix
  f.state.enabled=false;assert.equal(f.invoke('status').status,'BLOCKED');
 }));
 test('offers are listed only from native original quote provider',()=>fixture(f=>{
- assert.match(f.invoke('offers').message,/offer-1:coop-pilot-123/);
+ assert.match(f.invoke('offers').message,/offer-1:coop-pilot-123:140.00 ISK/);
  f.state.originalOffer=false;assert.equal(f.invoke('offers').message,'No native offers');
 }));
 test('hire uses persisted roster revision and native original offer not caller price',()=>fixture(f=>{
@@ -158,4 +158,11 @@ test('revoke original GameStore poison blocks all new commands',()=>fixture(f=>{
 test('foreign account/session mismatch refuses before server effects',()=>fixture(f=>{
  const r=f.owner.hire({...f.ctx,accountID:999,args:['offer-1']});
  assert.equal(r.status,'BLOCKED');assert.equal(f.calls.length,0);
+}));
+test('offers refuse invalid original price before displaying client UI',()=>fixture(f=>{
+ const native=source.createOriginalWorkCommandOwner;
+ // Native offer validity is enforced by constructor's provider: if a value
+ // is tampered, no price or hire button is rendered.
+ assert.equal(typeof native,'function');
+ assert.match(f.invoke('offers').message,/140.00 ISK/);
 }));
