@@ -1,0 +1,60 @@
+#Requires -Version 5.1
+# CONTRACT/WORK REVIEW ONLY. Does not enable, boot, deploy, or touch PLAY.
+[CmdletBinding()]
+param([string]$NativeCheckout='')
+Set-StrictMode -Version Latest
+$ErrorActionPreference='Stop'
+$root=(Resolve-Path -LiteralPath $PSScriptRoot).Path
+$node=(Get-Command node -ErrorAction Stop).Source
+$python=(Get-Command python -ErrorAction Stop).Source
+$major=[int](& $node -p "process.versions.node.split('.')[0]")
+if($LASTEXITCODE -ne 0 -or $major -lt 22){throw 'PF_FIRSTPLAY_NODE_22_REQUIRED'}
+& $python -c "import sys;assert sys.version_info >= (3,10)"
+if($LASTEXITCODE -ne 0){throw 'PF_FIRSTPLAY_PYTHON_310_REQUIRED'}
+$manifest=Join-Path $root 'SHA256SUMS.txt'
+if(-not(Test-Path -LiteralPath $manifest -PathType Leaf)){throw 'PF_FIRSTPLAY_MANIFEST_MISSING'}
+$expected=@(Get-Content -LiteralPath $manifest | Where-Object { $_.Trim() -ne '' })
+$actual=@()
+foreach($line in $expected){
+ if($line -notmatch '^([a-f0-9]{64})  (native|tests|tools)/[A-Za-z0-9._/-]+$'){
+  throw 'PF_FIRSTPLAY_MANIFEST_INVALID'
+ }
+ $name=$line.Substring(66)
+ $file=Join-Path $root $name
+ if(-not(Test-Path -LiteralPath $file -PathType Leaf)){throw ('PF_FIRSTPLAY_SOURCE_MISSING: '+$name)}
+ $src=[System.IO.File]::ReadAllText($file,[System.Text.Encoding]::UTF8).Replace(([string][char]13+[char]10),[string][char]10)
+ $sha=[System.Security.Cryptography.SHA256]::Create()
+ try{
+  $digest=[System.BitConverter]::ToString($sha.ComputeHash(
+   [System.Text.Encoding]::UTF8.GetBytes($src))).Replace('-','').ToLowerInvariant()
+ }finally{$sha.Dispose()}
+ $actual+=($digest+'  '+$name)
+}
+if(($expected -join [string][char]10) -cne ($actual -join [string][char]10)){
+ throw 'PF_FIRSTPLAY_TESTED_SOURCE_HASH_DRIFT'
+}
+$tests=Join-Path $root 'tests'
+$prior=[Environment]::GetEnvironmentVariable('PYTHONDONTWRITEBYTECODE','Process')
+try{
+ $env:PYTHONDONTWRITEBYTECODE='1'
+ & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-chat-gateway.test.cjs') (Join-Path $tests 'personal-fleet-work-command-owner.test.cjs')
+ if($LASTEXITCODE -ne 0){throw 'PF_FIRSTPLAY_NODE_TEST_FAILED'}
+ & $python -m unittest discover -s $tests -p 'test_*.py' -v
+ if($LASTEXITCODE -ne 0){throw 'PF_FIRSTPLAY_PYTHON_TEST_FAILED'}
+}finally{
+ [Environment]::SetEnvironmentVariable('PYTHONDONTWRITEBYTECODE',$prior,'Process')
+}
+if($NativeCheckout){
+ $native=(Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+ $nativeFile=Join-Path $native 'Code/server/src/services/chat/chatCommands.js'
+ if(-not(Test-Path -LiteralPath $nativeFile)){throw 'PF_FIRSTPLAY_NATIVE_CHAT_MISSING'}
+ $git=(Get-Command git -ErrorAction Stop).Source
+ $actualBlob=(& $git -C $native hash-object 'Code/server/src/services/chat/chatCommands.js').Trim()
+ if($LASTEXITCODE -ne 0 -or $actualBlob -cne '5f4dd4d34a398dde3120e8640a7058d2bd3bb038'){
+  throw 'PF_FIRSTPLAY_NATIVE_CHAT_SOURCE_PIN_DRIFT'
+ }
+ Write-Host 'Original EveJS chat source pin PASS (read-only).'
+}else{
+ Write-Warning 'Real native source pin NOT RUN: supply -NativeCheckout.'
+}
+Write-Host 'PF_FIRSTPLAY_80_CONTRACT_TESTS_PASS. WORK and client gameplay NOT RUN.'
