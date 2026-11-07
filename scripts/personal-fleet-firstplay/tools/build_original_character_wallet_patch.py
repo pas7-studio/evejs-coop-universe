@@ -42,6 +42,18 @@ MODULES={
  // whenever unrelated transient NPCs are active in the original GameStore.
  ("const result=atomic.transact([CHARACTERS,TABLE,'npcEntities'],tx=>{",
   "const result=atomic.transact([CHARACTERS,TABLE],tx=>{"),
+ ("const crypto = require('node:crypto');",
+  "const crypto = require('node:crypto');\nconst originalPayrollConsent=require('./coopPersonalFleetOriginalPayrollConsent');"),
+ ("   !ID(offer.expiresAtMs))return fail('PF53_NATIVE_OFFER_UNVERIFIED');",
+  "   !ID(offer.expiresAtMs)||!originalPayrollConsent.validOfferWage(offer))return fail('PF53_NATIVE_OFFER_UNVERIFIED');"),
+ ("    const paid={version:1,status:'PAID',operationID:command.operationID,",
+  "    const wageConsent=originalPayrollConsent.captureOfferWageConsent(offer,command,now);\n    if(!wageConsent||tx.get(TABLE,originalPayrollConsent.consentKey(command.operationID))!==null)\n      return fail('PF53_PAYROLL_CONSENT_UNVERIFIED_OR_ALREADY_USED');\n    const paid={version:1,status:'PAID',operationID:command.operationID,"),
+ ("      hireReceiptHash:hashReceipt,createdAtMs:now};",
+  "      hireReceiptHash:hashReceipt,createdAtMs:now,payrollConsent:wageConsent};"),
+ ("    tx.put(TABLE,paidKey(command.operationID),paid);",
+  "    tx.put(TABLE,paidKey(command.operationID),paid);\n    tx.put(TABLE,originalPayrollConsent.consentKey(command.operationID),wageConsent);"),
+ ("function verifyPaidReceipt(tx,receipt){",
+  "function verifyPaidReceipt(tx,receipt){\n if(!originalPayrollConsent.verifyPaidWageConsent(tx,receipt))return false;"),
 ],
 'coopPersonalFleetContractLifecycle.js':[
  ("    const rec=old.receipt,chars=tx.get(CHAR,CHAR),ch=chars?.[String(c.ownerCharacterID)],",
