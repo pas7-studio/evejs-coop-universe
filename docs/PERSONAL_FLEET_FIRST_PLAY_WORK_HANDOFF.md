@@ -315,3 +315,10 @@ not sufficient after crash), source-owned PF56 docking and a real authored
 SDE catalogue. Cloud GitHub write access to `pas7-studio/EveJS` still 403.
 Keep PR Draft, main and PLAY untouched and Personal Fleet disabled until
 native WORK E2E validates these facts.
+
+
+**2026-11-07 order patch assembler correction:** the assembled patch now
+rejects repeated stock paths explicitly, and includes the original arbiter
+source exactly once. Local final checks **216 Node + 26 Python = 242 PASS**;
+source/test manifest still 24 exact files. The complete 15-path patch has
+NOT yet run against the owner's original native WORK checkout.
