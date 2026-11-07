@@ -11,7 +11,10 @@ function f(){
  const assignmentID='as-123',pilotID='coop-pilot-123';
  const row={shipItemID:SHIP,ownerCharacterID:OWNER,systemID:SYSTEM,
   assignmentID,pilotID,generation:1,actorGeneration:1,typeID:606};
- const ship={...row,nativeNpc:true,entityID:SHIP,ownerID:OWNER,
+ const ship={...row,nativeNpc:true,nativeNpcOccupied:true,
+  npcEntityType:'personalFleet',entityType:'personalFleet',
+  operatorKind:'PERSONAL_FLEET',selectionKind:'PERSONAL_FLEET',
+  selectionID:assignmentID,entityID:SHIP,ownerID:OWNER,
   typeID:606,personalFleetOriginal:true,
   personalFleetAssignmentID:assignmentID,personalFleetPilotID:pilotID,
   personalFleetGeneration:1,transient:false};
@@ -44,7 +47,8 @@ function f(){
   './npc/nativeNpcService':{materializeStoredNativeController(scene,id){
     physicalCount++;
     if(materializeFailure)return {success:false,errorMsg:'UNKNOWN'};
-    scene.entities.set(id,{kind:'ship',itemID:id,nativeNpc:true,ownerID:liveOwner});
+    scene.entities.set(id,{...ship,kind:'ship',itemID:id,ownerID:liveOwner,
+     characterID:0,pilotCharacterID:0,session:null});
     controllers.set(id,{...controller,entityID:id,systemID:SYSTEM});
     return {success:true};
   }},
@@ -89,6 +93,11 @@ function f(){
   setLiveOwner:x=>liveOwner=x,authorizeIngress:()=>ingressAuthorized=true,
   ingressRestoreCount:()=>ingressRestores};
 }
+// PF101: exact physical presentation and controller markers authored by PF58.
+function liveShip(x){return {...x.ship,kind:'ship',itemID:SHIP,
+ characterID:0,pilotCharacterID:0,session:null,mode:'STOP'};}
+function liveController(x){return {...x.ship,runtimeKind:'nativeAmbient'};}
+
 test('PF90 does not create scenes or ships until genuine original scene loaded',()=>{
  const x=f(),a=x.recovery.recover();
  assert.equal(a.pending,1);assert.equal(x.getMaterializations(),0);
@@ -174,7 +183,7 @@ test('PF90 poisoned original GameStore blocks all recovery',()=>{
 
 test('PF90 recovers a single original NPC entity whose controller was not restored',()=>{
  const x=f();x.mount();
- x.scene.entities.set(SHIP,{kind:'ship',itemID:SHIP,nativeNpc:true,ownerID:OWNER,transient:false});
+ x.scene.entities.set(SHIP,liveShip(x));
  const result=x.recovery.recover();
  assert.equal(result.restored,1);
  assert.equal(x.getMaterializations(),1);
@@ -182,9 +191,7 @@ test('PF90 recovers a single original NPC entity whose controller was not restor
 });
 test('PF90 recovers the missing NPC actor with already authenticated native controller',()=>{
  const x=f();x.mount();
- x.controllers.set(SHIP,{entityID:SHIP,systemID:SYSTEM,
-  personalFleetOriginal:true,personalFleetAssignmentID:x.row.assignmentID,
-  personalFleetPilotID:x.row.pilotID,personalFleetGeneration:1});
+ x.controllers.set(SHIP,liveController(x));
  assert.equal(x.recovery.recover().restored,1);
  assert.equal(x.scene.getEntityByID(SHIP).itemID,SHIP);
  assert.equal(x.getMaterializations(),1);
@@ -201,12 +208,10 @@ test('PF90 rejects foreign matching-ID controller even when physical ship is pre
 });
 test('PF90 recognizes an already physically present original in-flight warp without replay',()=>{
  const x=f();x.mount();x.changeMode('WARP');x.authorizeIngress();
- x.scene.entities.set(SHIP,{kind:'ship',itemID:SHIP,nativeNpc:true,ownerID:OWNER,mode:'WARP',
+ x.scene.entities.set(SHIP,{...liveShip(x),mode:'WARP',
   sessionlessWarpIngress:{origin:{x:0,y:0,z:0},targetPoint:{x:100000,y:0,z:0},
    startTimeMs:1,travelCompleteAtMs:999999}});
- x.controllers.set(SHIP,{entityID:SHIP,systemID:SYSTEM,
-  personalFleetOriginal:true,personalFleetAssignmentID:x.row.assignmentID,
-  personalFleetPilotID:x.row.pilotID,personalFleetGeneration:1});
+ x.controllers.set(SHIP,liveController(x));
  assert.equal(x.recovery.recover().already,1);
  assert.equal(x.getMaterializations(),0);
 });
@@ -240,5 +245,64 @@ test('PF94 physical entity alone is not proof of resumed in-flight warp',()=>{
  x.scene.entities.set(SHIP,{kind:'ship',itemID:SHIP,nativeNpc:true,ownerID:OWNER});
  x.controllers.set(SHIP,{...x.ship,systemID:SYSTEM});
  assert.equal(x.recovery.recover().blocked,1);
+ assert.equal(x.getMaterializations(),0);
+});
+
+test('PF101 refuses a same-ID owner ship without the original PF58 actor markers',()=>{
+ const x=f();x.mount();
+ x.scene.entities.set(SHIP,{kind:'ship',itemID:SHIP,nativeNpc:true,
+   ownerID:OWNER,session:null});
+ x.controllers.set(SHIP,liveController(x));
+ const result=x.recovery.recover();
+ assert.equal(result.issues[0].reason,'PF90_EXISTING_SCENE_OR_CONTROLLER_CONFLICT');
+ assert.equal(x.getMaterializations(),0);
+});
+for(const [name,change] of [
+ ['native occupied bit',e=>{e.nativeNpcOccupied=false;}],
+ ['NPC entity type',e=>{e.npcEntityType='mining';}],
+ ['operator',e=>{e.operatorKind='WAR';}],
+ ['selection kind',e=>{e.selectionKind='WAR';}],
+ ['selection assignment',e=>{e.selectionID='other';}],
+ ['PF assignment',e=>{e.personalFleetAssignmentID='other';}],
+ ['PF pilot',e=>{e.personalFleetPilotID='coop-pilot-999';}],
+ ['PF generation',e=>{e.personalFleetGeneration=2;}],
+ ['player character',e=>{e.characterID=OWNER;}],
+ ['player pilot',e=>{e.pilotCharacterID=OWNER;}],
+ ['player session',e=>{e.session={};}],
+ ['foreign transient actor',e=>{e.transient=true;}],
+]){
+ test('PF101 rejects a scene actor with mismatched '+name,()=>{
+  const x=f();x.mount();const ship=liveShip(x);
+  change(ship);x.scene.entities.set(SHIP,ship);
+  x.controllers.set(SHIP,liveController(x));
+  const result=x.recovery.recover();
+  assert.equal(result.issues[0].reason,'PF90_EXISTING_SCENE_OR_CONTROLLER_CONFLICT');
+  assert.equal(x.getMaterializations(),0);
+ });
+}
+for(const [name,change] of [
+ ['NPC controller type',c=>{c.entityType='war';}],
+ ['controller operator',c=>{c.operatorKind='MINING';}],
+ ['controller selection',c=>{c.selectionID='other';}],
+ ['controller generation',c=>{c.personalFleetGeneration=9;}],
+ ['controller runtime type',c=>{c.runtimeKind='warCombat';}],
+ ['controller transient',c=>{c.transient=true;}],
+]){
+ test('PF101 rejects a resident controller with mismatched '+name,()=>{
+  const x=f();x.mount();
+  x.scene.entities.set(SHIP,liveShip(x));
+  const controller=liveController(x);change(controller);
+  x.controllers.set(SHIP,controller);
+  const result=x.recovery.recover();
+  assert.equal(result.issues[0].reason,'PF90_EXISTING_SCENE_OR_CONTROLLER_CONFLICT');
+  assert.equal(x.getMaterializations(),0);
+ });
+}
+test('PF101 accepts original nativeCombat controller as PF82 recovery continuity',()=>{
+ const x=f();x.mount();
+ x.scene.entities.set(SHIP,liveShip(x));
+ x.controllers.set(SHIP,{...liveController(x),runtimeKind:'nativeCombat'});
+ const r=x.recovery.recover();
+ assert.equal(r.already,1);
  assert.equal(x.getMaterializations(),0);
 });
