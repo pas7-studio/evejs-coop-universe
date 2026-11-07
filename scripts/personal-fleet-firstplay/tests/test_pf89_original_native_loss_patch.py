@@ -42,6 +42,15 @@ class Pf89OriginalLossNativePatchTest(unittest.TestCase):
   self.assertIn('captureOfferWageConsent(offer,command,now)',changed)
   self.assertIn('tx.put(TABLE,originalPayrollConsent.consentKey(command.operationID),wageConsent);',changed)
   self.assertIn('payrollConsent:wageConsent',changed)
+ def test_pf93_native_server_payroll_does_not_forge_player_login(self):
+  raw=(ROOT.parent/'pf57/native/coopPersonalFleetContractLifecycle.cjs').read_text(encoding='utf-8')
+  changed=m.transform('coopPersonalFleetContractLifecycle.js',raw)
+  self.assertIn('function salaryServer(c,capability)',changed)
+  self.assertIn("c.operationID!==originalPayrollConsent.salaryOperationID(c)",changed)
+  self.assertIn("return salaryInternal(c,true);",changed)
+  self.assertIn("function salary(c){return salaryInternal(c,false);}",changed)
+  self.assertIn("owner.accountId!==c.accountID",changed)
+  self.assertIn("typeof serverPayrollCapability!=='symbol'",changed)
  def test_unreviewed_root_reader_patch_drift_must_fail_closed(self):
   raw=ARCHIVE.read_text(encoding='utf-8')
   drift=raw.replace("tx.get('npcModules','npcModules')",
