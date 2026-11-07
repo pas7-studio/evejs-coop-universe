@@ -40,6 +40,15 @@ than blindly redispatching the original warp:
   stock materializer succeeds. Already-resumed valid ingress is idempotent.
   No original durable proof = **BLOCKED**, not an auto-generated warp.
 
+**PF53 direct-money-writer consent defense:** Also fixed a bypass left in
+PF92: the original PF53 source now rejects direct paid-hire invocations
+without `recurringSalaryAcknowledged === true`, and includes that bit in
+its source-owned operation signature. The native command owner supplies
+the bit only after parsing the explicit `accept-recurring` token.
+The original source-pinned build was rechecked: **32/32** exact native
+replacements (PF52 1, PF55 1, PF53 13, PF57 17) compile. PF92 consent
+regression now **15/15** in the controlled V8 harness.
+
 **Scope limitation:** This specifically covers PF56 in-progress **return to
 a station** with an unexpired, original native ingress snapshot. It does
 **not** yet resolve already-expired warps after a long server outage, or
@@ -50,7 +59,7 @@ blocking them is intentional to avoid moving a ship without physical proof.
 **Tests executed in a controlled mocked V8 harness:** ingress capture
 **14/14**, proof-driven source recovery **13/13**, PF90 source integration
 **23/23**, original PF55/PF56 post-effect SQLite-shaped ACK **32/32**
-(last full suite before the live-departure cache correction: 32/32).
+(including the live-departure correction).
 Actual original Node/SQLite, source installation and SIGKILL two-client
 gameplay tests are still required. `main` and `PLAY` remain unchanged;
 source feature flags remain OFF.
