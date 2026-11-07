@@ -121,7 +121,7 @@ test('missing native receipt is reported as unknown, not success',()=>fixture(f=
  assert.match(f.run('hold 2001').message,/outcome unavailable/);
 }));
 test('help is documented even before provider installation',()=>fixture(f=>{
- assert.match(f.run('help').message,/hire .*assign .*deploy .*follow .*hold .*return/);
+ assert.match(f.run('help').message,/hire .*assign .*deploy .*follow .*hold .*attack .*guard .*return/);
 }));
 test('PF91 salary chat requires one canonical named NPC pilot ID',()=>fixture(f=>{
  assert.equal(f.api.installServerAuthority(f.provider),true);
