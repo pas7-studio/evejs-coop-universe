@@ -6,6 +6,7 @@
  * fake authority callbacks or invented catalog entries.
  */
 const bootstrap=require('./coopPersonalFleetOriginalWorkBootstrap');
+const originalCatalogProof=require('./coopPersonalFleetOriginalCatalogProof');
 const STARTUP_SOURCE='ORIGINAL_EVEJS_PERSONAL_FLEET_STARTUP_V1';
 const truth=x=>x===true;
 let attempted=false;
@@ -39,6 +40,16 @@ function createOriginalWorkStarter({originalWorkConfiguration}={}){
   if(!Array.isArray(authoredSalaryPolicies)||authoredSalaryPolicies.length<1||
      authoredSalaryPolicies.length>12)
    throw Error('PF91_ORIGINAL_AUTHORED_NPC_SALARY_POLICIES_UNAVAILABLE');
+  // PF102 original SDE NPC, physical profile and corporation wallet readback
+  // MUST succeed before any native writer, chat authority or timer is installed.
+  // Authored JS catalogue entries alone never prove an actual hireable NPC.
+  const proof=originalCatalogProof.verifyOriginalCatalogAndWages(
+   authoredCatalog,authoredSalaryPolicies);
+  if(proof?.verified!==true||
+     proof.source!=='ORIGINAL_EVEJS_PF102_CATALOG_PREFLIGHT_V1'||
+     proof.npcCount!==authoredCatalog.length)
+   throw Error('PF102_ORIGINAL_CATALOG_PREFLIGHT_FAILED: '+
+    String(proof?.reason||'UNVERIFIED_SOURCE'));
   const originalHooks=originalWorkConfiguration.createNativeWriterHooks();
   if(!originalHooks||
      originalHooks.source!=='ORIGINAL_EVEJS_PERSONAL_FLEET_BOOT_OWNER_V1'||
