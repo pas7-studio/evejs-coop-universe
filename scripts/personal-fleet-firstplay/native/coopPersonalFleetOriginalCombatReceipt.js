@@ -20,7 +20,7 @@ const token=x=>typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x
 const sha=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const bad=reason=>({success:false,errorMsg:reason});
 function matches(row){
- return obj(row)&&row.version===1&&row.phase==='ISSUING'&&
+ return obj(row)&&row.version===1&&['ISSUING','ACKED'].includes(row.phase)&&
   ['ATTACK','DEFEND'].includes(row.action)&&
   token(row.operationID)&&token(row.assignmentID)&&
   /^coop-pilot-[0-9]{3,}$/.test(row.pilotID)&&
@@ -82,7 +82,7 @@ function createOriginalCombatReceipt({combatAuthority,orderWitness,
   return {ship,controller,manual,mode,effect};
  }
  function recordAfterEffect(row){
-  if(!on()||!matches(row))return bad('PF95_COMBAT_SOURCE_NOT_VALID');
+  if(!on()||!matches(row)||row.phase!=='ISSUING')return bad('PF95_COMBAT_SOURCE_NOT_VALID');
   try{return atomic.transact([T,NE,NC,CH,ITEMS],tx=>{
    const issued=tx.get(T,pf55.key(row.shipItemID)),
      ix=tx.get(T,F+'manual-order-operations-v1'),
