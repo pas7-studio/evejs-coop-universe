@@ -8,6 +8,7 @@
  */
 const gameStore=require('../gameStore');
 const pf56=require('./coopPersonalFleetReturnDock');
+const terminal=require('./coopPersonalFleetTerminalCustody');
 const T='corporationRuntime',MAX_OPEN=32,INTERVAL_MS=100;
 const positive=x=>Number.isSafeInteger(x)&&x>0;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -19,6 +20,7 @@ function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF5
  if(atomic?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof atomic.transact!=='function'||
     typeof atomic.isPoisoned!=='function'||
     typeof pf56.key!=='function'||typeof pf56.signature!=='function'||
+    typeof terminal.terminalKey!=='function'||
     typeof stationDwell?.sample!=='function'||
     [advanceReturn,enabled,allWritersFenced,scheduler?.setInterval,scheduler?.clearInterval].some(f=>typeof f!=='function'))
   throw Error('PF56_ORIGINAL_STATION_NATIVE_TICK_SOURCE_REQUIRED');
@@ -45,7 +47,16 @@ function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF5
       if(!positive(r.stationID)||!positive(r.systemID)||!positive(r.shipItemID))return null;
       rows.push(structuredClone(r));
       if(rows.length>MAX_OPEN)return null;
-    }else if(r.phase!=='DOCKED')return null;
+    }else if(r.phase==='DOCKED'){
+      // A crash after PF56 DOCKED but before PF60 finalize must not strand
+      // the physical hull's terminal lock forever. Never redispatch a dock.
+      const final=tx.get(T,terminal.terminalKey(r.assignmentID));
+      if(!obj(final)||!['NATIVE_CLEARED','FINALIZED'].includes(final.phase))return null;
+      if(final.phase==='NATIVE_CLEARED'){
+       rows.push(structuredClone(r));
+       if(rows.length>MAX_OPEN)return null;
+      }
+    }else return null;
    }
    return rows;
   });
