@@ -27,12 +27,14 @@ const originalOrderExecutor=require('./coopPersonalFleetOriginalOrderExecutor');
 const originalStationDwell=require('./coopPersonalFleetOriginalStationDwell');
 const originalStationTickDriver=require('./coopPersonalFleetOriginalStationTickDriver');
 const originalPhysicalRecovery=require('./coopPersonalFleetOriginalPhysicalRecovery');
+const originalSalaryTerms=require('./coopPersonalFleetOriginalSalaryTerms');
 const chat=require('./coopPersonalFleetChatGateway');
 const pf52=require('./coopPersonalFleetHangarBridge');
 const pf53=require('./coopPersonalFleetPaidHiring');
 const pf54=require('./coopPersonalFleetOriginalDeployment');
 const pf55=require('./coopPersonalFleetNativeOrders');
 const pf56=require('./coopPersonalFleetReturnDock');
+const pf57=require('./coopPersonalFleetContractLifecycle');
 const pf58=require('./coopPersonalFleetNativeBootstrap');
 const stockItemStore=require('../services/inventory/itemStore');
 const originalNpcStore=require('./npc/nativeNpcStore');
@@ -53,6 +55,7 @@ const HOOKS=Object.freeze([
  'verifyOriginalManifest','verifyFinalOriginalManifest',
  'verifyOriginalDockedPlayerSession',
  'readOriginalWarShipClaim',
+ 'verifyNativeWreckLoss','verifyWreckAssetCustody','verifyNoCompetingOrders',
 ]);
 let booted=false;
 let attempted=false;
@@ -99,10 +102,12 @@ function assertReadiness(hooks,original){
     hooks.allWalletWritersFenced()!==true)
   throw Error('PF_FIRSTPLAY_ORIGINAL_WRITER_HOOKS_NOT_INSTALLED');
 }
-function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
+function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,originalHooks}={}){
  if(booted||attempted||startupInProgress)throw Error('PF_FIRSTPLAY_ALREADY_BOOTED_OR_FAILED_STICKY');
  if(!Array.isArray(authoredCatalog)||authoredCatalog.length===0)
   throw Error('PF_FIRSTPLAY_REAL_NPC_CATALOG_EMPTY');
+ if(!Array.isArray(authoredSalaryPolicies)||authoredSalaryPolicies.length===0)
+  throw Error('PF91_AUTHORED_NPC_SALARY_POLICY_REQUIRED');
  assertSourceHooks(originalHooks);
  // A failed PF58 singleton/chat publication is not safe to retry in-process.
  attempted=true;
@@ -253,13 +258,29 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
       }
       return result;
     }});
-  // First-play excludes recurring PF57 salary / dismiss until its ORIGINAL
-  // wallet, loss and contract hook owners are present. The public command
-  // conductor returns a blocked response for dismiss rather than a fake ACK.
-  const dismissal=Object.freeze({dismiss:()=>({status:'BLOCKED',
-    reason:'PF_FIRSTPLAY_DISMISS_REQUIRES_ORIGINAL_PF57_NATIVE_HOOKS'})});
+  // PF91 server-authored price and due schedule from the actual PF53 hire.
+  // The user never submits a price, issuer, payroll policy or wallet proof.
+  const salaryTerms=originalSalaryTerms.createOriginalSalaryTerms({
+    authoredPolicies:authoredSalaryPolicies,enabled,
+    allWritersFenced:originalHooks.allWritersFenced});
+  const lifecycle=pf57.createPersonalFleetContractLifecycle({gameStore,pf52,pf53,
+    claimsPolicy:originalHooks.claimsPolicy,access,
+    resolveOriginalHire:salaryTerms.readOriginalHire,
+    resolveNativeSalary:salaryTerms.resolveNativeSalary,
+    verifyOriginalNpcService:salaryTerms.verifyOriginalNpcService,
+    verifyNativeEmployer:salaryTerms.verifyNativeEmployer,
+    verifyNativePilotReleased:salaryTerms.verifyNativePilotReleased,
+    verifyDismissalSettlement:salaryTerms.verifyDismissalSettlement,
+    verifyJournalID:wallet.verifyJournalID,
+    originalTransactionID:wallet.originalTransactionID,
+    notifyOriginalWallet:wallet.notifyOriginalSalaryWallet,
+    verifyNativeWreckLoss:originalHooks.verifyNativeWreckLoss,
+    verifyWreckAssetCustody:originalHooks.verifyWreckAssetCustody,
+    verifyNoCompetingOrders:originalHooks.verifyNoCompetingOrders,
+    verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
+    allWritersFenced:originalHooks.allWritersFenced,enabled});
   const commandOwner=commands.createOriginalWorkCommandOwner({gameStore,pf52,
-    hangar,pf53:paid,pf54:deploy,pf55:orders,pf56:returnDock,pf57:dismissal,
+    hangar,pf53:paid,pf54:deploy,pf55:orders,pf56:returnDock,pf57:lifecycle,
     listNativeOffers:offer.listNativeOffers,
     lookupNativeOffer:offer.lookupNativeOffer,
     verifyNativePilotHull:offer.verifyHiredPilotHull,
@@ -294,6 +315,7 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     mayEnable:enabled,originalHandoff:nativeHandoff,
     // Only trusted original WORK startup may call these; never publish in /pf.
     originalDockCoordinator:dockCoordinator,
+    originalContractLifecycle:lifecycle,
     // Server-internal tick entry only: requires the original return intent;
     // it is not an in-game, chat or HTTP command handler.
     sampleOriginalStationDwell:stationDwell.sample,
