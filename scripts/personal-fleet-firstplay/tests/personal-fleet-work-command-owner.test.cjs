@@ -57,7 +57,8 @@ function fixture(callback){
   salary:c=>{record('salary',c);return {status:'APPLIED',periodIndex:c.periodIndex};}};
  const lookupNativeOffer=()=>state.originalOffer?{offerID:'offer-1',revision:1,pilotID:PILOT,
   ownerCharacterID:CHAR,contractID:'contract-1',agentID:200,employerCorpID:1000120,
-  amountCents:14000,expiresAtMs:Date.now()+900000}:null;
+  amountCents:14000,salaryConsentRequired:true,salaryCents:2750,
+  periodMs:86400000,expiresAtMs:Date.now()+900000}:null;
  const owner=source.createOriginalWorkCommandOwner({gameStore:{coopAtomicNativeRows:atomic},pf52,hangar,pf53,pf54,pf55,pf56,pf57,
   enabled:()=>state.enabled,listNativeOffers:()=>[lookupNativeOffer()].filter(Boolean),lookupNativeOffer,
   verifyNativePilotHull:({shipTypeID})=>state.pilotHull&&shipTypeID===606,
@@ -209,4 +210,9 @@ test('PF91 corrupted original salary period blocks all wallet writes',()=>fixtur
  f.invoke('hire',['offer-1']);f.state.salaryInspected={status:'OK',contract:{lastPeriod:NaN}};
  assert.equal(f.invoke('salary',[PILOT]).status,'BLOCKED');
  assert.equal(f.calls.filter(x=>x.name==='salary').length,0);
+}));
+test('PF92 player sees recurring NPC salary and explicit recurrence before paid hire',()=>fixture(f=>{
+ const r=f.invoke('offers');
+ assert.match(r.message,/140.00 ISK hire/);
+ assert.match(r.message,/27.50 ISK salary every 24h/);
 }));
