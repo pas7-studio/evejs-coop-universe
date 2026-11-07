@@ -15,7 +15,8 @@ const hooksList=['verifyOriginalWriterHooks','allWritersFenced','allWalletWriter
  'verifyFinalOriginalManifest',
  'verifyOriginalDockedPlayerSession','readOriginalWarShipClaim'];
 function fixture(cb){
- const flags=['EVEJS_COOP_PERSONAL_FLEET_NATIVE','EVEJS_COOP_PERSONAL_FLEET_CHAT','EVEJS_COOP_NATIVE_ATOMIC_ROWS'];
+ const flags=['EVEJS_COOP_PERSONAL_FLEET_NATIVE','EVEJS_COOP_PERSONAL_FLEET_CHAT','EVEJS_COOP_NATIVE_ATOMIC_ROWS',
+  'EVEJS_COOP_PERSONAL_FLEET_ENTITY_ISOLATION'];
  const prior=flags.map(k=>[k,process.env[k]]);for(const k of flags)process.env[k]='1';
  const events=[];const supplied={};const hooks={source:'ORIGINAL_EVEJS_PERSONAL_FLEET_BOOT_OWNER_V1',
    claimsPolicy:{KEY:'coop-personal-fleet\u001factor-claims-v1',validate:x=>x,empty:()=>({})},
@@ -357,4 +358,10 @@ test('failed native station timer never permits a second PF58/chat install',()=>
  f.setBroken('station-tick-start');assert.throws(()=>call(f),/STATION_TIMER_START_FAILED/);
  assert.equal(f.events.at(-2),'chat');
  assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
+}));
+
+test('PF87 disabled scoped SQLite source flag must disable physical Personal Fleet',()=>fixture(f=>{
+ const b=call(f);delete process.env.EVEJS_COOP_PERSONAL_FLEET_ENTITY_ISOLATION;
+ assert.equal(b.mayEnable(),false);
+ assert.equal(b.getOperationalStatus().ready,false);
 }));
