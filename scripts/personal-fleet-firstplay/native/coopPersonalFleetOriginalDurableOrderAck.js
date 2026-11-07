@@ -20,6 +20,7 @@ const registry=require('./npc/npcRegistry');
 const originalNpcStore=require('./npc/nativeNpcStore');
 const pf55=require('./coopPersonalFleetNativeOrders');
 const pf56=require('./coopPersonalFleetReturnDock');
+const ingressProof=require('./coopPersonalFleetOriginalIngressProof');
 const worldData=require('./worldData');
 const T='corporationRuntime', NE='npcEntities', ITEMS='items',CH='characters';
 const F='coop-personal-fleet\u001f',RECEIPT=F+'native-order-receipt-v1:',
@@ -273,6 +274,8 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
     return result(false,'PF56_RETURN_ORIGINAL_WARP_NOT_OBSERVED');
    const timestamp=clock();
    if(!pos(timestamp))return result(false,'PF56_RETURN_DURABLE_CLOCK_INVALID');
+   const ingress=ingressProof.captureOriginalReturnIngress(row,physical,timestamp);
+   if(!ingress)return result(false,'PF94_REAL_NATIVE_RETURN_INGRESS_NOT_PROVEN');
    const marker={version:1,operationID:row.operationID,
     signature:row.signature,assignmentID:row.assignmentID,
     ownerCharacterID:row.ownerCharacterID,pilotID:row.pilotID,
@@ -281,9 +284,11 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
     requestedByAccountID:row.requestedByAccountID,
     committedAtMs:timestamp};
    tx.put(NE,entityKey(row.shipItemID),
-    {...physical.stored,personalFleetReturnOrder:marker});
+    {...physical.stored,mode:'WARP',targetPoint:{...ingress.targetPoint},
+     personalFleetReturnOrder:marker,personalFleetReturnIngress:ingress});
    tx.put(T,RETURN_RECEIPT+row.operationID,
-    {...marker,source:'EVEJS_ORIGINAL_NATIVE_RETURN_COMMITTED_V1'});
+    {...marker,source:'EVEJS_ORIGINAL_NATIVE_RETURN_COMMITTED_V1',
+     ingressHash:ingress.hash});
    return {success:true,operationID:row.operationID,
     status:'ORIGINAL_NATIVE_RETURN_ORDER_DURABLE'};
   },{contract:'personal-fleet-entity-receipt-v1',shipItemID:row.shipItemID,
@@ -297,7 +302,8 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
     ops=tx.get(T,pf56.OPS),
     stamp=tx.get(T,RETURN_RECEIPT+row.operationID),
     stored=tx.get(NE,entityKey(row.shipItemID)),
-    marker=stored?.personalFleetReturnOrder;
+    marker=stored?.personalFleetReturnOrder,
+    ingress=stored?.personalFleetReturnIngress;
    if(!obj(saved)||saved.operationID!==row.operationID||
     saved.signature!==row.signature||saved.phase!=='RETURN_ISSUING'||
     ops?.operations?.[row.operationID]?.signature!==row.signature||
@@ -309,6 +315,8 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
      'requestedByAccountID','committedAtMs'].some(k=>
       stamp[k]!==row[k]&&k!=='committedAtMs'||stamp[k]!==marker[k])||
     !pos(stamp.committedAtMs)||!pos(marker.committedAtMs)||
+    stamp.ingressHash!==ingress?.hash||
+    ingressProof.verifySnapshot(row,ingress,stored)!==true||
     orderWitness.verifyNativeActor(row,tx)!==true)
     return null;
    const character=tx.get(CH,String(row.ownerCharacterID));
