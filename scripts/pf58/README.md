@@ -263,3 +263,23 @@ the exact original source blob and checks/executes the candidate
 patch **only on a temporary copy** with real Node SQLite. See
 `scripts/pf95/PF95_NATIVE_GAMESTORE_OWNER_HANDOFF.md`.
 The original fork remains unmodified and Personal Fleet OFF.
+
+## PF97 exact original CharacterState / ItemStore owner boundary
+
+The original `characterState.writeCharacterRecord` is the shared
+writer for wallet/profile updates, read-side normalization and
+`ItemStore.syncCharacterActiveShip`. The latter's lazy active-hull
+path can provision or repair a physical ship before the character
+writer acknowledges it. PF97 adds two **review-only**, source-pinned
+native diffs. With `EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS=1`,
+all original non-ship character updates use a one-row atomic
+GameStore transaction with an exact before-image; protected ship
+identity updates, row deletion, stock ship activation and lazy
+ItemStore provisioning fail closed until real PF91/PF92 owner hooks
+exist. With the flag OFF, original behavior remains intact.
+
+PF58's optional `-NativeCheckout` test flow now validates both
+original files and checks the diff on disposable source copies;
+it never installs the patches. This is **not** playable Personal
+Fleet integration. See
+`scripts/pf97/PF97_ORIGINAL_CHARACTER_ITEMSTORE_OWNER_HANDOFF.md`.
