@@ -11,7 +11,7 @@ function fixture(callback){
  const state={poisoned:false,live:true,duplicate:false,station:true,structure:false,validStation:true,scene:true,entity:true};
  const session={characterID:OWNER,charid:OWNER,userid:55,socket:{destroyed:false},stationid:STATION,
   shipid:SHIP,_space:{initialStateSent:true,systemID:SYSTEM,shipID:SHIP}};
- const char={characterID:OWNER,accountId:55,shipID:SHIP,stationID:STATION};
+ const char={characterID:OWNER,accountId:55,shipID:SHIP,stationID:STATION,corporationID:1000035};
  const item={itemID:SHIP,ownerID:OWNER,locationID:SYSTEM,categoryID:6,flagID:0};
  put('characters',String(OWNER),char);put('items','items',{[SHIP]:item});
  const atomic={mode:'SERVER_INTERNAL_FLAGGED',isPoisoned:()=>state.poisoned,
@@ -27,6 +27,7 @@ function fixture(callback){
    '../services/chat/sessionRegistry':registry,
    '../services/structure/structureLocation':location,
    '../services/_shared/stationStaticData':stations,
+   '../services/corporation/corporationState':{getCorporationRecord:id=>id===1000035?{corporationID:id}:null},
    './runtime':space};
   if(!Object.prototype.hasOwnProperty.call(all,n))throw Error('UNTRUSTED_IMPORT:'+n);
   return all[n];};
@@ -41,7 +42,8 @@ function fixture(callback){
 }
 test('native source only imports original EveJS GameStore, sessions, docking and scene',()=>fixture(f=>{
  assert.deepEqual(f.paths,['../gameStore','../services/chat/sessionRegistry',
-  '../services/structure/structureLocation','../services/_shared/stationStaticData','./runtime']);
+  '../services/structure/structureLocation','../services/_shared/stationStaticData',
+  '../services/corporation/corporationState','./runtime']);
 }));
 test('original live session, account and current original character row accept',()=>fixture(f=>{
  assert.equal(f.auth(),true);
@@ -106,4 +108,11 @@ test('space follow refuses destroyed or changed original active ship',()=>fixtur
 test('foreign character cannot assume another player dock/source target',()=>fixture(f=>{
  assert.equal(f.bound.access.isOwner(f.session,OWNER+1),false);
  assert.equal(f.bound.resolveOriginalDockContext(f.session,OWNER+1),null);
+}));
+test('original PF58 native actor owner corporation comes from durable character and static corporation',()=>fixture(f=>{
+ assert.equal(f.bound.resolveOwnerCorporation(OWNER),1000035);
+}));
+test('original PF58 source refuses missing or fabricated corporation ownership',()=>fixture(f=>{
+ f.put('characters',String(OWNER),{...f.char,corporationID:999});
+ assert.equal(f.bound.resolveOwnerCorporation(OWNER),null);
 }));
