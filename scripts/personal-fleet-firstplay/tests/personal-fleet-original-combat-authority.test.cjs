@@ -15,6 +15,7 @@ function fixture(fn,{action='ATTACK'}={}){
  const ctrl={entityID:SHIP,systemID:SYSTEM,personalFleetOriginal:true,
   personalFleetAssignmentID:row.assignmentID,personalFleetPilotID:row.pilotID};
  const stock={...ctrl,ownerID:OWNER};
+ const targetCtrl={entityID:TARGET,systemID:SYSTEM,operatorKind:'RAID'};
  const dep={phase:'ACTIVE',shipItemID:SHIP,ownerCharacterID:OWNER,actorGeneration:2};
  const values={
   [T]:{
@@ -31,7 +32,8 @@ function fixture(fn,{action='ATTACK'}={}){
     transact:()=>{throw Error('NO_ADHOC_TRANSACTIONS_EXPECTED')},
     isPoisoned:()=>poison}},
   './runtime':{scenes:new Map([[SYSTEM,scene]])},
-  './npc/npcRegistry':{getControllerByEntityID:id=>id===SHIP?ctrl:null},
+  './npc/npcRegistry':{getControllerByEntityID:id=>id===SHIP?ctrl:
+    id===TARGET?targetCtrl:null},
   './npc/nativeNpcStore':{getNativeEntity:()=>stock,getNativeController:()=>stock},
   './npc/npcBehaviorLoop':{__testing:{isValidCombatTarget:()=>allowed}},
   './coopPersonalFleetOriginalGuardAggression':{read:()=>null},
@@ -45,7 +47,7 @@ function fixture(fn,{action='ATTACK'}={}){
  const owner=m.exports.createOriginalCombatAuthority({
   enabled:()=>enabled,allWritersFenced:()=>fenced});
  const tx={get:(table,key)=>values[table]?.[key]??null};
- fn({owner,row,tx,live,target,scene,ctrl,stock,dep,values,denyTarget:()=>allowed=false,
+ fn({owner,row,tx,live,target,scene,ctrl,stock,targetCtrl,dep,values,denyTarget:()=>allowed=false,
   disable:()=>enabled=false,unfence:()=>fenced=false,poison:()=>poison=true});
 }
 test('PF95 genuine stock-legal PvE native target is accepted',()=>fixture(f=>{
@@ -76,4 +78,21 @@ test('PF95 revoked writer gate blocks all combat',()=>fixture(f=>{
 }));
 test('PF95 a target already in warp is not a legal attack',()=>fixture(f=>{
  f.target.mode='WARP';assert.equal(f.owner.verify(f.row,f.tx),false);
+}));
+
+test('PF97 cannot fire on another original WAR, MINING or GATE director even if stock legality is broad',()=>fixture(f=>{
+ for(const forbidden of ['WAR','MINING','GATE','PATROL','EXPEDITION','CONCORD']){
+  f.targetCtrl.operatorKind=forbidden;
+  assert.equal(f.owner.verify(f.row,f.tx),false,forbidden);
+ }
+ f.targetCtrl.operatorKind='RAID';
+ assert.equal(f.owner.verify(f.row,f.tx),true);
+}));
+test('PF97 refuses same-corporation native NPC even under permissive original combat profile',()=>fixture(f=>{
+ f.live.corporationID=12345;f.target.corporationID=12345;
+ assert.equal(f.owner.verify(f.row,f.tx),false);
+}));
+test('PF97 unknown or replaced target native controller is no authority to attack',()=>fixture(f=>{
+ f.targetCtrl.systemID=30000143;
+ assert.equal(f.owner.verify(f.row,f.tx),false);
 }));
