@@ -3,7 +3,8 @@
  * Actual source-owned Node/SQLite station monitor scheduler for original EveJS.
  * Polls ONLY already-issued, validated PF56 return intents and invokes the
  * original station dwell witness on a 100ms unref'd native server timer.
- * Never requests a return, docks an item, or uses a player session.
+ * May advance an EXISTING durable PF56 order via its server-only authority.
+ * Never requests a new return, forges a player session, or blindly retries.
  */
 const gameStore=require('../gameStore');
 const pf56=require('./coopPersonalFleetReturnDock');
@@ -12,14 +13,14 @@ const positive=x=>Number.isSafeInteger(x)&&x>0;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const token=x=>typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x);
 const no=reason=>Object.freeze({status:'BLOCKED',reason});
-function createOriginalStationTickDriver({stationDwell,enabled=()=>false,
+function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF56_SERVER_CONTINUATION_NOT_INSTALLED'),enabled=()=>false,
  allWritersFenced=()=>false,scheduler={setInterval,clearInterval}}={}){
  const atomic=gameStore?.coopAtomicNativeRows;
  if(atomic?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof atomic.transact!=='function'||
     typeof atomic.isPoisoned!=='function'||
     typeof pf56.key!=='function'||typeof pf56.signature!=='function'||
     typeof stationDwell?.sample!=='function'||
-    [enabled,allWritersFenced,scheduler?.setInterval,scheduler?.clearInterval].some(f=>typeof f!=='function'))
+    [advanceReturn,enabled,allWritersFenced,scheduler?.setInterval,scheduler?.clearInterval].some(f=>typeof f!=='function'))
   throw Error('PF56_ORIGINAL_STATION_NATIVE_TICK_SOURCE_REQUIRED');
  let handle=null,busy=false,started=false;
  const live=()=>enabled()===true&&allWritersFenced()===true&&atomic.isPoisoned()===false;
@@ -37,14 +38,14 @@ function createOriginalStationTickDriver({stationDwell,enabled=()=>false,
     seen.add(entry.assignmentID);
     const r=tx.get(T,pf56.key(entry.assignmentID));
     if(r===undefined)return null;
-    if(r===null)continue;
+    if(r===null)return null; // A committed index without its return row is corrupt.
     if(!obj(r)||r.assignmentID!==entry.assignmentID||r.operationID!==op||
        r.signature!==entry.signature||r.signature!==pf56.signature(r))return null;
-    if(['RETURNING','ARRIVAL_OBSERVED'].includes(r.phase)){
+    if(['RETURN_ISSUING','RETURNING','ARRIVAL_OBSERVED','DOCK_ISSUING'].includes(r.phase)){
       if(!positive(r.stationID)||!positive(r.systemID)||!positive(r.shipItemID))return null;
       rows.push(structuredClone(r));
       if(rows.length>MAX_OPEN)return null;
-    }else if(!['RETURN_ISSUING','DOCK_ISSUING','DOCKED'].includes(r.phase))return null;
+    }else if(r.phase!=='DOCKED')return null;
    }
    return rows;
   });
@@ -56,15 +57,22 @@ function createOriginalStationTickDriver({stationDwell,enabled=()=>false,
   try{
    const rows=openReturns();
    if(!Array.isArray(rows))return no('PF56_MONITOR_ORIGINAL_RETURN_ROWS_UNCERTAIN');
-   let observed=0,blocked=0;
+   let observed=0,blocked=0,advanced=0,pending=0;
    for(const row of rows){
     if(!live())return no('PF56_MONITOR_GATE_REVOKED');
-    let status;
-    try{status=stationDwell.sample(row);}catch{status=null;}
-    if(status?.status==='OBSERVED'||status?.status==='UNCHANGED')observed++;
-    else blocked++;
+    if(['RETURNING','ARRIVAL_OBSERVED'].includes(row.phase)){
+     let sampled;
+     try{sampled=stationDwell.sample(row);}catch{sampled=null;}
+     if(sampled?.status==='OBSERVED'||sampled?.status==='UNCHANGED')observed++;
+     else blocked++;
+    }
+    if(!live())return no('PF56_MONITOR_GATE_REVOKED');
+    let result;
+    try{result=advanceReturn(row);}catch{result=null;}
+    if(['RETURNING','ARRIVAL_OBSERVED','DOCKED','ALREADY_DOCKED'].includes(result?.status))advanced++;
+    else pending++;
    }
-   return {status:'SAMPLED',active:rows.length,observed,blocked};
+   return {status:'SAMPLED',active:rows.length,observed,blocked,advanced,pending};
   }catch{return no('PF56_MONITOR_SQLITE_OR_SOURCE_UNCERTAIN');}
   finally{busy=false;}
  }
