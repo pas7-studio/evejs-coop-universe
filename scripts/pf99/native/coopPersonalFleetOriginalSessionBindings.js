@@ -11,19 +11,33 @@
  */
 const permit=require('./coopPersonalFleetOriginalNativePermit.cjs');
 const source=require('./coopPersonalFleetOriginalSessionWitness.js');
+const nativeEnabled=()=>process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS==='1';
+const disabled=()=>Object.freeze({
+ status:'BLOCKED',reason:'PF99_NATIVE_SESSION_OWNER_DISABLED',mayCommit:false
+});
 
 function createSourceBoundPlayerShipActivation({
  gameStore,pf52,enabled=()=>false,allWritersFenced=()=>false
 }={}){
- return permit.createOriginalPlayerShipActivation({
-  gameStore,pf52,enabled,allWritersFenced,
+ const activation=permit.createOriginalPlayerShipActivation({
+  gameStore,pf52,enabled:()=>nativeEnabled()&&enabled()===true,
+  allWritersFenced,
   verifyOriginalDockedPlayerSession:source.verifyOriginalDockedPlayerSession
+ });
+ return Object.freeze({
+  activate:request=>nativeEnabled()?activation.activate(request):disabled()
  });
 }
 
 function createSourceBoundCharacterRecordWriteBarrier({pf52}={}){
- return permit.createOriginalCharacterRecordWriteBarrier({
+ const barrier=permit.createOriginalCharacterRecordWriteBarrier({
   pf52,verifyOriginalSessionLease:source.verifyOriginalSessionLease
+ });
+ return Object.freeze({
+  inTransaction:request=>{
+   if(!nativeEnabled())throw Error('PF99_NATIVE_SESSION_OWNER_DISABLED');
+   return barrier.inTransaction(request);
+  }
  });
 }
 
