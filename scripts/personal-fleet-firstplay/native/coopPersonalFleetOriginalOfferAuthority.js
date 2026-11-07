@@ -24,9 +24,9 @@ const sha=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const clone=x=>structuredClone(x);
 const key=offerID=>PREFIX+offerID;
 function validCatalogEntry(r){
- return OBJ(r)&&POS(r.npcCharacterID)&&POS(r.employerCorpID)&&
+ return OBJ(r)&&POS(r.npcCharacterID)&&POS(r.employerCorpID)&&POS(r.shipTypeID)&&
    PROFILE.test(r.profileID)&&POS(r.amountCents)&&r.amountCents<=1000000000000&&
-   Object.keys(r).every(x=>['npcCharacterID','employerCorpID','profileID','amountCents'].includes(x));
+   Object.keys(r).every(x=>['npcCharacterID','employerCorpID','profileID','shipTypeID','amountCents'].includes(x));
 }
 function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
  originalNpcCharacters,originalNpcData,originalCorporations,
@@ -65,6 +65,7 @@ function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
      character.typeID!==1373||typeof character.ownerName!=='string'||
      character.ownerName.length<2||character.ownerName.startsWith('Entity ')||
      !OBJ(definition)||definition.profile?.profileID!==entry.profileID||
+     definition.profile?.shipTypeID!==entry.shipTypeID||
      !OBJ(definition.loadout)||!OBJ(definition.behaviorProfile)||
      !OBJ(corporation)||corporation.corporationID!==entry.employerCorpID||
      corporation.isNPC!==true||
@@ -73,7 +74,7 @@ function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
      !OBJ(division)||!Number.isFinite(division.balance)||division.balance<0||
      !Array.isArray(division.journal)||!Array.isArray(division.transactions))return null;
   return sha(['ORIGINAL_EVEJS_NPC_CATALOG_V1',entry.npcCharacterID,character.ownerName,
-    entry.profileID,definition.profile.loadoutID,definition.profile.behaviorProfileID,
+    entry.profileID,entry.shipTypeID,definition.profile.loadoutID,definition.profile.behaviorProfileID,
     entry.employerCorpID,entry.amountCents]);
  }
  function guard(session,owner,tx){
@@ -90,7 +91,8 @@ function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
     contractID:contractID(owner,entry.npcCharacterID,revision),
     pilotID:pilotID(entry.npcCharacterID),npcCharacterID:entry.npcCharacterID,
     agentID:entry.npcCharacterID,employerCorpID:entry.employerCorpID,
-    ownerCharacterID:owner,profileID:entry.profileID,amountCents:entry.amountCents,
+    ownerCharacterID:owner,profileID:entry.profileID,
+    shipTypeID:entry.shipTypeID,amountCents:entry.amountCents,
     sourceProof:proof,expiresAtMs};
  }
  function integrity(row,entry,owner,proof){
@@ -169,6 +171,58 @@ function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
      row.expiresAtMs<=now)return null;
   return clone(row);
  }
+ function activeHire(entry,owner,tx){
+  const offer=tx.get(T,key(offerID(owner,entry.npcCharacterID)));
+  if(!OBJ(offer)||!integrity(offer,entry,owner,sourceProof(entry,tx)))return null;
+  const raw=tx.get(T,pf52.REGISTRY_KEY);
+  if(!OBJ(raw))return null;
+  const idx=pf52.validateIndex(raw),p=idx.pilots[pilotID(entry.npcCharacterID)];
+  if(!p||p.ownerCharacterID!==owner||p.contractID!==offer.contractID||
+     p.pilotID!==offer.pilotID)return null;
+  const matches=Object.entries(idx.processed).filter(([,v])=>
+     v?.receipt?.type==='HIRED'&&v.receipt.pilotID===offer.pilotID&&
+     v.receipt.contractID===offer.contractID);
+  if(matches.length!==1)return null;
+  const paid=tx.get(T,pf53.paidKey(matches[0][0]));
+  if(!OBJ(paid)||paid.status!=='PAID'||paid.operationID!==matches[0][0]||
+     paid.offerID!==offer.offerID||paid.offerRevision!==offer.revision||
+     paid.contractID!==offer.contractID||paid.pilotID!==offer.pilotID||
+     paid.ownerCharacterID!==owner||paid.employerCorpID!==offer.employerCorpID||
+     paid.amountCents!==offer.amountCents||
+     paid.hireReceiptHash!==p.hireReceiptHash||
+     pf53.verifyPaidReceipt(tx,paid)!==true)return null;
+  return offer;
+ }
+ function verifyHiredPilotHull({session,ownerCharacterID,pilotID:pid,shipTypeID}={},nativeTx=null){
+  if(!available()||!POS(ownerCharacterID)||!POS(shipTypeID)||
+     typeof pid!=='string')return false;
+  const entry=catalog.find(e=>pilotID(e.npcCharacterID)===pid&&e.shipTypeID===shipTypeID);
+  if(!entry)return false;
+  try{
+   const check=tx=>guard(session,ownerCharacterID,tx)&&
+     activeHire(entry,ownerCharacterID,tx)!==null;
+   return nativeTx?check(nativeTx)===true:
+     atom.transact([T,CHAR],check)===true;
+  }catch{return false;}
+ }
+ function resolvePaidNativeProfile(row){
+  if(!available()||!OBJ(row)||!POS(row.ownerCharacterID)||!POS(row.shipItemID)||
+     !POS(row.typeID)||!TOKEN.test(row.contractID)||typeof row.pilotID!=='string')return null;
+  const entry=catalog.find(e=>pilotID(e.npcCharacterID)===row.pilotID&&
+     e.shipTypeID===row.typeID);
+  if(!entry)return null;
+  try{return atom.transact([T,CHAR],tx=>{
+   const owner=tx.get(CHAR,String(row.ownerCharacterID));
+   if(!OBJ(owner)||owner.characterID!==row.ownerCharacterID||owner.isDeleted===true)
+     return null;
+   const hire=activeHire(entry,row.ownerCharacterID,tx);
+   if(!hire||hire.contractID!==row.contractID)return null;
+   const definition=originalNpcData.buildNpcDefinition(entry.profileID);
+   if(!OBJ(definition)||definition.profile?.shipTypeID!==row.typeID||
+      definition.profile?.profileID!==entry.profileID)return null;
+   return clone(definition);
+  });}catch{return null;}
+ }
  function verifyOriginalNpcPilot(command,offer,tx){
   const verified=resolveNativeOffer(command,tx);
   return verified!==null&&verified.pilotID===offer?.pilotID&&
@@ -180,7 +234,8 @@ function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
     record.wallet?.divisions?.['1000']?.balance>=0;
  }
  return Object.freeze({listNativeOffers,lookupNativeOffer,resolveNativeOffer,
-  verifyOriginalNpcPilot,verifyNativeEmployer});
+  verifyOriginalNpcPilot,verifyNativeEmployer,verifyHiredPilotHull,
+  resolvePaidNativeProfile});
 }
 // Bind real original EveJS ownership services; never inject client-provided
 // NPC identities, corporations, profile rows or wallet values at install time.
