@@ -5,6 +5,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),
 const src=fs.readFileSync(path.join(__dirname,'../native/coopPersonalFleetOriginalDurableOrderAck.js'),'utf8');
 const pf56=require('../../pf56/native/coopPersonalFleetReturnDock.cjs');
 const T='corporationRuntime',NE='npcEntities', F='coop-personal-fleet\u001f';
+const ENTITY='entities\u001f2301';
 const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
 function fixture(run){
  const db=new DatabaseSync(':memory:');
@@ -44,7 +45,9 @@ function fixture(run){
  write(T,F+'manual-order-v1:2301',row);
  write(T,F+'manual-order-operations-v1',{
   version:1,operations:{'op-123':{phase:'ISSUING',signature:row.signature,shipItemID:2301}}});
- write(NE,'/',{nextEntityID:980000000001,entities:{'2301':originalEntity}});
+ write(NE,'entities',{}); // original SQLite group skeleton
+ write(NE,ENTITY,originalEntity);
+ write(NE,'entities\u001f2302',{entityID:2302,ownerID:777,mode:'STOP',unrelated:true});
  puts=0;
  const tx={get:read,put:write};
  const atomic={mode:'SERVER_INTERNAL_FLAGGED',isPoisoned:()=>poisoned,
@@ -91,7 +94,7 @@ function writeAndVerify(f){const result=f.create().recordAfterNativeEffect(f.row
 }
 test('post-native-effect FOLLOW state + receipt committed atomically to original SQLite',()=>fixture(f=>{
  const proof=writeAndVerify(f);assert.equal(proof.noForeignCommand,true);
- const stored=f.read(NE,'/').entities['2301'];assert.equal(stored.mode,'FOLLOW');
+ const stored=f.read(NE,ENTITY);assert.equal(stored.mode,'FOLLOW');
  assert.equal(stored.targetEntityID,3301);assert.equal(stored.followRange,3000);
  assert.equal(stored.otherStockItemRef,'untouched');assert.equal(f.receipt().action,'FOLLOW');
 }));
@@ -138,7 +141,7 @@ test('HOLD proof requires actual original STOP state and stop manual order',()=>
  f.entity.mode='STOP';f.entity.targetEntityID=0;f.entity.followRange=0;
  f.controller.manualOrder={type:'stop'};
  const proof=writeAndVerify(f);assert.equal(proof.action,'HOLD');
- assert.equal(f.read(NE,'/').entities['2301'].mode,'STOP');
+ assert.equal(f.read(NE,ENTITY).mode,'STOP');
 }));
 test('HOLD with foreign/active manual combat order cannot produce ACK',()=>fixture(f=>{
  f.row.action='HOLD';f.row.targetEntityID=null;f.row.signature=f.signature(f.row);
@@ -151,16 +154,16 @@ test('HOLD with foreign/active manual combat order cannot produce ACK',()=>fixtu
 test('SIGKILL simulation before COMMIT rolls back BOTH movement state and receipt',()=>fixture(f=>{
  f.abortNext();let ans=f.create().recordAfterNativeEffect(f.row);
  assert.equal(ans.success,false);assert.match(ans.errorMsg,/UNKNOWN_NO_RETRY/);
- assert.equal(f.receipt(),null);assert.equal(f.read(NE,'/').entities['2301'].mode,'STOP');
+ assert.equal(f.receipt(),null);assert.equal(f.read(NE,ENTITY).mode,'STOP');
 }));
 test('native NPC position movement does not erase durable PF55 order witness',()=>fixture(f=>{
- writeAndVerify(f);let root=f.read(NE,'/');root.entities['2301'].position.x=900;
- f.write(NE,'/',root);
+ writeAndVerify(f);let entity=f.read(NE,ENTITY);entity.position.x=900;
+ f.write(NE,ENTITY,entity);
  assert.equal(f.create().verifyPersistedNativeOrder(f.row,f.tx)?.orderApplied,true);
 }));
 test('changed original durable follow target invalidates PF55 order proof',()=>fixture(f=>{
- writeAndVerify(f);let root=f.read(NE,'/');root.entities['2301'].targetEntityID=9999;
- f.write(NE,'/',root);assert.equal(f.create().verifyPersistedNativeOrder(f.row,f.tx),null);
+ writeAndVerify(f);let entity=f.read(NE,ENTITY);entity.targetEntityID=9999;
+ f.write(NE,ENTITY,entity);assert.equal(f.create().verifyPersistedNativeOrder(f.row,f.tx),null);
 }));
 test('tampering durable receipt signature invalidates independent PF55 ACK',()=>fixture(f=>{
  writeAndVerify(f);f.write(T,F+'native-order-receipt-v1:op-123',
@@ -204,7 +207,7 @@ test('PF84B original native RETURN effect is persisted with a single exact SQLit
  const proof=ack.verifyPersistedNativeReturn(row,f.tx);
  assert.equal(proof?.source,'EVEJS_ORIGINAL_PERSISTED_NPC_RETURN_V1');
  assert.equal(proof.returnOrderPersisted,true);
- assert.equal(f.read(NE,'/').entities['2301'].personalFleetReturnOrder.signature,row.signature);
+ assert.equal(f.read(NE,ENTITY).personalFleetReturnOrder.signature,row.signature);
  assert.equal(f.create().recordAfterNativeReturnEffect(row).success,false);
 }));
 test('PF84B return proof survives new service owner, but rejects a changed original account',()=>fixture(f=>{
@@ -231,12 +234,35 @@ test('PF84B SQLite rollback leaves no forged acceptance after unknown commit',()
  assert.equal(ack.success,false);
  assert.match(ack.errorMsg,/UNKNOWN_NO_RETRY/);
  assert.equal(f.read(T,F+'native-return-receipt-v1:'+row.operationID),null);
- assert.equal(f.read(NE,'/').entities['2301'].personalFleetReturnOrder,undefined);
+ assert.equal(f.read(NE,ENTITY).personalFleetReturnOrder,undefined);
 }));
 test('PF84B tampered stock entity receipt is not accepted for RETURNING',()=>fixture(f=>{
  const row=seedOriginalReturn(f);assert.equal(f.create().recordAfterNativeReturnEffect(row).success,true);
- const root=f.read(NE,'/');
- root.entities['2301'].personalFleetReturnOrder.stationID=row.stationID+1;
- f.write(NE,'/',root);
+ const entity=f.read(NE,ENTITY);
+ entity.personalFleetReturnOrder.stationID=row.stationID+1;
+ f.write(NE,ENTITY,entity);
  assert.equal(f.create().verifyPersistedNativeReturn(row,f.tx),null);
+}));
+
+test('PF86 original sqliteStore ROW_GROUPS isolates every unrelated NPC',()=>fixture(f=>{
+ assert.equal(f.read(NE,'/'),null);
+ assert.equal(f.read(NE,'entities').entityID,undefined);
+ const secondBefore=f.read(NE,'entities\u001f2302');
+ writeAndVerify(f);
+ assert.deepEqual(f.read(NE,'entities\u001f2302'),secondBefore);
+ assert.equal(f.read(NE,'/'),null);
+ assert.equal(f.read(NE,ENTITY).mode,'FOLLOW');
+}));
+test('PF86 fake legacy root and missing real entity cannot create a native receipt',()=>fixture(f=>{
+ f.write(NE,'/',{entities:{'2301':{...f.originalEntity}}});
+ f.db.prepare('DELETE FROM "npcEntities" WHERE key=?').run(ENTITY);
+ const ack=f.create().recordAfterNativeEffect(f.row);
+ assert.equal(ack.success,false);
+ assert.equal(f.receipt(),null);
+}));
+test('PF86 original RETURN writes only owning NPC row, not other ships',()=>fixture(f=>{
+ const r=seedOriginalReturn(f),before=f.read(NE,'entities\u001f2302');
+ assert.equal(f.create().recordAfterNativeReturnEffect(r).success,true);
+ assert.deepEqual(f.read(NE,'entities\u001f2302'),before);
+ assert.equal(f.read(NE,'/'),null);
 }));
