@@ -47,14 +47,17 @@ class NativeFirstPlayAssemblyTest(unittest.TestCase):
   (self.work/'untracked').write_text('hello')
   self.assertEqual(m.read_changed_paths(self.work),{'untracked'})
  def test_expected_native_patch_inventory_is_sixteen_paths(self):
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),16)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),17)
   self.assertTrue(m.EXPECTED_PATCH_PATHS.issuperset(str(x) for x in m.ADDITIONS))
  def test_unique_original_native_patch_sources(self):
   source=(Path(__file__).resolve().parents[1]/'tools/prepare_firstplay_work.py').read_text()
   self.assertEqual(source.count('arbiter.build(work)'),1)
   self.assertEqual(source.count('build_original_order_arbiter_patch.py'),1)
   self.assertIn('PF_FIRSTPLAY_DUPLICATE_NATIVE_PATCH_PATH',source)
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),16)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),17)
+ def test_source_bound_dock_readback_must_be_in_complete_work_bundle(self):
+  self.assertIn('Code/server/src/space/coopPersonalFleetOriginalDockCompletionWitness.js',m.EXPECTED_PATCH_PATHS)
+  self.assertEqual(len(m.ADDITIONS),9)
  def test_worktree_branch_must_be_isolated(self):
   self.git(self.work,'switch','-c','unsafe')
   with self.assertRaisesRegex(ValueError,'ISOLATED_WORK_BRANCH_REQUIRED'):
