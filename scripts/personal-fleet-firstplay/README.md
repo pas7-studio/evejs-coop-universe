@@ -9,7 +9,7 @@ No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
 **Current staged WORK inventory:** PF80's 22 baseline native paths + a
 **39-path** first-play delta, with four overlaps = **57 distinct original
-native paths**. The corresponding manifest has **75 SHA256-pinned**
+native paths**. The corresponding manifest has **76 SHA256-pinned**
 source/test/tool files. Historical counts below are superseded.
 
 **PF96 — physical combat after restart.**
@@ -55,6 +55,19 @@ source/test/tool files. Historical counts below are superseded.
 - Both source patches pin the exact original `coop/pas7std` blobs and
   fail on drift. The existing PF56 server tick hosts the 1s guard
   reaction; there is no extra timer or new public command.
+
+**Original shared arbiter restart edge:** PF96's stock-pinned
+`coopNpcOrderBridge` patch adds a guarded one-time re-adoption for an
+already physical GUARD `FOLLOW` after process restart, even when the
+original process-local lease is absent. The bridge only accepts
+`pf-resume-guard` with the independent source `ACKED` DEFEND receipt,
+the original actor controller, physical following player ship and
+validated PF55 source rows. A new `personalFleetRecoveryProof` callback
+cannot authorize any unrelated WAR, MINING, RAID or new attack.
+An optional original native WORK regression executes the **real**
+`coopNpcOrderBridge` and `coopNpcOrderArbiter` after source installation;
+the same source transformations were also syntax-checked in an isolated
+JavaScript harness.
 
 **Isolated checks executed in controlled V8/faux-SQL contexts:**
 combat recovery **12/12**, station/guard server tick **29/29**,
