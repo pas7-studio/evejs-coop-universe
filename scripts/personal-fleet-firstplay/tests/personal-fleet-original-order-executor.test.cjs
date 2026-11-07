@@ -144,3 +144,49 @@ test('PF56 canonical original station ball uses itemID when entityID is absent',
  f.create();const s=f.capture.returnSource.getCanonicalStation(60000123);
  assert.equal(s?.stationID,60000123);
 }));
+
+test('PF95 real native ATTACK uses original shared arbiter, stock issueAttackOrder, then durable receipt',()=>fixture(f=>{
+ const calls=[];
+ f.options.combatAuthority={verify:()=>true};
+ f.options.combatReceipt={recordAfterEffect:row=>{calls.push(['receipt',row.action]);return {success:true};}};
+ const owner=f.create();
+ f.capture.executor.orderBridge.issue=cmd=>{calls.push(['arbiter',cmd.owner,cmd.action]);return cmd.execute();};
+ f.capture.executor.npcRuntime.issueAttackOrder=(id,target,opts)=>{
+  calls.push(['attack',id,target,opts]);return {success:true};};
+ const row={action:'ATTACK',shipItemID:2301,systemID:30000142,targetEntityID:3333};
+ assert.equal(owner.supports('ATTACK'),true);
+ assert.equal(owner.execute(row).success,true);
+ assert.equal(calls.length,3);
+ assert.equal(calls[0][1],'PERSONAL_FLEET');
+ assert.equal(calls[1][0],'attack');assert.equal(calls[1][2],3333);
+ assert.equal(calls[1][3].allowPodKill,false);
+ assert.equal(calls[2][0],'receipt');
+}));
+test('PF95 native GUARD physically follows owner with weapons disabled',()=>fixture(f=>{
+ const calls=[];
+ f.options.combatAuthority={verify:()=>true};
+ f.options.combatReceipt={recordAfterEffect:row=>{calls.push('receipt');return {success:true};}};
+ const owner=f.create();
+ f.capture.executor.orderBridge.issue=c=>c.execute();
+ f.capture.executor.npcRuntime.follow=(id,target,range)=>{
+  calls.push(['follow',id,target,range]);return {success:true};};
+ f.capture.executor.npcRuntime.issueOrder=(id,order)=>{
+  calls.push(['manual',id,order]);return {success:true};};
+ const row={action:'DEFEND',shipItemID:2301,systemID:30000142,
+  targetEntityID:3003,followRangeMeters:2500};
+ assert.equal(owner.supports('DEFEND'),true);
+ assert.equal(owner.execute(row).success,true);
+ assert.equal(calls[0][0],'follow');
+ assert.equal(calls[1][2].allowWeapons,false);
+ assert.equal(calls[1][2].type,'follow');
+ assert.equal(calls[2],'receipt');
+}));
+test('PF95 native combat cannot be reported ACKED when source receipt fails',()=>fixture(f=>{
+ f.options.combatAuthority={verify:()=>true};
+ f.options.combatReceipt={recordAfterEffect:()=>({success:false})};
+ const owner=f.create();f.capture.executor.orderBridge.issue=c=>c.execute();
+ f.capture.executor.npcRuntime.issueAttackOrder=()=>({success:true});
+ const r=owner.execute({action:'ATTACK',shipItemID:2301,systemID:30000142,targetEntityID:3333});
+ assert.equal(r.success,false);
+ assert.match(r.errorMsg,/UNKNOWN_NO_RETRY/);
+}));
