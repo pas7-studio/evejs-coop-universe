@@ -164,6 +164,16 @@ if ($ApplyToWork.IsPresent) {
     }
     & $python -m unittest discover -s (Join-Path $repo 'scripts/pf97/tests') -p 'test_pf97_*.py' -v
     if ($LASTEXITCODE -ne 0) { throw 'PF97_ORIGINAL_OWNER_SOURCE_ARCHIVE_INVALID' }
+    # PF98: native PF91/PF92 bridge cannot silently use PF93 fingerprint
+    # in production; it must require the PF95/PF96 original owner witness.
+    $pf98 = Join-Path $repo 'scripts/pf98/tests/pf98-native-owner-bridge.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf98 -PathType Leaf)) {
+      throw 'PF98_NATIVE_SOURCE_WITNESS_BRIDGE_TEST_MISSING'
+    }
+    & $node --test --test-concurrency=1 $pf98
+    if ($LASTEXITCODE -ne 0) { throw 'PF98_NATIVE_OWNER_WITNESS_BRIDGE_GATE_FAILED' }
+    & $python -m unittest discover -s (Join-Path $repo 'scripts/pf98/tests') -p 'test_pf98_*.py' -v
+    if ($LASTEXITCODE -ne 0) { throw 'PF98_NATIVE_SOURCE_ARCHIVE_INTEGRITY_FAILED' }
     $pf90Owner = Join-Path $repo 'scripts/pf58/tests/pf90-owner-snapshot.test.cjs'
     $pf90Sources = Join-Path $repo 'scripts/pf90/tests/pf90-original-owners.test.cjs'
     $pf90Audit = Join-Path $repo 'scripts/pf90/inspect-original-owner-writes.cjs'

@@ -251,3 +251,15 @@ mutations when feature mode is ON; installing them without
 actual PF91/PF92 original custody/session integration does not
 produce a usable Personal Fleet implementation. See
 `scripts/pf97/PF97_ORIGINAL_CHARACTER_ITEMSTORE_OWNER_HANDOFF.md`.
+
+## PF98 native source-owned session bridge review gate
+
+PF80 now runs PF98's 14 authored real SQLite fixture tests plus
+its archive/source contract checks, in addition to the PF95/PF96
+source owner review and PF97 original character/ItemStore paths.
+A normal server process without the original source-owned PF95/PF96
+transaction witness or without the feature's native witness flag
+may NOT authorize PF91 or PF92 protected active ship changes.
+These tests alone do not attest an original authenticated live
+session, WORK two-client gameplay or deployment to the original
+EveJS fork. See `scripts/pf98/PF98_ORIGINAL_SQLITE_WITNESS_BRIDGE.md`.

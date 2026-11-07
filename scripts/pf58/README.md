@@ -283,3 +283,17 @@ original files and checks the diff on disposable source copies;
 it never installs the patches. This is **not** playable Personal
 Fleet integration. See
 `scripts/pf97/PF97_ORIGINAL_CHARACTER_ITEMSTORE_OWNER_HANDOFF.md`.
+
+## PF98 PF91/PF92 source-owned session bridge (2026-11-07)
+
+PF98 finally connects PF91 player ship activation and the PF92 generic
+protected character writer to PF95/PF96's original owner-issued
+`tx.verifyReadOnlySessionWitness` method. With
+`EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS=1`, the missing original
+owner hook fails closed: there is no PF93 fingerprint fallback.
+Normal server execution with the flag absent now rejects protected
+session/title changes entirely. The old PF93 fingerprint path
+remains only inside the Node test runner for archived fixtures.
+The new real SQLite fixture suite is part of PF58's local runner.
+This is a candidate bridge, **not installed** in the original
+EveJS fork. See `scripts/pf98/PF98_ORIGINAL_SQLITE_WITNESS_BRIDGE.md`.
