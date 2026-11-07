@@ -137,7 +137,7 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
   const wallet=originalWalletAuthority.createOriginalWalletAuthority();
   const gameStore=original.gameStore,access=original.access;
   const offer=offers.createSourceBoundOriginalOfferAuthority({gameStore,pf52,pf53,
-    access,authoredCatalog,enabled,
+    access,authoredCatalog,authoredSalaryPolicies,enabled,
     allWalletWritersFenced:originalHooks.allWalletWritersFenced});
   const paid=pf53.createPersonalFleetPaidHiring({gameStore,pf52,access,
     resolveNativeOffer:offer.resolveNativeOffer,
