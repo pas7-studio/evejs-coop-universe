@@ -19,7 +19,7 @@ function fixture(action='ATTACK'){
   [F+'native-combat-order-receipt-v1:'+row.operationID]:receipt
  };
  let enabled=true,fenced=true,poisoned=false,targetLegal=true,
-  originalProof=true,actorReal=true,resumeFail=false,resumeCalls=0,
+  originalProof=true,actorReal=true,resumeFail=false,resumeCalls=0,retain=true,
   clock=now;
  const controller={entityID:shipID,systemID:system,personalFleetOriginal:true,
   personalFleetAssignmentID:row.assignmentID,
@@ -49,6 +49,7 @@ function fixture(action='ATTACK'){
   combatAuthority:{verify:()=>targetLegal},
   combatReceipt:{verifyPersisted:()=>originalProof?{orderApplied:true}:null},
   orderWitness:{verifyNativeActor:()=>actorReal},
+  retainOriginalCombatLease:()=>retain,
   resumeAfterOriginalAck:x=>{
    resumeCalls++;
    if(resumeFail)return {success:false,errorMsg:'UNKNOWN'};
@@ -62,6 +63,7 @@ function fixture(action='ATTACK'){
   setTime:x=>clock=x,disable:()=>enabled=false,unfence:()=>fenced=false,
   poison:()=>poisoned=true,targetOff:()=>targetLegal=false,
   proofOff:()=>originalProof=false,actorOff:()=>actorReal=false,
+  blockLease:()=>retain=false,
   failEffect:()=>resumeFail=true};
 }
 test('PF96 restores acknowledged physical ATTACK once after native restart',()=>{
@@ -123,4 +125,13 @@ test('PF96 read-only inspect never dispatches physical action',()=>{
  a.equal(f.recovery.inspect().rows.length,1);
  a.equal(f.getCalls(),0);
  a.equal(f.controller.manualOrder,null);
+});
+
+test('PF97 shared NPC lease cannot silently expire while source-ACKED GUARD is active',()=>{
+ const f=fixture('DEFEND');
+ a.equal(f.recovery.recover().restored,1);
+ a.equal(f.recovery.recover().already,1);
+ f.blockLease();
+ a.equal(f.recovery.recover().blocked,1);
+ a.equal(f.recovery.recover().issues[0].reason,'PF96_ORIGINAL_SHARED_LEASE_NOT_RETAINED');
 });
