@@ -28,6 +28,7 @@ const originalStationDwell=require('./coopPersonalFleetOriginalStationDwell');
 const originalStationTickDriver=require('./coopPersonalFleetOriginalStationTickDriver');
 const originalPhysicalRecovery=require('./coopPersonalFleetOriginalPhysicalRecovery');
 const originalSalaryTerms=require('./coopPersonalFleetOriginalSalaryTerms');
+const originalPayrollScheduler=require('./coopPersonalFleetOriginalPayrollScheduler');
 const chat=require('./coopPersonalFleetChatGateway');
 const pf52=require('./coopPersonalFleetHangarBridge');
 const pf53=require('./coopPersonalFleetPaidHiring');
@@ -248,11 +249,13 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   // Native server continuation consumes only committed PF56 intents. On a
   // restart, cleanup is readback/reconcile only, never PF66/PF61 redispatch.
+  let serverPayroll=null;
   const physicalRecovery=originalPhysicalRecovery.createOriginalPhysicalRecovery({
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   const stationTickDriver=originalStationTickDriver.createOriginalStationTickDriver({
     stationDwell,enabled,allWritersFenced:originalHooks.allWritersFenced,
     recoverPhysical:physicalRecovery.recover,
+    settlePayroll:()=>serverPayroll?.tick()||{status:'PF93_SERVER_PAYROLL_NOT_INSTALLED'},
     advanceReturn:row=>{
       if(row.phase==='DOCK_ISSUING'){
         const cleanup=dockCoordinator.reconcileNativeCleanup(row);
@@ -271,6 +274,7 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
   const salaryTerms=originalSalaryTerms.createOriginalSalaryTerms({
     authoredPolicies:authoredSalaryPolicies,enabled,
     allWritersFenced:originalHooks.allWritersFenced});
+  const payrollCapability=Symbol('PF93_ORIGINAL_SERVER_OWNED_PAYROLL_CAPABILITY');
   const lifecycle=pf57.createPersonalFleetContractLifecycle({gameStore,pf52,pf53,
     claimsPolicy:originalHooks.claimsPolicy,access,
     resolveOriginalHire:salaryTerms.readOriginalHire,
@@ -286,7 +290,11 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
     verifyWreckAssetCustody:originalHooks.verifyWreckAssetCustody,
     verifyNoCompetingOrders:originalHooks.verifyNoCompetingOrders,
     verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
-    allWritersFenced:originalHooks.allWritersFenced,enabled});
+    allWritersFenced:originalHooks.allWritersFenced,enabled,
+    serverPayrollCapability:payrollCapability});
+  serverPayroll=originalPayrollScheduler.createOriginalPayrollScheduler({
+    lifecycle,salaryTerms,serverPayrollCapability:payrollCapability,
+    enabled,allWritersFenced:originalHooks.allWritersFenced});
   const commandOwner=commands.createOriginalWorkCommandOwner({gameStore,pf52,
     hangar,pf53:paid,pf54:deploy,pf55:orders,pf56:returnDock,pf57:lifecycle,
     listNativeOffers:offer.listNativeOffers,
@@ -324,6 +332,7 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
     // Only trusted original WORK startup may call these; never publish in /pf.
     originalDockCoordinator:dockCoordinator,
     originalContractLifecycle:lifecycle,
+    nativePayrollTickStatus:()=>stationTickDriver.getStatus().payroll,
     // Server-internal tick entry only: requires the original return intent;
     // it is not an in-game, chat or HTTP command handler.
     sampleOriginalStationDwell:stationDwell.sample,
