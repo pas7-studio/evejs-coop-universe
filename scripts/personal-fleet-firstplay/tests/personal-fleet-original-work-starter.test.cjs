@@ -6,7 +6,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const target=path.join(__dirname,'../native/coopPersonalFleetOriginalWorkStarter.js');
 const source=fs.readFileSync(target,'utf8');
-function load({flags={},config,bootstrap={},missing=false,catalogVerified=true}={}){
+function load({flags={},config,bootstrap={},missing=false,sourceFailure=null,catalogVerified=true}={}){
  const events=[];
  const process={env:{EVEJS_COOP_PERSONAL_FLEET_NATIVE:'1',
   EVEJS_COOP_PERSONAL_FLEET_CHAT:'1',
@@ -37,7 +37,8 @@ function load({flags={},config,bootstrap={},missing=false,catalogVerified=true}=
      npcCount:catalog.length}:{verified:false,reason:'PF102_SOURCE_PILOT_NOT_FOUND'};
    }};
   if(id==='./coopPersonalFleetOriginalWorkConfiguration'){
-   if(missing){const e=Error('module missing');e.code='MODULE_NOT_FOUND';throw e;}
+   if(missing){const e=Error("Cannot find module './coopPersonalFleetOriginalWorkConfiguration'");e.code='MODULE_NOT_FOUND';throw e;}
+   if(sourceFailure)throw Error(sourceFailure);
    return chosen;
   }throw Error('FORBIDDEN_IMPORT:'+id);
  },module:m,exports:m.exports,process,Object,Error},{filename:target,timeout:10000});
@@ -53,6 +54,18 @@ test('PF88 original WorkStarter enables once only with verified server configura
 test('PF88 missing original WORK configuration fails before bootstrap',()=>{
  const f=load({missing:true});
  assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/CONFIG_NOT_INSTALLED/);
+ assert.deepEqual(f.events,[]);
+});
+test('PF105 genuine original SDE error surfaces through server startup with exact reason',()=>{
+ const f=load({sourceFailure:'PF104_NO_REAL_SDE_NPC_WITH_PHYSICAL_SHIP_PROFILE'});
+ assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),
+  /PF88_ORIGINAL_WORK_SOURCE_STARTUP_FAILED: PF104_NO_REAL_SDE_NPC_WITH_PHYSICAL_SHIP_PROFILE/);
+ assert.deepEqual(f.events,[]);
+});
+test('PF105 transitive source import is NOT reported as missing WorkConfiguration',()=>{
+ const f=load({sourceFailure:'PF102B_NATIVE_SOURCE_DEPENDENCY_MISSING:./coopPersonalFleetOriginalAuthoredPolicy'});
+ assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),
+  /PF88_ORIGINAL_WORK_SOURCE_STARTUP_FAILED: PF102B_NATIVE_SOURCE_DEPENDENCY_MISSING/);
  assert.deepEqual(f.events,[]);
 });
 test('PF88 native disabled flag fails without reading catalog or writer hooks',()=>{
