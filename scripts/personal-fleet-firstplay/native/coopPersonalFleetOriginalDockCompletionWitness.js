@@ -135,6 +135,11 @@ function createOriginalDockCompletionWitness({ enabled = () => false,
       const manifest = verifyFinalOriginalManifest(row, tx);
       if (!pf56.manifestValid(manifest, row) ||
           JSON.stringify(manifest) !== JSON.stringify(row.manifest)) return null;
+      // An UNMOUNTED system is not proof of a removed physical actor.
+      // Restart/recovery must mount the original scene before readback.
+      const sourceScene = runtime.scenes.get(row.systemID);
+      if (!sourceScene || sourceScene.systemID !== row.systemID ||
+          typeof sourceScene.getEntityByID !== 'function') return null;
       const scenes = [...runtime.scenes.values()];
       if (scenes.some(scene => !scene || typeof scene.getEntityByID !== 'function' ||
         scene.getEntityByID(row.shipItemID) != null)) return null;
