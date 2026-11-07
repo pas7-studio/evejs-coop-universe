@@ -72,3 +72,6 @@ test('PF100 read-only proof never modifies physical SQLite',()=>scenario(s=>{
  assert.equal(s.db.prepare('SELECT json FROM "characters"').get().json,before);
  assert.equal(s.session.shipID,2002);assert.equal(Object.isFrozen(a),true);
 }));
+test('PF100 hostile nonnumeric character identity cannot execute coercion',()=>expected(s=>{s.commit();s.request.characterID=Symbol('identity');},'BLOCKED','PF100_COMMIT_RECEIPT_INVALID'));
+test('PF100 throwing committed reader is denied, never publish',()=>expected(s=>{s.commit();s.read.get=()=>{throw Error('disk');};},'BLOCKED','PF100_COMMITTED_READ_UNAVAILABLE'));
+test('PF100 throwing session fields fail closed',()=>expected(s=>{s.commit();Object.defineProperty(s.session,'charid',{get(){throw Error('bad getter')}});},'BLOCKED','PF100_UNEXPECTED_AUTHORITY_EXCEPTION'));
