@@ -34,12 +34,17 @@ live feature flags remain OFF. `Test-FirstPlay-Local.ps1` now includes
 the new real-source catalog-proof regression; the exact worktree assembler
 fails if this required module is missing.
 
-**Evidence:** 21/21 checked-in catalog-proof tests and 11/11 checked-in
+**Evidence:** 22/22 checked-in catalog-proof tests and 11/11 checked-in
 WorkStarter tests executed with controlled Node-module V8 substitutes against
 the exact GitHub source (not a full Node process or real on-disk database).
 Original source-pinned WORK apply, real authenticated server launch,
 Node/SQLite/SIGKILL, two-player gameplay, writer hooks and native
 NPC data population are **NOT RUN / NOT INSTALLED**.
+The PF102 source gate explicitly performs original SDE/profile/corporation
+lookups **outside** the original SQLite wallet read transaction to avoid
+nested stock GameStore calls; that ordering is covered by the 22nd
+regression. The stock corporation service may perform its normal data
+initialization; PF102 itself does not write Personal Fleet gameplay rows.
 Keep the PR Draft; do not merge or activate PLAY.
 
 ## PF101 — strict original physical actor re-adoption (2026-11-08)
