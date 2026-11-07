@@ -24,6 +24,8 @@ const offers=require('./coopPersonalFleetOriginalOfferAuthority');
 const commands=require('./coopPersonalFleetWorkCommandOwner');
 const originalOrderWitness=require('./coopPersonalFleetOriginalOrderWitness');
 const originalOrderExecutor=require('./coopPersonalFleetOriginalOrderExecutor');
+const originalCombatAuthority=require('./coopPersonalFleetOriginalCombatAuthority');
+const originalCombatReceipt=require('./coopPersonalFleetOriginalCombatReceipt');
 const originalStationDwell=require('./coopPersonalFleetOriginalStationDwell');
 const originalStationTickDriver=require('./coopPersonalFleetOriginalStationTickDriver');
 const originalPhysicalRecovery=require('./coopPersonalFleetOriginalPhysicalRecovery');
@@ -175,16 +177,22 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   // These are original-source read-only witnesses, not operator callbacks.
   // The native PF55 issue/reconcile transactions must include characters.
-  const orderWitness=originalOrderWitness.createOriginalOrderWitness({
+  const combatAuthority=originalCombatAuthority.createOriginalCombatAuthority({
     enabled,allWritersFenced:originalHooks.allWritersFenced});
+  const orderWitness=originalOrderWitness.createOriginalOrderWitness({
+    combatAuthority,enabled,allWritersFenced:originalHooks.allWritersFenced});
   // The physical command bridge uses the EXISTING shared stock order arbiter,
   // never creates a second independent arbiter for Personal Fleet.
   const durableOrderAck=originalOrderAck.createOriginalDurableOrderAck({
     orderWitness,enabled,allWritersFenced:originalHooks.allWritersFenced});
+  const combatReceipt=originalCombatReceipt.createOriginalCombatReceipt({
+    combatAuthority,orderWitness,enabled,
+    allWritersFenced:originalHooks.allWritersFenced});
   const originalPhysicalOrders=originalOrderExecutor.createOriginalOrderExecutor({
     sharedOriginalArbiter:originalHooks.sharedOriginalNpcOrderArbiter,
     readOriginalWarShipClaim:originalHooks.readOriginalWarShipClaim,
-    orderWitness,orderReceipt:durableOrderAck,enabled,allWritersFenced:originalHooks.allWritersFenced});
+    orderWitness,orderReceipt:durableOrderAck,combatAuthority,combatReceipt,
+    enabled,allWritersFenced:originalHooks.allWritersFenced});
   // Original stock ItemStore, scene/registry and SDE station geometry must
   // agree on each tick. A process restart changes the unforgeable scene epoch;
   // no prior dwell can authorize the new process to dock.
@@ -196,7 +204,8 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
     verifyTarget:orderWitness.verifyTarget,
     verifyOriginalControl:orderWitness.verifyOriginalControl,
     nativeExecutor:originalPhysicalOrders,
-    verifyPersistedNativeOrder:durableOrderAck.verifyPersistedNativeOrder,
+    verifyPersistedNativeOrder:(row,tx)=>['ATTACK','DEFEND'].includes(row?.action)?
+      combatReceipt.verifyPersisted(row,tx):durableOrderAck.verifyPersistedNativeOrder(row,tx),
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   // PF66 moves the ONE original ItemStore hull and consumes its original
   // scene-detach capability exactly once. PF60/PF61 later clean native rows;
