@@ -86,8 +86,9 @@ function open(file){
   verifyFinalOriginalManifest(row){return f.shared.manifestOverride||{...manifest}},
   executeNativeReturn:nativeReturn,executeNativeDock:nativeDock};
  f.returnDock=pf56.createPersonalFleetReturnDock(opts);
- f.makeReady=()=>{f.makeActive();f.put('characters',String(F.OWNER),{
-  characterID:F.OWNER,accountId:F.session.userid,isDeleted:false});};
+ f.makeReady=()=>{f.makeActive();const original=f.get('characters',String(F.OWNER))||{};
+  f.put('characters',String(F.OWNER),{...original,
+    characterID:F.OWNER,accountId:F.session.userid,isDeleted:false});};
  f.returnCommand=command;
  f.progressToReturning=()=>{
   const c=command();let r=f.returnDock.requestReturn(c);
