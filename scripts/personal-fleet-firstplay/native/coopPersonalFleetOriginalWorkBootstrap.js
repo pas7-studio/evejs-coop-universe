@@ -15,6 +15,7 @@ const core=require('./coopPersonalFleetOriginalSourceBindings');
 const originalWalletAuthority=require('./coopPersonalFleetOriginalWalletAuthority');
 const offers=require('./coopPersonalFleetOriginalOfferAuthority');
 const commands=require('./coopPersonalFleetWorkCommandOwner');
+const originalOrderWitness=require('./coopPersonalFleetOriginalOrderWitness');
 const chat=require('./coopPersonalFleetChatGateway');
 const pf52=require('./coopPersonalFleetHangarBridge');
 const pf53=require('./coopPersonalFleetPaidHiring');
@@ -37,7 +38,6 @@ const HOOKS=Object.freeze([
  'verifyOriginalDeploymentAuthority','verifyExclusiveOwnership',
  'verifyOriginalActor','independentOriginalActorWitness',
  'originalStationUndockPoint','originalOwnershipWitness',
- 'verifyNativeActor','verifyTarget','verifyOriginalControl',
  'verifyPersistedNativeOrder','verifyNativeFlight','verifyOriginalReturnOrder',
  'verifyStationArrival','verifyContinuousDwell','verifyOriginalManifest',
  'verifyOriginalDockReceipt','verifyFinalOriginalManifest',
@@ -143,11 +143,15 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     },
     verifyOriginalActor:originalHooks.verifyOriginalActor,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
+  // These are original-source read-only witnesses, not operator callbacks.
+  // The native PF55 issue/reconcile transactions must include characters.
+  const orderWitness=originalOrderWitness.createOriginalOrderWitness({
+    enabled,allWritersFenced:originalHooks.allWritersFenced});
   const orders=pf55.createPersonalFleetNativeOrders({gameStore,pf52,access,
     verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
-    verifyNativeActor:originalHooks.verifyNativeActor,
-    verifyTarget:originalHooks.verifyTarget,
-    verifyOriginalControl:originalHooks.verifyOriginalControl,
+    verifyNativeActor:orderWitness.verifyNativeActor,
+    verifyTarget:orderWitness.verifyTarget,
+    verifyOriginalControl:orderWitness.verifyOriginalControl,
     nativeExecutor:originalHooks.originalOrderExecutor,
     verifyPersistedNativeOrder:originalHooks.verifyPersistedNativeOrder,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
