@@ -42,10 +42,14 @@ function fixture(cb){
    if(broken==='physical-order')throw Error('SHARED_ARBITER_NOT_INSTALLED');
    return {execute:()=>({success:false}),supports:()=>false,
     executeNativeReturn:()=>({success:false})};}},
+  './coopPersonalFleetOriginalPhysicalRecovery':{createOriginalPhysicalRecovery(args){
+   assert.equal(args.enabled(),false);
+   return {recover:()=>({status:'RECOVERY_OFF'})};}},
   './coopPersonalFleetOriginalStationTickDriver':{createOriginalStationTickDriver(args){
    events.push('station-tick-source');
    assert.equal(typeof args.stationDwell.sample,'function');
    assert.equal(typeof args.advanceReturn,'function');
+   assert.equal(typeof args.recoverPhysical,'function');
    assert.equal(args.enabled(),false);
    if(broken==='station-tick-source')throw Error('PF56_NATIVE_STATION_TICK_SOURCE_MISSING');
    return {start(){events.push('station-tick-start');
