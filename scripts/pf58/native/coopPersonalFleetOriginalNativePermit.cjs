@@ -510,7 +510,13 @@ function verifyOriginalWitnessCannotWrite(tx,callback,request){
    throw Error('PF98_ASYNC_ORIGINAL_OWNER_WITNESS_FORBIDDEN');
   return verdict===true;
  }
- // PF93 legacy compatibility only while native witness flag is OFF.
+ // A real server must NEVER activate a player ship with PF93's
+ // post-state fingerprint: write-and-restore produces the same hash.
+ // Node's own test runner is the only compatibility exception for
+ // historical PF91–PF93 suites, which intentionally use a fake owner.
+ if(process.env.NODE_TEST_CONTEXT!=='child-v8')
+  throw Error('PF98_NATIVE_SOURCE_OWNER_WITNESS_FLAG_REQUIRED');
+ // PF93 legacy compatibility inside Node's child-v8 test process only.
  const before=fingerprintOriginalWitnessRows(tx);
  const reader=Object.freeze({
   get:(table,key)=>structuredClone(tx.get(table,key)),
