@@ -15,7 +15,7 @@ const blocked=reason=>Object.freeze({status:'BLOCKED',reason});
 const P='coop-personal-fleet\u001f';
 const op=()=>`pf-${randomUUID()}`;
 function createOriginalWorkCommandOwner({gameStore,pf52,hangar,pf53,pf54,pf55,pf56,pf57,
- listNativeOffers,lookupNativeOffer,resolveOriginalDockContext,
+ listNativeOffers,lookupNativeOffer,verifyNativePilotHull,resolveOriginalDockContext,
  resolveOriginalFollowTarget,enabled=()=>false}={}){
  const atomic=gameStore?.coopAtomicNativeRows;
  if(atomic?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof atomic.transact!=='function'||
@@ -27,7 +27,7 @@ function createOriginalWorkCommandOwner({gameStore,pf52,hangar,pf53,pf54,pf55,pf
     ['issue','reconcile','inspect'].some(k=>typeof pf55?.[k]!=='function')||
     ['requestReturn','inspect'].some(k=>typeof pf56?.[k]!=='function')||
     typeof pf57?.dismiss!=='function'||
-    [listNativeOffers,lookupNativeOffer,resolveOriginalDockContext,
+    [listNativeOffers,lookupNativeOffer,verifyNativePilotHull,resolveOriginalDockContext,
      resolveOriginalFollowTarget,enabled].some(x=>typeof x!=='function'))
   throw Error('PF_FIRSTPLAY_ORIGINAL_COMMAND_AUTHORITIES_REQUIRED');
  const live=()=>enabled()===true&&atomic.isPoisoned()===false;
@@ -104,9 +104,14 @@ function createOriginalWorkCommandOwner({gameStore,pf52,hangar,pf53,pf54,pf55,pf
    const item=tx.get('items','items')?.[String(shipItemID)];
    return owner.shipID!==shipItemID&&owner.shipid!==shipItemID&&
      owner.activeShipID!==shipItemID&&pf52.readStockHangar(tx,shipItemID,ctx.ownerCharacterID,station.stationID)?.itemID===shipItemID&&
-     obj(item)&&item.ownerID===ctx.ownerCharacterID;
+     obj(item)&&item.ownerID===ctx.ownerCharacterID&&pos(item.typeID)?item.typeID:null;
   });
-  if(original!==true)return blocked('PF_FIRSTPLAY_SPARE_ORIGINAL_SHIP_UNVERIFIED');
+  if(!pos(original))return blocked('PF_FIRSTPLAY_SPARE_ORIGINAL_SHIP_UNVERIFIED');
+  if(verifyNativePilotHull({session:ctx.session,ownerCharacterID:ctx.ownerCharacterID,
+      pilotID,shipItemID,shipTypeID:original})!==true)
+   return blocked('PF_FIRSTPLAY_PAID_PILOT_SHIP_TYPE_UNVERIFIED');
+  // PF52.verifyShipAvailable must independently recheck the SAME source
+  // within its own original transaction immediately before reservation.
   const assignmentID='pf-assignment-'+randomUUID();
   const result=hangar.execute({type:'RESERVE_HANGAR_SHIP',session:ctx.session,
    operationID:op(),pilotID,ownerCharacterID:ctx.ownerCharacterID,
