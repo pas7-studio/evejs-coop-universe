@@ -13,7 +13,8 @@ const hooksList=['verifyOriginalWriterHooks','allWritersFenced','allWalletWriter
  'originalStationUndockPoint','originalOwnershipWitness',
  'verifyNativeFlight','verifyOriginalManifest',
  'verifyFinalOriginalManifest',
- 'verifyOriginalDockedPlayerSession','readOriginalWarShipClaim'];
+ 'verifyOriginalDockedPlayerSession','readOriginalWarShipClaim',
+ 'verifyNativeWreckLoss','verifyWreckAssetCustody','verifyNoCompetingOrders'];
 function fixture(cb){
  const flags=['EVEJS_COOP_PERSONAL_FLEET_NATIVE','EVEJS_COOP_PERSONAL_FLEET_CHAT','EVEJS_COOP_NATIVE_ATOMIC_ROWS',
   'EVEJS_COOP_PERSONAL_FLEET_ENTITY_ISOLATION'];
@@ -42,6 +43,19 @@ function fixture(cb){
    if(broken==='physical-order')throw Error('SHARED_ARBITER_NOT_INSTALLED');
    return {execute:()=>({success:false}),supports:()=>false,
     executeNativeReturn:()=>({success:false})};}},
+  './coopPersonalFleetOriginalSalaryTerms':{createOriginalSalaryTerms(args){
+   assert.equal(args.enabled(),false);
+   assert.equal(Array.isArray(args.authoredPolicies),true);
+   return {readOriginalHire:()=>null,resolveNativeSalary:()=>null,
+    verifyOriginalNpcService:()=>false,verifyNativeEmployer:()=>false,
+    verifyNativePilotReleased:()=>false,verifyDismissalSettlement:()=>false};}},
+  './coopPersonalFleetContractLifecycle':{createPersonalFleetContractLifecycle(args){
+   assert.equal(args.enabled(),false);
+   assert.equal(typeof args.resolveNativeSalary,'function');
+   assert.equal(typeof args.notifyOriginalWallet,'function');
+   assert.equal(typeof args.verifyNativeWreckLoss,'function');
+   return {salary:()=>({status:'DISABLED'}),dismiss:()=>({status:'DISABLED'}),
+    loss:()=>({status:'DISABLED'}),inspect:()=>({status:'DISABLED'})};}},
   './coopPersonalFleetOriginalPhysicalRecovery':{createOriginalPhysicalRecovery(args){
    assert.equal(args.enabled(),false);
    return {recover:()=>({status:'RECOVERY_OFF'})};}},
@@ -68,13 +82,15 @@ function fixture(cb){
    return {verifyNativeActor:()=>false,verifyOriginalControl:()=>false,verifyTarget:()=>false};}},
   './coopPersonalFleetOriginalWalletAuthority':{createOriginalWalletAuthority(){events.push('wallet');
    if(broken==='wallet')throw Error('PF_WALLET_SOURCE_MISSING');
-   return {originalTransactionID:()=>150000001,verifyJournalID:()=>true,notifyOriginalWallet:()=>true};}},
+   return {originalTransactionID:()=>150000001,verifyJournalID:()=>true,
+    notifyOriginalWallet:()=>true,notifyOriginalSalaryWallet:()=>true};}},
   './coopPersonalFleetOriginalOfferAuthority':{createSourceBoundOriginalOfferAuthority(){events.push('offers');return {
    resolveNativeOffer:()=>null,verifyOriginalNpcPilot:()=>false,verifyNativeEmployer:()=>false,
    listNativeOffers:()=>[],lookupNativeOffer:()=>null,verifyHiredPilotHull:()=>false,
    resolvePaidNativeProfile:()=>null};}},
   './coopPersonalFleetWorkCommandOwner':{createOriginalWorkCommandOwner(args){events.push('owner');
-   assert.equal(args.pf57.dismiss().status,'BLOCKED');
+   assert.equal(typeof args.pf57.dismiss,'function');
+   assert.equal(typeof args.pf57.salary,'function');
    assert.equal(args.enabled(),false);return {source:'ORIGINAL_EVEJS_PERSONAL_FLEET_OWNER_V1',enabled:args.enabled};}},
   './coopPersonalFleetChatGateway':{installServerAuthority(provider){events.push('chat');
    assert.equal(provider.enabled(),false);return broken==='chat'?false:true;}},
@@ -165,7 +181,8 @@ function fixture(cb){
  finally{for(const [k,v] of prior){if(v===undefined)delete process.env[k];else process.env[k]=v;}}
 }
 const authoredCatalog=[{npcCharacterID:1001,employerCorpID:1002,profileID:'real-profile',shipTypeID:600,amountCents:100}];
-const call=(f)=>f.api.createOriginalWorkBootstrap({originalHooks:f.hooks,authoredCatalog});
+const authoredSalaryPolicies=[{npcCharacterID:1001,employerCorpID:1002,profileID:'real-profile',shipTypeID:600,salaryCents:25,periodMs:86400000}];
+const call=(f)=>f.api.createOriginalWorkBootstrap({originalHooks:f.hooks,authoredCatalog,authoredSalaryPolicies});
 test('composition builds original source owners and publishes chat LAST',()=>fixture(f=>{
  const b=call(f);assert.equal(b.status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.equal(b.getOperationalStatus().ready,true);
