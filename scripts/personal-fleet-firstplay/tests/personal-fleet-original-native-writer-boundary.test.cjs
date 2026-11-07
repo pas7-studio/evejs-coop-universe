@@ -17,9 +17,7 @@ function fixture({missing=false,brokenSource=false,throwingWar=false}={}){
  const hooks=Object.fromEntries(HOOKS.filter(x=>x!=='readOriginalWarShipClaim')
   .map(x=>[x,()=>false]));
  hooks.source='ORIGINAL_EVEJS_PERSONAL_FLEET_BOOT_OWNER_V1';
- hooks.claimsPolicy={KEY:'coop-personal-fleet\u001factor-claims-v1',
-  validate:()=>null,empty:()=>null};
- hooks.sharedOriginalNpcOrderArbiter=Object.fromEntries(
+  hooks.sharedOriginalNpcOrderArbiter=Object.fromEntries(
   ['issue','blocked','snapshot','retainWithNativeProof','blocksForSystem']
   .map(x=>[x,()=>null]));
  const owners={source:brokenSource?'CLIENT_WRITER':
@@ -30,9 +28,13 @@ function fixture({missing=false,brokenSource=false,throwingWar=false}={}){
   if(throwingWar)throw Error('WAR_SQLITE_UNAVAILABLE');
   return {readOriginalWarShipClaim:(link)=>{claimReads++;return link?.pilotID==='coop-pilot-999'?'ASSIGNED':'UNKNOWN';}};
  }};
+ const claimsPolicy={KEY:'coop-personal-fleet\u001factor-claims-v1',
+  validate:raw=>raw,empty:()=>({version:1,claims:{},generations:{},processed:{}})};
+ const claims={createOriginalClaimsPolicy:()=>claimsPolicy};
  const deps={
   './coopPersonalFleetOriginalWorkBootstrap':{HOOKS},
   './coopPersonalFleetOriginalWarClaim':war,
+  './coopPersonalFleetOriginalClaimsPolicy':claims,
   './coopPersonalFleetOriginalReciprocalWriterOwners':owners};
  const m={exports:{}},imports=[];
  vm.runInNewContext(source,{module:m,exports:m.exports,
@@ -44,7 +46,7 @@ function fixture({missing=false,brokenSource=false,throwingWar=false}={}){
    if(!(name in deps))throw Error('PF103_UNKNOWN_DEP:'+name);
    return deps[name];
   },Object,Array,Error},{filename:'pf103-boundary.js'});
- return {api:m.exports,hooks,owners,war,imports,claimReads:()=>claimReads,
+ return {api:m.exports,hooks,owners,war,claimsPolicy,imports,claimReads:()=>claimReads,
   warCalls:()=>warCalls,ownerCalls:()=>ownerCalls};
 }
 test('PF103 boundary has fixed source identity required by PF102B',()=>{
@@ -76,10 +78,16 @@ test('PF103 rejects original owner attempting to bypass its WAR witness',()=>{
   /PF103_ORIGINAL_RECIPROCAL_WRITERS_INCOMPLETE/);
  a.equal(f.warCalls(),0);
 });
-test('PF103 validates canonical actor-claims policy source',()=>{
- const f=fixture();f.hooks.claimsPolicy.KEY='private-claim';
+test('PF105 original owner is forbidden to inject another actor claims parser',()=>{
+ const f=fixture();f.hooks.claimsPolicy={KEY:'coop-personal-fleet\u001factor-claims-v1',
+  validate:()=>({}),empty:()=>({})};
  a.throws(()=>f.api.createNativeWriterHooks(),
   /PF103_ORIGINAL_RECIPROCAL_WRITERS_INCOMPLETE/);
+});
+test('PF105 native boundary uses identical canonical original PF58 claims policy',()=>{
+ const f=fixture(),h=f.api.createNativeWriterHooks();
+ a.equal(h.claimsPolicy,f.claimsPolicy);
+ a.equal(h.claimsPolicy.KEY,'coop-personal-fleet\u001factor-claims-v1');
 });
 test('PF103 requires original shared arbiter with native retain',()=>{
  const f=fixture();delete f.hooks.sharedOriginalNpcOrderArbiter.retainWithNativeProof;
