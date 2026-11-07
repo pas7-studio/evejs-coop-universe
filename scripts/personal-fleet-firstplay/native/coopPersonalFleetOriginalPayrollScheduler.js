@@ -39,7 +39,7 @@ function createOriginalPayrollScheduler({lifecycle,salaryTerms,
     !Number.isSafeInteger(maxPerTick)||maxPerTick<1||maxPerTick>5)
   throw Error('PF93_ORIGINAL_SERVER_PAYROLL_AUTHORITIES_REQUIRED');
  const live=()=>enabled()===true&&allWritersFenced()===true&&atomic.isPoisoned()===false;
- let busy=false;
+ let busy=false,cursor=0;
  const unknown=new Set();
  function openDue(){
   return atomic.transact([T,CHAR],tx=>{
@@ -108,7 +108,12 @@ function createOriginalPayrollScheduler({lifecycle,salaryTerms,
    if(jobs.length>256)return null;
    jobs.sort((a,b)=>a.ownerCharacterID-b.ownerCharacterID||
       a.pilotID.localeCompare(b.pilotID));
-   return jobs.slice(0,maxPerTick);
+   if(!jobs.length)return [];
+   // Round-robin over ALL due pilots. An underfunded pilot or an
+   // unresolved COMMIT must never permanently starve later contracts.
+   const start=cursor%jobs.length;
+   cursor=(start+maxPerTick)%jobs.length;
+   return [...jobs.slice(start),...jobs.slice(0,start)].slice(0,maxPerTick);
   });
  }
  function tick(){
