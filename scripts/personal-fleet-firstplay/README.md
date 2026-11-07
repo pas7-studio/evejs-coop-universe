@@ -5,6 +5,75 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF96/PF97 — crash-safe combat re-adoption + reactive owner GUARD (2026-11-08)
+
+**Current staged WORK inventory:** PF80's 22 baseline native paths + a
+**39-path** first-play delta, with four overlaps = **57 distinct original
+native paths**. The corresponding manifest has **75 SHA256-pinned**
+source/test/tool files. Historical counts below are superseded.
+
+**PF96 — physical combat after restart.**
+
+- The original native NPC materializer discards the live `manualOrder`
+  on spawn. PF96 reads back an **ACKED** PF55 operation, the same original
+  PF95 SQLite combat receipt, stored controller, original actor claim and
+  CURRENT physical player/target. Only then can the original shared
+  `coopNpcOrderBridge` readopt the prior order on the same entity ID.
+- A recovered native ATTACK older than ten minutes, an absent/foreign
+  target, a changed owner, a conflicting live manualOrder, a missing
+  shared arbiter lease or unknown native outcome is **blocked**.
+  No new PF55 ISSUING transaction, second wallet event, new ship, or
+  automatic blind retry. Active same-owner GUARD leases are periodically
+  retained by the **existing shared original arbiter** rather than
+  expiring while the physical FOLLOW remains active.
+- PF96 runs in the existing source-owned PF56 server timer after
+  physical actor recovery, at most once per second.
+
+**PF97 — real NPC guard reaction to applied damage.**
+
+- Source-pinned original `combat/killmailTracker.js` invokes the new
+  **passive** guard witness only after actual positive damage.
+  The witness requires a genuine live attacker NPC and its native
+  controller, one authenticated owner's physically present player ship,
+  the same original scene and session, and a fresh bounded incident.
+  The damage callback never executes a wallet, NPC order or SQLite
+  mutation.
+- The guard reaction selects only the owner's already-active **ACKED
+  PF55 DEFEND** pilot/hull in the original PF52 roster/claim, with
+  matching original ItemStore ship, deployment, latest order, account
+  and session. It derives a deterministic retaliation operation ID,
+  asks the **shared original order arbiter** for preflight permission,
+  then issues and reconciles the actual PF55 ATTACK once. Uncertain
+  outcomes are process-sticky and never redispatched.
+- The source-pinned original `npc/npcBehaviorLoop.js` keeps its ordinary
+  friendly NPC protection. Only a claimed Personal Fleet native NPC
+  with a current signed PF55 ATTACK on the **exact real attacker** of
+  its own owner (proven by the original positive damage event) can
+  narrowly override that NPC-vs-NPC friendly veto. No general permission
+  to attack players, own corporation, CONCORD, unrelated NPCs or
+  competing WAR/MINING ships is created.
+- Both source patches pin the exact original `coop/pas7std` blobs and
+  fail on drift. The existing PF56 server tick hosts the 1s guard
+  reaction; there is no extra timer or new public command.
+
+**Isolated checks executed in controlled V8/faux-SQL contexts:**
+combat recovery **12/12**, station/guard server tick **29/29**,
+bootstrap **42/42**, original order witness **30/30**, applied-damage
+witness **10/10**, automatic guard reaction **11/11**, stock target
+policy **9/9**, original combat receipt **11/11**. Both source-pinned
+original damage/hostility transformations also compile when applied to
+the matched original JavaScript sources. These are NOT two-player
+native EveJS E2E results.
+
+**Full gameplay NOT yet certified:** genuine native WORK installation,
+real original SQLite/SIGKILL two-client battle, automatic guard reaction
+to every possible damage source, physical hits/killmails/wreck custody,
+stale post-crash combat reconciliation and independent original writer
+configuration remain outstanding. A player-directed attack on a passive
+NPC with no legitimate original hostility or applied-damage evidence
+may still be refused by the stock combat policy. Do not merge, mark
+playable or enable this draft on PLAY without those checks.
+
 ## PF95 — native ATTACK + owner GUARD and original controller receipt (2026-11-08)
 
 **Latest staged source inventory:** 22 PF80 baseline + **34-path** first-play
