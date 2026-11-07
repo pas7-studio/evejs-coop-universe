@@ -5,6 +5,60 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF104 — genuine original SDE NPC offer policy, no synthetic IDs (2026-11-08)
+
+The original native WORK patch now includes
+`coopPersonalFleetOriginalAuthoredPolicy.js`. PF102B loads this source
+directly. It contains **server-authored** financial terms:
+**50,000 ISK to hire** (`amountCents=5000000`) and **5,000 ISK per 24h**
+(`salaryCents=500000`, `periodMs=86400000`) — prices, NOT credited
+currency. Consent is still explicitly required by PF92/PF53.
+
+The module selects **at most three** named, original NPC characters from
+the same installed original EveJS static-data JSONL sources as
+`corporationState` (`Code/data` or `Code/_local/sde`), using:
+- genuine `npcCharacters.jsonl` `_key` and its NPC `corporationID`;
+  that corporation must exist in `npcCorporations.jsonl` and the
+  original `corporationState` must confirm owner identity and NPC status;
+- original `npcData.listNpcProfiles` / `buildNpcDefinition`, with
+  `entityType='npc'` and matching original NPC corporation, profile,
+  loadout, behavior and ship type;
+- original `itemTypeRegistry.resolveItemByTypeID`, which must prove the
+  physical hull is an actual **category 6 stock ship**. No CONCORD
+  profile, unknown placeholder or NPC-only category 11 hull is accepted.
+
+The selection is deterministic and only at server startup. These are
+**real SDE character records** chosen by a source-authored rule, not
+handwritten or fabricated IDs. The resulting policy is immutable;
+the original PF102 preflight now also verifies
+`definition.profile.corporationID===employerCorpID` so a genuine
+profile from another NPC employer cannot be substituted.
+
+**Fail-closed limits:** The real SDE JSONL is local to the native engine
+and not available in this GitHub session. A missing SDE folder, invalid
+record, empty matching set or unavailable real corporation wallet means
+**no offers and startup refusal**, never a dummy NPC, free ISK or fake
+ship. Whether this exact selection returns a compatible category-6
+profile on the owner's native WORK machine is **NOT YET VERIFIED**.
+Existing stock physical ItemStore and wallet rights remain mandatory.
+
+**Still blocking a playable WORK server:** the genuine reciprocal owner
+source `coopPersonalFleetOriginalReciprocalWriterOwners.js` has not
+been implemented or source-attested against all native
+player/ItemStore/Mining/WAR/Exploration writers. It must not be
+replaced with functions returning `true`. Gameplay, original SQLite,
+SIGKILL and two-client WORK acceptance remain **NOT RUN**.
+
+**Evidence:** 15/15 PF104 authored-policy tests pass with isolated
+simulated original SDE files, plus one PF102 regression for a
+foreign corporation profile. Not an actual SDE load or original
+Node process.
+
+**Native package:** 22 PF80 paths + **44** first-play delta paths
+(4 overlaps) = **62 unique** original native WORK source paths.
+The checksum manifest now has **86** pinned files; the manual local
+runner includes the PF104 policy test.
+
 ## PF103 — real native WAR ownership readback and writer boundary (2026-11-08)
 
 PF103 adds two original-native-only modules to the source-pinned WORK
