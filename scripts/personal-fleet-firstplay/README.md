@@ -195,7 +195,7 @@ Changing the target, assignment, actor generation or mode does.
 
 **Execution evidence**: 239/239 Node (including 19 actual SQLite durable
 receipt cases and integrated bootstrap/executor tests), plus 26/26
-Python/Git, **265/265 previously PASS; 66/66 newly added dock tests PASS; full combined regression NOT RUN.** **32 SHA256-pinned code/test files**;
+Python/Git, **265/265 previously PASS; 68/68 newly added dock tests PASS; full combined regression NOT RUN.** **32 SHA256-pinned code/test files**;
 19 unique additional native patch paths over PF80's 22 source paths,
 four overlapping, producing 37 unique modified native files.
 
@@ -243,8 +243,8 @@ All 32 source/test files have SHA256 manifest entries. The manual Windows
 runner has 12 Node suites and is configured to announce its combined PASS
 only after every suite succeeds on the user's machine.
 
-**Executed here:** 66/66 new Node VM/source-contract tests, including 35
-PF56 completion, 16 PF60 terminal source and 15 one-shot cleanup-coordinator
+**Executed here:** 68/68 new Node VM/source-contract tests, including 35
+PF56 completion, 17 PF60 terminal source and 15 one-shot cleanup-coordinator
 cases. Prior source baseline 265/265 passed before these changes. Full
 combined current-head test run, native WORK startup, real station flight/dwell,
 real ItemStore+NPC cleanup after kill, and two-client gameplay **NOT RUN**.
@@ -254,3 +254,10 @@ writer hooks, a real continuous station dwell monitor and original return-flight
 witness, plus observed crash-recovery on the running original server. A
 `DOCKED` response cannot be claimed until PF56 independently reconciles
 and PF60 finalizes the actual original ship. Do not touch PLAY.
+
+
+**Scene-mount safety correction:** Neither PF60 terminal custody nor PF56 dock
+completion can treat an unloaded original solar-system scene as proof that an
+NPC disappeared. Both require the exact original system scene to be mounted,
+and then check no physical duplicate exists in any mounted scene. Two new
+negative tests exercise this; the isolated dock suites now pass **68/68**.
