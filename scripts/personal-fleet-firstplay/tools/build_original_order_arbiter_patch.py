@@ -40,6 +40,28 @@ def transform(path: str, source: str) -> str:
     if '\r' in source or not source.endswith('\n'):
         raise ValueError('PF_ORDER_NATIVE_UNEXPECTED_LINE_ENDINGS')
     updated = source.replace(old, new, 1)
+    if path == BRIDGE:
+        # PF96 re-adopts its own original ACKED GUARD after the stock native
+        # NPC materializer resets the live manualOrder. Existing Destiny
+        # FOLLOW can outlive the process-local order lease. Only the exact
+        # source-backed bridge callback may permit that one re-adoption.
+        changes=(
+         (' warShipClaim=null}={}) {',
+          ' warShipClaim=null,personalFleetRecoveryProof=null}={}) {'),
+         (' if(warShipClaim!==null&&typeof warShipClaim!=="function")throw Error("WAR_SHIP_CLAIM_AUTHORITY_INVALID");',
+          ' if(warShipClaim!==null&&typeof warShipClaim!=="function")throw Error("WAR_SHIP_CLAIM_AUTHORITY_INVALID");\\n if(personalFleetRecoveryProof!==null&&typeof personalFleetRecoveryProof!=="function")throw Error("PF96_RECOVERY_PROOF_AUTHORITY_INVALID");'),
+         ('  if((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&\\n   (!lease||lease.owner!==owner)&&!warOwnsItsPatrol)',
+          '  const provenPfResume=owner==="PERSONAL_FLEET"&&action==="pf-resume-guard"&&\\n'
+          '   !state.manualBusy&&state.movementBusy&&\\n'
+          '   (!lease||lease.owner==="PERSONAL_FLEET")&&\\n'
+          '   personalFleetRecoveryProof?.(link)===true;\\n'
+          '  if((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&\\n'
+          '   (!lease||lease.owner!==owner)&&!warOwnsItsPatrol&&!provenPfResume)'),
+        )
+        for before,after in changes:
+            if updated.count(before)!=1 or updated.count(after)!=0:
+                raise ValueError('PF96_ORIGINAL_BRIDGE_RECOVERY_SOURCE_DRIFT')
+            updated=updated.replace(before,after,1)
     if updated.count('"PERSONAL_FLEET"') != 1:
         raise ValueError('PF_ORDER_DUPLICATE_FLEET_OWNER')
     return updated
