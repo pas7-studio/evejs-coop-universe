@@ -21,6 +21,7 @@ function fixture(testBody){
   './worldData':{getStationByID:id=>id===60000123?{stationID:id,solarSystemID:30000142,position:{x:200,y:300,z:400}}:null},
   './coopPersonalFleetNativeReturnExecutor':{createOriginalReturnExecutor:x=>{capture.returnSource=x;return {execute:row=>({success:true,kind:'REAL_RETURN_ADAPTER',ship:row.shipItemID})};}},
   './npc/npcRegistry':{getControllerByEntityID:id=>({entityID:id})},
+  './coopPersonalFleetNativeOrders':{key:id=>F+'manual-order-v1:'+id,OP_INDEX:F+'manual-order-operations-v1',signature:r=>r.signature},
   './coopPersonalFleetHangarBridge':{REGISTRY_KEY:'roster-index',validateIndex:x=>x,validateRoster:x=>x},
   './coopNpcOrderBridge':{createOrderBridge:o=>{Object.assign(capture,{bridge:o});return {issue:()=>({success:true})};}},
   './coopPersonalFleetNpcRuntimeExecutor':{createNpcRuntimeExecutor:o=>{capture.executor=o;return {
@@ -204,4 +205,16 @@ test('PF95 GUARD never moves a ship if native weapon disarm fails',()=>fixture(f
   targetEntityID:3003,followRangeMeters:2500};
  assert.equal(owner.execute(row).success,false);
  assert.deepEqual(calls,[]);
+}));
+
+test('PF96 direct combat resumption requires original ACKED operation and receipt',()=>fixture(f=>{
+ f.options.combatAuthority={verify:()=>true};
+ f.options.combatReceipt={recordAfterEffect:()=>({success:true}),
+  verifyPersisted:()=>({orderApplied:true})};
+ const x=f.create();
+ const row={phase:'ACKED',action:'ATTACK',operationID:'op1',
+  signature:'a'.repeat(64),shipItemID:2301,systemID:30000142,
+  targetEntityID:3333,actorGeneration:9};
+ assert.equal(x.resumeCommitted(row).success,false);
+ assert.equal(x.resumeCommitted(row).errorMsg,'PF96_ORIGINAL_ACKED_COMBAT_SOURCE_NOT_PROVEN');
 }));
