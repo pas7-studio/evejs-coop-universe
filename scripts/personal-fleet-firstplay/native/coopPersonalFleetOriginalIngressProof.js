@@ -52,7 +52,7 @@ function captureOriginalReturnIngress(row,physical,at){
   g=ship?.sessionlessWarpIngress;
  if(!pos(at)||!obj(row)||!obj(stored)||!obj(ship)||!obj(station)||
     !obj(g)||!vec(g.origin)||!vec(g.targetPoint)||
-    !vec(stored.position)||!vec(station.position)||
+    !vec(ship.position)||!vec(station.position)||
     ship.itemID!==row.shipItemID||ship.ownerID!==row.ownerCharacterID||
     ship.nativeNpc!==true||ship.kind!=='ship'||ship.transient===true||
     ship.session!=null||stored.entityID!==row.shipItemID||
@@ -61,7 +61,7 @@ function captureOriginalReturnIngress(row,physical,at){
     stored.personalFleetPilotID!==row.pilotID||
     station.stationID!==row.stationID||
     !num(station.radius)||station.radius<0||
-    dst(g.origin,stored.position)>1||
+    dst(g.origin,ship.position)>1||
     dst(g.targetPoint,station.position)>station.radius+1500||
     !pos(g.startTimeMs)||!pos(g.travelCompleteAtMs)||
     at<g.startTimeMs||at>=g.travelCompleteAtMs||
@@ -75,7 +75,7 @@ function captureOriginalReturnIngress(row,physical,at){
    startTimeMs:g.startTimeMs,travelCompleteAtMs:g.travelCompleteAtMs,
    completeAtMs:g.completeAtMs||g.travelCompleteAtMs,
    origin:{...g.origin},targetPoint:{...g.targetPoint},
-   storedPosition:{...stored.position}};
+   storedPosition:{...ship.position}};
  r.hash=hash(['PF94_ORIGINAL_NATIVE_INGRESS_V1',...fields(r)]);
  return verifySnapshot(row,r)?Object.freeze(r):null;
 }
