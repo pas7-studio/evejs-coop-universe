@@ -39,6 +39,17 @@ function fixture(cb){
    if(broken==='physical-order')throw Error('SHARED_ARBITER_NOT_INSTALLED');
    return {execute:()=>({success:false}),supports:()=>false,
     executeNativeReturn:()=>({success:false})};}},
+  './coopPersonalFleetOriginalStationTickDriver':{createOriginalStationTickDriver(args){
+   events.push('station-tick-source');
+   assert.equal(typeof args.stationDwell.sample,'function');
+   assert.equal(args.enabled(),false);
+   if(broken==='station-tick-source')throw Error('PF56_NATIVE_STATION_TICK_SOURCE_MISSING');
+   return {start(){events.push('station-tick-start');
+     assert.equal(events.at(-2),'chat');
+     if(broken==='station-tick-start')throw Error('PF56_NATIVE_STATION_TIMER_START_FAILED');
+     return true;},
+    stop(){return true;},tick(){return {status:'BLOCKED'};},
+    getStatus(){return {started:true,active:true};}};}},
   './coopPersonalFleetOriginalStationDwell':{createOriginalStationDwell(args){
    events.push('station-dwell');assert.equal(args.enabled(),false);
    if(broken==='station-dwell')throw Error('PF56_ORIGINAL_STATION_MONITOR_MISSING');
@@ -147,7 +158,7 @@ const call=(f)=>f.api.createOriginalWorkBootstrap({originalHooks:f.hooks,authore
 test('composition builds original source owners and publishes chat LAST',()=>fixture(f=>{
  const b=call(f);assert.equal(b.status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.equal(b.getOperationalStatus().ready,true);
- assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','order-ack','physical-order','station-dwell','orders','scoped-dock','terminal-sources','scoped-cleanup','terminal-custody','dock-coordinator','dock-witness','return','owner','PF58','chat']);
+ assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','order-ack','physical-order','station-dwell','station-tick-source','orders','scoped-dock','terminal-sources','scoped-cleanup','terminal-custody','dock-coordinator','dock-witness','return','owner','PF58','chat','station-tick-start']);
 }));
 test('flags OFF after install prevent action even after previously ready',()=>fixture(f=>{
  const b=call(f);delete process.env.EVEJS_COOP_PERSONAL_FLEET_CHAT;
@@ -324,4 +335,19 @@ test('operator fake native return and arrival callbacks are ignored',()=>fixture
  f.hooks.verifyOriginalDockReady=()=>true;
  assert.equal(call(f).status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.ok(f.events.includes('station-dwell'));
+}));
+
+test('PF56 native tick constructor fails before PF58 and /pf publication',()=>fixture(f=>{
+ f.setBroken('station-tick-source');assert.throws(()=>call(f),/STATION_TICK_SOURCE_MISSING/);
+ assert.equal(f.events.includes('PF58'),false);assert.equal(f.events.includes('chat'),false);
+}));
+test('native tick starts only AFTER chat and all original source owners',()=>fixture(f=>{
+ const x=call(f);assert.deepEqual(x.nativeStationTickStatus(),{started:true,active:true});
+ assert.equal(f.events.at(-2),'chat');assert.equal(f.events.at(-1),'station-tick-start');
+ assert.equal(typeof x.stopNativeStationTick,'function');
+}));
+test('failed native station timer never permits a second PF58/chat install',()=>fixture(f=>{
+ f.setBroken('station-tick-start');assert.throws(()=>call(f),/STATION_TIMER_START_FAILED/);
+ assert.equal(f.events.at(-2),'chat');
+ assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
 }));
