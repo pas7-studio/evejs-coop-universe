@@ -49,13 +49,13 @@ def transform(path: str, source: str) -> str:
          (' warShipClaim=null}={}) {',
           ' warShipClaim=null,personalFleetRecoveryProof=null}={}) {'),
          (' if(warShipClaim!==null&&typeof warShipClaim!=="function")throw Error("WAR_SHIP_CLAIM_AUTHORITY_INVALID");',
-          ' if(warShipClaim!==null&&typeof warShipClaim!=="function")throw Error("WAR_SHIP_CLAIM_AUTHORITY_INVALID");\\n if(personalFleetRecoveryProof!==null&&typeof personalFleetRecoveryProof!=="function")throw Error("PF96_RECOVERY_PROOF_AUTHORITY_INVALID");'),
-         ('  if((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&\\n   (!lease||lease.owner!==owner)&&!warOwnsItsPatrol)',
-          '  const provenPfResume=owner==="PERSONAL_FLEET"&&action==="pf-resume-guard"&&\\n'
-          '   !state.manualBusy&&state.movementBusy&&\\n'
-          '   (!lease||lease.owner==="PERSONAL_FLEET")&&\\n'
-          '   personalFleetRecoveryProof?.(link)===true;\\n'
-          '  if((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&\\n'
+          ' if(warShipClaim!==null&&typeof warShipClaim!=="function")throw Error("WAR_SHIP_CLAIM_AUTHORITY_INVALID");\n if(personalFleetRecoveryProof!==null&&typeof personalFleetRecoveryProof!=="function")throw Error("PF96_RECOVERY_PROOF_AUTHORITY_INVALID");'),
+         ('  if((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&\n   (!lease||lease.owner!==owner)&&!warOwnsItsPatrol)',
+          '  const provenPfResume=owner==="PERSONAL_FLEET"&&action==="pf-resume-guard"&&\n'
+          '   !state.manualBusy&&state.movementBusy&&\n'
+          '   (!lease||lease.owner==="PERSONAL_FLEET")&&\n'
+          '   personalFleetRecoveryProof?.(link)===true;\n'
+          '  if((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&\n'
           '   (!lease||lease.owner!==owner)&&!warOwnsItsPatrol&&!provenPfResume)'),
         )
         for before,after in changes:
