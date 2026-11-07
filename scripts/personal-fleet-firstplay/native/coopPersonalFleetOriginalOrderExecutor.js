@@ -13,6 +13,7 @@ const registry=require('./npc/npcRegistry');
 const worldData=require('./worldData');
 const {createOriginalReturnExecutor}=require('./coopPersonalFleetNativeReturnExecutor');
 const pf52=require('./coopPersonalFleetHangarBridge');
+const pf55=require('./coopPersonalFleetNativeOrders');
 const {createOrderBridge}=require('./coopNpcOrderBridge');
 const {createNpcRuntimeExecutor}=require('./coopPersonalFleetNpcRuntimeExecutor');
 const F='coop-personal-fleet\u001f',T='corporationRuntime';
@@ -166,7 +167,31 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
   return {success:true,data:{operationID:row.operationID,
    durability:'ORIGINAL_NPC_ENTITIES_AND_PF55_RECEIPT_COMMITTED'}};
  }
- return Object.freeze({supports,execute,
+ function resumeCommitted(row){
+  if(!live()||!combatReady()||!row||
+     row.phase!=='ACKED'||!['ATTACK','DEFEND'].includes(row.action)||
+     !positive(row.shipItemID)||!positive(row.systemID))
+   return {success:false,errorMsg:'PF96_COMBAT_RESUME_NOT_AUTHORIZED'};
+  let proven=false;
+  // This is a READ-BACK of the committed original order, never a second
+  // PF55 ISSUING or a second native receipt. The bridge's shared lease
+  // remains the exclusive gate for any physical re-adoption.
+  try{proven=a.transact([T,'items','characters','npcEntities','npcRuntimeControllers'],tx=>{
+   const ledger=tx.get(T,pf55.key(row.shipItemID));
+   const ix=tx.get(T,pf55.OP_INDEX);
+   return ledger?.phase==='ACKED'&&ledger.operationID===row.operationID&&
+     ledger.signature===row.signature&&
+     row.signature===pf55.signature(row)&&
+     ix?.operations?.[row.operationID]?.phase==='ACKED'&&
+     ix.operations[row.operationID].signature===row.signature&&
+     orderWitness.verifyNativeActor(row,tx)===true&&
+     combatReceipt.verifyPersisted(row,tx)?.orderApplied===true&&
+     combatAuthority.verify(row,tx)===true;
+  })===true;}catch{proven=false;}
+  if(!proven)return {success:false,errorMsg:'PF96_ORIGINAL_ACKED_COMBAT_SOURCE_NOT_PROVEN'};
+  return combatEffect(row);
+ }
+ return Object.freeze({supports,execute,resumeCommitted,
   executeNativeReturn(row){
    if(!live()||!row||!positive(row.shipItemID)||!positive(row.stationID)||
       !positive(row.systemID)||!positive(row.actorGeneration))
