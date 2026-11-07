@@ -62,7 +62,11 @@ def transform(path: str, source: str) -> str:
             if updated.count(before)!=1 or updated.count(after)!=0:
                 raise ValueError('PF96_ORIGINAL_BRIDGE_RECOVERY_SOURCE_DRIFT')
             updated=updated.replace(before,after,1)
-    if updated.count('"PERSONAL_FLEET"') != 1:
+    # The bridge may now mention this owner in its tightly-scoped
+    # source-authenticated PF96 readoption condition. Count the exact marker,
+    # not all legitimate references to the owner in native source.
+    if updated.count(new) != 1 or (path == ARB and
+       updated.count('"PERSONAL_FLEET"') != 1):
         raise ValueError('PF_ORDER_DUPLICATE_FLEET_OWNER')
     return updated
 
