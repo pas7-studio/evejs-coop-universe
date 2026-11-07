@@ -243,7 +243,7 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
       const result=returnDock.advanceServer(row);
       if(['DOCKED','ALREADY_DOCKED'].includes(result?.status)){
         const finalized=dockCoordinator.finalizeAfterPf56Dock(row);
-        return finalized?.status==='FINALIZED'?result:
+        return ['FINALIZED','ALREADY_FINALIZED'].includes(finalized?.status)?result:
           {status:'BLOCKED',reason:'PF84_TERMINAL_FINALIZE_UNPROVEN'};
       }
       return result;
