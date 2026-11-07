@@ -119,26 +119,43 @@ function createOriginalAtomicSwitchAndHandoff({gameStore,pf52,
       return block('PF100B_EXISTING_NATIVE_ACTOR_CLAIM');
     if(pf52.checkCompetingClaims(tx,row))
      return block('PF100B_COMPETING_ORIGINAL_CLAIMS');
+    // Native owner witness fences EVERY external read-only callback too.
+    // Giving a callback a read-only facade is insufficient if its closure
+    // already holds the underlying tx.put/del authority (PF94–96).
+    let spawn,at,evidenceReason='PF100B_ORIGINAL_OWNER_OR_EQUIPMENT_INVALID';
     const evidence=()=>{
-     const ro=readOnly(tx);
-     const eq=verifyOriginalEquipment(structuredClone(row),ro);
-     return verifyExclusive(structuredClone(row),ro)===true&&
-       verifyNoPhysicalActor(structuredClone(row),ro)===true&&
-       obj(eq)&&eq.fittingHash===row.fittingHash&&eq.cargoHash===row.cargoHash;
+     let observed=null;
+     const ok=tx.verifyReadOnlySessionWitness((_request,ro)=>{
+      const eq=verifyOriginalEquipment(structuredClone(row),ro);
+      if(verifyExclusive(structuredClone(row),ro)!==true||
+         verifyNoPhysicalActor(structuredClone(row),ro)!==true||
+         !obj(eq)||eq.fittingHash!==row.fittingHash||
+         eq.cargoHash!==row.cargoHash){
+       evidenceReason='PF100B_ORIGINAL_OWNER_OR_EQUIPMENT_INVALID';return false;
+      }
+      const place=resolveOriginalUndock(structuredClone(row),ro);
+      const coords=x=>obj(x)&&['x','y','z'].every(k=>
+        typeof x[k]==='number'&&Number.isFinite(x[k]));
+      if(!obj(place)||place.stationID!==row.stationID||
+         place.systemID!==row.systemID||place.sessionless!==true||
+         !coords(place.position)||!coords(place.direction)){
+       evidenceReason='PF100B_UNDOCK_UNPROVEN';return false;
+      }
+      const timestamp=clock();
+      if(!pos(timestamp)){evidenceReason='PF100B_CLOCK_INVALID';return false;}
+      observed={spawn:structuredClone(place),at:timestamp};
+      return true;
+     },Object.freeze({kind:'PF100B_ATOMIC_ADMISSION'}));
+     if(ok!==true||!observed)return false;
+     spawn=observed.spawn;at=observed.at;
+     return true;
     };
-    if(!evidence())return block('PF100B_ORIGINAL_OWNER_OR_EQUIPMENT_INVALID');
-    const spawn=resolveOriginalUndock(structuredClone(row),readOnly(tx));
-    const coords=x=>obj(x)&&['x','y','z'].every(k=>typeof x[k]==='number'&&Number.isFinite(x[k]));
-    if(!obj(spawn)||spawn.stationID!==row.stationID||
-       spawn.systemID!==row.systemID||spawn.sessionless!==true||
-       !coords(spawn.position)||!coords(spawn.direction))
-     return block('PF100B_UNDOCK_UNPROVEN');
+    if(!evidence())return block(evidenceReason);
     if(!live()||!gated()||!evidence())
      return block('PF100B_AUTHORITY_REVOKED_BEFORE_COMMIT');
     if(!isDeepStrictEqual(tx.get(C,String(row.ownerCharacterID)),before)||
        !isDeepStrictEqual(tx.get(I,'items'),items))
      throw Error('PF100B_AUTHORITY_CHANGED_INSIDE_TX_ROLLBACK');
-    const at=clock();if(!pos(at))return block('PF100B_CLOCK_INVALID');
     const next=structuredClone(current);
     next.shipID=replacementShipItemID;
     next.shipTypeID=replacement.typeID;
@@ -165,7 +182,8 @@ function createOriginalAtomicSwitchAndHandoff({gameStore,pf52,
      throw Error('PF100B_COMMIT_READBACK_UNPROVEN_ROLLBACK');
     return Object.freeze({status:'DURABLE_TX_APPLIED',mayRetryAutomatically:false,
       characterID:row.ownerCharacterID,oldShipItemID:row.shipItemID,
-      replacementShipItemID,assignmentID:row.assignmentID});
+      replacementShipItemID,stationID:row.stationID,systemID:row.systemID,
+      assignmentID:row.assignmentID});
    });
   }catch{
    // Unknown commit status can never be interpreted as permission to retry.
