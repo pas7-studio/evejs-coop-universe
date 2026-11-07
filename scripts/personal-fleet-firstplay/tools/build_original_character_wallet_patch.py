@@ -26,7 +26,7 @@ MODULES={
  ("  try{admission=atomic.transact([TABLE,ITEMS],tx=>{",
   "  try{admission=atomic.transact([TABLE,ITEMS,'characters'],tx=>{"),
  ("  try{return atomic.transact([TABLE,ITEMS],tx=>{",
-  "  try{return atomic.transact([TABLE,ITEMS,'characters'],tx=>{"),
+  "  try{return atomic.transact([TABLE,ITEMS,'characters','npcEntities'],tx=>{"),
 ],
 'coopPersonalFleetPaidHiring.js':[
  (" const characters=tx.get(CHARACTERS,CHARACTERS);\n const c=characters?.[String(receipt.ownerCharacterID)];",
