@@ -44,6 +44,7 @@ const HOOKS=Object.freeze([
  'executeNativeReturn','executeNativeDock','verifyOriginalDockedPlayerSession',
 ]);
 let booted=false;
+let attempted=false;
 let startupInProgress=false;
 
 function assertSourceHooks(hooks){
@@ -84,10 +85,12 @@ function assertReadiness(hooks,original){
   throw Error('PF_FIRSTPLAY_ORIGINAL_WRITER_HOOKS_NOT_INSTALLED');
 }
 function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
- if(booted||startupInProgress)throw Error('PF_FIRSTPLAY_ALREADY_BOOTED');
+ if(booted||attempted||startupInProgress)throw Error('PF_FIRSTPLAY_ALREADY_BOOTED_OR_FAILED_STICKY');
  if(!Array.isArray(authoredCatalog)||authoredCatalog.length===0)
   throw Error('PF_FIRSTPLAY_REAL_NPC_CATALOG_EMPTY');
  assertSourceHooks(originalHooks);
+ // A failed PF58 singleton/chat publication is not safe to retry in-process.
+ attempted=true;
  startupInProgress=true;
  let ready=false;
  const enabled=()=>ready&&
