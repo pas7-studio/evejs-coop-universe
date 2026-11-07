@@ -4,6 +4,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),
  fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const src=fs.readFileSync(path.join(__dirname,'../native/coopPersonalFleetOriginalDurableOrderAck.js'),'utf8');
 const pf56=require('../../pf56/native/coopPersonalFleetReturnDock.cjs');
+const ingressProof=require('../native/coopPersonalFleetOriginalIngressProof');
 const T='corporationRuntime',NE='npcEntities', F='coop-personal-fleet\u001f';
 const ENTITY='entities\u001f2301';
 const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
@@ -11,6 +12,7 @@ function fixture(run){
  const db=new DatabaseSync(':memory:');
  for(const name of [T,NE,'items','characters'])db.exec(`CREATE TABLE "${name}" (key TEXT PRIMARY KEY, json TEXT NOT NULL)`);
  let poisoned=false,on=true,fenced=true,actorOK=true,targetOK=true,controlOK=true,abort=false;
+ let now=1700000001000;
  let gets=0,puts=0,dispatch=0;
  const row={version:1,phase:'ISSUING',operationID:'op-123',
   assignmentID:'asgn-1',pilotID:'coop-pilot-123',ownerCharacterID:901,
@@ -32,7 +34,7 @@ function fixture(run){
  const scene={systemID:30000142,getEntityByID:id=>id===2301?entity:id===60000123?stationBall:null};
  const originalEntity={entityID:2301,systemID:30000142,ownerID:901,typeID:600,
   personalFleetOriginal:true,personalFleetAssignmentID:'asgn-1',
-  personalFleetPilotID:'coop-pilot-123',mode:'STOP',targetEntityID:0,
+  personalFleetPilotID:'coop-pilot-123',mode:'STOP',position:{x:1,y:2,z:3},targetEntityID:0,
   followRange:0,otherStockItemRef:'untouched'};
  const read=(table,key)=>{
   gets++;const q=db.prepare(`SELECT json FROM "${table}" WHERE key=?`).get(key);
@@ -67,23 +69,24 @@ function fixture(run){
   './npc/nativeNpcStore':{getNativeEntity:()=>originalEntity,getNativeController:()=>storedController},
   './coopPersonalFleetNativeOrders':{key:id=>F+'manual-order-v1:'+id,signature},
   './coopPersonalFleetReturnDock':pf56,
+  './coopPersonalFleetOriginalIngressProof':ingressProof,
   './worldData':{getStationByID:id=>id===60000123?{stationID:id,solarSystemID:30000142,
-   position:{x:200,y:300,z:400}}:null}
+   position:{...stationBall.position}}:null}
  };
  const context={module:{exports:{}},exports:{},require:n=>{
   if(n==='node:crypto')return crypto;
   if(!(n in original))throw Error('UNKNOWN_SOURCE '+n);return original[n];
  },Date,Object,Number,Array,Set,Map,structuredClone,process};
  vm.runInNewContext(src,context,{filename:'coopPersonalFleetOriginalDurableOrderAck.js'});
- const opts={enabled:()=>on,allWritersFenced:()=>fenced,
+ const opts={enabled:()=>on,allWritersFenced:()=>fenced,clock:()=>now,
   orderWitness:{verifyNativeActor:()=>actorOK,verifyOriginalControl:()=>controlOK,
    verifyTarget:()=>targetOK}};
  const create=()=>context.module.exports.createOriginalDurableOrderAck(opts);
- try{run({row,entity,controller,storedController,originalEntity,original,opts,create,
+ try{run({row,entity,controller,storedController,originalEntity,original,stationBall,opts,create,
   read,write,tx,atomic,db,signature,pf56,
   setEnabled:x=>on=x,setFenced:x=>fenced=x,setPoisoned:x=>poisoned=x,
   setActor:x=>actorOK=x,setTarget:x=>targetOK=x,setControl:x=>controlOK=x,
-  abortNext:()=>abort=true,getCounts:()=>({puts,gets,dispatch}),
+  abortNext:()=>abort=true,setClock:t=>now=t,getCounts:()=>({puts,gets,dispatch}),
   receipt:()=>read(T,F+'native-order-receipt-v1:op-123')});}
  finally{db.close();}
 }
@@ -197,7 +200,11 @@ function seedOriginalReturn(f){
  f.write(T,f.pf56.OPS,{version:1,operations:{
   [row.operationID]:{assignmentID:row.assignmentID,signature:row.signature,phase:'RETURN_ISSUING'}}});
  f.write('characters',String(row.ownerCharacterID),{characterID:901,accountId:55});
- f.entity.mode='WARP';f.entity.pendingWarp={destination:{x:1200,y:300,z:400}};
+ f.stationBall.position.x=200000;
+ f.entity.mode='WARP';f.entity.pendingWarp={destination:{x:201020,y:300,z:400}};
+ f.entity.sessionlessWarpIngress={origin:{x:1,y:2,z:3},
+  targetPoint:{x:201020,y:300,z:400},startTimeMs:1700000000000,
+  travelCompleteAtMs:1700000020000,completeAtMs:1700000020200};
  return row;
 }
 test('PF84B original native RETURN effect is persisted with a single exact SQLite receipt',()=>fixture(f=>{
