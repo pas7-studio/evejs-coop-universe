@@ -176,9 +176,10 @@ test('PF95 native GUARD physically follows owner with weapons disabled',()=>fixt
   targetEntityID:3003,followRangeMeters:2500};
  assert.equal(owner.supports('DEFEND'),true);
  assert.equal(owner.execute(row).success,true);
- assert.equal(calls[0][0],'follow');
- assert.equal(calls[1][2].allowWeapons,false);
- assert.equal(calls[1][2].type,'follow');
+ assert.equal(calls[0][0],'manual');
+ assert.equal(calls[0][2].allowWeapons,false);
+ assert.equal(calls[0][2].type,'follow');
+ assert.equal(calls[1][0],'follow');
  assert.equal(calls[2],'receipt');
 }));
 test('PF95 native combat cannot be reported ACKED when source receipt fails',()=>fixture(f=>{
@@ -189,4 +190,18 @@ test('PF95 native combat cannot be reported ACKED when source receipt fails',()=
  const r=owner.execute({action:'ATTACK',shipItemID:2301,systemID:30000142,actorGeneration:9,targetEntityID:3333});
  assert.equal(r.success,false);
  assert.match(r.errorMsg,/UNKNOWN_NO_RETRY/);
+}));
+
+test('PF95 GUARD never moves a ship if native weapon disarm fails',()=>fixture(f=>{
+ const calls=[];
+ f.options.combatAuthority={verify:()=>true};
+ f.options.combatReceipt={recordAfterEffect:()=>{calls.push('receipt');return {success:true};}};
+ const owner=f.create();
+ f.capture.executor.orderBridge.issue=c=>c.execute();
+ f.capture.executor.npcRuntime.issueOrder=()=>({success:false,errorMsg:'DISARM_FAILED'});
+ f.capture.executor.npcRuntime.follow=()=>{calls.push('moved');return {success:true};};
+ const row={action:'DEFEND',shipItemID:2301,systemID:30000142,actorGeneration:9,
+  targetEntityID:3003,followRangeMeters:2500};
+ assert.equal(owner.execute(row).success,false);
+ assert.deepEqual(calls,[]);
 }));
