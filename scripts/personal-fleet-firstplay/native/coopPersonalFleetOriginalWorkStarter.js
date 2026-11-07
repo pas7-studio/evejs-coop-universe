@@ -75,7 +75,18 @@ function bootstrapOriginalWorkFromServer(){
  // this package never ships a fake success function.
  let source;
  try{source=require('./coopPersonalFleetOriginalWorkConfiguration');}
- catch(e){throw Error('PF88_ORIGINAL_WORK_CONFIG_NOT_INSTALLED: '+String(e?.code||'UNKNOWN'));}
+ catch(e){
+  // PF104 policy loads at module initialization. A missing SDE, poisoned
+  // original GameStore, or failing transitive stock dependency MUST preserve
+  // its real P0 cause; only the missing DIRECT configuration source may
+  // be labelled NOT_INSTALLED. Otherwise the operator cannot diagnose why
+  // original WORK refused to listen.
+  if(e?.code==='MODULE_NOT_FOUND'&&
+     String(e.message||'').includes("'./coopPersonalFleetOriginalWorkConfiguration'"))
+   throw Error('PF88_ORIGINAL_WORK_CONFIG_NOT_INSTALLED: MODULE_NOT_FOUND');
+  throw Error('PF88_ORIGINAL_WORK_SOURCE_STARTUP_FAILED: '+
+   String(e?.message||'UNKNOWN_NATIVE_SOURCE_FAILURE'));
+ }
  return createOriginalWorkStarter({originalWorkConfiguration:source}).start();
 }
 module.exports=Object.freeze({STARTUP_SOURCE,createOriginalWorkStarter,
