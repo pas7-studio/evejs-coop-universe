@@ -17,6 +17,7 @@ function createOriginalWorkStarter({originalWorkConfiguration}={}){
  if(!originalWorkConfiguration||
     originalWorkConfiguration.source!=='ORIGINAL_EVEJS_PERSONAL_FLEET_WORK_CONFIGURATION_V1'||
     typeof originalWorkConfiguration.loadNativeAuthoredCatalog!=='function'||
+    typeof originalWorkConfiguration.loadNativeSalaryPolicies!=='function'||
     typeof originalWorkConfiguration.createNativeWriterHooks!=='function')
   throw Error('PF88_ORIGINAL_SOURCE_CONFIGURATION_REQUIRED');
  return Object.freeze({start(){
@@ -34,6 +35,10 @@ function createOriginalWorkStarter({originalWorkConfiguration}={}){
   if(!Array.isArray(authoredCatalog)||authoredCatalog.length<1||
      authoredCatalog.length>12)
    throw Error('PF88_ORIGINAL_NATIVE_NPC_CATALOG_UNAVAILABLE');
+  const authoredSalaryPolicies=originalWorkConfiguration.loadNativeSalaryPolicies();
+  if(!Array.isArray(authoredSalaryPolicies)||authoredSalaryPolicies.length<1||
+     authoredSalaryPolicies.length>12)
+   throw Error('PF91_ORIGINAL_AUTHORED_NPC_SALARY_POLICIES_UNAVAILABLE');
   const originalHooks=originalWorkConfiguration.createNativeWriterHooks();
   if(!originalHooks||
      originalHooks.source!=='ORIGINAL_EVEJS_PERSONAL_FLEET_BOOT_OWNER_V1'||
@@ -41,7 +46,7 @@ function createOriginalWorkStarter({originalWorkConfiguration}={}){
      originalHooks.allWritersFenced?.()!==true||
      originalHooks.allWalletWritersFenced?.()!==true)
    throw Error('PF88_ORIGINAL_NATIVE_WRITER_FENCES_UNVERIFIED');
-  const result=bootstrap.createOriginalWorkBootstrap({authoredCatalog,originalHooks});
+  const result=bootstrap.createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,originalHooks});
   if(result?.status!=='INSTALLED_WORK_SOURCE_BOUND'||
      result.mayEnable?.()!==true||
      result.getOperationalStatus?.().ready!==true)
