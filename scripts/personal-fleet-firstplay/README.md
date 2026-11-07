@@ -67,7 +67,7 @@ receipts, bootstrap fail-sticky and in-memory EVE service adapters.
 **26/26 Python/Git tests PASS** on Python 3.13.5; exact original stock
 blob pins, patch transforms, `git apply`, manifest and linked-worktree gates.
 
-**Previous baseline: 265/265 PASS. New PF56/60/61/66 local tests: 66/66 PASS. Full combined regression on this PR head has NOT RUN. 40 source/test/tool files SHA256-pinned.**
+**Previous baseline: 265/265 PASS. New PF56/60/61/66 local tests: 66/66 PASS. Full combined regression on this PR head has NOT RUN. 41 source/test/tool files SHA256-pinned.**
 These are isolated component and controlled SQLite/VM tests.
 Original EveJS server and connected game-client E2E are **NOT RUN** here.
 Manual Windows PowerShell runner is **NOT RUN** here.
@@ -239,7 +239,7 @@ Added and tested:
 
 The WORK package now has **21 exact additional native paths** atop PF80's
 22 staged paths; four paths overlap and **41 unique native files** are staged.
-All 40 source/test/tool files have SHA256 manifest entries. The manual Windows
+All 41 source/test/tool files have SHA256 manifest entries. The manual Windows
 runner has 12 Node suites and is configured to announce its combined PASS
 only after every suite succeeds on the user's machine.
 
@@ -273,7 +273,7 @@ New coopPersonalFleetOriginalStationTickDriver.js runs a single unref'd original
 
 Important remaining CODE: PF56 still needs its independently authenticated original durable RETURN order receipt (verifyOriginalReturnOrder), and its confirmReturn, observeArrival and requestDock transitions still require an authenticated player session. Completing these transitions after player logout needs a real original server-owned durable permit and integration, NOT a fabricated player session. The game engine startup and all original reciprocal writer hooks also remain uninstalled from this cloud connection.
 
-Test evidence actually executed: 66/66 fresh Node tests (22 physical-return bridge, 28 station dwell, 16 native scheduler), plus separately rerun older candidate baseline 239/239 Node and 26/26 Python. The full combined CURRENT PR head tests and actual native WORK/client/restart are NOT RUN. Do not sum independent source versions as a green current-head run. The isolated WORK patch now requires 23 additional native paths on PF80's 22 baseline (four overlapping), 41 unique final staged native paths. Manifest: 40 code/test/tool source entries. Manual Windows runner: 14 Node suites. PLAY and main untouched.
+Test evidence actually executed: 66/66 fresh Node tests (22 physical-return bridge, 28 station dwell, 16 native scheduler), plus separately rerun older candidate baseline 239/239 Node and 26/26 Python. The full combined CURRENT PR head tests and actual native WORK/client/restart are NOT RUN. Do not sum independent source versions as a green current-head run. The isolated WORK patch now requires 23 additional native paths on PF80's 22 baseline (four overlapping), 41 unique final staged native paths. Manifest: 41 code/test/tool source entries. Manual Windows runner: 14 Node suites. PLAY and main untouched.
 
 
 ### Original stock scene entity and Crimewatch audit (2026-11-07)
@@ -292,7 +292,7 @@ Latest isolated source-specific evidence is **74/74 Node PASS** (physical
 RETURN, original SDE/scene station dwell, original station native timer).
 Previous separately re-run candidate baseline: **239/239 Node + 26/26 Python
 PASS**. The full combined current PR-head regression and original native WORK
-client E2E are still NOT RUN. Source pins: 40 source/test/tool entries; 23-path
+client E2E are still NOT RUN. Source pins: 41 source/test/tool entries; 23-path
 incremental WORK patch over PF80's staged 22, 41 unique native source paths.
 The missing original durable RETURN order receipt and genuine sessionless
 PF56 transition authorization remain code blockers, not just debugging.
@@ -463,3 +463,28 @@ client E2E are still required.
 **Safety:** No automation, PLAY access, main merge or auto-enable. A live
 actor's post-crash return-flight resume, original startup hook owners and
 all reciprocal writer hooks are still not proven; do not call this playable.
+
+### PF87 real Node/SQLite verification of the staged WORK adapter
+
+After applying PF80 plus the **23-path** first-play patch in the **isolated**
+linked native WORK worktree, run (in PowerShell from the orchestration checkout):
+
+```powershell
+.\scripts\personal-fleet-firstplay\Test-FirstPlay-Local.ps1 `
+ -NativeCheckout 'C:\Games\EveCoop\upstream-evejs' `
+ -NativeWorktree 'O:\tmp\pf-firstplay-native-work'
+```
+
+`-NativeCheckout` validates **unmodified stock source pins**.
+`-NativeWorktree` loads the **actually patched original**
+`coopGameStoreAtomic.js` and `coopPersonalFleetNativeEntityIsolation.js`,
+uses a **private temporary on-disk Node 22 SQLite database** (never the live
+GameStore), and exercises original `createSqliteAdapter` together with
+`createGameStoreAdapter`: full durable commit and fresh DB reopen, no
+transient NPC persistence, one-NPC write scope, rollback on uncertain
+precommit, PF55 two-row ACK, PF56 CONFIRM, original default transient deny,
+and poison on postcommit cache failure. No server or game client starts.
+
+If the actual WORK source differs from the reviewed builder, the test must
+fail instead of reporting gameplay readiness. No command in this section
+enables Personal Fleet, starts PLAY or mutates native engine files.
