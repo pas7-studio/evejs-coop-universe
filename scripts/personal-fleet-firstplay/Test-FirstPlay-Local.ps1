@@ -39,6 +39,14 @@ try{
  $env:PYTHONDONTWRITEBYTECODE='1'
  & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-chat-gateway.test.cjs') (Join-Path $tests 'personal-fleet-work-command-owner.test.cjs') (Join-Path $tests 'personal-fleet-original-offers.test.cjs') (Join-Path $tests 'personal-fleet-original-source-bindings.test.cjs') (Join-Path $tests 'personal-fleet-original-work-bootstrap.test.cjs') (Join-Path $tests 'personal-fleet-original-wallet-authority.test.cjs') (Join-Path $tests 'personal-fleet-original-order-witness.test.cjs') (Join-Path $tests 'personal-fleet-original-order-executor.test.cjs') (Join-Path $tests 'personal-fleet-original-durable-order-ack.test.cjs') (Join-Path $tests 'personal-fleet-original-dock-completion.test.cjs') (Join-Path $tests 'personal-fleet-original-terminal-dock-sources.test.cjs') (Join-Path $tests 'personal-fleet-original-dock-coordinator.test.cjs') (Join-Path $tests 'personal-fleet-original-station-dwell.test.cjs') (Join-Path $tests 'personal-fleet-original-station-tick-driver.test.cjs')
  if($LASTEXITCODE -ne 0){throw 'PF_FIRSTPLAY_NODE_TEST_FAILED'}
+ # PF84 changes PF56's original transaction and sessionless transitions.
+ # Do not declare first-play PASS from only the source-bound VM suites.
+ $pf56Tests=Join-Path (Join-Path $root '..') 'pf56/tests'
+ & $node --test --test-concurrency=1 `
+   (Join-Path $pf56Tests 'pf56-return-dock.test.cjs') `
+   (Join-Path $pf56Tests 'pf56-native-api.test.cjs') `
+   (Join-Path $pf56Tests 'pf56-sqlite-sigkill.test.cjs')
+ if($LASTEXITCODE -ne 0){throw 'PF84_RETURN_SQLITE_OR_NATIVE_API_TEST_FAILED'}
  & $python -m unittest discover -s $tests -p 'test_*.py' -v
  if($LASTEXITCODE -ne 0){throw 'PF_FIRSTPLAY_PYTHON_TEST_FAILED'}
 }finally{
