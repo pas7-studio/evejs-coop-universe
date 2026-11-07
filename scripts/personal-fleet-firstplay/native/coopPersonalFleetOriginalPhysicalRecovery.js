@@ -100,7 +100,17 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
      entity.personalFleetPilotID!==row.pilotID||
      controller.personalFleetPilotID!==row.pilotID||
      entity.personalFleetGeneration!==row.generation||
-     controller.personalFleetGeneration!==row.generation)
+     controller.personalFleetGeneration!==row.generation||
+     entity.nativeNpcOccupied!==true||
+     entity.npcEntityType!=='personalFleet'||
+     entity.operatorKind!=='PERSONAL_FLEET'||
+     entity.selectionKind!=='PERSONAL_FLEET'||
+     entity.selectionID!==row.assignmentID||
+     controller.entityType!=='personalFleet'||
+     controller.operatorKind!=='PERSONAL_FLEET'||
+     controller.selectionKind!=='PERSONAL_FLEET'||
+     controller.selectionID!==row.assignmentID||
+     !['nativeAmbient','nativeCombat'].includes(controller.runtimeKind))
    return null;
   return {entity,controller};
  }
@@ -111,16 +121,37 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
     ![s._space?.shipID,s.shipID,s.shipid,s.activeShipID].some(v=>
       v===id||String(v)===String(id)));
  }
+ // PF101: source-owned physical actor markers are NOT optional. A numeric
+ // ship ID + matching owner must not make a player, Mining, WAR or stale NPC
+ // actor eligible for Personal Fleet re-adoption after a process restart.
+ // These fields are written by the original PF58 stock ship materializer.
+ function originalSceneShip(row,e){
+  return obj(e)&&e.kind==='ship'&&e.itemID===row.shipItemID&&
+   e.nativeNpc===true&&e.nativeNpcOccupied===true&&
+   e.npcEntityType==='personalFleet'&&e.transient!==true&&
+   e.operatorKind==='PERSONAL_FLEET'&&
+   e.selectionKind==='PERSONAL_FLEET'&&e.selectionID===row.assignmentID&&
+   e.personalFleetOriginal===true&&
+   e.personalFleetAssignmentID===row.assignmentID&&
+   e.personalFleetPilotID===row.pilotID&&
+   e.personalFleetGeneration===row.generation&&
+   e.ownerID===row.ownerCharacterID&&
+   e.characterID===0&&e.pilotCharacterID===0&&e.session==null;
+ }
+ function originalSceneController(row,c){
+  return obj(c)&&c.entityID===row.shipItemID&&
+   c.systemID===row.systemID&&c.transient!==true&&
+   c.personalFleetOriginal===true&&
+   c.personalFleetAssignmentID===row.assignmentID&&
+   c.personalFleetPilotID===row.pilotID&&
+   c.personalFleetGeneration===row.generation&&
+   c.entityType==='personalFleet'&&c.operatorKind==='PERSONAL_FLEET'&&
+   c.selectionKind==='PERSONAL_FLEET'&&c.selectionID===row.assignmentID&&
+   ['nativeAmbient','nativeCombat'].includes(c.runtimeKind);
+ }
  function physical(row,scene){
-  const e=scene.getEntityByID(row.shipItemID),
-    c=registry.getControllerByEntityID(row.shipItemID);
-  return e?.kind==='ship'&&e.nativeNpc===true&&e.transient!==true&&
-    e.itemID===row.shipItemID&&e.ownerID===row.ownerCharacterID&&
-    c?.entityID===row.shipItemID&&c.systemID===row.systemID&&
-    c.personalFleetOriginal===true&&
-    c.personalFleetAssignmentID===row.assignmentID&&
-    c.personalFleetPilotID===row.pilotID&&
-    c.personalFleetGeneration===row.generation;
+  return originalSceneShip(row,scene.getEntityByID(row.shipItemID))&&
+   originalSceneController(row,registry.getControllerByEntityID(row.shipItemID));
  }
  function recoverOne(row){
   if(!live())return block('PF90_NATIVE_RECOVERY_FENCED');
@@ -167,16 +198,12 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
    // A partly materialized actor is repairable by stock native service
    // only when every existing half belongs to the SAME durable original
    // Personal Fleet ship. It must not overwrite an unrelated entity.
-   if(occupant&&(occupant.kind!=='ship'||occupant.nativeNpc!==true||
-      occupant.itemID!==row.shipItemID||occupant.ownerID!==row.ownerCharacterID||
-      occupant.transient===true))
+   // A half-materialized original is repairable only when every existing
+   // half is PF58-identical. Never overwrite a same-ID foreign physical actor
+   // or a controller belonging to a different NPC director.
+   if(occupant&&!originalSceneShip(row,occupant))
     return block('PF90_EXISTING_SCENE_OR_CONTROLLER_CONFLICT');
-   if(controller&&(controller.entityID!==row.shipItemID||
-      controller.systemID!==row.systemID||
-      controller.personalFleetOriginal!==true||
-      controller.personalFleetAssignmentID!==row.assignmentID||
-      controller.personalFleetPilotID!==row.pilotID||
-      controller.personalFleetGeneration!==row.generation))
+   if(controller&&!originalSceneController(row,controller))
     return block('PF90_EXISTING_SCENE_OR_CONTROLLER_CONFLICT');
    if(attempted.has(row.shipItemID))
     return block('PF90_UNKNOWN_PRIOR_MATERIALIZATION_OUTCOME');
