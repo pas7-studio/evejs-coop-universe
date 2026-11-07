@@ -268,3 +268,17 @@ before/after hashes. Archived PF93 fixtures can use their
 test-only fallback in Node's child-v8 test process.
 No original fork edits are applied by PF98.
 See `scripts/pf98/PF98_ORIGINAL_SQLITE_WITNESS_BRIDGE.md`.
+
+## PF99 original authenticated session source WORK preflight
+
+PF80 now includes the PF99 authenticated native session gate:
+read-only source-pinned verification of original
+`sessionRegistry.js`, `structureLocation.js`, and
+`charService.js`, plus the source-bound PF91/PF92 SQLite
+fixture tests. It tests that copied sessions, foreign accounts,
+second character login, dock drift and stale active ship cannot
+pass as an owner-issued original witness. The wrappers do not
+accept a caller-supplied verification callback and are disabled
+without the native flag. PF80 does not install these source
+modules; the original fork and PLAY remain unchanged.
+See `scripts/pf99/PF99_ORIGINAL_AUTHENTICATED_SESSION_WORK_HANDOFF.md`.

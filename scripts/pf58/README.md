@@ -297,3 +297,24 @@ remains only inside the Node test runner for archived fixtures.
 The new real SQLite fixture suite is part of PF58's local runner.
 This is a candidate bridge, **not installed** in the original
 EveJS fork. See `scripts/pf98/PF98_ORIGINAL_SQLITE_WITNESS_BRIDGE.md`.
+
+## PF99 source-owned authenticated player session for PF91/PF92
+
+PF99 supplies two source-bound JavaScript modules intended for
+the original EveJS `space/` directory. The original
+`sessionRegistry.getSessions/findSessionByCharacterID` provides
+exact live socket object identity; `charService`'s existing
+`session.userid` ↔ `character.accountId` rule is repeated
+inside the original transaction-scoped read-only witness.
+Original station/structure docking, active `shipID`, account
+ownership, disconnect/relogin and duplicate login are verified
+without client-supplied auth booleans.
+
+A separate binder constructs PF91/PF92 with the canonical imported
+witness, ignoring any caller-provided callback. Both bindings are
+fail-closed when the native flag is OFF. PF58's local test runner
+now includes PF99's 22 session cases and 11 PF91/PF92 SQLite
+factory cases, with source pins when `-NativeCheckout` is set.
+The native modules are NOT installed in the original fork;
+Personal Fleet remains OFF. See
+`scripts/pf99/PF99_ORIGINAL_AUTHENTICATED_SESSION_WORK_HANDOFF.md`.
