@@ -6,7 +6,7 @@ const SEP='\u001f',T='corporationRuntime',CHAR='characters';
 const NPC=30001001,CORP=1000110,OWNER=90000111,OWNER2=90000222;
 const ENTRY=Object.freeze({npcCharacterID:NPC,employerCorpID:CORP,profileID:'cooperative_friendly_a',shipTypeID:606,amountCents:75000});
 const eRow=()=>({corporationID:CORP,wallet:{divisions:{'1000':{balance:1000,journal:[],transactions:[]}}}});
-function fixture(cb,{catalog=[ENTRY]}={}){
+function fixture(cb,{catalog=[ENTRY],wages=[]}={}){
  const db=new DatabaseSync(':memory:');
  for(const t of [T,CHAR])db.exec(`CREATE TABLE "${t}" (key TEXT PRIMARY KEY,json TEXT NOT NULL)`);
  const put=(t,k,row)=>db.prepare(`INSERT INTO "${t}" (key,json) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json`).run(k,JSON.stringify(row));
@@ -37,7 +37,7 @@ function fixture(cb,{catalog=[ENTRY]}={}){
   {corporationID:CORP,isNPC:true}:null,isNpcCorporationID:c=>state.originalCorporation&&c===CORP};
  const owner=createOriginalOfferAuthority({gameStore:{coopAtomicNativeRows:atomic},pf52,pf53,access,
   originalNpcCharacters,originalNpcData,originalCorporations,
-  authoredCatalog:catalog,enabled:()=>state.enabled,allWalletWritersFenced:()=>state.fenced,
+  authoredCatalog:catalog,authoredSalaryPolicies:wages,enabled:()=>state.enabled,allWalletWritersFenced:()=>state.fenced,
   clock:()=>state.time,ttlMs:15*60*1000});
  const c={ownerCharacterID:OWNER,session};
  const offers=()=>owner.listNativeOffers(c),quote=()=>offers()[0],
@@ -273,3 +273,38 @@ test('source authored NPC has to be eligible for original ship type before quote
  const a={...ENTRY,shipTypeID:607};
  assert.deepEqual(f.offers(),[]);
 }, {catalog:[{...ENTRY,shipTypeID:607}]}));
+
+test('PF92 genuine original NPC offer commits recurring wage and due period visibly',()=>fixture(f=>{
+ const row=f.quote();
+ assert.equal(row.salaryConsentRequired,true);
+ assert.equal(row.salaryCents,2750);
+ assert.equal(row.periodMs,86400000);
+ assert.deepEqual(f.lookup(row.offerID),row);
+ const command={session:f.session,ownerCharacterID:OWNER,offerID:row.offerID,
+  offerRevision:row.revision,agentID:row.agentID,pilotID:row.pilotID,
+  contractID:row.contractID};
+ assert.deepEqual(f.owner.resolveNativeOffer(command,{get:f.get}),row);
+},{wages:[{npcCharacterID:NPC,employerCorpID:CORP,
+ profileID:ENTRY.profileID,shipTypeID:606,salaryCents:2750,periodMs:86400000}]}));
+test('PF92 historical quote cannot be silently repriced after issuer changes config',()=>fixture(f=>{
+ const row=f.quote();
+ const change={...row,salaryCents:9500};
+ f.put(T,key(row.offerID),change);
+ assert.equal(f.lookup(row.offerID),null);
+ assert.deepEqual(f.offers(),[]);
+},{wages:[{npcCharacterID:NPC,employerCorpID:CORP,
+ profileID:ENTRY.profileID,shipTypeID:606,salaryCents:2750,periodMs:86400000}]}));
+test('PF92 native offer issuer rejects unrelated server wage policy',()=>{
+ assert.throws(()=>fixture(()=>{}, {wages:[{npcCharacterID:NPC+1,
+  employerCorpID:CORP,profileID:ENTRY.profileID,shipTypeID:606,
+  salaryCents:2750,periodMs:86400000}]}),/AUTHORITIES_REQUIRED/);
+});
+test('PF92 quoted wage changes source signature when salary catalog changes',()=>{
+ let a,b;
+ const base={npcCharacterID:NPC,employerCorpID:CORP,profileID:ENTRY.profileID,
+  shipTypeID:606,periodMs:86400000};
+ fixture(f=>{a=f.quote();},{wages:[{...base,salaryCents:2750}]});
+ fixture(f=>{b=f.quote();},{wages:[{...base,salaryCents:2850}]});
+ assert.notEqual(a.sourceProof,b.sourceProof);
+ assert.equal(a.salaryCents,2750);assert.equal(b.salaryCents,2850);
+});
