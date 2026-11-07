@@ -31,6 +31,7 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
     !orderWitness||!['verifyNativeActor','verifyTarget','verifyPersonalClaim','verifyOriginalControl'].every(k=>
      typeof orderWitness[k]==='function')||
   typeof orderReceipt?.recordAfterNativeEffect!=='function'||
+  typeof orderReceipt?.recordAfterNativeReturnEffect!=='function'||
     [readOriginalWarShipClaim,enabled,allWritersFenced].some(f=>typeof f!=='function'))
   throw Error('PF_FIRSTPLAY_ORIGINAL_SHARED_ORDER_RUNTIME_REQUIRED');
  const live=()=>enabled()===true&&allWritersFenced()===true&&a.isPoisoned()===false;
@@ -130,7 +131,17 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
    if(!live()||!row||!positive(row.shipItemID)||!positive(row.stationID)||
       !positive(row.systemID)||!positive(row.actorGeneration))
     return {success:false,errorMsg:'PF56_RETURN_NATIVE_SOURCE_UNAVAILABLE'};
-   return nativeReturn.execute(row);
+   const physical=nativeReturn.execute(row);
+   if(physical?.success!==true||physical?.then)return physical;
+   // Original stock native warp has begun. Only now store its source-bound
+   // acceptance receipt in original npcEntities + PF56 SQLite, atomically.
+   // Unknown commit leaves RETURN_ISSUING for explicit reconciliation;
+   // never dispatch a second warp from the return scheduler.
+   const durable=orderReceipt.recordAfterNativeReturnEffect(row);
+   if(durable?.success!==true)return {
+    success:false,errorMsg:'PF56_NATIVE_RETURN_EFFECT_OUTCOME_UNKNOWN_NO_RETRY'};
+   return {success:true,data:{operationID:row.operationID,
+    durability:'ORIGINAL_NPC_ENTITIES_AND_PF56_RETURN_RECEIPT_COMMITTED'}};
   },
   // Read-only; useful to diagnose a missing native assignment on WORK.
   inspectAssignments:()=>assignments().map(x=>Object.freeze({...x}))});
