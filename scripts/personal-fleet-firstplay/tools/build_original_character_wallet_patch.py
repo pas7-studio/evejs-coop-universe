@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native-only correction: original EveJS characterState stores one SQLite row per character.
+"""Native-only correction: source-pinned original character and PF57 NPC SQLite row shapes.
 
 PF53/PF57 archive fixture was an aggregate map under characters/characters.
 PF52 reserve and PF55 native orders must include original individual
@@ -46,7 +46,13 @@ MODULES={
  ("   if(!obj(chars)||!obj(owner)||owner.characterID!==c.ownerCharacterID||",
   "   if(!obj(owner)||owner.characterID!==c.ownerCharacterID||"),
  ("   tx.put(CHAR,CHAR,{...chars,[String(c.ownerCharacterID)]:{...owner,balance:isk(after),\n    balanceChange:isk(-quote.amountCents),walletJournal:[debit,...owner.walletJournal].slice(0,100)}});",
-  "   tx.put(CHAR,String(c.ownerCharacterID),{...owner,balance:isk(after),\n    balanceChange:isk(-quote.amountCents),walletJournal:[debit,...owner.walletJournal].slice(0,100)});"),
+  "   tx.put(CHAR,String(c.ownerCharacterID),{...owner,balance:isk(after),\n    balanceChange:isk(-quote.amountCents),walletJournal:[debit,...owner.walletJournal].slice(0,100)});"), ("const crypto=require('node:crypto');\n",
+  "const crypto=require('node:crypto');\nconst originalRows=require('./coopPersonalFleetOriginalLossRows');\n"),
+ ("    wreckRoot=tx.get(WRECK,WRECK),record=ledger.losses[c.assignmentID];",
+  "    wreckRoot=originalRows.readWreckRoot(tx),record=ledger.losses[c.assignmentID];"),
+ ("   const items=tx.get(ITEMS,ITEMS),wreckRoot=tx.get(WRECK,WRECK),\n    entityRoot=tx.get(NPC,NPC),cargoRoot=tx.get('npcCargo','npcCargo'),\n    moduleRoot=tx.get('npcModules','npcModules'),wreckItems=tx.get('npcWreckItems','npcWreckItems');",
+  "   const items=tx.get(ITEMS,ITEMS),wreckRoot=originalRows.readWreckRoot(tx),\n    assets=originalRows.readNativeAssets(tx,c.shipItemID),\n    entityRoot=assets?.entityRoot,cargoRoot=assets?.cargoRoot,\n    moduleRoot=assets?.moduleRoot,wreckItems=assets?.wreckItems;"),
+
 ],
 }
 
