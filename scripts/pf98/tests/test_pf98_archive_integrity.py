@@ -45,6 +45,10 @@ class PF98OriginalSourceBridge(unittest.TestCase):
         self.assertLess(bridge.index("tx.verifyReadOnlySessionWitness(callback,request)"),
                         bridge.index('fingerprintOriginalWitnessRows(tx)'))
         self.assertIn('return verdict===true',bridge)
+        self.assertIn("process.env.NODE_TEST_CONTEXT!=='child-v8'",bridge)
+        self.assertIn('PF98_NATIVE_SOURCE_OWNER_WITNESS_FLAG_REQUIRED',bridge)
+        self.assertLess(bridge.index('PF98_NATIVE_SOURCE_OWNER_WITNESS_FLAG_REQUIRED'),
+                        bridge.index('fingerprintOriginalWitnessRows(tx)'))
 
     def test_pf95_pf96_original_owner_review_has_sticky_commit_fence(self):
         source=ORIGINAL.read_text(encoding='utf-8')
@@ -59,7 +63,7 @@ class PF98OriginalSourceBridge(unittest.TestCase):
         self.assertIn("require('../../pf58/tests/pf54-fixture.cjs')",source)
         self.assertIn("require('../../pf58/native/coopPersonalFleetOriginalNativePermit.cjs')",source)
         self.assertIn('PF98_ORIGINAL_SQLITE_OWNER_SESSION_WITNESS_REQUIRED',source)
-        self.assertEqual(source.count("test('"),12)
+        self.assertEqual(source.count("test('"),14)
         self.assertIn('PF98_NATIVE_SOURCE_WITNESS_BRIDGE_FAILED',RUNNER.read_text(encoding='utf-8'))
 
 if __name__ == '__main__':
