@@ -36,6 +36,19 @@ node --test --test-concurrency=1 scripts/pf100/tests/pf100-original-postcommit-p
 
 Git blob hashes of both locally tested module and its test file were matched against the actual newly published GitHub files. SHA256 manifest is in `SHA256SUMS.txt`. This run did **not** execute an original EveJS server or full WORK E2E.
 
+## Manual preflight wiring
+
+The existing `scripts/pf58/Test-PF58-Local.ps1` now runs PF100's isolated
+Node/SQLite proof as part of its general regression; when
+`-NativeCheckout` is supplied it also calls the PF100 runner, which
+requires all six exact original-source pins. The
+`scripts/pf62/Prepare-PF80-CompleteNativeWork.ps1` native WORK gate
+likewise calls the same PF100 runner before assembling the WORK review.
+The runner normalizes CRLF to LF when hashing source files on Windows;
+original Git blob identity checks do the same. Both are **manual**
+preflight gates, not native gameplay proof and not GitHub Actions.
+Neither PowerShell workflow was executed in this container.
+
 ## Required source-owned integration (not implemented by PF100)
 
 The original CharacterState owner must, without a second `repo.write`:
