@@ -75,12 +75,17 @@ if($NativeWorktree){
   throw 'PF87_ISOLATED_WORK_BRANCH_REQUIRED'
  }
  $priorWork=[Environment]::GetEnvironmentVariable('PF87_NATIVE_WORKTREE','Process')
+ $priorEntry=[Environment]::GetEnvironmentVariable('PF88_NATIVE_WORKTREE','Process')
  try{
   $env:PF87_NATIVE_WORKTREE=$work
+  $env:PF88_NATIVE_WORKTREE=$work
   & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-original-atomic-adapter-sqlite.test.cjs')
   if($LASTEXITCODE -ne 0){throw 'PF87_ORIGINAL_WORK_NODE_SQLITE_TEST_FAILED'}
+  & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-original-entry-work.test.cjs')
+  if($LASTEXITCODE -ne 0){throw 'PF88_ORIGINAL_WORK_STARTUP_ENTRY_TEST_FAILED'}
  }finally{
   [Environment]::SetEnvironmentVariable('PF87_NATIVE_WORKTREE',$priorWork,'Process')
+  [Environment]::SetEnvironmentVariable('PF88_NATIVE_WORKTREE',$priorEntry,'Process')
  }
 }else{
  Write-Warning 'PF87 original GameStore Node/SQLite not run: provide -NativeWorktree.'
