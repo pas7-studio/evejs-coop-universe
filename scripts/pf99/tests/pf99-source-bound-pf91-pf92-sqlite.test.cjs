@@ -4,13 +4,6 @@ const fs=require('node:fs'),path=require('node:path');
 const F=require('../../pf58/tests/pf54-fixture.cjs');
 const permit=require('../../pf58/native/coopPersonalFleetOriginalNativePermit.cjs');
 const C='characters',I='items',T='corporationRuntime',OTHER_SHIP=2002;
-function source(name,requirePath){
- const mod={exports:{}};
- const p=path.resolve(__dirname,'../native/'+name);
- new Function('require','module','exports','process')(requirePath,mod,mod.exports,process,
-  );
- return mod.exports;
-}
 function compile(name,requirePath){
  const mod={exports:{}},text=fs.readFileSync(path.resolve(__dirname,'../native/'+name),'utf8');
  new Function('require','module','exports','process',text)(requirePath,mod,mod.exports,process);
