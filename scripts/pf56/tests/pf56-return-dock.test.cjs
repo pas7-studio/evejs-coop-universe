@@ -224,3 +224,49 @@ test('reconcile refuses unrelated corrupted global durable operation entries',()
  f.put('corporationRuntime',f.pf56.OPS,ix);
  assert.equal(f.returnDock.reconcileDock(c).reason,'PF56_RECONCILE_FOREIGN_OR_UNCERTAIN');
 }));
+
+test('PF84 server-only continuation completes after player disconnect without a new warp or dock',()=>run((f,c)=>{
+ const requested=f.returnDock.requestReturn(c);
+ assert.equal(requested.status,'NEEDS_RECONCILIATION');
+ const durable=f.get('corporationRuntime',f.pf56.key(c.assignmentID));
+ assert.equal(durable.requestedByAccountID,c.session.userid);
+ c.session.socket.destroyed=true;
+ assert.equal(f.returnDock.advanceServer(durable).status,'RETURNING');
+ assert.equal(f.returnDock.advanceServer(durable).status,'ARRIVAL_OBSERVED');
+ assert.equal(f.returnDock.advanceServer(durable).reason,'PF56_STATION_DWELL_NOT_COMPLETE');
+ f.shared.clock+=2100;
+ assert.equal(f.returnDock.advanceServer(durable).status,'NEEDS_RECONCILIATION');
+ assert.equal(f.shared.dockCalls,1);
+ assert.equal(f.returnDock.advanceServer(durable).status,'DOCKED');
+ assert.equal(f.returnDock.advanceServer(durable).status,'ALREADY_DOCKED');
+ assert.equal(f.shared.returnCalls,1);
+ assert.equal(f.shared.dockCalls,1);
+ const item=f.get('items','items')[String(c.shipItemID)];
+ assert.equal(item.itemID,c.shipItemID);
+ assert.equal(item.flagID,4);
+}));
+
+test('PF84 denies offline initiation, forged generations and owner-account transfer',()=>run((f,c)=>{
+ const forged={...c,signature:f.pf56.signature(c)};
+ assert.equal(f.returnDock.advanceServer(forged).reason,'PF56_SERVER_RETURN_DURABLE_INTENT_UNVERIFIED');
+ assert.equal(f.shared.returnCalls,0);
+ f.returnDock.requestReturn(c);
+ const durable=f.get('corporationRuntime',f.pf56.key(c.assignmentID));
+ assert.equal(f.returnDock.advanceServer({...durable,actorGeneration:durable.actorGeneration+1}).reason,
+  'PF56_SERVER_RETURN_DURABLE_INTENT_UNVERIFIED');
+ const owner=f.get('characters',String(c.ownerCharacterID));
+ f.put('characters',String(c.ownerCharacterID),{...owner,accountId:c.session.userid+1});
+ assert.equal(f.returnDock.advanceServer(durable).reason,'PF56_SERVER_RETURN_OWNER_REVOKED');
+ assert.equal(f.shared.dockCalls,0);
+}));
+
+test('PF84 unknown return or unknown dock effect is never reissued by server ticks',()=>run((f,c)=>{
+ f.shared.returnIssued=false;
+ f.returnDock.requestReturn(c);
+ const durable=f.get('corporationRuntime',f.pf56.key(c.assignmentID));
+ c.session.socket.destroyed=true;
+ assert.equal(f.returnDock.advanceServer(durable).reason,'PF56_ORIGINAL_RETURN_ORDER_NOT_PERSISTED');
+ assert.equal(f.returnDock.advanceServer(durable).reason,'PF56_ORIGINAL_RETURN_ORDER_NOT_PERSISTED');
+ assert.equal(f.shared.returnCalls,1);
+ assert.equal(f.shared.dockCalls,0);
+}));
