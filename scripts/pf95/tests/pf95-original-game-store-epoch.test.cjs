@@ -8,7 +8,7 @@ const {DatabaseSync}=require('node:sqlite');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
 const pin='2b28b48145f3fbc989ce7346384487ee75e52280';
-const patch=path.resolve(__dirname,'../../../patches/upstream/0011-pf95-original-sqlite-witness-owner.patch');
+const patch=path.resolve(__dirname,'../review/coopGameStoreAtomic.pf95.review-only.patch');
 const rel='Code/server/src/space/coopGameStoreAtomic.js';
 function sourceFromWork(t){
  const input=process.env.PF95_NATIVE_WORKTREE;
