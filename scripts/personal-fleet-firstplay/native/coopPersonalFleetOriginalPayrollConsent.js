@@ -87,5 +87,18 @@ function boundWagePolicy(paid,policy,tx){
    policy.periodMs!==paid.payrollConsent.periodMs)return false;
  return true;
 }
+/**
+ * Deterministic server-only salary idempotency key. The secret is NOT an ID:
+ * true authorization is the persisted PF53 consent + original wallet/actor
+ * state checked inside the same native GameStore transaction. This key
+ * ensures crash/restart never invents a second charge for the same period.
+ */
+function salaryOperationID(c){
+ if(!obj(c)||!pos(c.ownerCharacterID)||!pilot(c.pilotID)||
+    !token(c.contractID)||!Number.isSafeInteger(c.periodIndex)||
+    c.periodIndex<1||c.periodIndex>1000000)return null;
+ return 'pf-pay-'+sig(['PF93_SERVER_PAYROLL_PERIOD_V1',
+  c.ownerCharacterID,c.pilotID,c.contractID,c.periodIndex]);
+}
 module.exports=Object.freeze({validOfferWage,captureOfferWageConsent,
- consentKey,verifyPaidWageConsent,boundWagePolicy,verifyObject});
+ consentKey,verifyPaidWageConsent,boundWagePolicy,verifyObject,salaryOperationID});
