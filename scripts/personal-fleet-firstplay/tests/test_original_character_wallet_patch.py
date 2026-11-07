@@ -61,7 +61,7 @@ class WalletPatchTest(unittest.TestCase):
     self.assertIn("transact([TABLE,ITEM_TABLE,'characters'],tx=>",s)
    if name=='coopPersonalFleetNativeOrders.js':
     self.assertEqual(s.count("atomic.transact([TABLE,ITEMS,'characters'],tx=>"),1)
-    self.assertEqual(s.count("atomic.transact([TABLE,ITEMS,'characters','npcEntities'],tx=>"),1)
+    self.assertEqual(s.count("atomic.transact([TABLE,ITEMS,'characters','npcEntities','npcRuntimeControllers'],tx=>"),1)
  def test_rejects_staged_workfile_tampering(self):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);files={}
