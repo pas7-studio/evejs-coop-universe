@@ -11,7 +11,7 @@ const hooksList=['verifyOriginalWriterHooks','allWritersFenced','allWalletWriter
  'verifyRelease','verifyOriginalEquipment','verifyOriginalDeploymentAuthority',
  'verifyExclusiveOwnership','verifyOriginalActor','independentOriginalActorWitness',
  'originalStationUndockPoint','originalOwnershipWitness',
- 'verifyNativeFlight','verifyOriginalReturnOrder','verifyOriginalManifest',
+ 'verifyNativeFlight','verifyOriginalManifest',
  'verifyFinalOriginalManifest',
  'verifyOriginalDockedPlayerSession','readOriginalWarShipClaim'];
 function fixture(cb){
@@ -32,7 +32,8 @@ function fixture(cb){
   './coopPersonalFleetOriginalDurableOrderAck':{createOriginalDurableOrderAck(args){events.push('order-ack');
    if(broken==='order-ack')throw Error('DURABLE_ACK_ORIGINAL_SOURCE_MISSING');
    assert.equal(args.enabled(),false);
-   return {recordAfterNativeEffect:()=>({success:false}),verifyPersistedNativeOrder:()=>null};}},
+   return {recordAfterNativeEffect:()=>({success:false}),verifyPersistedNativeOrder:()=>null,
+    recordAfterNativeReturnEffect:()=>({success:false}),verifyPersistedNativeReturn:()=>null};}},
   './coopPersonalFleetOriginalOrderExecutor':{createOriginalOrderExecutor(args){events.push('physical-order');
    assert.equal(typeof args.orderReceipt.recordAfterNativeEffect,'function');
    assert.equal(args.sharedOriginalArbiter,hooks.sharedOriginalNpcOrderArbiter);
@@ -123,6 +124,7 @@ function fixture(cb){
    return {verifyOriginalDockReceipt:()=>null};}},
   './coopPersonalFleetReturnDock':{createPersonalFleetReturnDock(args){events.push('return');
    assert.equal(args.enabled(),false);
+   assert.equal(typeof args.verifyOriginalReturnOrder,'function');
    assert.equal(typeof args.verifyOriginalDockReceipt,'function');
    assert.equal(typeof args.verifyServerReturnOwner,'function');
    assert.equal(typeof args.verifyStationArrival,'function');
@@ -191,7 +193,7 @@ test('refuse empty fabricated operator catalog',()=>fixture(f=>{
  assert.equal(f.events.length,0);
 }));
 test('missing original engine hooks block before imports or publication',()=>fixture(f=>{
- delete f.hooks.verifyOriginalReturnOrder;assert.throws(()=>call(f),/BOOT_HOOKS_REQUIRED/);
+ delete f.hooks.verifyOriginalManifest;assert.throws(()=>call(f),/BOOT_HOOKS_REQUIRED/);
  assert.equal(f.events.length,0);
 }));
 test('caller cannot substitute forged gameStore module',()=>fixture(f=>{
