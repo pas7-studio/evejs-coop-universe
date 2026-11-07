@@ -24,7 +24,7 @@ const ACTIONS=Object.freeze({
   salary:{arity:1,method:'salary'},
   dismiss:{arity:1,method:'dismiss'},
 });
-const HELP='Personal Fleet: /pf offers | roster | status | hire <offerID> accept-recurring | assign <pilotID> <hangarShipItemID> | deploy <assignmentID> | follow <shipItemID> | hold <shipItemID> | attack <shipItemID> <enemyNpcEntityID> | guard <shipItemID> | return <shipItemID> | salary <pilotID> | dismiss <pilotID>';
+const HELP='Personal Fleet: /pf offers | status | hire <offer> accept-recurring | assign <pilot> <ship> | deploy <assignment> | follow <ship> | hold <ship> | attack <ship> <enemyNPC> | guard <ship> | return <ship> | salary <pilot> | dismiss <pilot>';
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const own=(x,k)=>Object.prototype.hasOwnProperty.call(x,k);
 const safeString=x=>String(x??'').replace(/[\r\n\t\u0000-\u001f\u007f]/g,' ').slice(0,250);
