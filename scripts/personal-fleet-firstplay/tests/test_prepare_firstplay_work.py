@@ -46,8 +46,8 @@ class NativeFirstPlayAssemblyTest(unittest.TestCase):
   self.assertEqual(baseline,set())
   (self.work/'untracked').write_text('hello')
   self.assertEqual(m.read_changed_paths(self.work),{'untracked'})
- def test_expected_native_patch_inventory_is_fourteen_paths(self):
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),14)
+ def test_expected_native_patch_inventory_is_fifteen_paths(self):
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),15)
   self.assertTrue(m.EXPECTED_PATCH_PATHS.issuperset(str(x) for x in m.ADDITIONS))
  def test_worktree_branch_must_be_isolated(self):
   self.git(self.work,'switch','-c','unsafe')
