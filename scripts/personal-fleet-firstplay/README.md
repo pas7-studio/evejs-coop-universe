@@ -24,15 +24,15 @@ A separate patch changes PF53 and PF57 native wallet candidate code from
 the obsolete synthetic aggregate characters map to actual individual original
 characters/<characterID> SQLite rows.
 
-The combined native WORK assembler builds nine modified/new native paths on
-top of PF80's 22-path candidate, for a total of 28. It requires an isolated
+The combined native WORK assembler builds ten modified/new native paths on
+top of PF80's 22-path candidate, for a total of 29. It requires an isolated
 linked Git worktree on a work/* branch, a valid PF62 source manifest, exact
 original chat source pin 5f4dd4d34a398dde3120e8640a7058d2bd3bb038,
 and explicit WORK-NOT-PLAY confirmation. It never creates native business
 authorities or enables feature flags.
 
-**Evidence:** 149/149 Node/SQLite/VM tests and 18/18 Python/Git tests PASS on
-Node.js 22.16.0, Python 3.13.5, Git. All sixteen code/test files have exact
+**Evidence:** 169/169 Node/SQLite/VM tests and 18/18 Python/Git tests PASS on
+Node.js 22.16.0, Python 3.13.5, Git. All eighteen code/test files have exact
 Git blob SHA matches with the locally tested source. No native original
 EveJS runtime or Windows PowerShell test was run.
 
@@ -56,7 +56,7 @@ Then stage the additional source-pinned chat, wallet and owner modules:
 
     python scripts/personal-fleet-firstplay/tools/prepare_firstplay_work.py --worktree 'O:\tmp\pf-firstplay-native-work' --source-root . --pf62-manifest 'O:\tmp\pf-firstplay-pf80-review\PF62-MANIFEST.json' --review-output 'O:\tmp\pf-firstplay-native-review' --apply-to-work --confirm-work-only 'WORK-NOT-PLAY'
 
-Review PERSONAl-FLEET-FIRST-PLAY-REVIEW.json and the 9-path patch in the
+Review PERSONAl-FLEET-FIRST-PLAY-REVIEW.json and the 10-path patch in the
 separate review directory. The review receipt intentionally reports
 nativeAuthorityWired:false, featureEnabled:false and gameplayE2E:NOT_RUN.
 
@@ -172,7 +172,7 @@ scene entity before producing a FOLLOW target.
 
 **Test evidence this continuation:** 44 real-SQLite native offer cases,
 23 source-bound owner/session/ItemStore/scene cases, plus the updated
-65 prior Node cases = **149 Node PASS**; 18 Python/Git PASS;
+65 prior Node cases = **169 Node PASS**; 18 Python/Git PASS;
 **167 total PASS**. Original actual native EVE gameplay still NOT RUN.
 
 ## Physical hull profile compatibility — fixed
@@ -216,8 +216,8 @@ PF52's exact one reserve/release transaction scope to
 `[corporationRuntime, items, characters]` while preserving the
 original PF52 compare-and-set ledger and reserve keys. Source-pinned
 Python/Git tests prove the patch is applied to the PF80 staged file.
-The incremental patch now has **9** affected source paths over PF80's
-already staged 22, with **28 unique changed native paths** total.
+The incremental patch now has **10** affected source paths over PF80's
+already staged 22, with **29 unique changed native paths** total.
 No source row is silently skipped or validated via nested transactions.
 
 ## One native composition root is now committed (2026-11-07)
@@ -272,9 +272,61 @@ The first slice's target is paid hire, spare hull, deploy, FOLLOW/HOLD, and
 verified native RETURN with the same original ship ID.
 
 Local component evidence after this change:
-**149/149 Node tests** (including 17 composition, disabled flags,
+**169/169 Node tests** (including 18 composition, disabled flags,
 partial-failure, fail-sticky/duplicate install tests) and **18/18
-Python/Git tests**, combined **167/167 PASS**. Sixteen exact published
+Python/Git tests**, combined **187/187 PASS**. Eighteen exact published
 JS/Python source/test Git blobs match the local tested files.
 The original game, live wallet settlement, physical scene and
 client-visible WORK tests have still **NOT been executed** here.
+
+## Source-owned wallet journal and notification integration — 2026-11-07
+
+A further production-facing module is now in the **10-path** review package:
+
+- `native/coopPersonalFleetOriginalWalletAuthority.js` imports original
+  `../services/account/plexVaultLogState.getTransactionID`,
+  `../services/account/walletState`, original
+  `../services/corporation/corpWalletState`, and original GameStore.
+  The PF53 original wallet ID comes from exactly the same issuer the
+  original EveJS player wallet uses. A `WeakMap` binds the issued number
+  to the *same native SQLite transaction object*, with one-use validation,
+  and checks original player, corporation and global PF53 journal collisions.
+  It creates **no journal or balance changes** itself.
+- After PF53 commits the real ISK debit/credit, the adapter independently
+  reads the durable payment, original player wallet and original corporation
+  wallet with matching amounts and transaction ID before it invokes the
+  stock `notifyCharacterWalletChange` and
+  `notifyCorporationWalletChange`. A mismatched receipt, partial
+  persistence or stale cache returns notification PENDING, **never retries
+  the original charge**. Duplicate notifications are suppressed within
+  one native process; this is not a cross-restart exactly-once delivery
+  guarantee.
+- Original PF57 salary notification is **not claimed implemented** by the
+  hiring adapter; PF57 dismiss/salary/loss remains an explicit blocked
+  first-play scope until independently source-installed.
+- `coopPersonalFleetOriginalWorkBootstrap` now constructs this wallet
+  authority directly, removing three manually injected wallet-ID and
+  notification callbacks. It still *requires* original
+  `allWalletWritersFenced` and reciprocal original writer hooks before
+  enabling gameplay. Do not substitute a permissive `()=>true`.
+
+Exact original source pins now also cover
+`account/plexVaultLogState.js`, `account/walletState.js` and
+`corporation/corpWalletState.js`.
+
+**Evidence: 169/169 Node 22.16.0 plus 18/18 Python/Git = 187/187 PASS.**
+Includes 19 native wallet ID, collision, notice and readback tests plus
+18 fail-sticky original WORK bootstrap cases. These are controlled original
+service fixtures with real SQLite transactions; not an in-game client E2E.
+The Windows runner is not executed in this cloud environment.
+
+### Remaining native WORK code before gameplay is genuinely launchable
+
+The native WORK fork still must **implement**, commit and test the
+original-source hook provider for writer fencing, actor/controller movement
+and station docking. It must select real named EVE NPC/profile/ship type
+combinations, install this boot composition at original *server startup*,
+and run client-visible original wallet/ItemStore/scene E2E and crash
+recovery. The GitHub integration in this session cannot write the
+original `pas7-studio/EveJS` branch (HTTP 403). The Draft PR is
+not a replacement for that original engine commit.
