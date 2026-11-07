@@ -11,7 +11,8 @@ function quote(){return {salaryConsentRequired:true,salaryCents:2250,periodMs:86
  employerCorpID:1000012,amountCents:9900};}
 function cmd(){return {operationID:'op-123',offerID:'pf-offer-500-123456',
  offerRevision:2,contractID:'pf-contract-500-123456-2',pilotID:'coop-pilot-123456',
- ownerCharacterID:500,session:{userid:900,characterID:500,socket:{destroyed:false}}};}
+ ownerCharacterID:500,recurringSalaryAcknowledged:true,
+ session:{userid:900,characterID:500,socket:{destroyed:false}}};}
 function fixture(){
  const offer=quote(),command=cmd(),consent=c.captureOfferWageConsent(offer,command,now);
  assert.ok(consent);
@@ -98,4 +99,11 @@ test('PF92 receipt with extra hidden wage authorization is rejected',()=>{
 test('PF92 invalid native operation cannot create consent row',()=>{
  assert.equal(c.consentKey('../wrong'),null);
  assert.equal(c.consentKey(''),null);
+});
+test('PF94 PF53 direct native hire requires acknowledged wage recurrence',()=>{
+ const x=fixture();
+ x.command.recurringSalaryAcknowledged=false;
+ assert.equal(c.captureOfferWageConsent(x.offer,x.command,now),null);
+ x.command.recurringSalaryAcknowledged=undefined;
+ assert.equal(c.captureOfferWageConsent(x.offer,x.command,now),null);
 });
