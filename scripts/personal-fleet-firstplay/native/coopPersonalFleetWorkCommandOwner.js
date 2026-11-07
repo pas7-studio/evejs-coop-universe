@@ -174,21 +174,23 @@ function createOriginalWorkCommandOwner({gameStore,pf52,hangar,pf53,pf54,pf55,pf
   return {row,pilot:a.pilot};
  }
  function order(ctx,action){
-  if(!admission(ctx)||ctx.args.length!==1||!pos(ctx.args[0]))
+  if(!admission(ctx)||ctx.args.length!==(action==='ATTACK'?2:1)||
+     !pos(ctx.args[0])||(action==='ATTACK'&&(!pos(ctx.args[1])||ctx.args[0]===ctx.args[1])))
    return blocked('PF_FIRSTPLAY_ORDER_INPUT_INVALID');
   const shipItemID=ctx.args[0],s=active(ctx,shipItemID);
   if(s.error)return blocked(s.error);
   let targetEntityID=null;
-  if(action==='FOLLOW'){
+  if(['FOLLOW','DEFEND'].includes(action)){
    const native=resolveOriginalFollowTarget(ctx.session,ctx.ownerCharacterID,s.row.systemID);
    if(!obj(native)||native.nativeVerified!==true||!pos(native.shipItemID)||native.shipItemID===shipItemID)
     return blocked('PF_FIRSTPLAY_ORIGINAL_FRIENDLY_TARGET_UNVERIFIED');
    targetEntityID=native.shipItemID;
   }
+  if(action==='ATTACK')targetEntityID=ctx.args[1];
   const c={session:ctx.session,operationID:op(),ownerCharacterID:ctx.ownerCharacterID,
    pilotID:s.pilot.pilotID,assignmentID:s.pilot.assignmentID,shipItemID,
    systemID:s.row.systemID,actorGeneration:s.row.actorGeneration,
-   action,targetEntityID,...(action==='FOLLOW'?{followRangeMeters:2500}:{})};
+   action,targetEntityID,...(['FOLLOW','DEFEND'].includes(action)?{followRangeMeters:2500}:{})};
   const result=pf55.issue(c);
   if(result?.status!=='NEEDS_RECONCILIATION')return result||blocked('PF_FIRSTPLAY_ORDER_OUTCOME_UNKNOWN');
   // Do not reissue on a failed ACK. Check only original persisted NPC order.
@@ -197,6 +199,8 @@ function createOriginalWorkCommandOwner({gameStore,pf52,hangar,pf53,pf54,pf55,pf
  }
  function follow(ctx){return order(ctx,'FOLLOW');}
  function hold(ctx){return order(ctx,'HOLD');}
+ function attack(ctx){return order(ctx,'ATTACK');}
+ function guard(ctx){return order(ctx,'DEFEND');}
  function returnToBase(ctx){
   if(!admission(ctx)||ctx.args.length!==1||!pos(ctx.args[0]))
    return blocked('PF_FIRSTPLAY_RETURN_INPUT_INVALID');
@@ -244,6 +248,6 @@ function createOriginalWorkCommandOwner({gameStore,pf52,hangar,pf53,pf54,pf55,pf
    pilotID:pilot.pilotID,contractID:pilot.contractID})||blocked('PF_FIRSTPLAY_DISMISS_OUTCOME_UNKNOWN');
  }
  return Object.freeze({source:'ORIGINAL_EVEJS_PERSONAL_FLEET_OWNER_V1',
-  enabled:live,offers,status,roster:status,hire,assign,deploy,follow,hold,returnToBase,salary,dismiss});
+  enabled:live,offers,status,roster:status,hire,assign,deploy,follow,hold,attack,guard,returnToBase,salary,dismiss});
 }
 module.exports=Object.freeze({createOriginalWorkCommandOwner});
