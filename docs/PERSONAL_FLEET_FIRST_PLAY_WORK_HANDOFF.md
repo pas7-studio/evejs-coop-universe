@@ -165,7 +165,7 @@ total **136/136** isolated component checks. No original native engine boot,
 Windows PowerShell runner, client gameplay or true native payment/actor test.
 
 The combined WORK-only patch assembler starts from PF80's isolated
-22-path staged native worktree and adds SEVEN native source paths
+22-path staged native worktree and adds EIGHT native source paths
 (two existing PF53/PF57, three new: chat hook, /pf gateway, command
 conductor). It verifies the exact final 27-path WORK inventory; both
 review and explicit apply modes keep all flags OFF. Read the README
@@ -186,7 +186,7 @@ must be on a real original engine fork commit and authenticated EVE client.
 
 ## Original real NPC offers and source binding — 2026-11-07
 
-The first-play WORK bundle now stages **SEVEN** native source paths beyond the
+The first-play WORK bundle now stages **EIGHT** native source paths beyond the
 PF80 22-path base (two existing wallet modules modified; five changed/added
 native files, 27 final staged Git paths total). Both key source adapters are in
 `scripts/personal-fleet-firstplay/native/`:
@@ -222,3 +222,19 @@ and gameplay restart hooks. Do not describe the project as
 `CODE_COMPLETE_ONLY_DEBUG_REMAINS` until the original fork has actual
 commits for those adapters and source-level tests. The cloud GitHub
 App cannot currently write to `pas7-studio/EveJS` (HTTP 403).
+
+
+### PF52 original-characters transaction boundary (2026-11-07)
+
+A source-authorized PF52 `RESERVE_HANGAR_SHIP` invokes the paid NPC
+hull-type verifier **inside** its native GameStore transaction. Original
+PF52 used only `[corporationRuntime, items]`; that scope cannot read
+`characters/<characterID>`, which is required to verify live ownership
+and PF53's paid wallet receipt. The first-play native patch now changes
+PF52's exact one reserve/release transaction scope to
+`[corporationRuntime, items, characters]` while preserving the
+original PF52 compare-and-set ledger and reserve keys. Source-pinned
+Python/Git tests prove the patch is applied to the PF80 staged file.
+The incremental patch now has **8** affected source paths over PF80's
+already staged 22, with **27 unique changed native paths** total.
+No source row is silently skipped or validated via nested transactions.
