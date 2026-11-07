@@ -7,7 +7,7 @@ const vm=require('node:vm');
 const file=path.join(__dirname,'../native/coopPersonalFleetOriginalWorkBootstrap.js');
 const source=fs.readFileSync(file,'utf8');
 const hooksList=['verifyOriginalWriterHooks','allWritersFenced','allWalletWritersFenced',
- 'verifyJournalID','originalTransactionID','notifyOriginalWallet','verifyShipAvailable',
+ 'verifyShipAvailable',
  'verifyRelease','verifyOriginalEquipment','verifyOriginalDeploymentAuthority',
  'verifyExclusiveOwnership','verifyOriginalActor','independentOriginalActorWitness',
  'originalStationUndockPoint','originalOwnershipWitness','verifyNativeActor',
@@ -23,13 +23,15 @@ function fixture(cb){
    claimsPolicy:{KEY:'coop-personal-fleet\u001factor-claims-v1',validate:x=>x,empty:()=>({})},
    originalOrderExecutor:{execute:()=>({success:false}),supports:()=>true}};
  for(const name of hooksList)hooks[name]=()=>true;
- hooks.originalTransactionID=()=>1;
  let broken='',originalPoisoned=false;
  const gameStore={coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',transact:()=>{},isPoisoned:()=>originalPoisoned}};
  const deps={
   './coopPersonalFleetOriginalSourceBindings':{createOriginalSourceBindings(){events.push('source');
    return {gameStore,access:{isOwner:()=>false},resolveOwnerCorporation:()=>1,
     resolveOriginalDockContext:()=>null,resolveOriginalFollowTarget:()=>null};}},
+  './coopPersonalFleetOriginalWalletAuthority':{createOriginalWalletAuthority(){events.push('wallet');
+   if(broken==='wallet')throw Error('PF_WALLET_SOURCE_MISSING');
+   return {originalTransactionID:()=>150000001,verifyJournalID:()=>true,notifyOriginalWallet:()=>true};}},
   './coopPersonalFleetOriginalOfferAuthority':{createSourceBoundOriginalOfferAuthority(){events.push('offers');return {
    resolveNativeOffer:()=>null,verifyOriginalNpcPilot:()=>false,verifyNativeEmployer:()=>false,
    listNativeOffers:()=>[],lookupNativeOffer:()=>null,verifyHiredPilotHull:()=>false,
@@ -74,7 +76,7 @@ const call=(f)=>f.api.createOriginalWorkBootstrap({originalHooks:f.hooks,authore
 test('composition builds original source owners and publishes chat LAST',()=>fixture(f=>{
  const b=call(f);assert.equal(b.status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.equal(b.getOperationalStatus().ready,true);
- assert.deepEqual(f.events,['source','offers','paid','hangar','deploy','orders','return','owner','PF58','chat']);
+ assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','orders','return','owner','PF58','chat']);
 }));
 test('flags OFF after install prevent action even after previously ready',()=>fixture(f=>{
  const b=call(f);delete process.env.EVEJS_COOP_PERSONAL_FLEET_CHAT;
@@ -86,7 +88,7 @@ test('original reciprocal writer revocation kills ready gate',()=>fixture(f=>{
 }));
 test('native failure before PF58 never publishes chat',()=>fixture(f=>{
  f.setBroken('deploy');assert.throws(()=>call(f),/NATIVE_NO_WRITER/);
- assert.deepEqual(f.events,['source','offers','paid','hangar','deploy']);
+ assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy']);
 }));
 test('PF58 source-binding failure never publishes chat',()=>fixture(f=>{
  f.setBroken('PF58');assert.throws(()=>call(f),/PF58_BINDING_FENCED/);
@@ -142,4 +144,10 @@ test('failed source install is sticky and cannot double-publish PF58',()=>fixtur
  const count=f.events.length;
  assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
  assert.equal(f.events.length,count);
+}));
+
+test('original wallet adapter fails before PF53/PF58/partial chat install',()=>fixture(f=>{
+ f.setBroken('wallet');assert.throws(()=>call(f),/PF_WALLET_SOURCE_MISSING/);
+ assert.deepEqual(f.events,['source','wallet']);
+ assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
 }));
