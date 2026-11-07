@@ -230,3 +230,29 @@ test('PF94 paid hire sends a true consent bit into original PF53 wallet transact
  assert.equal(c.amountCents,undefined);
  assert.equal(c.periodMs,undefined);
 }));
+test('PF95 authenticated ATTACK dispatches native PF55 only for a unique active ship',()=>fixture(f=>{
+ f.setActive();
+ const result=f.invoke('attack',[SHIP,2301]);
+ assert.equal(result.status,'ACKED');
+ const issued=f.calls.find(x=>x.name==='order');
+ assert.equal(issued.c.action,'ATTACK');
+ assert.equal(issued.c.targetEntityID,2301);
+ assert.equal(issued.c.followRangeMeters,undefined);
+ assert.equal(issued.c.shipItemID,SHIP);
+ assert.equal(issued.c.ownerCharacterID,CHAR);
+}));
+test('PF95 GUARD uses only source-verified currently piloted player ship',()=>fixture(f=>{
+ f.setActive();
+ const r=f.invoke('guard',[SHIP]);
+ assert.equal(r.status,'ACKED');
+ const issued=f.calls.find(x=>x.name==='order');
+ assert.equal(issued.c.action,'DEFEND');
+ assert.equal(issued.c.targetEntityID,2010);
+ assert.equal(issued.c.followRangeMeters,2500);
+ f.state.target=false;
+ assert.equal(f.invoke('guard',[SHIP]).status,'BLOCKED');
+}));
+test('PF95 ATTACK denies two-arg client injection without an active assigned original actor',()=>fixture(f=>{
+ assert.equal(f.invoke('attack',[SHIP,2301]).status,'BLOCKED');
+ assert.equal(f.calls.filter(x=>x.name==='order').length,0);
+}));
