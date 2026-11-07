@@ -13,6 +13,7 @@ function fixture(testBody){
  const capture={};
  const witness={verifyNativeActor:(row)=>actorOk&&row.shipItemID===2301&&row.actorGeneration===9,
   verifyTarget:()=>targetOk,verifyPersonalClaim:()=>actorOk,verifyOriginalControl:()=>actorOk};
+ const nativeController={entityID:2301,systemID:30000142};
  const modules={
   '../gameStore':{coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',transact:(tables,cb)=>{calls.push([...tables]);return cb(tx);},isPoisoned:()=>poisoned}},
   './runtime':{scenes:new Map([[30000142,{systemID:30000142,
@@ -20,7 +21,8 @@ function fixture(testBody){
   './npc/npcRuntime':{follow:()=>{},stop:()=>{},issueOrder:()=>{},issueAttackOrder:()=>{},warpToEntity:()=>{},warpToPoint:()=>{}},
   './worldData':{getStationByID:id=>id===60000123?{stationID:id,solarSystemID:30000142,position:{x:200,y:300,z:400}}:null},
   './coopPersonalFleetNativeReturnExecutor':{createOriginalReturnExecutor:x=>{capture.returnSource=x;return {execute:row=>({success:true,kind:'REAL_RETURN_ADAPTER',ship:row.shipItemID})};}},
-  './npc/npcRegistry':{getControllerByEntityID:id=>({entityID:id})},
+  './npc/npcRegistry':{getControllerByEntityID:id=>id===2301?
+   nativeController:{entityID:id}},
   './coopPersonalFleetNativeOrders':{key:id=>F+'manual-order-v1:'+id,OP_INDEX:F+'manual-order-operations-v1',signature:r=>r.signature},
   './coopPersonalFleetHangarBridge':{REGISTRY_KEY:'roster-index',validateIndex:x=>x,validateRoster:x=>x},
   './coopNpcOrderBridge':{createOrderBridge:o=>{Object.assign(capture,{bridge:o});return {issue:()=>({success:true})};}},
@@ -36,7 +38,7 @@ function fixture(testBody){
    recordAfterNativeReturnEffect:()=>({success:receiptOK})},
   enabled:()=>on,allWritersFenced:()=>fenced};
  const create=()=>api.createOriginalOrderExecutor(options);
- const ctx={api,create,capture,options,data,idx,dep,calls,
+ const ctx={api,create,capture,options,data,idx,dep,calls,nativeController,
   setEnabled:x=>on=x,setFenced:x=>fenced=x,setPoisoned:x=>poisoned=x,
   setWar:x=>war=x,setActor:x=>actorOk=x,setTarget:x=>targetOk=x,
   setReceipt:x=>receiptOK=x};
@@ -217,4 +219,36 @@ test('PF96 direct combat resumption requires original ACKED operation and receip
   targetEntityID:3333,actorGeneration:9};
  assert.equal(x.resumeCommitted(row).success,false);
  assert.equal(x.resumeCommitted(row).errorMsg,'PF96_ORIGINAL_ACKED_COMBAT_SOURCE_NOT_PROVEN');
+}));
+
+test('PF96 source bridge callback demands real ACKED DEFEND plus physical source proof',()=>fixture(f=>{
+ f.options.combatAuthority={verify:()=>true};
+ f.options.combatReceipt={recordAfterEffect:()=>({success:true}),
+  verifyPersisted:()=>({orderApplied:true})};
+ const x=f.create(),link={entityID:2301,systemID:30000142,
+  pilotID:'coop-pilot-123'};
+ assert.equal(typeof f.capture.bridge.personalFleetRecoveryProof,'function');
+ assert.equal(f.capture.bridge.personalFleetRecoveryProof(link),false);
+ const row={version:1,phase:'ACKED',action:'DEFEND',operationID:'guard-op-1',
+  signature:'a'.repeat(64),shipItemID:2301,systemID:30000142,
+  ownerCharacterID:901,actorGeneration:9,pilotID:link.pilotID,
+  assignmentID:'asgn-1',targetEntityID:3003,followRangeMeters:2500};
+ const T='corporationRuntime',F='coop-personal-fleet\u001f';
+ f.data.set(T+'|'+F+'manual-order-v1:2301',row);
+ f.data.set(T+'|'+F+'manual-order-operations-v1',{
+  operations:{[row.operationID]:{phase:'ACKED',signature:row.signature}}});
+ Object.assign(f.nativeController,{personalFleetOriginal:true,
+  personalFleetAssignmentID:row.assignmentID,
+  personalFleetPilotID:row.pilotID,manualOrder:null});
+ const scene=f.capture.bridge.sceneForSystem(row.systemID);
+ const originalGet=scene.getEntityByID;
+ scene.getEntityByID=id=>id===2301?
+  {kind:'ship',itemID:2301,nativeNpc:true,ownerID:901,mode:'FOLLOW',
+   targetEntityID:3003}:originalGet(id);
+ assert.equal(f.capture.bridge.personalFleetRecoveryProof(link),true);
+ row.action='ATTACK';
+ assert.equal(f.capture.bridge.personalFleetRecoveryProof(link),false);
+ row.action='DEFEND';
+ f.nativeController.manualOrder={type:'attack',targetID:8888,allowWeapons:true};
+ assert.equal(f.capture.bridge.personalFleetRecoveryProof(link),false);
 }));
