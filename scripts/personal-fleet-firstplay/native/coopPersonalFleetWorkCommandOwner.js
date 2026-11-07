@@ -67,9 +67,13 @@ function createOriginalWorkCommandOwner({gameStore,pf52,hangar,pf53,pf54,pf55,pf
   const list=listNativeOffers({session:ctx.session,ownerCharacterID:ctx.ownerCharacterID});
   if(!Array.isArray(list)||list.length>24||list.some(x=>!obj(x)||!TOKEN.test(x.offerID)||
       !PILOT.test(x.pilotID)||x.ownerCharacterID!==ctx.ownerCharacterID||
-      !pos(x.amountCents)||!pos(x.expiresAtMs)||x.expiresAtMs<=Date.now()))
+      !pos(x.amountCents)||!pos(x.expiresAtMs)||x.expiresAtMs<=Date.now()||
+      x.salaryConsentRequired!==true||!pos(x.salaryCents)||x.salaryCents>1000000000000||
+      !Number.isSafeInteger(x.periodMs)||x.periodMs<3600000||x.periodMs>604800000))
    return blocked('PF_FIRSTPLAY_NATIVE_OFFERS_UNAVAILABLE');
-  return {status:'READY',message:list.length?list.map(x=>x.offerID+':'+x.pilotID+':'+(x.amountCents/100).toFixed(2)+' ISK').join(' | '):'No native offers'};
+  return {status:'READY',message:list.length?list.map(x=>x.offerID+':'+x.pilotID+':'+
+   (x.amountCents/100).toFixed(2)+' ISK hire; '+
+   (x.salaryCents/100).toFixed(2)+' ISK salary every '+(x.periodMs/3600000)+'h').join(' | '):'No native offers'};
  }
  function status(ctx){
   const s=rosterSnapshot(ctx);if(s.error)return blocked(s.error);
@@ -85,7 +89,10 @@ function createOriginalWorkCommandOwner({gameStore,pf52,hangar,pf53,pf54,pf55,pf
      offer.ownerCharacterID!==ctx.ownerCharacterID||!PILOT.test(offer.pilotID)||
      !TOKEN.test(offer.contractID)||!pos(offer.agentID)||!pos(offer.revision)||
      !pos(offer.employerCorpID)||!pos(offer.amountCents)||!pos(offer.expiresAtMs)||
-     offer.expiresAtMs<=Date.now())return blocked('PF_FIRSTPLAY_ORIGINAL_OFFER_NOT_VERIFIED');
+     offer.expiresAtMs<=Date.now()||offer.salaryConsentRequired!==true||
+     !pos(offer.salaryCents)||!Number.isSafeInteger(offer.periodMs)||
+     offer.periodMs<3600000||offer.periodMs>604800000)
+   return blocked('PF_FIRSTPLAY_ORIGINAL_OFFER_NOT_VERIFIED');
   const result=pf53.hire({operationID:op(),session:ctx.session,
    ownerCharacterID:ctx.ownerCharacterID,offerID:offer.offerID,
    offerRevision:offer.revision,agentID:offer.agentID,pilotID:offer.pilotID,
