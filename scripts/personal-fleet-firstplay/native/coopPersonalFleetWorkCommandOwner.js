@@ -97,7 +97,8 @@ function createOriginalWorkCommandOwner({gameStore,pf52,hangar,pf53,pf54,pf55,pf
   const result=pf53.hire({operationID:op(),session:ctx.session,
    ownerCharacterID:ctx.ownerCharacterID,offerID:offer.offerID,
    offerRevision:offer.revision,agentID:offer.agentID,pilotID:offer.pilotID,
-   contractID:offer.contractID,expectedRosterRevision:snap.data.revision});
+   contractID:offer.contractID,expectedRosterRevision:snap.data.revision,
+   recurringSalaryAcknowledged:true});
   return result?.status==='APPLIED'?{...result,pilotID:offer.pilotID}:result||blocked('PF_FIRSTPLAY_HIRE_OUTCOME_UNKNOWN');
  }
  function assign(ctx){
