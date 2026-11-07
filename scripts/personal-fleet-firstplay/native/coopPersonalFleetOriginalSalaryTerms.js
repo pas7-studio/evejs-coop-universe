@@ -6,6 +6,7 @@
  * All reads are against the SAME original GameStore SQLite transaction.
  */
 const pf53=require('./coopPersonalFleetPaidHiring');
+const consent=require('./coopPersonalFleetOriginalPayrollConsent');
 const pf52=require('./coopPersonalFleetHangarBridge');
 const npcData=require('./npc/npcData');
 const corporations=require('../services/corporation/corporationState');
@@ -103,7 +104,7 @@ function createOriginalSalaryTerms({authoredPolicies=[],clock=()=>Date.now(),
      !Number.isSafeInteger(command.periodIndex)||command.periodIndex<1||
      !verifiedPaid(command,paid,tx))return null;
   const policy=forPilot(command.pilotID,paid.employerCorpID);
-  if(!sourcePilot(command,paid,policy)||!pos(paid.createdAtMs)||
+  if(!sourcePilot(command,paid,policy)||!consent.boundWagePolicy(paid,policy,tx)||!pos(paid.createdAtMs)||
      !Number.isSafeInteger(policy.periodMs*command.periodIndex))return null;
   const dueAtMs=paid.createdAtMs+policy.periodMs*command.periodIndex;
   const now=clock();
@@ -121,13 +122,14 @@ function createOriginalSalaryTerms({authoredPolicies=[],clock=()=>Date.now(),
  function verifyOriginalNpcService(command,paid,tx){
   if(!live()||!verifiedPaid(command,paid,tx))return false;
   const policy=forPilot(command.pilotID,paid.employerCorpID);
-  return sourcePilot(command,paid,policy)===true;
+  return sourcePilot(command,paid,policy)===true&&consent.boundWagePolicy(paid,policy,tx);
  }
  function verifyNativeEmployer(command,paid,corp,tx){
   if(!live()||!verifiedPaid(command,paid,tx)||!obj(corp)||
      corp.corporationID!==paid.employerCorpID||
      !obj(corp.wallet?.divisions?.['1000']))return false;
-  return corporations.getCorporationRecord(paid.employerCorpID)?.isNPC===true&&
+  return consent.boundWagePolicy(paid,forPilot(command.pilotID,paid.employerCorpID),tx)&&
+    corporations.getCorporationRecord(paid.employerCorpID)?.isNPC===true&&
      corporations.isNpcCorporationID(paid.employerCorpID)===true;
  }
  function verifyNativePilotReleased(command,tx){
@@ -146,7 +148,8 @@ function createOriginalSalaryTerms({authoredPolicies=[],clock=()=>Date.now(),
   if(!live()||!obj(command)||!obj(tx))return false;
   const paid=originalPaid(command,tx);
   const policy=forPilot(command.pilotID,paid?.employerCorpID);
-  if(!obj(paid)||!policy||!sourcePilot(command,paid,policy))return false;
+  if(!obj(paid)||!policy||!sourcePilot(command,paid,policy)||
+     !consent.boundWagePolicy(paid,policy,tx))return false;
   const ledger=tx.get(T,LEDGER),last=ledger?.contracts?.[command.pilotID]?.lastPeriod||0;
   if(!Number.isSafeInteger(last)||last<0)return false;
   const now=clock();
