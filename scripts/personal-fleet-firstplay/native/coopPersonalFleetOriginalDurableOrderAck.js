@@ -19,8 +19,11 @@ const runtime=require('./runtime');
 const registry=require('./npc/npcRegistry');
 const originalNpcStore=require('./npc/nativeNpcStore');
 const pf55=require('./coopPersonalFleetNativeOrders');
+const pf56=require('./coopPersonalFleetReturnDock');
+const worldData=require('./worldData');
 const T='corporationRuntime', NE='npcEntities', ITEMS='items',CH='characters';
-const F='coop-personal-fleet\u001f',RECEIPT=F+'native-order-receipt-v1:';
+const F='coop-personal-fleet\u001f',RECEIPT=F+'native-order-receipt-v1:',
+ RETURN_RECEIPT=F+'native-return-receipt-v1:';
 const token=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const pilot=/^coop-pilot-[0-9]{3,}$/;
 const pos=x=>Number.isSafeInteger(x)&&x>0;
@@ -183,6 +186,143 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
     orderApplied:true,controllerPersisted:true,noForeignCommand:true});
   }catch{return null;}
  }
- return Object.freeze({recordAfterNativeEffect,verifyPersistedNativeOrder});
+ // PF84B: native RETURN acceptance is durable only after a real, source-owned
+ // physical warp begins. This records a one-shot *acceptance* proof, not a
+ // promise that a warp will finish after an interrupted engine restart.
+ function matchesReturn(row){
+  return obj(row)&&row.version===1&&row.phase==='RETURN_ISSUING'&&
+   token.test(row.operationID)&&token.test(row.assignmentID)&&
+   pilot.test(row.pilotID)&&[row.shipItemID,row.systemID,row.stationID,
+    row.ownerCharacterID,row.requestedByAccountID,row.actorGeneration,
+    row.reservationGeneration,row.typeID].every(pos)&&
+   row.returnDispatchCount===1&&row.dockDispatchCount===0&&
+   typeof row.signature==='string'&&/^[0-9a-f]{64}$/.test(row.signature)&&
+   row.signature===pf56.signature(row);
+ }
+ function originalStation(row,scene){
+  const station=worldData.getStationByID(row.stationID),
+   ball=scene?.getEntityByID?.(row.stationID);
+  if(station?.stationID!==row.stationID||
+   station.solarSystemID!==row.systemID||!vec(station.position)||
+   scene?.systemID!==row.systemID||ball?.kind!=='station'||
+   ball.itemID!==row.stationID||!vec(ball.position)||
+   !finite(ball.radius)||ball.radius<1||
+   Math.hypot(station.position.x-ball.position.x,
+    station.position.y-ball.position.y,
+    station.position.z-ball.position.z)>100)return null;
+  return station;
+ }
+ function persistedReturnSource(row,tx){
+  if(orderWitness.verifyNativeActor(row,tx)!==true)return null;
+  const originalChar=tx.get(CH,String(row.ownerCharacterID));
+  if(originalChar?.characterID!==row.ownerCharacterID||
+   originalChar.accountId!==row.requestedByAccountID||
+   originalChar.isDeleted===true)return null;
+  const scene=runtime.scenes.get(row.systemID),
+    ship=scene?.getEntityByID?.(row.shipItemID),
+    controller=registry.getControllerByEntityID(row.shipItemID),
+    station=originalStation(row,scene);
+  const root=tx.get(NE,'/'),stored=root?.entities?.[String(row.shipItemID)];
+  const nativeEntity=originalNpcStore.getNativeEntity(row.shipItemID),
+    nativeController=originalNpcStore.getNativeController(row.shipItemID);
+  if(!station||!obj(root)||!obj(root.entities)||!obj(stored)||
+   ship?.kind!=='ship'||ship.itemID!==row.shipItemID||
+   ship.ownerID!==row.ownerCharacterID||ship.nativeNpc!==true||
+   ship.session!=null||controller?.entityID!==row.shipItemID||
+   controller.systemID!==row.systemID||
+   nativeEntity?.entityID!==row.shipItemID||
+   nativeEntity.personalFleetOriginal!==true||
+   nativeEntity.personalFleetAssignmentID!==row.assignmentID||
+   nativeEntity.personalFleetPilotID!==row.pilotID||
+   nativeController?.entityID!==row.shipItemID||
+   nativeController.personalFleetOriginal!==true||
+   nativeController.personalFleetAssignmentID!==row.assignmentID||
+   nativeController.personalFleetPilotID!==row.pilotID||
+   stored.entityID!==row.shipItemID||stored.systemID!==row.systemID||
+   stored.ownerID!==row.ownerCharacterID||
+   stored.personalFleetOriginal!==true||
+   stored.personalFleetAssignmentID!==row.assignmentID||
+   stored.personalFleetPilotID!==row.pilotID||
+   scene.getEntityByID(row.shipItemID)!==ship)return null;
+  return {root,stored,ship,station};
+ }
+ function recordAfterNativeReturnEffect(row){
+  if(!matchesReturn(row)||!on())
+   return result(false,'PF56_RETURN_DURABLE_RECORD_DISABLED');
+  try{return atomic.transact([T,ITEMS,CH,NE],tx=>{
+   const intent=tx.get(T,pf56.key(row.assignmentID)),
+     ops=tx.get(T,pf56.OPS);
+   if(!obj(intent)||intent.phase!=='RETURN_ISSUING'||
+    intent.operationID!==row.operationID||
+    intent.signature!==row.signature||
+    ops?.operations?.[row.operationID]?.signature!==row.signature||
+    ops.operations[row.operationID].assignmentID!==row.assignmentID||
+    ops.operations[row.operationID].phase!=='RETURN_ISSUING'||
+    tx.get(T,RETURN_RECEIPT+row.operationID)!==null)
+    return result(false,'PF56_RETURN_ORIGINAL_ISSUING_INTENT_NOT_PROVEN');
+   const physical=persistedReturnSource(row,tx);
+   if(!physical)return result(false,'PF56_RETURN_ORIGINAL_ACTOR_NOT_VERIFIED');
+   // A successful bridge callback alone is insufficient: observe original
+   // in-scene warp state after the effect. No position teleport is written.
+   const ship=physical.ship;
+   if(!(ship.isWarping===true||ship.warpState||
+    ship.pendingWarp||String(ship.mode||'').toUpperCase()==='WARP'))
+    return result(false,'PF56_RETURN_ORIGINAL_WARP_NOT_OBSERVED');
+   const timestamp=clock();
+   if(!pos(timestamp))return result(false,'PF56_RETURN_DURABLE_CLOCK_INVALID');
+   const marker={version:1,operationID:row.operationID,
+    signature:row.signature,assignmentID:row.assignmentID,
+    ownerCharacterID:row.ownerCharacterID,pilotID:row.pilotID,
+    shipItemID:row.shipItemID,systemID:row.systemID,
+    stationID:row.stationID,actorGeneration:row.actorGeneration,
+    requestedByAccountID:row.requestedByAccountID,
+    committedAtMs:timestamp};
+   const root={...physical.root,entities:{...physical.root.entities,
+    [String(row.shipItemID)]:{...physical.stored,personalFleetReturnOrder:marker}}};
+   tx.put(NE,'/',root);
+   tx.put(T,RETURN_RECEIPT+row.operationID,
+    {...marker,source:'EVEJS_ORIGINAL_NATIVE_RETURN_COMMITTED_V1'});
+   return {success:true,operationID:row.operationID,
+    status:'ORIGINAL_NATIVE_RETURN_ORDER_DURABLE'};
+  });}catch{return result(false,'PF56_NATIVE_RETURN_COMMIT_UNKNOWN_NO_RETRY');}
+ }
+ function verifyPersistedNativeReturn(row,tx){
+  if(!matchesReturn(row)||!on()||!obj(tx)||typeof tx.get!=='function')return null;
+  try{
+   const saved=tx.get(T,pf56.key(row.assignmentID)),
+    ops=tx.get(T,pf56.OPS),
+    stamp=tx.get(T,RETURN_RECEIPT+row.operationID),
+    root=tx.get(NE,'/'),
+    marker=root?.entities?.[String(row.shipItemID)]?.personalFleetReturnOrder;
+   if(!obj(saved)||saved.operationID!==row.operationID||
+    saved.signature!==row.signature||saved.phase!=='RETURN_ISSUING'||
+    ops?.operations?.[row.operationID]?.signature!==row.signature||
+    ops.operations[row.operationID].phase!=='RETURN_ISSUING'||
+    !obj(stamp)||stamp.source!=='EVEJS_ORIGINAL_NATIVE_RETURN_COMMITTED_V1'||
+    !obj(marker)||stamp.version!==1||marker.version!==1||
+    ['operationID','signature','assignmentID','ownerCharacterID','pilotID',
+     'shipItemID','systemID','stationID','actorGeneration',
+     'requestedByAccountID','committedAtMs'].some(k=>
+      stamp[k]!==row[k]&&k!=='committedAtMs'||stamp[k]!==marker[k])||
+    !pos(stamp.committedAtMs)||!pos(marker.committedAtMs)||
+    orderWitness.verifyNativeActor(row,tx)!==true)
+    return null;
+   const character=tx.get(CH,String(row.ownerCharacterID));
+   if(character?.characterID!==row.ownerCharacterID||
+      character.accountId!==row.requestedByAccountID||
+      character.isDeleted===true)return null;
+   return Object.freeze({
+    source:'EVEJS_ORIGINAL_PERSISTED_NPC_RETURN_V1',
+    operationID:row.operationID,signature:row.signature,
+    assignmentID:row.assignmentID,ownerCharacterID:row.ownerCharacterID,
+    pilotID:row.pilotID,shipItemID:row.shipItemID,
+    controllerEntityID:row.shipItemID,actorGeneration:row.actorGeneration,
+    stationID:row.stationID,systemID:row.systemID,
+    nativeOwner:'PERSONAL_FLEET',returnOrderPersisted:true,
+    returnTargetVerified:true,noForeignCommand:true});
+  }catch{return null;}
+ }
+ return Object.freeze({recordAfterNativeEffect,verifyPersistedNativeOrder,
+  recordAfterNativeReturnEffect,verifyPersistedNativeReturn});
 }
 module.exports=Object.freeze({createOriginalDurableOrderAck});
