@@ -5,6 +5,50 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## Current PF89/PF90 source status — 2026-11-08
+
+**Latest staged source scope:** PF80 **22** files plus first-play **27** delta
+paths, 4 overlapping = **45** distinct original native WORK paths.
+**51** SHA256-pinned first-play native/tool/test files. These supersede the
+older dated path/count statements below, which are historical snapshots.
+
+**PF89 (native PF57 loss):** The actual WORK PF57 source now reads the
+original per-entity `npcEntities` and `npcModules` SQLite rows, plus original
+flat `npcCargo.cargo`, `npcWrecks.wrecks` and `npcWreckItems.items`.
+It uses a new, strictly read-only
+`coopPersonalFleetOriginalLossRows.js` with duplicate title detection
+(including original `sourceCargoID`), root/skeleton and row identity checks.
+The source-pinned builder makes this change ONLY in isolated WORK; legacy
+archive unit fixtures remain intact. The helper's isolated V8 tests were
+**16/16 PASS**, and all 7 original PF57 stock patches were verified against
+the real module text with a JavaScript compilation check. The actual
+PF57 original-node/SQLite and game death E2E remain NOT RUN.
+
+**PF90 (physical restart):** `coopPersonalFleetOriginalPhysicalRecovery.js`
+is source-bound to original nativeNpcStore/nativeNpcService, the PF52
+reservation+roster, PF54 ACTIVE receipt, actor claim, original ItemStore,
+live player sessions and mounted original scene. When EVERY proof agrees,
+it invokes the real native
+`materializeStoredNativeController(scene,sameItemID,{broadcast:false})`.
+It neither mints a ship nor reissues any player/NPC command. It is called
+through the existing 100ms PF56 server tick (at most once per second) and
+waits for scenes to be loaded. A failed/ambiguous materialization is fenced
+per entity for the process; it does not retry unknown side effects. V8
+behavioral source tests: **15/15 PASS**. This still requires native WORK E2E
+and an original server/restart proof.
+
+**Unresolved WARP:** The original native materializer restores position and
+motion fields, but does not guarantee reconstitution of an active sessionless
+ingress warp. PF90 refuses blind warp redispatch for a persisted `WARP`.
+An original-source durable flight-resume protocol is still required to
+complete restart-in-flight acceptance.
+
+**Not complete:** native PF57 payroll scheduling, actual loss and independent
+wreck/killmail witnesses, safe dismissal, shared-player NPC ATTACK/GUARD
+and physical mining/exploration role integration, official native startup
+configuration with all writer hooks, and authenticated two-client WORK E2E.
+The Personal Fleet source remains **OFF**; main and PLAY untouched.
+
 ## What the source package actually provides
 
 For the **first physical game smoke**, use a **spare genuine player-owned hangar ship**;
