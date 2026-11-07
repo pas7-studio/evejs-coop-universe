@@ -43,7 +43,9 @@ foreach ($file in @($pf99Auth,$pf99Native)) {
     throw 'PF99_AUTHENTICATED_NATIVE_OWNER_TEST_MISSING'
   }
 }
-$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87) + @($pf88) + @($pf89) + @($pf90) + @($pf91) + @($pf92) + @($pf93) + @($pf94) + @($pf98) + @($pf99Auth) + @($pf99Native)
+$pf100Proof = Join-Path $root '../pf100/tests/pf100-original-postcommit-proof.test.cjs'
+if (-not (Test-Path -LiteralPath $pf100Proof -PathType Leaf)) { throw 'PF100_POSTCOMMIT_SQLITE_PROOF_TEST_MISSING' }
+$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87) + @($pf88) + @($pf89) + @($pf90) + @($pf91) + @($pf92) + @($pf93) + @($pf94) + @($pf98) + @($pf99Auth) + @($pf99Native) + @($pf100Proof)
 & $node --test '--test-concurrency=1' @allNodeTests
 if ($LASTEXITCODE -ne 0) { throw 'PF58_NODE_REGRESSION_FAILED' }
 $python = (Get-Command python -ErrorAction Stop).Source
@@ -89,6 +91,11 @@ if ($NativeCheckout) {
   } finally {
     [Environment]::SetEnvironmentVariable('PF99_NATIVE_WORKTREE',$oldPf99Root,'Process')
   }
+  # PF100 must run native original six-source pins and SHA256 in WORK preflight.
+  $pf100Runner = Join-Path $root '../pf100/Test-PF100-Local.ps1'
+  if (-not (Test-Path -LiteralPath $pf100Runner -PathType Leaf)) { throw 'PF100_WORK_PROOF_RUNNER_MISSING' }
+  & $pf100Runner -NativeCheckout $native
+  if ($LASTEXITCODE -ne 0) { throw 'PF100_WORK_POSTCOMMIT_PROOF_GATE_FAILED' }
   $patch = Join-Path ([System.IO.Path]::GetTempPath()) 'pf58-native-stock-fittings-review.patch'
   & $python (Join-Path $root 'build_native_stock_fittings_patch.py') $native --output $patch
   if ($LASTEXITCODE -ne 0) { throw 'PF58_NATIVE_SOURCE_PIN_FAILED' }
