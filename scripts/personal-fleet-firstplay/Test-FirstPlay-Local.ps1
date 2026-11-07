@@ -53,7 +53,24 @@ if($NativeCheckout){
  if($LASTEXITCODE -ne 0 -or $actualBlob -cne '5f4dd4d34a398dde3120e8640a7058d2bd3bb038'){
   throw 'PF_FIRSTPLAY_NATIVE_CHAT_SOURCE_PIN_DRIFT'
  }
- Write-Host 'Original EveJS chat source pin PASS (read-only).'
+ $sourcePins=@{
+  'Code/server/src/space/npc/npcData.js'='8046ced2336923ec6801c954f67aba300a65e127'
+  'Code/server/src/services/corporation/corporationState.js'='2abe99b533d02d731d46d08965c3dcdbf6a6d3d1'
+  'Code/server/src/services/corporation/corporationRuntimeState.js'='1e87597539389567716e75de565519c9cb19a977'
+  'Code/server/src/services/chat/sessionRegistry.js'='01892cb8f6e35ef46268eae5f2909fd96c4a2a51'
+  'Code/server/src/services/structure/structureLocation.js'='0e12ae00721359d526c4453529c81a16f337df22'
+  'Code/server/src/services/_shared/stationStaticData.js'='15512a5320dc7979f3bab90cab0281d9fff15332'
+  'Code/server/src/space/runtime.js'='0de66d2ab0499bfcff2b1bb57176e775c9b8df22'
+  'Code/server/src/gameStore/sqliteStore.js'='d851fb5a84added2d4527c34407879e8a009bb74'
+ }
+ foreach($name in $sourcePins.Keys){
+  $seen=(& $git -C $native hash-object $name).Trim()
+  if($LASTEXITCODE -ne 0 -or $seen -cne $sourcePins[$name]){
+   throw ('PF_FIRSTPLAY_NATIVE_SOURCE_PIN_DRIFT: '+$name)
+  }
+ }
+ Write-Host 'Original EveJS chat, NPC, wallet, session, station, runtime and SQLite source pins PASS (read-only).'
+
 }else{
  Write-Warning 'Real native source pin NOT RUN: supply -NativeCheckout.'
 }
