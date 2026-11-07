@@ -14,13 +14,14 @@ const hooksList=['verifyOriginalWriterHooks','allWritersFenced','allWalletWriter
  'verifyNativeFlight','verifyOriginalReturnOrder','verifyStationArrival',
  'verifyContinuousDwell','verifyOriginalManifest','verifyOriginalDockReceipt',
  'verifyFinalOriginalManifest','executeNativeReturn','executeNativeDock',
- 'verifyOriginalDockedPlayerSession'];
+ 'verifyOriginalDockedPlayerSession','readOriginalWarShipClaim'];
 function fixture(cb){
  const flags=['EVEJS_COOP_PERSONAL_FLEET_NATIVE','EVEJS_COOP_PERSONAL_FLEET_CHAT','EVEJS_COOP_NATIVE_ATOMIC_ROWS'];
  const prior=flags.map(k=>[k,process.env[k]]);for(const k of flags)process.env[k]='1';
  const events=[];const supplied={};const hooks={source:'ORIGINAL_EVEJS_PERSONAL_FLEET_BOOT_OWNER_V1',
    claimsPolicy:{KEY:'coop-personal-fleet\u001factor-claims-v1',validate:x=>x,empty:()=>({})},
-   originalOrderExecutor:{execute:()=>({success:false}),supports:()=>true}};
+   sharedOriginalNpcOrderArbiter:{issue:()=>{},blocked:()=>false,snapshot:()=>({leases:[]}),
+      retainWithNativeProof:()=>{},blocksForSystem:()=>new Set()}};
  for(const name of hooksList)hooks[name]=()=>true;
  let broken='',originalPoisoned=false;
  const gameStore={coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',transact:()=>{},isPoisoned:()=>originalPoisoned}};
@@ -28,6 +29,11 @@ function fixture(cb){
   './coopPersonalFleetOriginalSourceBindings':{createOriginalSourceBindings(){events.push('source');
    return {gameStore,access:{isOwner:()=>false},resolveOwnerCorporation:()=>1,
     resolveOriginalDockContext:()=>null,resolveOriginalFollowTarget:()=>null};}},
+  './coopPersonalFleetOriginalOrderExecutor':{createOriginalOrderExecutor(args){events.push('physical-order');
+   assert.equal(args.sharedOriginalArbiter,hooks.sharedOriginalNpcOrderArbiter);
+   assert.equal(args.enabled(),false);
+   if(broken==='physical-order')throw Error('SHARED_ARBITER_NOT_INSTALLED');
+   return {execute:()=>({success:false}),supports:()=>false};}},
   './coopPersonalFleetOriginalOrderWitness':{createOriginalOrderWitness(){events.push('order-witness');
    if(broken==='order-witness')throw Error('ORIGINAL_ORDER_SOURCE_UNAVAILABLE');
    return {verifyNativeActor:()=>false,verifyOriginalControl:()=>false,verifyTarget:()=>false};}},
@@ -80,7 +86,7 @@ const call=(f)=>f.api.createOriginalWorkBootstrap({originalHooks:f.hooks,authore
 test('composition builds original source owners and publishes chat LAST',()=>fixture(f=>{
  const b=call(f);assert.equal(b.status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.equal(b.getOperationalStatus().ready,true);
- assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','orders','return','owner','PF58','chat']);
+ assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','physical-order','orders','return','owner','PF58','chat']);
 }));
 test('flags OFF after install prevent action even after previously ready',()=>fixture(f=>{
  const b=call(f);delete process.env.EVEJS_COOP_PERSONAL_FLEET_CHAT;
@@ -168,4 +174,14 @@ test('PF55 physical source authority functions are NOT operator-supplied',()=>fi
  assert.equal(call(f).status,'INSTALLED_WORK_SOURCE_BOUND');
  // Their presence on hooks is ignored; tests above assert the source-bound
  // mock's false values are still handed to the real PF55 constructor.
+}));
+
+test('real original physical order bridge not configured fails before PF58/chat',()=>fixture(f=>{
+ f.setBroken('physical-order');assert.throws(()=>call(f),/SHARED_ARBITER_NOT_INSTALLED/);
+ assert.equal(f.events.includes('PF58'),false);assert.equal(f.events.includes('chat'),false);
+}));
+test('missing source-owned shared arbiter is a hard startup error',()=>fixture(f=>{
+ delete f.hooks.sharedOriginalNpcOrderArbiter;
+ assert.throws(()=>call(f),/ORIGINAL_BOOT_HOOKS_REQUIRED/);
+ assert.equal(f.events.length,0);
 }));
