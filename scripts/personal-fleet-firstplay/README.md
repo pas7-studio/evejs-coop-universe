@@ -31,7 +31,7 @@ original chat source pin 5f4dd4d34a398dde3120e8640a7058d2bd3bb038,
 and explicit WORK-NOT-PLAY confirmation. It never creates native business
 authorities or enables feature flags.
 
-**Evidence:** 118/118 Node/SQLite/VM tests and 18/18 Python/Git tests PASS on
+**Evidence:** 132/132 Node/SQLite/VM tests and 18/18 Python/Git tests PASS on
 Node.js 22.16.0, Python 3.13.5, Git. All fourteen code/test files have exact
 Git blob SHA matches with the locally tested source. No native original
 EveJS runtime or Windows PowerShell test was run.
@@ -122,7 +122,7 @@ the NPC, native employer and amount; PF53 alone debits the original wallet.
 
 **There is deliberately no preconfigured/fake hireable character** in
 this repository. An operator on the real native WORK server must select
-NPC character IDs and native profile IDs that genuinely exist in its
+NPC character IDs, native profile IDs and supported ship type IDs that genuinely exist in its
 installed SDE. An empty catalogue gives `/pf offers: No native offers`
 rather than invented pilots.
 
@@ -138,12 +138,23 @@ const offerAuthority = require('./coopPersonalFleetOriginalOfferAuthority')
     pf52: require('./coopPersonalFleetHangarBridge'),
     pf53: require('./coopPersonalFleetPaidHiring'),
     access: bind.access,
+    // One example *shape*, not real IDs or a free NPC:
+    // [{npcCharacterID: <existing SDE character ID>,
+    //   employerCorpID: <real NPC employer corp ID>,
+    //   profileID: <authored NPC profile ID>,
+    //   shipTypeID: <same physical ship type as profile>,
+    //   amountCents: <real server-authorized hire price>}]
     authoredCatalog: verifiedOperatorWorkCatalogue,
     enabled: nativePersonalFleetEnabled,
     allWalletWritersFenced: verifiedOriginalWriterHooks,
   });
 // Supply offerAuthority.resolveNativeOffer/verifyOriginalNpcPilot/
 // verifyNativeEmployer to PF53's real constructor.
+ // offerAuthority.verifyHiredPilotHull must be checked BEFORE PF52 reserve
+ // and again by PF52.verifyShipAvailable UNDER its own original transaction.
+ // offerAuthority.resolvePaidNativeProfile is PF58 adoption's
+ // resolveNativeProfile; bind.resolveOwnerCorporation is PF58's
+ // original owner corporation resolver.
 // Supply listNativeOffers/lookupNativeOffer to the command owner.
 // Supply bind.resolveOriginalDockContext / bind.resolveOriginalFollowTarget
 // and bind.access to the remaining PF52/PF54/PF55/PF56 constructors.
@@ -151,13 +162,42 @@ const offerAuthority = require('./coopPersonalFleetOriginalOfferAuthority')
 ```
 
 The `coopPersonalFleetOriginalSourceBindings` file imports exactly
-original GameStore, sessionRegistry, structureLocation, stationStaticData
-and space runtime; it never accepts client-supplied equivalents.
+original GameStore, sessionRegistry, structureLocation, stationStaticData,
+corporationState and space runtime; it never accepts client-supplied equivalents.
 It requires the original character row/account, a single live session,
 real docked station or real physical in-space player ship, and a matching
 scene entity before producing a FOLLOW target.
 
-**Test evidence this continuation:** 34 real-SQLite native offer cases,
-21 source-bound owner/session/ItemStore/scene cases, plus the updated
-63 prior Node cases = **118 Node PASS**; 18 Python/Git PASS;
+**Test evidence this continuation:** 44 real-SQLite native offer cases,
+23 source-bound owner/session/ItemStore/scene cases, plus the updated
+65 prior Node cases = **118 Node PASS**; 18 Python/Git PASS;
 **136 total PASS**. Original actual native EVE gameplay still NOT RUN.
+
+## Physical hull profile compatibility — fixed
+
+PF58's original native adoption rejects a profile whose
+`definition.profile.shipTypeID` is not the EXACT original ItemStore hull
+`typeID`. This is now checked at **three** stages:
+
+1. Operator-authored catalogue row requires `shipTypeID`; quote creation
+   validates it against the actual original NPC profile.
+2. `/pf assign` reads the original hangar physical ItemStore hull and
+   calls `verifyHiredPilotHull` before reserving it. PF52's native
+   `verifyShipAvailable` MUST call the same verifier with its
+   **transaction-scoped** original `tx` (not a separate transaction).
+3. PF58 adoption calls `resolvePaidNativeProfile(row)`, which
+   independently verifies PF52's active employment, the exact PF53
+   durable paid receipt and source NPC identity, the unchanged contract,
+   and the original hull type. It cannot choose a new profile after
+   the money was charged.
+
+The source-bound player adapter also provides
+`resolveOwnerCorporation(ownerCharacterID)` from the exact original
+character's persisted corporation and the real original corporation
+service. PF58 adoption can use it as the mandatory corporate resolver.
+
+**Still NOT installed:** the original native startup composition root
+must supply these exact methods to the existing PF52/PF58 constructors,
+and original NPC controllers/scene adoption and return need actual WORK
+evidence. This is not a claim that actor spawning and docking are
+already connected to the running engine.
