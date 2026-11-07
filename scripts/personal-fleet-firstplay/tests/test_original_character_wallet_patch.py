@@ -12,13 +12,21 @@ b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
 
 class WalletPatchTest(unittest.TestCase):
  def example(self,name):
-  return "'use strict';\n"+'\n'.join(before for before,_ in b.MODULES[name])+"\n"
+  # Some source-pinned transformations are chained: later anchors are
+  # introduced by earlier replacements. Do not paste those anchors twice
+  # into a synthetic fixture, or count them as unprocessed stock source.
+  blocks=[];earlier=[]
+  for before,after in b.MODULES[name]:
+   if not any(before in emitted for emitted in earlier):
+    blocks.append(before)
+   earlier.append(after)
+  return "'use strict';\n"+'\n'.join(blocks)+"\n"
  def test_rewrites_both_original_stock_character_rows(self):
   for name in b.MODULES:
    out=b.transform(name,self.example(name))
    for before,after in b.MODULES[name]:
     self.assertIn(after,out)
-    self.assertNotIn(before,out)
+    if before not in after:self.assertNotIn(before,out)
    if name in ('coopPersonalFleetPaidHiring.js','coopPersonalFleetContractLifecycle.js'):self.assertIn('String(',out)
  def test_rejects_missing_and_duplicate_exact_original_snippets(self):
   for name in b.MODULES:
