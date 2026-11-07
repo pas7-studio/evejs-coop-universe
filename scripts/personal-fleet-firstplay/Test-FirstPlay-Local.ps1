@@ -37,7 +37,7 @@ $tests=Join-Path $root 'tests'
 $prior=[Environment]::GetEnvironmentVariable('PYTHONDONTWRITEBYTECODE','Process')
 try{
  $env:PYTHONDONTWRITEBYTECODE='1'
- & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-chat-gateway.test.cjs') (Join-Path $tests 'personal-fleet-work-command-owner.test.cjs') (Join-Path $tests 'personal-fleet-original-offers.test.cjs') (Join-Path $tests 'personal-fleet-original-source-bindings.test.cjs') (Join-Path $tests 'personal-fleet-original-work-bootstrap.test.cjs') (Join-Path $tests 'personal-fleet-original-wallet-authority.test.cjs') (Join-Path $tests 'personal-fleet-original-order-witness.test.cjs') (Join-Path $tests 'personal-fleet-original-order-executor.test.cjs') (Join-Path $tests 'personal-fleet-original-durable-order-ack.test.cjs') (Join-Path $tests 'personal-fleet-original-dock-completion.test.cjs') (Join-Path $tests 'personal-fleet-original-terminal-dock-sources.test.cjs') (Join-Path $tests 'personal-fleet-original-dock-coordinator.test.cjs')
+ & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-chat-gateway.test.cjs') (Join-Path $tests 'personal-fleet-work-command-owner.test.cjs') (Join-Path $tests 'personal-fleet-original-offers.test.cjs') (Join-Path $tests 'personal-fleet-original-source-bindings.test.cjs') (Join-Path $tests 'personal-fleet-original-work-bootstrap.test.cjs') (Join-Path $tests 'personal-fleet-original-wallet-authority.test.cjs') (Join-Path $tests 'personal-fleet-original-order-witness.test.cjs') (Join-Path $tests 'personal-fleet-original-order-executor.test.cjs') (Join-Path $tests 'personal-fleet-original-durable-order-ack.test.cjs') (Join-Path $tests 'personal-fleet-original-dock-completion.test.cjs') (Join-Path $tests 'personal-fleet-original-terminal-dock-sources.test.cjs') (Join-Path $tests 'personal-fleet-original-dock-coordinator.test.cjs') (Join-Path $tests 'personal-fleet-original-station-dwell.test.cjs') (Join-Path $tests 'personal-fleet-original-station-tick-driver.test.cjs')
  if($LASTEXITCODE -ne 0){throw 'PF_FIRSTPLAY_NODE_TEST_FAILED'}
  & $python -m unittest discover -s $tests -p 'test_*.py' -v
  if($LASTEXITCODE -ne 0){throw 'PF_FIRSTPLAY_PYTHON_TEST_FAILED'}
@@ -68,6 +68,7 @@ if($NativeCheckout){
   'Code/server/src/space/coopNpcOrderArbiter.js'='aa5447ada4015b1ac8262d14bae5cd975af6ec6b'
   'Code/server/src/space/coopNpcOrderBridge.js'='c0f93af3e5a67703a84dc03cab8da29a65afdf3b'
   'Code/server/src/space/npc/npcRuntime.js'='8ee3d4f82db1600094df8de1060a9aa8e575af1a'
+  'Code/server/src/space/worldData.js'='7c19011d1e35a090a7ed7d10288f179ab637ed40'
   'Code/server/src/space/npc/npcRegistry.js'='990197ea61d89ddc3f22450840eb047bc548278c'
   'Code/server/src/space/npc/nativeNpcStore.js'='95724ab4537683e7ee933bc3149d0a891082ce7e'
  }
@@ -82,4 +83,4 @@ if($NativeCheckout){
 }else{
  Write-Warning 'Real native source pin NOT RUN: supply -NativeCheckout.'
 }
-Write-Host 'PF_FIRSTPLAY_344_CONTRACT_TESTS_PASS. WORK and client gameplay NOT RUN.'
+Write-Host 'PF_FIRSTPLAY_ALL_CONFIGURED_CONTRACT_SUITES_PASS (exact counts in Node/Python output). Native WORK and gameplay E2E NOT RUN.'
