@@ -36,7 +36,14 @@ $pf94 = Join-Path $root '../pf94/tests/pf94-owner-epoch-sqlite.test.cjs'
 if (-not (Test-Path -LiteralPath $pf94 -PathType Leaf)) { throw 'PF94_NATIVE_OWNER_SQLITE_TEST_MISSING' }
 $pf98 = Join-Path $root '../pf98/tests/pf98-native-owner-bridge.test.cjs'
 if (-not (Test-Path -LiteralPath $pf98 -PathType Leaf)) { throw 'PF98_NATIVE_OWNER_WITNESS_BRIDGE_TEST_MISSING' }
-$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87) + @($pf88) + @($pf89) + @($pf90) + @($pf91) + @($pf92) + @($pf93) + @($pf94) + @($pf98)
+$pf99Auth = Join-Path $root '../pf99/tests/pf99-authenticated-original-session.test.cjs'
+$pf99Native = Join-Path $root '../pf99/tests/pf99-source-bound-pf91-pf92-sqlite.test.cjs'
+foreach ($file in @($pf99Auth,$pf99Native)) {
+  if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+    throw 'PF99_AUTHENTICATED_NATIVE_OWNER_TEST_MISSING'
+  }
+}
+$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87) + @($pf88) + @($pf89) + @($pf90) + @($pf91) + @($pf92) + @($pf93) + @($pf94) + @($pf98) + @($pf99Auth) + @($pf99Native)
 & $node --test '--test-concurrency=1' @allNodeTests
 if ($LASTEXITCODE -ne 0) { throw 'PF58_NODE_REGRESSION_FAILED' }
 $python = (Get-Command python -ErrorAction Stop).Source
@@ -71,6 +78,16 @@ if ($NativeCheckout) {
     if ($LASTEXITCODE -ne 0) { throw 'PF97_ORIGINAL_CHARACTER_ITEMSTORE_TEST_FAILED' }
   } finally {
     [Environment]::SetEnvironmentVariable('PF97_NATIVE_WORKTREE',$oldPf97Root,'Process')
+  }
+  # PF99: re-run source-bound authenticated session tests against exact
+  # original source pins, including real sessionRegistry and charService.
+  $oldPf99Root = [Environment]::GetEnvironmentVariable('PF99_NATIVE_WORKTREE','Process')
+  try {
+    $env:PF99_NATIVE_WORKTREE = $native
+    & $node --test '--test-concurrency=1' $pf99Auth $pf99Native
+    if ($LASTEXITCODE -ne 0) { throw 'PF99_ORIGINAL_SESSION_SOURCE_PINNED_GATE_FAILED' }
+  } finally {
+    [Environment]::SetEnvironmentVariable('PF99_NATIVE_WORKTREE',$oldPf99Root,'Process')
   }
   $patch = Join-Path ([System.IO.Path]::GetTempPath()) 'pf58-native-stock-fittings-review.patch'
   & $python (Join-Path $root 'build_native_stock_fittings_patch.py') $native --output $patch
