@@ -200,7 +200,17 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
    systemID:row.systemID,owner:'PERSONAL_FLEET'}).status==='PERMITTED';}
   catch{return false;}
  }
- return Object.freeze({supports,execute,resumeCommitted,canIssuePersonalCombat,
+ function retainOriginalCombatLease(row){
+  if(!live()||!row||!['ATTACK','DEFEND'].includes(row.action)||
+     !positive(row.shipItemID)||!positive(row.systemID)||
+     typeof orderBridge.blocked!=='function')return false;
+  // The original native bridge refreshes only ITS OWN proven still-live
+  // lease. It never grants a new owner or clears an unknown outcome.
+  try{return orderBridge.blocked({entityID:row.shipItemID,
+   systemID:row.systemID,owner:'PERSONAL_FLEET'})===false;}
+  catch{return false;}
+ }
+ return Object.freeze({supports,execute,resumeCommitted,canIssuePersonalCombat,retainOriginalCombatLease,
   executeNativeReturn(row){
    if(!live()||!row||!positive(row.shipItemID)||!positive(row.stationID)||
       !positive(row.systemID)||!positive(row.actorGeneration))
