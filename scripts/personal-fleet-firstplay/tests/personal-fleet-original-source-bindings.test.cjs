@@ -116,3 +116,27 @@ test('original PF58 source refuses missing or fabricated corporation ownership',
  f.put('characters',String(OWNER),{...f.char,corporationID:999});
  assert.equal(f.bound.resolveOwnerCorporation(OWNER),null);
 }));
+
+test('PF84 original account permits server continuation after player logout without a session',()=>fixture(f=>{
+ const row={ownerCharacterID:OWNER,requestedByAccountID:55,assignmentID:'pf84-1',operationID:'return-1'};
+ f.session.socket.destroyed=true;f.state.live=false;
+ assert.equal(f.auth(),false);
+ assert.equal(f.bound.verifyServerReturnOwner(row,{get:f.get}),true);
+}));
+test('PF84 original account transfer, deletion or poison revokes server return',()=>fixture(f=>{
+ const row={ownerCharacterID:OWNER,requestedByAccountID:55,assignmentID:'pf84-1',operationID:'return-1'};
+ f.put('characters',String(OWNER),{...f.char,accountId:77});
+ assert.equal(f.bound.verifyServerReturnOwner(row,{get:f.get}),false);
+ f.put('characters',String(OWNER),{...f.char,isDeleted:true});
+ assert.equal(f.bound.verifyServerReturnOwner(row,{get:f.get}),false);
+ f.put('characters',String(OWNER),f.char);
+ f.state.poisoned=true;
+ assert.equal(f.bound.verifyServerReturnOwner(row,{get:f.get}),false);
+}));
+test('PF84 server continuation forbids missing or forged account and character',()=>fixture(f=>{
+ const tx={get:f.get};
+ const row={ownerCharacterID:OWNER,requestedByAccountID:55,assignmentID:'pf84-1',operationID:'return-1'};
+ assert.equal(f.bound.verifyServerReturnOwner({...row,requestedByAccountID:0},tx),false);
+ assert.equal(f.bound.verifyServerReturnOwner({...row,ownerCharacterID:OWNER+1},tx),false);
+ assert.equal(f.bound.verifyServerReturnOwner(row,{get:()=>null}),false);
+}));
