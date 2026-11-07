@@ -15,7 +15,7 @@ function fixture(cb){
  const put=(t,k,v)=>db.prepare(`INSERT INTO "${t}" (key,json) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json`).run(k,JSON.stringify(v));
  const scan=t=>db.prepare(`SELECT key,json FROM "${t}"`).all().map(r=>({key:r.key,value:JSON.parse(r.json)}));
  const state={enabled:true,writers:true,exclusive:true,equipment:true,actorFree:true,spawn:true,
-  witnessCalls:0,revokeAt:0,poisoned:false,failOnPut:0,writeCount:0,commitUncertain:false};
+  witnessCalls:0,revokeAt:0,poisoned:false,failOnPut:0,writeCount:0,commitUncertain:false,rogueWrite:false,currentTx:null};
  const row={version:1,phase:'ISSUING',dispatchCount:1,operationID:'deploy-1',assignmentID:'assignment-1',pilotID:'coop-pilot-123',contractID:'contract-1',shipItemID:2001,ownerCharacterID:90000001,stationID:600001,systemID:30000142,typeID:606,generation:1,fittingHash:sha('fit'),cargoHash:sha('cargo')};
  const previous={itemID:2001,shipID:2001,ownerID:90000001,locationID:600001,
   flagID:4,typeID:606,categoryID:6,singleton:1,stacksize:1,quantity:-1,spaceState:null};
@@ -39,16 +39,21 @@ function fixture(cb){
  // A faithful constrained adapter subset; whole original owner is not installed.
  const a={mode:'SERVER_INTERNAL_FLAGGED',isPoisoned:()=>state.poisoned,transact(tables,callback){
   assert.deepEqual(tables,['corporationRuntime','items','characters']);
-  db.exec('BEGIN IMMEDIATE');state.writeCount=0;
+  db.exec('BEGIN IMMEDIATE');state.writeCount=0;let insideWitness=false,sticky=false;
   try{
-   const tx={get,scan,put(t,k,value){put(t,k,value);state.writeCount++;
+   const tx={get,scan,put(t,k,value){if(insideWitness){sticky=true;throw Error('PF96_WRITE_DURING_WITNESS');}put(t,k,value);state.writeCount++;
       if(state.failOnPut&&state.writeCount===state.failOnPut)throw Error('SIGKILL_SIMULATED_AFTER_WRITE');},
      verifyReadOnlySessionWitness(witness,request){
       state.witnessCalls++;
       if(state.revokeAt===state.witnessCalls)return false;
-      return witness(request,{get:(t,k)=>structuredClone(get(t,k)),scan:t=>structuredClone(scan(t))})===true;
+      insideWitness=true;let passed;
+      try{passed=witness(request,{get:(t,k)=>structuredClone(get(t,k)),scan:t=>structuredClone(scan(t))})===true;}
+      finally{insideWitness=false;}
+      if(sticky)throw Error('PF96_STICKY_WRITER_POISON');
+      return passed;
      }};
-   const result=callback(tx);assert.equal(typeof result?.then,'undefined');
+   state.currentTx=tx;const result=callback(tx);assert.equal(typeof result?.then,'undefined');
+   if(sticky)throw Error('PF96_STICKY_COMMIT_FENCE');
    db.exec('COMMIT');if(state.commitUncertain)throw Error('COMMIT_ACK_UNCERTAIN');
    return result;
   }catch(e){try{db.exec('ROLLBACK')}catch{}throw e;}
@@ -111,8 +116,10 @@ function fixture(cb){
  new Function('require','module','exports','process','structuredClone',original)(mockRequire,module,module.exports,process,structuredClone);
  const service=module.exports.createOriginalAtomicSwitchAndHandoff({gameStore:{coopAtomicNativeRows:a},pf52,
   enabled:()=>state.enabled,allWritersFenced:()=>state.writers,
-  verifyExclusive:()=>state.exclusive,verifyOriginalEquipment:()=>state.equipment?
-   {fittingHash:row.fittingHash,cargoHash:row.cargoHash}:null,
+  verifyExclusive:()=>state.exclusive,verifyOriginalEquipment:()=>{
+   if(state.rogueWrite){try{state.currentTx.put('items','items',get('items','items'));}catch{}}
+   return state.equipment?
+   {fittingHash:row.fittingHash,cargoHash:row.cargoHash}:null;},
   verifyNoPhysicalActor:()=>state.actorFree,
   resolveOriginalUndock:()=>state.spawn?{stationID:row.stationID,systemID:row.systemID,
    sessionless:true,position:{x:1,y:2,z:3},direction:{x:1,y:0,z:0}}:null,
@@ -182,3 +189,11 @@ test('PF100B block if active ship aliases contradict',()=>verified(x=>{
  x.put('characters','90000001',{...x.char,shipid:3000});
  x.request.expectedCharacterBefore={...x.char,shipid:3000};
 },'BLOCKED','PF100B_ACTIVE_ORIGINAL_SHIP_NOT_OWNED'));
+test('PF100B sticky owner witness rejects caught identical-value native callback write',()=>fixture(x=>{
+ x.state.rogueWrite=true;
+ const r=x.run();assert.equal(r.status,'OUTCOME_UNKNOWN');
+ assert.equal(r.mayRetryAutomatically,false);
+ assert.equal(x.get('characters','90000001').shipID,2001);
+ assert.equal(x.get('items','items')['2001'].flagID,4);
+ assert.equal(x.get(T,P+'handoff-v1:'+x.row.assignmentID),null);
+}));
