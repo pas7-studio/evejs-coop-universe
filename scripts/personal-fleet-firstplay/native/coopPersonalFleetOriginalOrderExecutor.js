@@ -138,13 +138,16 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
     if(row.action==='ATTACK')
      return npcRuntime.issueAttackOrder(row.shipItemID,row.targetEntityID,
       {allowWeapons:true,keepLock:true,allowPodKill:false});
-    const follow=npcRuntime.follow(row.shipItemID,row.targetEntityID,
-       row.followRangeMeters,{wakeController:true});
-    if(follow?.success!==true)return follow;
-    return npcRuntime.issueOrder(row.shipItemID,{
+    // Disable hostile modules FIRST. If physical FOLLOW then fails,
+    // the guard can never retain an ambient auto-aggro fire permit
+    // against the protected owner while PF55 is still ISSUING.
+    const disarm=npcRuntime.issueOrder(row.shipItemID,{
      type:'follow',targetID:row.targetEntityID,
      followRangeMeters:row.followRangeMeters,
      allowWeapons:false,keepLock:false,allowPodKill:false});
+    if(disarm?.success!==true)return disarm;
+    return npcRuntime.follow(row.shipItemID,row.targetEntityID,
+      row.followRangeMeters,{wakeController:true});
    }
   });
  }
