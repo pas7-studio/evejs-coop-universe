@@ -18,7 +18,7 @@ const blocked=reason=>Object.freeze({status:'BLOCKED',reason});
 const pending=x=>obj(x)&&x.manualOrder!=null&&
  String(x.manualOrder.type||'').toLowerCase()!=='resumebehavior';
 function createOriginalCombatRecovery({combatAuthority,combatReceipt,
- orderWitness,resumeAfterOriginalAck,enabled=()=>false,
+ orderWitness,resumeAfterOriginalAck,retainOriginalCombatLease,enabled=()=>false,
  allWritersFenced=()=>false,clock=()=>Date.now(),maxPerTick=3}={}){
  const a=gameStore?.coopAtomicNativeRows;
  if(a?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof a.transact!=='function'||
@@ -29,7 +29,7 @@ function createOriginalCombatRecovery({combatAuthority,combatReceipt,
     typeof combatAuthority?.verify!=='function'||
     typeof combatReceipt?.verifyPersisted!=='function'||
     typeof orderWitness?.verifyNativeActor!=='function'||
-    [resumeAfterOriginalAck,enabled,allWritersFenced,clock]
+    [resumeAfterOriginalAck,retainOriginalCombatLease,enabled,allWritersFenced,clock]
      .some(x=>typeof x!=='function')||
     !Number.isSafeInteger(maxPerTick)||maxPerTick<1||maxPerTick>8)
   throw Error('PF96_ORIGINAL_COMBAT_RECOVERY_AUTHORITIES_REQUIRED');
@@ -101,6 +101,8 @@ function createOriginalCombatRecovery({combatAuthority,combatReceipt,
       manual.type===(row.action==='ATTACK'?'attack':'follow')&&
       manual.allowWeapons===(row.action==='ATTACK')&&
       manual.allowPodKill!==true)
+    if(retainOriginalCombatLease(row)!==true)
+     return blocked('PF96_ORIGINAL_SHARED_LEASE_NOT_RETAINED');
     return {status:'ALREADY_NATIVE',shipItemID:row.shipItemID};
    return blocked('PF96_ACTIVE_FOREIGN_NATIVE_ORDER');
   }
