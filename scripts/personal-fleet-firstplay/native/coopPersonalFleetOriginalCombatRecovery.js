@@ -100,10 +100,11 @@ function createOriginalCombatRecovery({combatAuthority,combatReceipt,
    if(manual.targetID===row.targetEntityID&&
       manual.type===(row.action==='ATTACK'?'attack':'follow')&&
       manual.allowWeapons===(row.action==='ATTACK')&&
-      manual.allowPodKill!==true)
+      manual.allowPodKill!==true){
     if(retainOriginalCombatLease(row)!==true)
      return blocked('PF96_ORIGINAL_SHARED_LEASE_NOT_RETAINED');
     return {status:'ALREADY_NATIVE',shipItemID:row.shipItemID};
+   }
    return blocked('PF96_ACTIVE_FOREIGN_NATIVE_ORDER');
   }
   const key=row.operationID+':'+row.shipItemID+':'+row.actorGeneration;
