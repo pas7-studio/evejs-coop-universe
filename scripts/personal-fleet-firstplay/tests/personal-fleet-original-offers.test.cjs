@@ -173,3 +173,32 @@ test('authoring source snapshot cannot be changed by caller after construction',
   assert.equal(f.lookup(q.offerID).amountCents,75000);
  },{catalog:source});
 });
+test('PF53 atomic offer verification refuses invalid original native clock',()=>fixture(f=>{
+ const o=f.quote();f.state.time=NaN;
+ const command={session:f.session,ownerCharacterID:OWNER,offerID:o.offerID,
+  offerRevision:o.revision,agentID:o.agentID,pilotID:o.pilotID,contractID:o.contractID};
+ assert.equal(f.owner.resolveNativeOffer(command,{get:f.get}),null);
+}));
+test('PF53 atomic offer verification refuses a changed original SDE profile after quote',()=>fixture(f=>{
+ const o=f.quote(),cmd={session:f.session,ownerCharacterID:OWNER,offerID:o.offerID,
+  offerRevision:o.revision,agentID:o.agentID,pilotID:o.pilotID,contractID:o.contractID};
+ f.state.originalProfile=false;
+ assert.equal(f.owner.resolveNativeOffer(cmd,{get:f.get}),null);
+}));
+test('source-bound factory lazy-loads only original EveJS corporation and NPC-data owners',()=>{
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+ const code=fs.readFileSync(path.join(__dirname,'../native/coopPersonalFleetOriginalOfferAuthority.js'),'utf8');
+ const names=[];const fake={getNpcCharacterOwnerRecord:()=>null,getCorporationRecord:()=>null,isNpcCorporationID:()=>false};
+ const sandbox={module:{exports:{}},process,require:n=>{
+  names.push(n);
+  if(n==='node:crypto')return require('node:crypto');
+  if(n==='node:util')return require('node:util');
+  if(n==='../services/corporation/corporationState')return fake;
+  if(n==='./npc/npcData')return {buildNpcDefinition:()=>null};
+  throw Error('UNAUTHORIZED_SOURCE_MODULE '+n);
+ },structuredClone};
+ vm.runInNewContext(code,sandbox,{filename:'coopPersonalFleetOriginalOfferAuthority.js'});
+ assert.deepEqual(names,['node:crypto','node:util']);
+ assert.throws(()=>sandbox.module.exports.createSourceBoundOriginalOfferAuthority({}),/AUTHORITIES_REQUIRED/);
+ assert.deepEqual(names.slice(2),['../services/corporation/corporationState','./npc/npcData']);
+});
