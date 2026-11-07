@@ -53,8 +53,8 @@ The native WORK staging includes:
 - **Native XMPP hook:** exact original `chatCommands.js` source-pinned patch;
   no new unauthenticated HTTP API or client modification.
 - **Isolated review assembler:** PF80's **22-file** preflight candidate +
-  this **19-path** original source delta (four overlap with PF80) =
-  **37 unique staged native paths**. The generated patch includes both
+  this **21-path** original source delta (four overlap with PF80) =
+  **39 unique staged native paths**. The generated patch includes both
   original NPC order source files, PF55 original character row scope,
   PF52 original paid hull row scope, wallet corrections, new modules
   and the original chat hook. It must pass exact Git `apply --check`.
@@ -67,7 +67,7 @@ receipts, bootstrap fail-sticky and in-memory EVE service adapters.
 **26/26 Python/Git tests PASS** on Python 3.13.5; exact original stock
 blob pins, patch transforms, `git apply`, manifest and linked-worktree gates.
 
-**Previous baseline: 265/265 PASS. New PF56/60/61/66 local tests: 66/66 PASS. Full combined regression on this PR head has NOT RUN. 32 source/test files SHA256-pinned.**
+**Previous baseline: 265/265 PASS. New PF56/60/61/66 local tests: 66/66 PASS. Full combined regression on this PR head has NOT RUN. 36 source/test files SHA256-pinned.**
 These are isolated component and controlled SQLite/VM tests.
 Original EveJS server and connected game-client E2E are **NOT RUN** here.
 Manual Windows PowerShell runner is **NOT RUN** here.
@@ -162,7 +162,7 @@ The assembler now verifies **unique** native patch destinations before
 calling `git apply --check`. This catches repeated stock-source hunks,
 including duplicate original `coopNpcOrderArbiter.js` edits, which individual
 unit tests otherwise would not detect. Its expected exact set is **15 unique
-native paths**, four already staged by PF80, and **37 unique final WORK paths**.
+native paths**, four already staged by PF80, and **39 unique final WORK paths**.
 The two original stock order files are source-pinned and their anchors were
 independently checked against the `coop/pas7std` fork. The full original
 WORK `git apply --check` on the owner's machine remains unexecuted here.
@@ -195,9 +195,9 @@ Changing the target, assignment, actor generation or mode does.
 
 **Execution evidence**: 239/239 Node (including 19 actual SQLite durable
 receipt cases and integrated bootstrap/executor tests), plus 26/26
-Python/Git, **265/265 previously PASS; 68/68 newly added dock tests PASS; full combined regression NOT RUN.** **32 SHA256-pinned code/test files**;
+Python/Git, **265/265 previously PASS; 68/68 newly added dock tests PASS; full combined regression NOT RUN.** **36 SHA256-pinned code/test files**;
 19 unique additional native patch paths over PF80's 22 source paths,
-four overlapping, producing 37 unique modified native files.
+four overlapping, producing 39 unique modified native files.
 
 **Not yet WORK gameplay:** Original GameStore refuses transactions on
 `npcEntities` while transient native rows are not safely quiescent; this
@@ -237,9 +237,9 @@ Added and tested:
   `verifyOriginalDockReceipt` hooks. Original PF66/PF61 code flags are hard
   prerequisites. This source remains **OFF** until real native writer hooks.
 
-The WORK package now has **19 exact additional native paths** atop PF80's
-22 staged paths; four paths overlap and **37 unique native files** are staged.
-All 32 source/test files have SHA256 manifest entries. The manual Windows
+The WORK package now has **21 exact additional native paths** atop PF80's
+22 staged paths; four paths overlap and **39 unique native files** are staged.
+All 36 source/test files have SHA256 manifest entries. The manual Windows
 runner has 12 Node suites and is configured to announce its combined PASS
 only after every suite succeeds on the user's machine.
 
@@ -261,3 +261,16 @@ completion can treat an unloaded original solar-system scene as proof that an
 NPC disappeared. Both require the exact original system scene to be mounted,
 and then check no physical duplicate exists in any mounted scene. Two new
 negative tests exercise this; the isolated dock suites now pass **68/68**.
+
+
+## Native original return flight and station dwell (2026-11-07)
+
+Original PF56 return flight is now source-wired to stock npcRuntime.warpToPoint through the exact same original shared NPC order bridge and arbiter used by PF55 FOLLOW/HOLD. The source accepts station coordinates only when original worldData.getStationByID and a matching, loaded original station scene ball agree. Client-provided destinations never substitute.
+
+New original source module coopPersonalFleetOriginalStationDwell.js verifies stock ItemStore, PF52/54 physical actor claim, original controller, scene, station geometry and stopped/warp-inactive movement. It writes a tick-bounded 2-second station dwell record in original SQLite. A departure, scene restart, controller change, missing scene, missed tick over 350ms, or a sample stale over 100ms denies PF56 continuous dwell and the PF66 native pre-dock gate. No fake player session or ItemStore mutation.
+
+New coopPersonalFleetOriginalStationTickDriver.js runs a single unref'd original-server 100ms timer after guarded native bootstrap publication; it enumerates only genuine persisted RETURNING/ARRIVAL_OBSERVED rows, samples outside the enumeration transaction, and never dispatches a warp or docking effect. A second timer startup is forbidden. Four prior callbacks (executeNativeReturn, verifyStationArrival, verifyContinuousDwell, verifyOriginalDockReady) now use original-source methods.
+
+Important remaining CODE: PF56 still needs its independently authenticated original durable RETURN order receipt (verifyOriginalReturnOrder), and its confirmReturn, observeArrival and requestDock transitions still require an authenticated player session. Completing these transitions after player logout needs a real original server-owned durable permit and integration, NOT a fabricated player session. The game engine startup and all original reciprocal writer hooks also remain uninstalled from this cloud connection.
+
+Test evidence actually executed: 66/66 fresh Node tests (22 physical-return bridge, 28 station dwell, 16 native scheduler), plus separately rerun older candidate baseline 239/239 Node and 26/26 Python. The full combined CURRENT PR head tests and actual native WORK/client/restart are NOT RUN. Do not sum independent source versions as a green current-head run. The isolated WORK patch now requires 21 additional native paths on PF80's 22 baseline (four overlapping), 39 unique final staged native paths. Manifest: 36 code/test source entries. Manual Windows runner: 14 Node suites. PLAY and main untouched.
