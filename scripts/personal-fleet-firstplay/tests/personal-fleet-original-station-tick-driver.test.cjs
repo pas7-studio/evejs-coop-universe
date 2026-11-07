@@ -3,7 +3,7 @@ const {test}=require('node:test'),a=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const source=fs.readFileSync(path.join(__dirname,'../native/coopPersonalFleetOriginalStationTickDriver.js'),'utf8');
 const R={assignmentID:'job-001',operationID:'pfret-001',signature:'a'.repeat(64),phase:'RETURNING',shipItemID:1400,stationID:60000002,systemID:30000001};
-function f(){let alive=true,fenced=true,poison=false,rows=[{...R}],throwTx=false,throwSample=false,calls=0,advances=0,terminalPhase='FINALIZED',scheduled=null,cleared=0;
+function f(){let alive=true,fenced=true,poison=false,rows=[{...R}],throwTx=false,throwSample=false,calls=0,advances=0,terminalPhase='FINALIZED',scheduled=null,cleared=0,now=60000,payrollCalls=0,throwPayroll=false;
  let index={version:1,operations:{'pfret-001':{assignmentID:R.assignmentID,signature:R.signature,phase:'RETURN_ISSUING'}}};
  const t='coop-personal-fleet\u001freturn-dock-v1:',root='coop-personal-fleet\u001freturn-ops-v1',
   terminalKey='coop-personal-fleet\u001fterminal-v1:';
@@ -15,13 +15,16 @@ function f(){let alive=true,fenced=true,poison=false,rows=[{...R}],throwTx=false
  './coopPersonalFleetTerminalCustody':{terminalKey:x=>terminalKey+x}};
  const module={exports:{}};
  vm.runInNewContext(source,{module,require:x=>{if(!(x in deps))throw Error('UNKNOWN_SOURCE '+x);return deps[x]},
-   Object,Array,Number,Set,Map,structuredClone,setInterval,clearInterval}, {filename:'station-tick.js'});
- const driver=module.exports.createOriginalStationTickDriver({advanceReturn:()=>{advances++;return {status:'RETURNING'}},
+   Object,Array,Number,Set,Map,Date:{now:()=>now},structuredClone,setInterval,clearInterval}, {filename:'station-tick.js'});
+ const driver=module.exports.createOriginalStationTickDriver({
+ settlePayroll:()=>{payrollCalls++;if(throwPayroll)throw Error('PAYROLL_ERROR');return {status:'PAYROLL_RECONCILED'};},
+ advanceReturn:()=>{advances++;return {status:'RETURNING'}},
  stationDwell:{sample:()=>{calls++;if(throwSample)throw Error('SAMPLE');return {status:'OBSERVED'}}},
  enabled:()=>alive,allWritersFenced:()=>fenced,scheduler:{setInterval:(cb,ms)=>{scheduled={cb,ms,unref(){}};return scheduled},clearInterval:()=>{cleared++}}});
  return {driver,db,R,rows,setRows:v=>rows=v,setIndex:v=>index=v,setAlive:v=>alive=v,setFenced:v=>fenced=v,setPoison:v=>poison=v,
  setThrowTx:v=>throwTx=v,setThrowSample:v=>throwSample=v,setTerminalPhase:v=>terminalPhase=v,
- getCalls:()=>calls,getAdvances:()=>advances,getScheduled:()=>scheduled,getCleared:()=>cleared};}
+ getCalls:()=>calls,getAdvances:()=>advances,getScheduled:()=>scheduled,getCleared:()=>cleared,
+ setNow:v=>now=v,getPayrollCalls:()=>payrollCalls,throwPayroll:()=>throwPayroll=true};}
 const tt=(name,fn)=>test(name,()=>fn(f()));
 tt('source tick does not start a timer during construction',f=>a.equal(f.getScheduled(),null));
 tt('source tick starts exactly one 100ms unrefd server timer',f=>{
@@ -74,4 +77,29 @@ tt('PF84 DOCK_ISSUING uses server readback but never adds station dwell',f=>{
  f.rows[0].phase='DOCK_ISSUING';
  a.equal(f.driver.tick().active,1);a.equal(f.getCalls(),0);
  a.equal(f.getAdvances(),1);
+});
+
+tt('PF93 original server invokes payroll once per 30 seconds without a second timer',f=>{
+ a.equal(f.driver.tick().status,'SAMPLED');
+ a.equal(f.getPayrollCalls(),1);
+ a.equal(f.driver.tick().status,'SAMPLED');
+ a.equal(f.getPayrollCalls(),1);
+ f.setNow(89999);f.driver.tick();a.equal(f.getPayrollCalls(),1);
+ f.setNow(90000);f.driver.tick();a.equal(f.getPayrollCalls(),2);
+ a.equal(f.driver.getStatus().payroll,'PAYROLL_RECONCILED');
+});
+tt('PF93 payroll checks due contracts even with no pending return orders',f=>{
+ f.setIndex(null);
+ a.equal(f.driver.tick().active,0);
+ a.equal(f.getPayrollCalls(),1);
+});
+tt('PF93 revoked writer gate means no server payroll callback',f=>{
+ f.setFenced(false);f.driver.tick();
+ a.equal(f.getPayrollCalls(),0);
+});
+tt('PF93 failed payroll cannot fake a good return observation',f=>{
+ f.throwPayroll();
+ const result=f.driver.tick();
+ a.equal(result.observed,1);
+ a.equal(f.driver.getStatus().payroll,'BLOCKED');
 });
