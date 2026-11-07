@@ -25,6 +25,10 @@ MODULES={
 'coopPersonalFleetNativeOrders.js':[
  ("  try{admission=atomic.transact([TABLE,ITEMS],tx=>{",
   "  try{admission=atomic.transact([TABLE,ITEMS,'characters'],tx=>{"),
+ // PF95 native combat receipts need the original controller row in the
+ // same committed SQLite snapshot as PF55's operation receipt and NPC entity.
+ ("  try{return atomic.transact([TABLE,ITEMS,'characters','npcEntities'],tx=>{",
+  "  try{return atomic.transact([TABLE,ITEMS,'characters','npcEntities','npcRuntimeControllers'],tx=>{"),
 ],
 'coopPersonalFleetPaidHiring.js':[
  (" const characters=tx.get(CHARACTERS,CHARACTERS);\n const c=characters?.[String(receipt.ownerCharacterID)];",
