@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Source-pinned original EveJS cooperative NPC order owner admission.
 
-Only adds PERSONAL_FLEET to the original shared NPC order arbiter and marks it
-peaceful for stock native combat fencing. It does not create a second arbiter,
+Adds PERSONAL_FLEET to the original shared NPC order arbiter; PF95 keeps
+it non-peaceful so a verified ATTACK may be stopped or retasked by the same
+original exclusive lease. Other peaceful NPC directors remain combat-fenced. It does not create a second arbiter,
 automatically bind it, or activate Personal Fleet. Review/apply to WORK only.
 """
 from __future__ import annotations
@@ -23,7 +24,7 @@ MARKERS = {
     ),
     BRIDGE: (
         'const PEACEFUL = new Set(["PATROL","CIVILIAN","GATE","EXPEDITION"]);',
-        'const PEACEFUL = new Set(["PATROL","CIVILIAN","GATE","EXPEDITION","PERSONAL_FLEET"]);',
+        'const PEACEFUL=new Set(["PATROL","CIVILIAN","GATE","EXPEDITION"]); // PF95 stock-combat-checked owner "PERSONAL_FLEET" is NOT peaceful',
     ),
 }
 
