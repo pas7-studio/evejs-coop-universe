@@ -10,7 +10,7 @@ function fixture(){
   personalFleetOriginal:true,personalFleetAssignmentID:ROW.assignmentID,
   personalFleetPilotID:ROW.pilotID,position:{x:0,y:0,z:0},mode:'STOP'};
  const ship={kind:'ship',nativeNpc:true,itemID:ROW.shipItemID,ownerID:500,
-  session:null,transient:false,
+  session:null,transient:false,position:{x:0,y:0,z:0},
   sessionlessWarpIngress:{origin:{x:0,y:0,z:0},
    targetPoint:{x:107250,y:0,z:0},
    startTimeMs:10000,travelCompleteAtMs:20000,completeAtMs:20200}};
@@ -32,8 +32,8 @@ test('PF94 cannot record a warp to a foreign station',()=>{
  const f=fixture();f.ship.sessionlessWarpIngress.targetPoint.x=2222222;
  a.equal(capture(f),null);
 });
-test('PF94 wrong original stored departure position cannot attest physical warp',()=>{
- const f=fixture();f.stored.position.x=1600;
+test('PF94 wrong original physical departure position cannot attest warp',()=>{
+ const f=fixture();f.ship.position={x:1600,y:0,z:0};
  a.equal(capture(f),null);
 });
 test('PF94 cannot invent origin when original live ship is not an NPC',()=>{
@@ -74,4 +74,10 @@ test('PF94 original receipt does not authorize a synthetic target station',()=>{
 test('PF94 a duration longer than native 120 seconds is rejected',()=>{
  const f=fixture();f.ship.sessionlessWarpIngress.travelCompleteAtMs=160000;
  a.equal(capture(f),null);
+});
+test('PF94 real departing NPC can commit truthful live position despite old stored tick',()=>{
+ const f=fixture();f.stored.position.x=500;
+ const r=capture(f);
+ a.equal(r.storedPosition.x,0);
+ a.equal(proof.verifySnapshot(ROW,r),true);
 });
