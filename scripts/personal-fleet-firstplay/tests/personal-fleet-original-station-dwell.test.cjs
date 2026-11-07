@@ -22,7 +22,7 @@ function fixture(){
  }};
  const actor={entityID:1400,itemID:1400,ownerID:1900,nativeNpc:true,mode:'STOP',
    position:V(1100),velocity:V(),radius:65,warpState:null,pendingWarp:null,isWarping:false};
- const stationBall={entityID:60000002,position:V(1000),radius:300};
+ const stationBall={entityID:60000002,itemID:60000002,position:V(1000),radius:300};
  const entities=new Map([[1400,actor],[60000002,stationBall]]);
  const scene={systemID:30000001,getEntityByID:id=>entities.get(id)||null};
  const scenes=new Map([[30000001,scene]]);
@@ -175,4 +175,15 @@ label('PF66 rejects unrecorded station return attempts',f=>{
 label('PF66 cannot treat a changed NPC actor as dock-ready',f=>{
  const r=dockState(f);f.actor.mode='WARP';
  assert.equal(f.source.verifyOriginalDockReady(r,currentTx(f)),false);
+});
+
+label('stock EveJS ship and station itemID work even without entityID properties',f=>{
+ delete f.actor.entityID;delete f.stationBall.entityID;
+ assert.equal(f.source.sample(base).status,'OBSERVED');
+});
+label('wrong stock station itemID is not equivalent to an entityID',f=>{
+ f.stationBall.itemID=60000003;assert.equal(f.source.sample(base).status,'BLOCKED');
+});
+label('wrong native ship itemID blocks physical arrival',f=>{
+ f.actor.itemID=2301;assert.equal(f.source.sample(base).status,'BLOCKED');
 });
