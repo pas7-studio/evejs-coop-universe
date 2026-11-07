@@ -53,34 +53,43 @@ function verifyOriginalCatalogAndWages(authoredCatalog,authoredSalaryPolicies){
  }
  if(new Set(authoredSalaryPolicies.map(s=>s?.npcCharacterID)).size!==seen.size)
   return reject('PF102_UNEXPECTED_WAGE_POLICY');
+ // Stock SDE/profile/corporation lookups can themselves read/initialize
+ // GameStore-owned records. Perform them BEFORE opening the PF atomic SQLite
+ // transaction; never nest their legacy DB calls in BEGIN IMMEDIATE.
  try{
+  for(const [c] of pairs){
+   const character=corporations.getNpcCharacterOwnerRecord(c.npcCharacterID);
+   const def=npcData.buildNpcDefinition(c.profileID);
+   const corp=corporations.getCorporationRecord(c.employerCorpID);
+   if(!object(character)||character.ownerID!==c.npcCharacterID||
+      character.typeID!==1373||
+      typeof character.ownerName!=='string'||
+      character.ownerName.trim().length<2||
+      character.ownerName.startsWith('Entity '))
+    return reject('PF102_ORIGINAL_SDE_NPC_CHARACTER_NOT_FOUND');
+   if(!object(def)||def.profile?.profileID!==c.profileID||
+      def.profile?.shipTypeID!==c.shipTypeID||
+      !profileID(def.profile.loadoutID)||
+      !profileID(def.profile.behaviorProfileID)||
+      !object(def.loadout)||!object(def.behaviorProfile)||
+      def.loadout.loadoutID!==def.profile.loadoutID||
+      def.behaviorProfile.behaviorProfileID!==def.profile.behaviorProfileID)
+    return reject('PF102_ORIGINAL_PROFILE_OR_FITTINGS_NOT_FOUND');
+   if(!object(corp)||corp.corporationID!==c.employerCorpID||
+      corp.isNPC!==true||
+      corporations.isNpcCorporationID(c.employerCorpID)!==true)
+    return reject('PF102_ORIGINAL_NPC_EMPLOYER_WALLET_NOT_FOUND');
+  }
+  // Only the actual original corporation wallet row is read under this
+  // one atomic owner. Any unknown result is a deny, not an offer permit.
+  if(atomic.isPoisoned())return reject('PF102_ORIGINAL_GAMESTORE_POISONED');
   return atomic.transact([TABLE],tx=>{
    if(atomic.isPoisoned()||typeof tx?.get!=='function')
     return reject('PF102_ORIGINAL_READ_AUTHORITY_REVOKED');
    for(const [c] of pairs){
-    const character=corporations.getNpcCharacterOwnerRecord(c.npcCharacterID);
-    const def=npcData.buildNpcDefinition(c.profileID);
-    const corp=corporations.getCorporationRecord(c.employerCorpID);
     const source=tx.get(TABLE,'corporations'+SEPARATOR+c.employerCorpID);
     const division=source?.wallet?.divisions?.['1000'];
-    if(!object(character)||character.ownerID!==c.npcCharacterID||
-       character.typeID!==1373||
-       typeof character.ownerName!=='string'||
-       character.ownerName.trim().length<2||
-       character.ownerName.startsWith('Entity '))
-     return reject('PF102_ORIGINAL_SDE_NPC_CHARACTER_NOT_FOUND');
-    if(!object(def)||def.profile?.profileID!==c.profileID||
-       def.profile?.shipTypeID!==c.shipTypeID||
-       !profileID(def.profile.loadoutID)||
-       !profileID(def.profile.behaviorProfileID)||
-       !object(def.loadout)||!object(def.behaviorProfile)||
-       def.loadout.loadoutID!==def.profile.loadoutID||
-       def.behaviorProfile.behaviorProfileID!==def.profile.behaviorProfileID)
-     return reject('PF102_ORIGINAL_PROFILE_OR_FITTINGS_NOT_FOUND');
-    if(!object(corp)||corp.corporationID!==c.employerCorpID||
-       corp.isNPC!==true||
-       corporations.isNpcCorporationID(c.employerCorpID)!==true||
-       !object(source)||source.corporationID!==c.employerCorpID||
+    if(!object(source)||source.corporationID!==c.employerCorpID||
        !object(division)||!Number.isFinite(division.balance)||
        division.balance<0||
        !Array.isArray(division.journal)||
