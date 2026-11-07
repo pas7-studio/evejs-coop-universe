@@ -19,7 +19,13 @@ $actualLines=@()
 foreach($name in $files){
  $absolute=Join-Path $root $name
  if (-not (Test-Path -LiteralPath $absolute -PathType Leaf)) { throw ('PF100_MISSING_FILE: '+$name) }
- $digest=(Get-FileHash -LiteralPath $absolute -Algorithm SHA256).Hash.ToLowerInvariant()
+ # Git for Windows may check out CRLF; compare canonical LF source bytes.
+ $canonical=[System.IO.File]::ReadAllText($absolute,[System.Text.Encoding]::UTF8).Replace("`r`n","`n")
+ $sha256=[System.Security.Cryptography.SHA256]::Create()
+ try {
+  $digest=[System.BitConverter]::ToString($sha256.ComputeHash(
+   [System.Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','').ToLowerInvariant()
+ }finally{$sha256.Dispose()}
  $actualLines+=($digest+'  '+$name)
 }
 $expectedLines=@(Get-Content -LiteralPath $manifest | Where-Object { $_.Trim() -ne '' })
