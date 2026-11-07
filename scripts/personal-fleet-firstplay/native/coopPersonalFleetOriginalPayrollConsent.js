@@ -41,6 +41,7 @@ function verifyObject(c){
 function captureOfferWageConsent(offer,command,at){
  if(!validOfferWage(offer)||!obj(command)||!obj(command.session)||
    !pos(at)||at>=offer.expiresAtMs||
+   command.recurringSalaryAcknowledged!==true||
    !token(command.operationID)||!token(command.offerID)||
    !pos(command.offerRevision)||!token(command.contractID)||
    !pilot(command.pilotID)||!pos(command.ownerCharacterID)||
