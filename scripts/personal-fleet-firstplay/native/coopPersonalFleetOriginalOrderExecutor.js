@@ -16,7 +16,7 @@ const {createNpcRuntimeExecutor}=require('./coopPersonalFleetNpcRuntimeExecutor'
 const F='coop-personal-fleet\u001f',T='corporationRuntime';
 const positive=x=>Number.isSafeInteger(x)&&x>0;
 function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipClaim,
- orderWitness,enabled=()=>false,allWritersFenced=()=>false}={}){
+ orderWitness,orderReceipt,enabled=()=>false,allWritersFenced=()=>false}={}){
  const a=gameStore.coopAtomicNativeRows;
  if(a?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof a.transact!=='function'||
     typeof a.isPoisoned!=='function'||typeof runtime.scenes?.get!=='function'||
@@ -27,6 +27,7 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
      typeof sharedOriginalArbiter[k]==='function')||
     !orderWitness||!['verifyNativeActor','verifyTarget','verifyPersonalClaim','verifyOriginalControl'].every(k=>
      typeof orderWitness[k]==='function')||
+  typeof orderReceipt?.recordAfterNativeEffect!=='function'||
     [readOriginalWarShipClaim,enabled,allWritersFenced].some(f=>typeof f!=='function'))
   throw Error('PF_FIRSTPLAY_ORIGINAL_SHARED_ORDER_RUNTIME_REQUIRED');
  const live=()=>enabled()===true&&allWritersFenced()===true&&a.isPoisoned()===false;
@@ -84,7 +85,16 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
  function execute(row){
   if(!row||!supports(row.action))
    return {success:false,errorMsg:'PF_FIRSTPLAY_PHYSICAL_ORDER_NOT_AUTHORIZED'};
-  return base.execute(row);
+  const physical=base.execute(row);
+  // Original bridge/runtime returned physical success. Post-effect native
+  // movement + PF55 receipt MUST commit together in original SQLite. If this
+  // fails, PF55 keeps ISSUING and NEVER redispatches the movement.
+  if(physical?.success!==true||physical?.then)return physical;
+  const persisted=orderReceipt.recordAfterNativeEffect(row);
+  if(persisted?.success!==true)return {
+   success:false,errorMsg:'PF55_NATIVE_EFFECT_OUTCOME_UNKNOWN_NO_RETRY'};
+  return {success:true,data:{operationID:row.operationID,
+   durability:'ORIGINAL_NPC_ENTITIES_AND_PF55_RECEIPT_COMMITTED'}};
  }
  return Object.freeze({supports,execute,
   // Read-only; useful to diagnose a missing native assignment on WORK.
