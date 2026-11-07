@@ -8,7 +8,7 @@ const ROOT='/work/Code',STATIC=path.join(ROOT,'data',
 const CORP=1000017,CHAR=3011234,SHIP=606,PROFILE='genuine-pilot';
 function fixture({missingSde=false,wrongCorp=false,missingNpc=false,
  wrongCategory=false,wrongProfile=false,noPlayerHull=false,
- corruptStatic=false,duplicates=false,unknownCharacter=false,
+ corruptStatic=false,duplicates=false,unknownCharacter=false,mismatchedStockName=false,
  emptyProfile=false,profileKind='npc'}={}){
  const events=[],writes=[];
  const npcCharacter={_key:CHAR,corporationID:wrongCorp?1000019:CORP,
@@ -52,7 +52,7 @@ function fixture({missingSde=false,wrongCorp=false,missingNpc=false,
  };
  const corpSource={
   getNpcCharacterOwnerRecord(id){events.push(['source-character',id]);
-   return unknownCharacter?null:{ownerID:id,typeID:1373,ownerName:'Authentic SDE Pilot'};},
+   return unknownCharacter?null:{ownerID:id,typeID:1373,ownerName:mismatchedStockName?'Foreign Name':'Authentic SDE Pilot'};},
   getCorporationRecord(id){events.push(['source-corp',id]);
    return missingNpc?null:{corporationID:id,isNPC:true};},
   isNpcCorporationID:id=>id===CORP
@@ -94,6 +94,10 @@ test('PF104 disabled or uninstalled real JSONL returns no invented NPC',()=>{
 });
 test('PF104 original SDE character must belong to the profile NPC employer',()=>{
  const f=fixture({wrongCorp:true});
+ a.throws(()=>f.run(),/PF104_NO_REAL_SDE_NPC_WITH_PHYSICAL_SHIP_PROFILE/);
+});
+test('PF104 source version drift in SDE character name prevents hire',()=>{
+ const f=fixture({mismatchedStockName:true});
  a.throws(()=>f.run(),/PF104_NO_REAL_SDE_NPC_WITH_PHYSICAL_SHIP_PROFILE/);
 });
 test('PF104 SDE NPC character owner must exist in actual corporationState',()=>{
