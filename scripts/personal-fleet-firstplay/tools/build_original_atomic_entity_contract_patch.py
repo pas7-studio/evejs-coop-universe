@@ -22,7 +22,7 @@ def build(work:Path)->str:
  s=old
  s=one(s,'  let cargoWitness=null;\n',
   '  let cargoWitness=null,entityWitness=null,entityPolicy=null,entityIsolation=null;\n')
- s=one(s,'  try{\n    ensureSqliteReady();\n','''  try{
+ s=one(s,'  try{\n   ensureSqliteReady();\n','''  try{
     // PF87 applies ONLY to a source-owned one-NPC receipt contract.
     // Invalid policies are rejected before any SQLite/native side effect.
     if(options?.contract==='personal-fleet-entity-receipt-v1'){
@@ -36,12 +36,12 @@ def build(work:Path)->str:
     }
     ensureSqliteReady();
 ''')
- s=one(s,'     if(activeTransient&&!mixedMode)\n',
+ s=one(s,'    if(activeTransient&&!mixedMode)\n',
   '     if(activeTransient&&!mixedMode&&!(entityPolicy&&t==="npcEntities"))\n')
- s=one(s,'''     if(activeTransient){
-       cargoWitness=isolation.capture({paths:transientPaths[t],
-         live:cache[t],durable:sqliteStore.loadTableObject(t)});
-     }
+ s=one(s,'''    if(activeTransient){
+      cargoWitness=isolation.capture({paths:transientPaths[t],
+        live:cache[t],durable:sqliteStore.loadTableObject(t)});
+    }
 ''','''     if(activeTransient){
        if(entityPolicy&&t==='npcEntities')
          entityWitness=entityIsolation.capture({paths:transientPaths[t],
@@ -51,13 +51,13 @@ def build(work:Path)->str:
          live:cache[t],durable:sqliteStore.loadTableObject(t)});
      }
 ''')
- s=one(s,'''    const outcome=sqliteWriter.transact(tables,cargoWitness?
-      tx=>{
-       const guarded=isolation.guardMutation(tx,cargoWitness,cargoContract);
-       const returned=mutation(guarded);
-       guarded.assertWriteSetComplete();
-       return returned;
-      }:mutation);
+ s=one(s,'''   const outcome=sqliteWriter.transact(tables,cargoWitness?
+     tx=>{
+      const guarded=isolation.guardMutation(tx,cargoWitness,cargoContract);
+      const returned=mutation(guarded);
+      guarded.assertWriteSetComplete();
+      return returned;
+     }:mutation);
 ''','''    const outcome=sqliteWriter.transact(tables,cargoWitness||entityPolicy?
       tx=>{
        const guarded=entityPolicy?
@@ -68,19 +68,19 @@ def build(work:Path)->str:
        return returned;
       }:mutation);
 ''')
- s=one(s,'    committed=true;\n','''    committed=true;
+ s=one(s,'   committed=true;\n','''    committed=true;
     if(entityWitness)entityIsolation.verifyShadow({witness:entityWitness,
       paths:transientPaths.npcEntities,live:cache.npcEntities});
 ''')
- s=one(s,'''    const writeSets=outcome&&outcome.writes&&typeof outcome.writes==="object"?outcome.writes:null;
+ s=one(s,'''   const writeSets=outcome&&outcome.writes&&typeof outcome.writes==="object"?outcome.writes:null;
 ''','''    const writeSets=outcome&&outcome.writes&&typeof outcome.writes==="object"?outcome.writes:null;
     if(entityPolicy&&(!writeSets||
        (writeSets.npcEntities||[]).some(([key])=>
          key!=='entities'+SEP+entityPolicy.shipItemID)))
       throw Error('PF87_UNSCOPED_OR_UNKNOWN_POSTCOMMIT_NPC_WRITES');
 ''')
- s=one(s,'''    if(accountsTouched&&invalidateNativeAccounts("commit",tables)!==true)
-      throw Error("NATIVE_ACCOUNT_CACHE_INVALIDATION_FAILED");
+ s=one(s,'''   if(accountsTouched&&invalidateNativeAccounts("commit",tables)!==true)
+     throw Error("NATIVE_ACCOUNT_CACHE_INVALIDATION_FAILED");
 ''','''    if(accountsTouched&&invalidateNativeAccounts("commit",tables)!==true)
       throw Error("NATIVE_ACCOUNT_CACHE_INVALIDATION_FAILED");
     if(entityWitness)entityIsolation.verifyShadow({witness:entityWitness,
