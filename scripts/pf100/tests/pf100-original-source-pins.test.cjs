@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const root=process.env.PF100_NATIVE_WORKTREE;
 const pins={
  'Code/server/src/services/chat/sessionRegistry.js':'01892cb8f6e35ef46268eae5f2909fd96c4a2a51',
@@ -14,7 +14,9 @@ for(const [relative,sha] of Object.entries(pins)){
  test('PF100 pin original '+relative,{skip:!root},()=>{
   const file=path.join(root,relative);
   assert.equal(fs.statSync(file).isFile(),true);
-  const actual=cp.execFileSync('git',['hash-object',file],{encoding:'utf8'}).trim();
+  const text=fs.readFileSync(file,'utf8').replace(/\r\n/g,'\n');
+  const data=Buffer.from(text,'utf8');
+  const actual=crypto.createHash('sha1').update(Buffer.from('blob '+data.length+'\0')).update(data).digest('hex');
   assert.equal(actual,sha,'Source drift blocks native activation: '+relative);
  });
 }
