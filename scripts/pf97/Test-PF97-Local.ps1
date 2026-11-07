@@ -14,7 +14,8 @@ $tests=@(
  (Join-Path $root 'tests/pf97-itemstore-source.test.cjs')
 )
 $needed=@(
- @($tests),
+ $tests[0],
+ $tests[1],
  (Join-Path $root 'review/characterState.pf97.review-only.patch'),
  (Join-Path $root 'review/itemStore.pf97.review-only.patch'),
  (Join-Path $root 'SHA256SUMS.txt'),
