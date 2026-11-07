@@ -25,6 +25,7 @@ const commands=require('./coopPersonalFleetWorkCommandOwner');
 const originalOrderWitness=require('./coopPersonalFleetOriginalOrderWitness');
 const originalOrderExecutor=require('./coopPersonalFleetOriginalOrderExecutor');
 const originalStationDwell=require('./coopPersonalFleetOriginalStationDwell');
+const originalStationTickDriver=require('./coopPersonalFleetOriginalStationTickDriver');
 const chat=require('./coopPersonalFleetChatGateway');
 const pf52=require('./coopPersonalFleetHangarBridge');
 const pf53=require('./coopPersonalFleetPaidHiring');
@@ -173,6 +174,8 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
   // no prior dwell can authorize the new process to dock.
   const stationDwell=originalStationDwell.createOriginalStationDwell({
     orderWitness,enabled,allWritersFenced:originalHooks.allWritersFenced});
+  const stationTickDriver=originalStationTickDriver.createOriginalStationTickDriver({
+    stationDwell,enabled,allWritersFenced:originalHooks.allWritersFenced});
   const orders=pf55.createPersonalFleetNativeOrders({gameStore,pf52,access,
     verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
     verifyNativeActor:orderWitness.verifyNativeActor,
@@ -259,7 +262,13 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     enabled,allWritersFenced:originalHooks.allWritersFenced,atomicOriginalTransfer:true});
   if(chat.installServerAuthority(commandOwner)!==true)
     throw Error('PF_FIRSTPLAY_CHAT_AUTHORITY_ALREADY_INSTALLED');
-  ready=true;booted=true;
+  ready=true;
+  // The timer is installed only after every original source and /pf authority
+  // has finished initialization. A failed timer install revokes ready and the
+  // process-sticky failed-bootstrap gate blocks a second side-effect attempt.
+  if(stationTickDriver.start()!==true)
+    throw Error('PF56_SOURCE_OWNED_STATION_TIMER_NOT_INSTALLED');
+  booted=true;
   return Object.freeze({status:'INSTALLED_WORK_SOURCE_BOUND',
     mayEnable:enabled,originalHandoff:nativeHandoff,
     // Only trusted original WORK startup may call these; never publish in /pf.
@@ -267,6 +276,9 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     // Server-internal tick entry only: requires the original return intent;
     // it is not an in-game, chat or HTTP command handler.
     sampleOriginalStationDwell:stationDwell.sample,
+    nativeStationTickStatus:stationTickDriver.getStatus,
+    // Trusted WORK process shutdown only; never exposed via chat or HTTP.
+    stopNativeStationTick:stationTickDriver.stop,
     getOperationalStatus:()=>Object.freeze({ready:enabled(),booted})});
  }catch(error){
   // Inability to install a required hook is NOT a partial success.
