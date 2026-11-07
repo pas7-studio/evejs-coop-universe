@@ -6,7 +6,8 @@ const source=fs.readFileSync(path.join(__dirname,'../native/coopPersonalFleetOri
 const SEP='\u001f',P='coop-personal-fleet'+SEP,SHIP=2301,SYSTEM=30000142,OWNER=500;
 function f(){
  let enabled=true,fenced=true,poisoned=false,physicalCount=0,
-  materializeFailure=false,mode='STOP',liveOwner=OWNER,saveMissing=false;
+  materializeFailure=false,mode='STOP',liveOwner=OWNER,saveMissing=false,
+  ingressAuthorized=false,ingressRestores=0;
  const assignmentID='as-123',pilotID='coop-pilot-123';
  const row={shipItemID:SHIP,ownerCharacterID:OWNER,systemID:SYSTEM,
   assignmentID,pilotID,generation:1,actorGeneration:1,typeID:606};
@@ -49,6 +50,22 @@ function f(){
   }},
   './runtime':{scenes},'./npc/npcRegistry':{getControllerByEntityID:id=>controllers.get(id)||null},
   '../services/chat/sessionRegistry':{getSessions:()=>sessions},
+  './coopPersonalFleetOriginalIngressRecovery':{
+   createOriginalIngressRecovery:()=>({
+    inspect:()=>ingressAuthorized?{status:'VERIFIED_ORIGINAL_INGRESS'}:
+     {status:'BLOCKED',reason:'PF90_IN_FLIGHT_WARP_NEEDS_SOURCE_RECOVERY'},
+    restore:(row,scene)=>{
+     if(!ingressAuthorized)return {status:'BLOCKED',
+      reason:'PF90_IN_FLIGHT_WARP_NEEDS_SOURCE_RECOVERY'};
+     ingressRestores++;
+     const ship=scene.getEntityByID(row.shipItemID);
+     if(!ship)return {status:'BLOCKED',reason:'PF94_NO_PHYSICAL_ACTOR'};
+     if(ship.sessionlessWarpIngress)return {status:'ALREADY_ORIGINAL_INGRESS'};
+     ship.sessionlessWarpIngress={origin:{x:0,y:0,z:0},
+      targetPoint:{x:100000,y:0,z:0},startTimeMs:1,travelCompleteAtMs:999999};
+     return {status:'RESTORED_ORIGINAL_INGRESS'};
+    }
+   })},
   './coopPersonalFleetHangarBridge':{REGISTRY_KEY:P+'hangar-reservations-v1',
     ROSTER_PREFIX:P+'hangar-roster-v1:',validateIndex:x=>x,
     validateRoster:x=>x}
@@ -69,7 +86,8 @@ function f(){
   changeSavedOwner:x=>originalEntity.ownerID=x,
   failService:()=>materializeFailure=true,
   missingSaved:()=>saveMissing=true,
-  setLiveOwner:x=>liveOwner=x};
+  setLiveOwner:x=>liveOwner=x,authorizeIngress:()=>ingressAuthorized=true,
+  ingressRestoreCount:()=>ingressRestores};
 }
 test('PF90 does not create scenes or ships until genuine original scene loaded',()=>{
  const x=f(),a=x.recovery.recover();
@@ -182,7 +200,7 @@ test('PF90 rejects foreign matching-ID controller even when physical ship is pre
  assert.equal(x.getMaterializations(),0);
 });
 test('PF90 recognizes an already physically present original in-flight warp without replay',()=>{
- const x=f();x.mount();x.changeMode('WARP');
+ const x=f();x.mount();x.changeMode('WARP');x.authorizeIngress();
  x.scene.entities.set(SHIP,{kind:'ship',itemID:SHIP,nativeNpc:true,ownerID:OWNER,mode:'WARP'});
  x.controllers.set(SHIP,{entityID:SHIP,systemID:SYSTEM,
   personalFleetOriginal:true,personalFleetAssignmentID:x.row.assignmentID,
@@ -195,5 +213,30 @@ test('PF90 rejects transient physical ship masquerading as an original',()=>{
  x.scene.entities.set(SHIP,{kind:'ship',itemID:SHIP,nativeNpc:true,ownerID:OWNER,transient:true});
  assert.equal(x.recovery.recover().issues[0].reason,
   'PF90_EXISTING_SCENE_OR_CONTROLLER_CONFLICT');
+ assert.equal(x.getMaterializations(),0);
+});
+
+test('PF94 PF90 integration restores original in-flight actor exactly once',()=>{
+ const x=f();x.mount();x.changeMode('WARP');x.authorizeIngress();
+ const first=x.recovery.recover();
+ assert.equal(first.inFlightRestored,1);
+ assert.equal(first.restored,1);
+ assert.equal(x.getMaterializations(),1);
+ assert.equal(x.ingressRestoreCount(),1);
+ assert.ok(x.scene.getEntityByID(SHIP).sessionlessWarpIngress);
+ const second=x.recovery.recover();
+ assert.equal(second.already,1);
+ assert.equal(x.getMaterializations(),1);
+});
+test('PF94 original in-flight server refuses to materialize without PF56 source receipt',()=>{
+ const x=f();x.mount();x.changeMode('WARP');
+ assert.equal(x.recovery.recover().blocked,1);
+ assert.equal(x.getMaterializations(),0);
+});
+test('PF94 physical entity alone is not proof of resumed in-flight warp',()=>{
+ const x=f();x.mount();x.changeMode('WARP');
+ x.scene.entities.set(SHIP,{kind:'ship',itemID:SHIP,nativeNpc:true,ownerID:OWNER});
+ x.controllers.set(SHIP,{...x.ship,systemID:SYSTEM});
+ assert.equal(x.recovery.recover().blocked,1);
  assert.equal(x.getMaterializations(),0);
 });
