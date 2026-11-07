@@ -35,7 +35,7 @@ function fixture(fn){
    getNativeController:()=>state.controller,
    listNativeModulesForEntity:()=>state.modules,listNativeCargoForEntity:()=>state.cargo},
   './npc/npcRegistry':{getControllerByEntityID:()=>state.runtimeController},
-  './runtime':{scenes:new Map([[300,{getEntityByID:()=>state.sceneEntity}]])},
+  './runtime':{scenes:new Map([[300,{systemID:300,getEntityByID:()=>state.sceneEntity}]])},
   './coopPersonalFleetReturnDock':{manifestValid:(m,r)=>m?.shipItemID===r.shipItemID},
   './coopPersonalFleetScopedDock':{valid:r=>r?.phase==='DOCK_ISSUING'&&r?.dockDispatchCount===1,
    signature:()=>sig,stockShip:(item,r,dock)=>!!item&&dock&&item.itemID===r.shipItemID&&
@@ -48,7 +48,7 @@ function fixture(fn){
   verifyExclusiveOwnership:()=>state.exclusive,
   verifyFinalOriginalManifest:()=>state.manifest});
  const tx={get:(t,k)=>rows.get(t+'\t'+k)??null};
- fn({owner,tx,rows,ret,c,state,manifest,sig});
+ fn({owner,tx,rows,ret,c,state,manifest,sig,deps});
 }
 test('real PF66 dock receipt authenticates PF60 command and creates stable source witness',()=>fixture(f=>{
  assert.equal(f.owner.authenticateCommand(f.c,f.tx),true);
@@ -79,6 +79,7 @@ const invalid=[
  ['changed original fitting hashes',f=>{f.state.manifest={...f.manifest,fittingHash:'f'.repeat(64)}}],
  ['live native NPC scene entity',f=>{f.state.sceneEntity={itemID:501}}],
  ['live native NPC registry controller',f=>{f.state.runtimeController={entityID:501}}],
+ ['original system scene never mounted',f=>{f.deps['./runtime'].scenes.clear()}],
  ['duplicate original item ID',f=>{f.rows.get('items\titems')['888']={...f.state.ship}}],
 ];
 for(const [name,mutate] of invalid)test('reject terminal receipt when '+name,()=>fixture(f=>{
