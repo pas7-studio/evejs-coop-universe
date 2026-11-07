@@ -13,7 +13,9 @@ $files=@(
  'tests/pf100-original-postcommit-proof.test.cjs',
  'tests/pf100-original-source-pins.test.cjs',
  'native/coopPersonalFleetOriginalAtomicSwitchAndHandoff.cjs',
- 'tests/pf100b-original-atomic-player-npc.test.cjs'
+ 'tests/pf100b-original-atomic-player-npc.test.cjs',
+ 'native/coopPersonalFleetOriginalDurableHandoffReadback.cjs',
+ 'tests/pf100c-durable-handoff-readback.test.cjs'
 )
 $manifest=Join-Path $root 'SHA256SUMS.txt'
 if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw 'PF100_MANIFEST_MISSING' }
@@ -40,7 +42,7 @@ try {
   [Environment]::SetEnvironmentVariable('PF100_NATIVE_WORKTREE',$null,'Process')
   Write-Warning 'PF100 source-pinned native tests will SKIP without -NativeCheckout.'
  }
- & $node --test --test-concurrency=1 (Join-Path $root $files[1]) (Join-Path $root $files[2]) (Join-Path $root $files[4])
+ & $node --test --test-concurrency=1 (Join-Path $root $files[1]) (Join-Path $root $files[2]) (Join-Path $root $files[4]) (Join-Path $root $files[6])
  if($LASTEXITCODE -ne 0){throw 'PF100_NATIVE_POSTCOMMIT_TEST_FAILED'}
 }finally{
  [Environment]::SetEnvironmentVariable('PF100_NATIVE_WORKTREE',$before,'Process')
