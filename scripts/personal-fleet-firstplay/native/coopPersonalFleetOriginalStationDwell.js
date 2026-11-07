@@ -66,13 +66,15 @@ function createOriginalStationDwell({orderWitness,enabled=()=>false,
   // Only physical original NPC stations whose geometry exists in BOTH
   // original SDE and the same loaded original scene. Unknown -> no docking.
   if(scene?.systemID!==row.systemID||!object(actor)||
-     actor.entityID!==row.shipItemID||actor.itemID!==row.shipItemID||
+     actor.itemID!==row.shipItemID||
+     (actor.entityID!==undefined&&actor.entityID!==row.shipItemID)||
      actor.ownerID!==row.ownerCharacterID||actor.nativeNpc!==true||
      !object(controller)||controller.entityID!==row.shipItemID||
      controller.systemID!==row.systemID||
      station?.stationID!==row.stationID||station.solarSystemID!==row.systemID||
      !object(staticBall)||!vector(station.position)||!vector(staticBall.position)||
-     !positive(staticBall.entityID)||staticBall.entityID!==row.stationID||
+     staticBall.itemID!==row.stationID||
+     (staticBall.entityID!==undefined&&staticBall.entityID!==row.stationID)||
      !finite(staticBall.radius)||staticBall.radius<1||
      Math.hypot(station.position.x-staticBall.position.x,
        station.position.y-staticBall.position.y,
