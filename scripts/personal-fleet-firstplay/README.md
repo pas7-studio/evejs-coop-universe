@@ -296,3 +296,54 @@ client E2E are still NOT RUN. Source pins: 36 source/test entries; 21-path
 incremental WORK patch over PF80's staged 22, 39 unique native source paths.
 The missing original durable RETURN order receipt and genuine sessionless
 PF56 transition authorization remain code blockers, not just debugging.
+
+## PF84 — server-owned, sessionless RETURN continuation (2026-11-07)
+
+**Candidate code only; not installed or tested on native WORK/PLAY.**
+
+PF56's original `/pf return` remains **player-authenticated**. At the moment
+that command commits `RETURN_ISSUING`, it now binds the original account ID
+to the durable intent (`requestedByAccountID`). This is not an independent
+authorization token or a client-provided identity.
+
+The original `characters` row is the authority for a later sessionless
+transition. `coopPersonalFleetOriginalSourceBindings.verifyServerReturnOwner`
+checks that the character still exists, is not deleted, and is owned by the
+same account. `coopPersonalFleetReturnDock.advanceServer` is not exposed
+to chat/HTTP and requires the committed PF56 intent, full exact operation/
+assignment/actor identity, original transaction ownership, reciprocal writer
+fences and original source-specific physical/ItemStore proofs. **It never
+creates a new RETURN order, session or ship.** Older intents without the
+original account stamp cannot be silently migrated.
+
+The native source-owned 100 ms station timer now progresses:
+
+- `RETURN_ISSUING`: read-only reconciliation of the **original durable
+  RETURN-order proof**; never invokes `warpToPoint` again.
+- `RETURNING`: physical station-arrival observation.
+- `ARRIVAL_OBSERVED`: continuous native dwell and original manifest gate,
+  then exactly one already-fenced PF66 docking dispatch.
+- `DOCK_ISSUING`: readback-only PF60/61 native cleanup followed by PF56
+  ItemStore + manifest + controller reconciliation.
+- `DOCKED`: when PF60 was `NATIVE_CLEARED` at a crash, readback-only final
+  custody lock release. A `FINALIZED` tombstone is never reissued.
+
+If the actor, owner, scene, station, original ItemStore or writer proofs
+cannot be checked, the tick returns `BLOCKED`. A lost scene never becomes
+proof that the ship disappeared. A failed/unknown dock effect is **not**
+dispatched again; operator-controlled reconciliation remains necessary.
+
+**Important remaining blockers:** the original `verifyOriginalReturnOrder`
+durable native receipt is still supplied by a trusted engine hook, not
+implemented by this change. Original native boot/writer hooks, true persisted
+NPC return/flight state, actual WORK patch apply, Node/SQLite full-current-head
+run, engine restart and two-client gameplay have not been verified. PF84 does
+not make the feature playable or authorize main/PLAY deployment.
+
+**Isolated verification in this change:** 10 in-memory PF56 transition
+scenarios, 19/19 station-timer VM tests, 39/39 native bootstrap VM tests and
+26/26 original source-binding tests using a mocked SQLite adapter. These
+are contract/VM checks, not a full real Node/SQLite, Windows or native WORK
+gameplay run. The first-play PowerShell runner now additionally invokes
+PF56's actual Node/SQLite, original native API and SIGKILL suites locally;
+its new combined result is **NOT RUN** in this cloud session.
