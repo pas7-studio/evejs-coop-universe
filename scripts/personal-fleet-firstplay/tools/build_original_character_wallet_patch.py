@@ -109,7 +109,7 @@ def transform(module:str,text:str)->str:
   if changed.count(before)!=1:raise ValueError('PF_NATIVE_WALLET_SOURCE_ANCHOR_DRIFT:'+module)
   changed=changed.replace(before,after,1)
  if module=='coopPersonalFleetNativeOrders.js' and changed.count(
-    "  try{return atomic.transact([TABLE,ITEMS,'characters','npcEntities'],tx=>{")!=1:
+    "  try{return atomic.transact([TABLE,ITEMS,'characters','npcEntities','npcRuntimeControllers'],tx=>{")!=1:
   raise ValueError('PF_NATIVE_WALLET_PF55_EXISTING_ORIGINAL_SCOPE_DRIFT')
  if changed==text:raise ValueError('PF_NATIVE_WALLET_NO_CHANGE')
  if 'tx.get(CHAR,CHAR)' in changed or 'tx.put(CHAR,CHAR' in changed or \
