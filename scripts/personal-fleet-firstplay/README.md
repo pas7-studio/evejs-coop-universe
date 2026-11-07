@@ -5,6 +5,43 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF102 — source-attested real NPC catalog and salary startup gate (2026-11-08)
+
+Before any original native writer hook, physical NPC, chat command or
+station/payroll timer is published, `OriginalWorkStarter` now checks an
+independent source-bound `coopPersonalFleetOriginalCatalogProof.js`:
+
+- Every explicitly authored NPC offer maps to one **real** original
+  SDE NPC character (`typeID=1373`), stock `npcData.buildNpcDefinition`
+  profile/hull/loadout/behavior and native SDE NPC corporation.
+- The NPC employer must have an **existing original** GameStore
+  `corporationRuntime` wallet division 1000, nonnegative balance and
+  genuine original journal/transactions arrays. There is no fake wallet or
+  invented NPC profile/ItemStore ship.
+- Salary policies must match the exact NPC, employer, profile and hull
+  one-to-one and have independently validated positive ISK cents and
+  bounded pay periods. Unknown/duplicate NPC, stale SDE, mutable foreign
+  salary field, GameStore poison, missing wallet or an uncertain original
+  read fail startup *before* native writer creation.
+- No client command, environment-supplied NPC ID or callback is accepted
+  as proof. `createNativeWriterHooks` and the missing server-owned
+  `coopPersonalFleetOriginalWorkConfiguration` still require real
+  source implementation. PF102 does **not** pretend those parts exist.
+
+**Native WORK package:** PF80 baseline 22 paths plus **40** incremental
+first-play paths, 4 overlaps = **58 unique** source paths; all unchanged
+live feature flags remain OFF. `Test-FirstPlay-Local.ps1` now includes
+the new real-source catalog-proof regression; the exact worktree assembler
+fails if this required module is missing.
+
+**Evidence:** 21/21 checked-in catalog-proof tests and 11/11 checked-in
+WorkStarter tests executed with controlled Node-module V8 substitutes against
+the exact GitHub source (not a full Node process or real on-disk database).
+Original source-pinned WORK apply, real authenticated server launch,
+Node/SQLite/SIGKILL, two-player gameplay, writer hooks and native
+NPC data population are **NOT RUN / NOT INSTALLED**.
+Keep the PR Draft; do not merge or activate PLAY.
+
 ## PF101 — strict original physical actor re-adoption (2026-11-08)
 
 **Code change in the same Draft PR:** PF90's original physical recovery now
