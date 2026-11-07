@@ -42,6 +42,18 @@ $python = (Get-Command python -ErrorAction Stop).Source
 if ($LASTEXITCODE -ne 0) { throw 'PF58_PATCH_TESTS_FAILED' }
 if ($NativeCheckout) {
   $native = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+  $pf95Original = Join-Path $root '../pf95/tests/pf95-original-game-store-epoch.test.cjs'
+  if (-not (Test-Path -LiteralPath $pf95Original -PathType Leaf)) {
+    throw 'PF95_NATIVE_TEMPORARY_OWNER_TEST_MISSING'
+  }
+  $oldPf95Root = [Environment]::GetEnvironmentVariable('PF95_NATIVE_WORKTREE','Process')
+  try {
+    $env:PF95_NATIVE_WORKTREE = $native
+    & $node --test '--test-concurrency=1' $pf95Original
+    if ($LASTEXITCODE -ne 0) { throw 'PF95_ORIGINAL_GAMESTORE_OWNER_WITNESS_FAILED' }
+  } finally {
+    [Environment]::SetEnvironmentVariable('PF95_NATIVE_WORKTREE',$oldPf95Root,'Process')
+  }
   $patch = Join-Path ([System.IO.Path]::GetTempPath()) 'pf58-native-stock-fittings-review.patch'
   & $python (Join-Path $root 'build_native_stock_fittings_patch.py') $native --output $patch
   if ($LASTEXITCODE -ne 0) { throw 'PF58_NATIVE_SOURCE_PIN_FAILED' }
