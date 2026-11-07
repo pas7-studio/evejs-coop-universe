@@ -32,7 +32,7 @@ and explicit WORK-NOT-PLAY confirmation. It never creates native business
 authorities or enables feature flags.
 
 **Evidence:** 118/118 Node/SQLite/VM tests and 18/18 Python/Git tests PASS on
-Node.js 22.16.0, Python 3.13.5, Git. All ten code/test files have exact
+Node.js 22.16.0, Python 3.13.5, Git. All fourteen code/test files have exact
 Git blob SHA matches with the locally tested source. No native original
 EveJS runtime or Windows PowerShell test was run.
 
@@ -68,10 +68,11 @@ nativeAuthorityWired:false, featureEnabled:false and gameplayE2E:NOT_RUN.
    ItemStore, original wallet, NPC controller/scene, and protected /pf
    source owner. No fake verification callbacks. Original native fork GitHub
    write still returns HTTP 403 to this cloud integration.
-2. Real pilot/offers authority: nativeNpcStore stores npcEntities root
-   under slash with entities/controllers, not the synthetic pilots map
-   in old PF53 fixtures. Need persistent eligible NPC identity,
-   original NPC profile and agent proof, NPC employer and sourced price.
+2. Native offer source is now a tested SDE-backed candidate, but must be
+   installed in the original WORK composition root with an **operator-authored
+   list of real NPC-character IDs, NPC profile IDs, employer and prices**.
+   Original nativeNpcStore stores real entities/controllers and still needs
+   a separate physical actor adoption hook for the hired NPC.
 3. Full original wallet and ship writer fences: connect PF53/PF57
    corrected character rows to real wallet authority and all reciprocal
    player/Mining/WAR/Exploration/Market/ItemStore ownership writers.
