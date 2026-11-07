@@ -10,7 +10,7 @@ const hooksList=['verifyOriginalWriterHooks','allWritersFenced','allWalletWriter
  'verifyShipAvailable',
  'verifyRelease','verifyOriginalEquipment','verifyOriginalDeploymentAuthority',
  'verifyExclusiveOwnership','verifyOriginalActor','independentOriginalActorWitness',
- 'originalStationUndockPoint','originalOwnershipWitness','verifyPersistedNativeOrder',
+ 'originalStationUndockPoint','originalOwnershipWitness',
  'verifyNativeFlight','verifyOriginalReturnOrder','verifyStationArrival',
  'verifyContinuousDwell','verifyOriginalManifest','verifyOriginalDockReceipt',
  'verifyFinalOriginalManifest','executeNativeReturn','executeNativeDock',
@@ -29,7 +29,12 @@ function fixture(cb){
   './coopPersonalFleetOriginalSourceBindings':{createOriginalSourceBindings(){events.push('source');
    return {gameStore,access:{isOwner:()=>false},resolveOwnerCorporation:()=>1,
     resolveOriginalDockContext:()=>null,resolveOriginalFollowTarget:()=>null};}},
+  './coopPersonalFleetOriginalDurableOrderAck':{createOriginalDurableOrderAck(args){events.push('order-ack');
+   if(broken==='order-ack')throw Error('DURABLE_ACK_ORIGINAL_SOURCE_MISSING');
+   assert.equal(args.enabled(),false);
+   return {recordAfterNativeEffect:()=>({success:false}),verifyPersistedNativeOrder:()=>null};}},
   './coopPersonalFleetOriginalOrderExecutor':{createOriginalOrderExecutor(args){events.push('physical-order');
+   assert.equal(typeof args.orderReceipt.recordAfterNativeEffect,'function');
    assert.equal(args.sharedOriginalArbiter,hooks.sharedOriginalNpcOrderArbiter);
    assert.equal(args.enabled(),false);
    if(broken==='physical-order')throw Error('SHARED_ARBITER_NOT_INSTALLED');
@@ -57,6 +62,7 @@ function fixture(cb){
    assert.equal(args.enabled(),false);if(broken==='deploy')throw Error('NATIVE_NO_WRITER');
    return {prepare:()=>{},dispatch:()=>{},reconcile:()=>{},inspect:()=>{}};}},
   './coopPersonalFleetNativeOrders':{createPersonalFleetNativeOrders(args){events.push('orders');
+   assert.equal(typeof args.verifyPersistedNativeOrder,'function');
    assert.equal(args.enabled(),false);assert.equal(args.verifyNativeActor(),false);
    assert.equal(args.verifyOriginalControl(),false);assert.equal(args.verifyTarget(),false);
    return {issue:()=>{},reconcile:()=>{},inspect:()=>{}};}},
@@ -86,7 +92,7 @@ const call=(f)=>f.api.createOriginalWorkBootstrap({originalHooks:f.hooks,authore
 test('composition builds original source owners and publishes chat LAST',()=>fixture(f=>{
  const b=call(f);assert.equal(b.status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.equal(b.getOperationalStatus().ready,true);
- assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','physical-order','orders','return','owner','PF58','chat']);
+ assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','order-ack','physical-order','orders','return','owner','PF58','chat']);
 }));
 test('flags OFF after install prevent action even after previously ready',()=>fixture(f=>{
  const b=call(f);delete process.env.EVEJS_COOP_PERSONAL_FLEET_CHAT;
@@ -184,4 +190,16 @@ test('missing source-owned shared arbiter is a hard startup error',()=>fixture(f
  delete f.hooks.sharedOriginalNpcOrderArbiter;
  assert.throws(()=>call(f),/ORIGINAL_BOOT_HOOKS_REQUIRED/);
  assert.equal(f.events.length,0);
+}));
+
+test('PF55 durable post-effect proof must be source-owned and cannot be forged by originalHooks',()=>fixture(f=>{
+ f.hooks.verifyPersistedNativeOrder=()=>({orderApplied:true});
+ assert.equal(call(f).status,'INSTALLED_WORK_SOURCE_BOUND');
+ assert.ok(f.events.indexOf('order-ack')>f.events.indexOf('order-witness'));
+ assert.ok(f.events.indexOf('order-ack')<f.events.indexOf('orders'));
+}));
+test('missing native PF55 durable source fails sticky without publishing /pf',()=>fixture(f=>{
+ f.setBroken('order-ack');assert.throws(()=>call(f),/DURABLE_ACK_ORIGINAL_SOURCE_MISSING/);
+ assert.equal(f.events.includes('chat'),false);
+ assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
 }));
