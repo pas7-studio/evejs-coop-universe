@@ -322,3 +322,20 @@ for(const [name,which,change] of [
   assert.equal(x.getMaterializations(),0);
  });
 }
+
+for(const [name,change] of [
+ ['original scene reports WARP',e=>{e.mode='WARP';}],
+ ['original scene ingress exists without PF56 ACK',e=>{e.sessionlessWarpIngress={};}],
+ ['original scene pending warp',e=>{e.pendingWarp={};}],
+ ['original scene warp state',e=>{e.warpState={};}],
+ ['original scene active warp bit',e=>{e.isWarping=true;}],
+]){
+ test('PF101 refuses '+name+' if saved original NPC reports STOP',()=>{
+  const x=f();x.mount();const ship=liveShip(x);
+  change(ship);x.scene.entities.set(SHIP,ship);
+  x.controllers.set(SHIP,liveController(x));
+  const result=x.recovery.recover();
+  assert.equal(result.issues[0].reason,'PF101_UNPROVEN_SCENE_WARP_CONFLICT');
+  assert.equal(x.getMaterializations(),0);
+ });
+}
