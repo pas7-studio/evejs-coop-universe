@@ -1,7 +1,7 @@
 diff --git a/server/src/services/character/characterState.js b/server/src/services/character/characterState.js
 --- a/server/src/services/character/characterState.js
 +++ b/server/src/services/character/characterState.js
-@@ -375,25 +375,104 @@
+@@ -375,30 +375,113 @@
      });
  }
  
@@ -122,10 +122,6 @@ diff --git a/server/src/services/character/characterState.js b/server/src/servic
 +    data: clonedRecord,
 +  };
 +}
- 
- // Owner removal API: lets other domains delete a character record without
- // writing the characters table directly. Keeps characterRecordCache consistent.
-@@ -397,8 +476,12 @@
  
  // Owner removal API: lets other domains delete a character record without
  // writing the characters table directly. Keeps characterRecordCache consistent.
