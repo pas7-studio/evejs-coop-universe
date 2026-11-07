@@ -63,3 +63,30 @@ The original CharacterState owner must, without a second `repo.write`:
 Native `pas7-studio/EveJS` create-branch was retried **2026-11-07** and still returned HTTP **403 Resource not accessible by integration**. Until the real original owner hook and these tests exist, keep **PR #350 Draft**, Personal Fleet **OFF**, PF42 coexistence exclusion intact, and never merge/deploy to `main` or `PLAY`.
 
 No GitHub Actions workflow is created here; `AGENTS.md` explicitly forbids it.
+
+## PF100B / PF100C continuation — 2026-11-07
+
+The original PF100 postcommit witness above is **still PF91-specific**
+and is not a session-side effect reconciler for PF100B. Two additional
+inert candidates now live alongside it:
+
+- [PF100B original atomic handoff](PF100B_ORIGINAL_ATOMIC_HANDOFF.md):
+  a single original GameStore transaction candidate changing the
+  active character title to an **already existing** capsule, moving
+  the source stock hull into space, and consuming the PF58 one-shot
+  permit. **26/26 PASS** on real isolated Node SQLite with controlled
+  PF58/PF99 adapters.
+- [PF100C durable readback](PF100C_DURABLE_HANDOFF_READBACK.md):
+  source-side read-only original GameStore inspector for the complete
+  PF54+PF58+ItemStore+character-row durable handoff preimage.
+  **18/18 PASS** on real isolated Node SQLite with controlled PF58
+  adapters; it explicitly grants no spawn, notification or retry.
+
+The `Test-PF100-Local.ps1` manual runner and the existing PF58/PF80
+native WORK preflight now include both suites; the 44 tests were
+actually executed together on Node v22.16.0. Windows PowerShell,
+full original native GameStore, engine startup, real two-player WORK
+and physical gameplay were **NOT EXECUTED**. This does not retract
+any earlier P0 blocker: original source owner integration and
+session/actor postcommit effects remain missing; Personal Fleet OFF,
+Draft PR, main and PLAY untouched.
