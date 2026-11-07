@@ -1,9 +1,53 @@
 # EveJS Personal Fleet — First playable WORK source package
 
-**Last reviewed: 2026-11-07. Status: WORK source candidate, NOT gameplay-ready.**
+**Last reviewed: 2026-11-08. Status: WORK source candidate, NOT gameplay-ready.**
 Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-universe/pull/350).
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
+
+## PF102B — original source-owned WORK configuration (2026-11-08)
+
+**Integrated:** `coopPersonalFleetOriginalWorkConfiguration.js` is now
+installed by the exact first-play native WORK patch and loaded by PF88's
+actual original server startup, instead of simply lacking that module.
+It has exactly the three contract functions expected by PF88:
+`loadNativeAuthoredCatalog`, `loadNativeSalaryPolicies` and
+`createNativeWriterHooks`.
+
+The configuration imports only two **explicit original-native source files**,
+neither a dynamically selected code path nor user/client/env JSON:
+
+| Owner-authored native source | Required responsibility |
+| --- | --- |
+| `Code/server/src/space/coopPersonalFleetOriginalAuthoredPolicy.js` | A static JavaScript source `{source:'ORIGINAL_EVEJS_PERSONAL_FLEET_AUTHORED_POLICY_V1',catalog:[...],salaryPolicies:[...]}` with 1–12 curated real SDE NPC identities, physical profile/hull mappings, hire prices and exact recurring salary terms |
+| `Code/server/src/space/coopPersonalFleetOriginalNativeWriterBoundary.js` | `{source:'ORIGINAL_EVEJS_PERSONAL_FLEET_NATIVE_WRITERS_V1',createNativeWriterHooks()}` backed by **real reciprocal original** ItemStore, player, Mining, WAR, Exploration, wallet, NPC scene and shared arbiter owners |
+
+The first file is validated and snapshotted once (exact schema, unique pilots,
+one-to-one immutable salary terms). Returned arrays are defensive copies.
+The second must return the full original PF88 writer-hook contract, canonical
+actor-claims policy and shared stock order arbiter. PF88 separately executes
+the three real writer-attestation checks before any physical NPC, /pf command
+or scheduler can be installed.
+
+**Missing and intentionally NOT forged:** there is still no source-authored
+verified NPC policy in the native fork, and no source-owned reciprocal writer
+boundary implementation. Both must be written in the original native WORK
+source and verified against its real actor/ItemStore/economy/competition
+writers. No default NPC, ISK, fee, wage, fake `()=>true`, substitute wallet,
+or private arbiter is provided. Missing either module blocks launch
+**before TCP** and flags remain OFF. This is not playable yet.
+
+**Evidence:** 25/25 checked-in configuration tests, including five
+cross-module `OriginalWorkStarter` ordering scenarios, executed against the
+exact GitHub files in a controlled V8 environment. These are isolated
+contract checks, **not** native Node/SQLite, original WORK server boot
+or in-game E2E. Original WORK patch assembly and installed-source test are
+NOT RUN.
+
+**Current exact WORK candidate:** PF80 22 paths + first-play 41 delta
+paths - 4 overlaps = **59 unique native paths**. Manual
+`Test-FirstPlay-Local.ps1` now includes PF102B. SHA256 manifest has **80**
+code/test/tool entries. Preserve Draft; never merge as playable.
 
 ## PF102 — source-attested real NPC catalog and salary startup gate (2026-11-08)
 
@@ -24,12 +68,12 @@ independent source-bound `coopPersonalFleetOriginalCatalogProof.js`:
   salary field, GameStore poison, missing wallet or an uncertain original
   read fail startup *before* native writer creation.
 - No client command, environment-supplied NPC ID or callback is accepted
-  as proof. `createNativeWriterHooks` and the missing server-owned
-  `coopPersonalFleetOriginalWorkConfiguration` still require real
-  source implementation. PF102 does **not** pretend those parts exist.
+  as proof. `createNativeWriterHooks` now routes through PF102B's server-owned
+  `coopPersonalFleetOriginalWorkConfiguration`, but the two original
+  authoritative policy/writer modules remain to be implemented.
 
-**Native WORK package:** PF80 baseline 22 paths plus **40** incremental
-first-play paths, 4 overlaps = **58 unique** source paths; all unchanged
+**Native WORK package (PF102B head):** PF80 baseline 22 paths plus **41** incremental
+first-play paths, 4 overlaps = **59 unique** source paths; all unchanged
 live feature flags remain OFF. `Test-FirstPlay-Local.ps1` now includes
 the new real-source catalog-proof regression; the exact worktree assembler
 fails if this required module is missing.
