@@ -417,3 +417,25 @@ New coopPersonalFleetOriginalStationTickDriver.js runs a single unref'd original
 Important remaining CODE: PF56 still needs its independently authenticated original durable RETURN order receipt (verifyOriginalReturnOrder), and its confirmReturn, observeArrival and requestDock transitions still require an authenticated player session. Completing these transitions after player logout needs a real original server-owned durable permit and integration, NOT a fabricated player session. The game engine startup and all original reciprocal writer hooks also remain uninstalled from this cloud connection.
 
 Test evidence actually executed: 66/66 fresh Node tests (22 physical-return bridge, 28 station dwell, 16 native scheduler), plus separately rerun older candidate baseline 239/239 Node and 26/26 Python. The full combined CURRENT PR head tests and actual native WORK/client/restart are NOT RUN. Do not sum independent source versions as a green current-head run. The isolated WORK patch now requires 21 additional native paths on PF80's 22 baseline (four overlapping), 39 unique final staged native paths. Manifest: 36 code/test source entries. Manual Windows runner: 14 Node suites. PLAY and main untouched.
+
+
+### Original stock scene entity and Crimewatch audit (2026-11-07)
+
+The real original EveJS scene creates stations with `kind:'station'` and
+`itemID=stationID` (not necessarily `entityID`). Native space ships similarly
+use `kind:'ship'` with original `itemID`. The source-bound station geometry,
+return executor and dwell gate now verify these canonical `itemID`/kind fields,
+with optional `entityID` accepted only if it agrees. The station monitor also
+imports original `security/crimewatchState.isCriminallyFlagged` and refuses
+station arrival / PF66 dock readiness unless that original check explicitly
+returns `false` for the verified original ownerCharacterID. That preserves
+a native station-docking restriction without creating a fake player session.
+
+Latest isolated source-specific evidence is **74/74 Node PASS** (physical
+RETURN, original SDE/scene station dwell, original station native timer).
+Previous separately re-run candidate baseline: **239/239 Node + 26/26 Python
+PASS**. The full combined current PR-head regression and original native WORK
+client E2E are still NOT RUN. Source pins: 36 source/test entries; 21-path
+incremental WORK patch over PF80's staged 22, 39 unique native source paths.
+The missing original durable RETURN order receipt and genuine sessionless
+PF56 transition authorization remain code blockers, not just debugging.
