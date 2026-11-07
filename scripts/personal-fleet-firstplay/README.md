@@ -53,8 +53,8 @@ The native WORK staging includes:
 - **Native XMPP hook:** exact original `chatCommands.js` source-pinned patch;
   no new unauthenticated HTTP API or client modification.
 - **Isolated review assembler:** PF80's **22-file** preflight candidate +
-  this **21-path** original source delta (four overlap with PF80) =
-  **39 unique staged native paths**. The generated patch includes both
+  this **23-path** original source delta (four overlap with PF80) =
+  **41 unique staged native paths**. The generated patch includes both
   original NPC order source files, PF55 original character row scope,
   PF52 original paid hull row scope, wallet corrections, new modules
   and the original chat hook. It must pass exact Git `apply --check`.
@@ -67,7 +67,7 @@ receipts, bootstrap fail-sticky and in-memory EVE service adapters.
 **26/26 Python/Git tests PASS** on Python 3.13.5; exact original stock
 blob pins, patch transforms, `git apply`, manifest and linked-worktree gates.
 
-**Previous baseline: 265/265 PASS. New PF56/60/61/66 local tests: 66/66 PASS. Full combined regression on this PR head has NOT RUN. 36 source/test files SHA256-pinned.**
+**Previous baseline: 265/265 PASS. New PF56/60/61/66 local tests: 66/66 PASS. Full combined regression on this PR head has NOT RUN. 40 source/test/tool files SHA256-pinned.**
 These are isolated component and controlled SQLite/VM tests.
 Original EveJS server and connected game-client E2E are **NOT RUN** here.
 Manual Windows PowerShell runner is **NOT RUN** here.
@@ -162,7 +162,7 @@ The assembler now verifies **unique** native patch destinations before
 calling `git apply --check`. This catches repeated stock-source hunks,
 including duplicate original `coopNpcOrderArbiter.js` edits, which individual
 unit tests otherwise would not detect. Its expected exact set is **15 unique
-native paths**, four already staged by PF80, and **39 unique final WORK paths**.
+native paths**, four already staged by PF80, and **41 unique final WORK paths**.
 The two original stock order files are source-pinned and their anchors were
 independently checked against the `coop/pas7std` fork. The full original
 WORK `git apply --check` on the owner's machine remains unexecuted here.
@@ -197,7 +197,7 @@ Changing the target, assignment, actor generation or mode does.
 receipt cases and integrated bootstrap/executor tests), plus 26/26
 Python/Git, **265/265 previously PASS; 68/68 newly added dock tests PASS; full combined regression NOT RUN.** **36 SHA256-pinned code/test files**;
 19 unique additional native patch paths over PF80's 22 source paths,
-four overlapping, producing 39 unique modified native files.
+four overlapping, producing 41 unique modified native files.
 
 **Not yet WORK gameplay:** Original GameStore refuses transactions on
 `npcEntities` while transient native rows are not safely quiescent; this
@@ -238,8 +238,8 @@ Added and tested:
   prerequisites. This source remains **OFF** until real native writer hooks.
 
 The WORK package now has **21 exact additional native paths** atop PF80's
-22 staged paths; four paths overlap and **39 unique native files** are staged.
-All 36 source/test files have SHA256 manifest entries. The manual Windows
+22 staged paths; four paths overlap and **41 unique native files** are staged.
+All 40 source/test/tool files have SHA256 manifest entries. The manual Windows
 runner has 12 Node suites and is configured to announce its combined PASS
 only after every suite succeeds on the user's machine.
 
@@ -273,7 +273,7 @@ New coopPersonalFleetOriginalStationTickDriver.js runs a single unref'd original
 
 Important remaining CODE: PF56 still needs its independently authenticated original durable RETURN order receipt (verifyOriginalReturnOrder), and its confirmReturn, observeArrival and requestDock transitions still require an authenticated player session. Completing these transitions after player logout needs a real original server-owned durable permit and integration, NOT a fabricated player session. The game engine startup and all original reciprocal writer hooks also remain uninstalled from this cloud connection.
 
-Test evidence actually executed: 66/66 fresh Node tests (22 physical-return bridge, 28 station dwell, 16 native scheduler), plus separately rerun older candidate baseline 239/239 Node and 26/26 Python. The full combined CURRENT PR head tests and actual native WORK/client/restart are NOT RUN. Do not sum independent source versions as a green current-head run. The isolated WORK patch now requires 21 additional native paths on PF80's 22 baseline (four overlapping), 39 unique final staged native paths. Manifest: 36 code/test source entries. Manual Windows runner: 14 Node suites. PLAY and main untouched.
+Test evidence actually executed: 66/66 fresh Node tests (22 physical-return bridge, 28 station dwell, 16 native scheduler), plus separately rerun older candidate baseline 239/239 Node and 26/26 Python. The full combined CURRENT PR head tests and actual native WORK/client/restart are NOT RUN. Do not sum independent source versions as a green current-head run. The isolated WORK patch now requires 23 additional native paths on PF80's 22 baseline (four overlapping), 41 unique final staged native paths. Manifest: 40 code/test/tool source entries. Manual Windows runner: 14 Node suites. PLAY and main untouched.
 
 
 ### Original stock scene entity and Crimewatch audit (2026-11-07)
@@ -292,8 +292,8 @@ Latest isolated source-specific evidence is **74/74 Node PASS** (physical
 RETURN, original SDE/scene station dwell, original station native timer).
 Previous separately re-run candidate baseline: **239/239 Node + 26/26 Python
 PASS**. The full combined current PR-head regression and original native WORK
-client E2E are still NOT RUN. Source pins: 36 source/test entries; 21-path
-incremental WORK patch over PF80's staged 22, 39 unique native source paths.
+client E2E are still NOT RUN. Source pins: 40 source/test/tool entries; 23-path
+incremental WORK patch over PF80's staged 22, 41 unique native source paths.
 The missing original durable RETURN order receipt and genuine sessionless
 PF56 transition authorization remain code blockers, not just debugging.
 
@@ -408,3 +408,58 @@ transactions on a native table that has unquiesced transient rows. This
 preserves safety and must NOT be bypassed by an unscoped writer. A real
 original-server startup, sourced reciprocal writer fences and WORK
 SIGKILL/client tests remain mandatory. No PLAY activation.
+
+## PF87 — Source-scoped transient NPC SQLite isolation and complete PF55 ACK (2026-11-07)
+
+A source audit uncovered **two native GameStore blockers** that the isolated
+prior V8 mocks did not model correctly: (1) stock `npcEntities` is an
+`entities\\u001f<itemID>` **per-entity SQLite table**, not a root blob;
+(2) the stock `coopAtomicNativeRows` rejects every transaction that includes
+`npcEntities` if *any unrelated transient NPC* is present. Independently,
+PF55's ACK reconciler previously called `tx.get('npcEntities', ...)` without
+declaring that SQLite table, which the real adapter rejects.
+
+The first-play WORK assembler now produces **23 additional source paths**
+over PF80's 22-path baseline (four overlapping paths), for **41 unique
+staged paths**. It includes a pinned original GameStore adapter delta
+(`Code/server/src/space/coopGameStoreAtomic.js`, original blob
+`2b28b48145f3fbc989ce7346384487ee75e52280`) and
+`coopPersonalFleetNativeEntityIsolation.js`. Neither the original
+`gameStore/index.js` nor any other stock native writer is modified.
+
+The new GameStore option `contract:'personal-fleet-entity-receipt-v1'`:
+- Requires the exact original table set
+  `[corporationRuntime,items,characters,npcEntities]` and an explicit
+  `EVEJS_COOP_PERSONAL_FLEET_ENTITY_ISOLATION=1` WORK-only flag (plus the
+  original atomic/PF native flags). The bootstrap's operational gate also
+  requires that flag, so physical commands cannot start before installation.
+- Synchronizes the original GameStore flush, checks pre-commit cache/durable
+  equality after excluding **only** canonical transient
+  `/entities/<itemID>` rows, and refuses an overlapping target or a
+  transient entry accidentally persisted to SQLite.
+- Allows **only**: PF55 one original physical entity row + matching
+  original receipt, PF56 one entity row + matching RETURN receipt,
+  PF56's exact RETURN_ISSUING → RETURNING transition, or PF55's exact
+  ISSUING → ACKED ledger and operation-index transition.
+- Rejects partial write sets, arbitrary deletes, unrelated character/wallet,
+  inventory, controller, or other-NPC mutations, duplicate receipts, changed
+  ownership fields, missing durable source and malformed transient paths.
+- Refreshes the original cache via its stock **per-row** path and verifies
+  every transient cache shadow both before and after that replay.
+  If any safety check fails *after SQLite commit*, the original GameStore
+  adapter retains its existing poison/fatal behavior; no blind retry.
+
+New targeted regression suite:
+`tests/personal-fleet-original-native-entity-isolation.test.cjs`;
+original pinned-adapter builder tests:
+`tests/test_original_atomic_entity_contract_patch.py`.
+`Test-FirstPlay-Local.ps1` now also runs PF55 Node/SQLite/SIGKILL tests.
+The isolated JavaScript contract suite passed **22/22 VM tests** in this
+environment. This does **not** constitute a completed native WORK test or
+prove that the patched GameStore adapter was exercised inside the actual
+original engine. Manual Node 22/Python, WORK server startup and connected
+client E2E are still required.
+
+**Safety:** No automation, PLAY access, main merge or auto-enable. A live
+actor's post-crash return-flight resume, original startup hook owners and
+all reciprocal writer hooks are still not proven; do not call this playable.
