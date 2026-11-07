@@ -24,15 +24,15 @@ A separate patch changes PF53 and PF57 native wallet candidate code from
 the obsolete synthetic aggregate characters map to actual individual original
 characters/<characterID> SQLite rows.
 
-The combined native WORK assembler builds eight modified/new native paths on
-top of PF80's 22-path candidate, for a total of 27. It requires an isolated
+The combined native WORK assembler builds nine modified/new native paths on
+top of PF80's 22-path candidate, for a total of 28. It requires an isolated
 linked Git worktree on a work/* branch, a valid PF62 source manifest, exact
 original chat source pin 5f4dd4d34a398dde3120e8640a7058d2bd3bb038,
 and explicit WORK-NOT-PLAY confirmation. It never creates native business
 authorities or enables feature flags.
 
-**Evidence:** 132/132 Node/SQLite/VM tests and 18/18 Python/Git tests PASS on
-Node.js 22.16.0, Python 3.13.5, Git. All fourteen code/test files have exact
+**Evidence:** 149/149 Node/SQLite/VM tests and 18/18 Python/Git tests PASS on
+Node.js 22.16.0, Python 3.13.5, Git. All sixteen code/test files have exact
 Git blob SHA matches with the locally tested source. No native original
 EveJS runtime or Windows PowerShell test was run.
 
@@ -56,7 +56,7 @@ Then stage the additional source-pinned chat, wallet and owner modules:
 
     python scripts/personal-fleet-firstplay/tools/prepare_firstplay_work.py --worktree 'O:\tmp\pf-firstplay-native-work' --source-root . --pf62-manifest 'O:\tmp\pf-firstplay-pf80-review\PF62-MANIFEST.json' --review-output 'O:\tmp\pf-firstplay-native-review' --apply-to-work --confirm-work-only 'WORK-NOT-PLAY'
 
-Review PERSONAl-FLEET-FIRST-PLAY-REVIEW.json and the 8-path patch in the
+Review PERSONAl-FLEET-FIRST-PLAY-REVIEW.json and the 9-path patch in the
 separate review directory. The review receipt intentionally reports
 nativeAuthorityWired:false, featureEnabled:false and gameplayE2E:NOT_RUN.
 
@@ -64,10 +64,12 @@ nativeAuthorityWired:false, featureEnabled:false and gameplayE2E:NOT_RUN.
 
 ## Missing P0 code — not merely debugging
 
-1. Original native server bootstrap: wire real GameStore, CharacterState,
-   ItemStore, original wallet, NPC controller/scene, and protected /pf
-   source owner. No fake verification callbacks. Original native fork GitHub
-   write still returns HTTP 403 to this cloud integration.
+1. A tested source-bound *composition candidate* now exists:
+   native/coopPersonalFleetOriginalWorkBootstrap.js.
+   **Still missing in the ORIGINAL engine:** its trusted startup hook provider,
+   exact wallet transaction IDs, original actor/order/return hooks,
+   native writer-fence installation and startup invocation.
+   Original native fork GitHub writes still return HTTP 403.
 2. Native offer source is now a tested SDE-backed candidate, but must be
    installed in the original WORK composition root with an **operator-authored
    list of real NPC-character IDs, NPC profile IDs, employer and prices**.
@@ -170,8 +172,8 @@ scene entity before producing a FOLLOW target.
 
 **Test evidence this continuation:** 44 real-SQLite native offer cases,
 23 source-bound owner/session/ItemStore/scene cases, plus the updated
-65 prior Node cases = **118 Node PASS**; 18 Python/Git PASS;
-**136 total PASS**. Original actual native EVE gameplay still NOT RUN.
+65 prior Node cases = **149 Node PASS**; 18 Python/Git PASS;
+**167 total PASS**. Original actual native EVE gameplay still NOT RUN.
 
 ## Physical hull profile compatibility — fixed
 
@@ -214,6 +216,65 @@ PF52's exact one reserve/release transaction scope to
 `[corporationRuntime, items, characters]` while preserving the
 original PF52 compare-and-set ledger and reserve keys. Source-pinned
 Python/Git tests prove the patch is applied to the PF80 staged file.
-The incremental patch now has **8** affected source paths over PF80's
-already staged 22, with **27 unique changed native paths** total.
+The incremental patch now has **9** affected source paths over PF80's
+already staged 22, with **28 unique changed native paths** total.
 No source row is silently skipped or validated via nested transactions.
+
+## One native composition root is now committed (2026-11-07)
+
+`native/coopPersonalFleetOriginalWorkBootstrap.js` imports original GameStore,
+stock ItemStore, native NPC service/store/registry, original live sessions,
+space runtime, PF52/53/54/55/56/58, source-bound offer authority and chat
+gateway. It constructs the actual server-side dependency graph:
+**offer -> paid hire -> hangar reservation -> PF54 deploy -> PF55 order ->
+PF56 return -> command owner -> PF58 stock-ship adoption -> /pf chat publish**.
+No public API or client-owned callback can replace those original module imports.
+
+Source-owned writer/wallet/physical actor/return hooks remain **mandatory**
+and must be supplied by an ORIGINAL native server module, not fake return-true
+functions. PF58 binding publication is the last mutation before the chat
+gateway; the common `ready` gate is false until all constructors pass and the
+final chat registry install acknowledges success. A partial failure is
+**fail-sticky** for this process, preventing an unsafe second PF58 binding.
+
+The original local engine needs to author an original bootstrap hooks module
+(e.g. `Code/server/src/space/coopPersonalFleetOriginalWorkHooks.js`) that
+actually implements the declared `HOOKS` list, together with real
+`originalOrderExecutor`, `claimsPolicy` and operator-selected real NPC
+catalogue, then invoke the composition **from the server's trusted startup**
+on an isolated WORK stack:
+
+```js
+const {createOriginalWorkBootstrap} =
+  require('./coopPersonalFleetOriginalWorkBootstrap');
+const originalHooks = require('./coopPersonalFleetOriginalWorkHooks');
+const workCatalog = require('./coopPersonalFleetOriginalWorkCatalog');
+// Both modules above are ORIGINAL server-owned, source-reviewed code.
+// No anonymous or all-true authority functions are accepted as evidence.
+const result = createOriginalWorkBootstrap({
+  originalHooks,
+  authoredCatalog: workCatalog,
+});
+if (result.status !== 'INSTALLED_WORK_SOURCE_BOUND')
+  throw Error('PERSONAL_FLEET_NATIVE_BOOTSTRAP_INCOMPLETE');
+```
+
+**This example is NOT an installed startup hook.** The original hooks and
+catalog modules shown are *not provided*, because they must reflect local EVE
+SDE, physical actor runtime and installed original writer fences. They must
+never be invented just to satisfy the constructor. A standalone
+`createOriginalWorkBootstrap` call from a user/chat handler is NOT allowed.
+
+For the first playable slice, PF57 salary/dismiss remains
+**explicitly BLOCKED**, not silently emulated; its original native salary,
+wreck loss and contract authorities will be needed for the complete feature.
+The first slice's target is paid hire, spare hull, deploy, FOLLOW/HOLD, and
+verified native RETURN with the same original ship ID.
+
+Local component evidence after this change:
+**149/149 Node tests** (including 17 composition, disabled flags,
+partial-failure, fail-sticky/duplicate install tests) and **18/18
+Python/Git tests**, combined **167/167 PASS**. Sixteen exact published
+JS/Python source/test Git blobs match the local tested files.
+The original game, live wallet settlement, physical scene and
+client-visible WORK tests have still **NOT been executed** here.
