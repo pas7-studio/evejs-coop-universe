@@ -212,7 +212,8 @@ function createPersonalFleetNativeOrders({gameStore,pf52,access,
  }
  function reconcile(c){
   const fail=preflight(c);if(fail)return fail;
-  try{return atomic.transact([TABLE,ITEMS],tx=>{
+  // PF87: original NPC entity and receipt in the SAME SQLite snapshot.
+  try{return atomic.transact([TABLE,ITEMS,'characters','npcEntities'],tx=>{
    const violation=guard(c,tx);if(violation)return blocked(violation);
    const raw=tx.get(TABLE,key(c.shipItemID));
    const ops=tx.get(TABLE,OP_INDEX);
@@ -235,7 +236,9 @@ function createPersonalFleetNativeOrders({gameStore,pf52,access,
    tx.put(TABLE,OP_INDEX,ix);
    return {status:'ACKED',operationID:c.operationID,shipItemID:c.shipItemID,
     proofHash:ack.proofHash};
-  });}catch{return blocked('PF55_RECONCILE_COMMIT_UNCERTAIN');}
+  },{contract:'personal-fleet-entity-receipt-v1',shipItemID:c.shipItemID,
+    operationID:c.operationID,assignmentID:c.assignmentID,mode:'RECONCILE'});
+  }catch{return blocked('PF55_RECONCILE_COMMIT_UNCERTAIN');}
  }
  function inspect({session,ownerCharacterID,shipItemID}={}){
   if(enabled()!==true)return {status:'DISABLED'};
