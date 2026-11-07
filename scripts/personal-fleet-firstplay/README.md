@@ -23,13 +23,13 @@ scene ship now has a live WARP/pendingWarp/warpState/ingress, recovery refuses
 teleport, ship spawn or claim overwrite is introduced.
 
 **Evidence:** 31/31 isolated direct V8 cases exercising the *actual* GitHub
-module with injected in-memory original-store/scene stubs PASS, including
-forged actor/controller/source witnesses and legitimate pre-existing NPCs.
-The expanded checked-in Node test file additionally covers all the tampering
-and divergent WARP cases, but **the full checked-in Node suite was NOT RUN**
-in this cloud environment. The actual original EveJS WORK installation,
-SQLite/SIGKILL and two-client gameplay remain NOT RUN; feature OFF,
-Draft, no `main`/`PLAY` changes.
+module with injected in-memory original-store/scene stubs PASS. The expanded,
+**actual checked-in PF90/PF94/PF101 test file** was also evaluated with
+controlled `node:test`, `node:fs`, `node:vm`, and `structuredClone` shims
+against the exact final GitHub source, **54/54 PASS**. Those are V8
+fixture-level behavioral results, **not a native Node `node --test` run**.
+The real original EveJS WORK installation, SQLite/SIGKILL and two-client
+gameplay remain NOT RUN; feature OFF, Draft, no `main`/`PLAY` changes.
 
 ## PF96/PF97 — crash-safe combat re-adoption + reactive owner GUARD (2026-11-08)
 
