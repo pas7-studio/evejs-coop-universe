@@ -3,6 +3,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),
  {DatabaseSync}=require('node:sqlite'),crypto=require('node:crypto'),
  fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const src=fs.readFileSync(path.join(__dirname,'../native/coopPersonalFleetOriginalDurableOrderAck.js'),'utf8');
+const pf56=require('../../pf56/native/coopPersonalFleetReturnDock.cjs');
 const T='corporationRuntime',NE='npcEntities', F='coop-personal-fleet\u001f';
 const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
 function fixture(run){
@@ -25,7 +26,9 @@ function fixture(run){
  const storedController={entityID:2301,systemID:30000142,personalFleetOriginal:true,
   personalFleetAssignmentID:'asgn-1',personalFleetPilotID:'coop-pilot-123',
   runtimeKind:'nativeAmbient'};
- const scene={systemID:30000142,getEntityByID:id=>id===2301?entity:null};
+ const stationBall={kind:'station',itemID:60000123,entityID:60000123,
+  position:{x:200,y:300,z:400},radius:270};
+ const scene={systemID:30000142,getEntityByID:id=>id===2301?entity:id===60000123?stationBall:null};
  const originalEntity={entityID:2301,systemID:30000142,ownerID:901,typeID:600,
   personalFleetOriginal:true,personalFleetAssignmentID:'asgn-1',
   personalFleetPilotID:'coop-pilot-123',mode:'STOP',targetEntityID:0,
@@ -59,7 +62,10 @@ function fixture(run){
   './runtime':{scenes:new Map([[30000142,scene]])},
   './npc/npcRegistry':{getControllerByEntityID:()=>controller},
   './npc/nativeNpcStore':{getNativeEntity:()=>originalEntity,getNativeController:()=>storedController},
-  './coopPersonalFleetNativeOrders':{key:id=>F+'manual-order-v1:'+id,signature}
+  './coopPersonalFleetNativeOrders':{key:id=>F+'manual-order-v1:'+id,signature},
+  './coopPersonalFleetReturnDock':pf56,
+  './worldData':{getStationByID:id=>id===60000123?{stationID:id,solarSystemID:30000142,
+   position:{x:200,y:300,z:400}}:null}
  };
  const context={module:{exports:{}},exports:{},require:n=>{
   if(n==='node:crypto')return crypto;
@@ -71,7 +77,7 @@ function fixture(run){
    verifyTarget:()=>targetOK}};
  const create=()=>context.module.exports.createOriginalDurableOrderAck(opts);
  try{run({row,entity,controller,storedController,originalEntity,original,opts,create,
-  read,write,tx,atomic,db,signature,
+  read,write,tx,atomic,db,signature,pf56,
   setEnabled:x=>on=x,setFenced:x=>fenced=x,setPoisoned:x=>poisoned=x,
   setActor:x=>actorOK=x,setTarget:x=>targetOK=x,setControl:x=>controlOK=x,
   abortNext:()=>abort=true,getCounts:()=>({puts,gets,dispatch}),
@@ -175,3 +181,62 @@ test('native repository has no new wallet, ship, or client HTTP effects',()=>{
  for(const bad of ['.moveShipToSpace(','.dockShipToLocation(','.spawnNpc(','.transferCharacterBalance(',
                    'http.createServer','createOrderArbiter('])assert.equal(src.includes(bad),false,bad);
 });
+
+function seedOriginalReturn(f){
+ const row={version:1,phase:'RETURN_ISSUING',operationID:'pf84-ret-123',
+  assignmentID:'asgn-1',pilotID:'coop-pilot-123',ownerCharacterID:901,
+  shipItemID:2301,stationID:60000123,systemID:30000142,
+  reservationGeneration:1,actorGeneration:9,typeID:600,
+  requestedByAccountID:55,requestedAtMs:1700000000000,
+  returnDispatchCount:1,dockDispatchCount:0};
+ row.signature=f.pf56.signature(row);
+ f.write(T,f.pf56.key(row.assignmentID),row);
+ f.write(T,f.pf56.OPS,{version:1,operations:{
+  [row.operationID]:{assignmentID:row.assignmentID,signature:row.signature,phase:'RETURN_ISSUING'}}});
+ f.write('characters',String(row.ownerCharacterID),{characterID:901,accountId:55});
+ f.entity.mode='WARP';f.entity.pendingWarp={destination:{x:1200,y:300,z:400}};
+ return row;
+}
+test('PF84B original native RETURN effect is persisted with a single exact SQLite receipt',()=>fixture(f=>{
+ const row=seedOriginalReturn(f),ack=f.create();
+ const recorded=ack.recordAfterNativeReturnEffect(row);
+ assert.equal(recorded.success,true,recorded.errorMsg);
+ const proof=ack.verifyPersistedNativeReturn(row,f.tx);
+ assert.equal(proof?.source,'EVEJS_ORIGINAL_PERSISTED_NPC_RETURN_V1');
+ assert.equal(proof.returnOrderPersisted,true);
+ assert.equal(f.read(NE,'/').entities['2301'].personalFleetReturnOrder.signature,row.signature);
+ assert.equal(f.create().recordAfterNativeReturnEffect(row).success,false);
+}));
+test('PF84B return proof survives new service owner, but rejects a changed original account',()=>fixture(f=>{
+ const row=seedOriginalReturn(f),ack=f.create();
+ assert.equal(ack.recordAfterNativeReturnEffect(row).success,true);
+ assert.equal(f.create().verifyPersistedNativeReturn(row,f.tx)?.returnOrderPersisted,true);
+ f.write('characters','901',{characterID:901,accountId:56});
+ assert.equal(f.create().verifyPersistedNativeReturn(row,f.tx),null);
+}));
+test('PF84B fabricated return intent cannot produce a stock NPC receipt',()=>fixture(f=>{
+ const row=seedOriginalReturn(f);f.setActor(false);
+ assert.equal(f.create().recordAfterNativeReturnEffect(row).success,false);
+ assert.equal(f.read(T,F+'native-return-receipt-v1:'+row.operationID),null);
+}));
+test('PF84B no original physical warp means no durable RETURN acknowledgement',()=>fixture(f=>{
+ const row=seedOriginalReturn(f);
+ f.entity.mode='STOP';f.entity.pendingWarp=null;
+ assert.equal(f.create().recordAfterNativeReturnEffect(row).success,false);
+ assert.equal(f.read(T,F+'native-return-receipt-v1:'+row.operationID),null);
+}));
+test('PF84B SQLite rollback leaves no forged acceptance after unknown commit',()=>fixture(f=>{
+ const row=seedOriginalReturn(f);
+ f.abortNext();const ack=f.create().recordAfterNativeReturnEffect(row);
+ assert.equal(ack.success,false);
+ assert.match(ack.errorMsg,/UNKNOWN_NO_RETRY/);
+ assert.equal(f.read(T,F+'native-return-receipt-v1:'+row.operationID),null);
+ assert.equal(f.read(NE,'/').entities['2301'].personalFleetReturnOrder,undefined);
+}));
+test('PF84B tampered stock entity receipt is not accepted for RETURNING',()=>fixture(f=>{
+ const row=seedOriginalReturn(f);assert.equal(f.create().recordAfterNativeReturnEffect(row).success,true);
+ const root=f.read(NE,'/');
+ root.entities['2301'].personalFleetReturnOrder.stationID=row.stationID+1;
+ f.write(NE,'/',root);
+ assert.equal(f.create().verifyPersistedNativeReturn(row,f.tx),null);
+}));
