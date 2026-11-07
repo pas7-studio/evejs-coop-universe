@@ -57,5 +57,34 @@ class PF95ReviewOnlyIntegrity(unittest.TestCase):
         self.assertGreaterEqual(source.count("test('"),12)
         self.assertIn("PF95_NATIVE_WORKTREE",RUNNER.read_text(encoding='utf8'))
 
+    def test_pf96_native_sqlite_witness_failures_poison_commit(self):
+        patch = PATCH.read_text(encoding='utf8')
+        self.assertIn('witnessRunning=false,witnessDenied=false,witnessPoison=null', patch)
+        self.assertIn('if(witnessRunning){witnessPoison=', patch)
+        self.assertIn('if(witnessDenied){witnessPoison=', patch)
+        self.assertIn('PF96_ORIGINAL_SESSION_WITNESS_REENTRANT', patch)
+        self.assertIn('PF96_ORIGINAL_SESSION_WITNESS_CALLBACK_FAILED', patch)
+        self.assertIn('PF96_ORIGINAL_SESSION_WITNESS_POISONED_BEFORE_COMMIT', patch)
+        self.assertIn('PF96_ORIGINAL_SESSION_WITNESS_DENIED_BEFORE_COMMIT', patch)
+        self.assertIn('if(value!==true)witnessDenied=true;', patch)
+        self.assertLess(patch.index('if(witnessPoison)throw Error("PF96_ORIGINAL_SESSION_WITNESS_POISONED_BEFORE_COMMIT:'),
+                        patch.index('try{db.exec("COMMIT");}catch(cause)'))
+
+    def test_pf96_original_source_tests_include_swallowed_exception_and_false_gates(self):
+        source=SOURCE.read_text(encoding='utf8')
+        self.assertGreaterEqual(source.count("test('"),23)
+        for expected in [
+            'callback catches original put attempt',
+            'mutator swallows original witness write exception',
+            'original writes before a later rejected session witness',
+            'later successful witness',
+            'nested witness failure',
+            'caught asynchronous witness',
+            'thrown original session exception',
+            'disabled witness',
+            'unrelated original corporation write',
+        ]:
+            self.assertIn(expected, source)
+
 if __name__=='__main__':
     unittest.main()
