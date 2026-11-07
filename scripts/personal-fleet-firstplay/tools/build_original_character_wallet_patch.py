@@ -52,6 +52,10 @@ MODULES={
   "    wreckRoot=originalRows.readWreckRoot(tx),record=ledger.losses[c.assignmentID];"),
  ("   const items=tx.get(ITEMS,ITEMS),wreckRoot=tx.get(WRECK,WRECK),\n    entityRoot=tx.get(NPC,NPC),cargoRoot=tx.get('npcCargo','npcCargo'),\n    moduleRoot=tx.get('npcModules','npcModules'),wreckItems=tx.get('npcWreckItems','npcWreckItems');",
   "   const items=tx.get(ITEMS,ITEMS),wreckRoot=originalRows.readWreckRoot(tx),\n    assets=originalRows.readNativeAssets(tx,c.shipItemID),\n    entityRoot=assets?.entityRoot,cargoRoot=assets?.cargoRoot,\n    moduleRoot=assets?.moduleRoot,wreckItems=assets?.wreckItems;"),
+ ("try{result=atomic.transact([T,CHAR,NPC],tx=>{",
+  "try{result=atomic.transact([T,CHAR],tx=>{"),
+ ("try{return atomic.transact([T,ITEMS,NPC],tx=>{",
+  "try{return atomic.transact([T,ITEMS],tx=>{"),
 
 ],
 }
