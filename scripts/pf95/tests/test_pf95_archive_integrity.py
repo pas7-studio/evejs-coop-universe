@@ -76,7 +76,7 @@ class PF95ReviewOnlyIntegrity(unittest.TestCase):
         for expected in [
             'callback catches original put attempt',
             'mutator swallows original witness write exception',
-            'pre-existing original write',
+            'original writes before a later rejected session witness',
             'later successful witness',
             'nested witness failure',
             'caught asynchronous witness',
