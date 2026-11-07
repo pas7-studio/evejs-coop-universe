@@ -191,7 +191,16 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
   if(!proven)return {success:false,errorMsg:'PF96_ORIGINAL_ACKED_COMBAT_SOURCE_NOT_PROVEN'};
   return combatEffect(row);
  }
- return Object.freeze({supports,execute,resumeCommitted,
+ function canIssuePersonalCombat(row){
+  if(!live()||!combatReady()||!row||
+     !['ATTACK','DEFEND'].includes(row.action)||
+     !positive(row.shipItemID)||!positive(row.systemID)||
+     typeof orderBridge.diagnose!=='function')return false;
+  try{return orderBridge.diagnose({entityID:row.shipItemID,
+   systemID:row.systemID,owner:'PERSONAL_FLEET'}).status==='PERMITTED';}
+  catch{return false;}
+ }
+ return Object.freeze({supports,execute,resumeCommitted,canIssuePersonalCombat,
   executeNativeReturn(row){
    if(!live()||!row||!positive(row.shipItemID)||!positive(row.stationID)||
       !positive(row.systemID)||!positive(row.actorGeneration))
