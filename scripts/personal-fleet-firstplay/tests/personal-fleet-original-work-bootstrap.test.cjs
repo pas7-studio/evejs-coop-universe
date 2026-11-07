@@ -386,3 +386,17 @@ test('PF87 disabled scoped SQLite source flag must disable physical Personal Fle
  assert.equal(b.mayEnable(),false);
  assert.equal(b.getOperationalStatus().ready,false);
 }));
+
+test('PF91 cannot start a salary policy for an unrelated original NPC',()=>fixture(f=>{
+ assert.throws(()=>f.api.createOriginalWorkBootstrap({
+  originalHooks:f.hooks,authoredCatalog,
+  authoredSalaryPolicies:[{...authoredSalaryPolicies[0],npcCharacterID:999999}]
+ }),/SALARY_TERMS_HIRE_CATALOG_MISMATCH/);
+ assert.deepEqual(f.events,[]);
+}));
+test('PF91 no silently zero-wage salary policy at bootstrap',()=>fixture(f=>{
+ assert.throws(()=>f.api.createOriginalWorkBootstrap({
+  originalHooks:f.hooks,authoredCatalog,authoredSalaryPolicies:[]
+ }),/AUTHORED_NPC_SALARY_POLICY_REQUIRED/);
+ assert.deepEqual(f.events,[]);
+}));
