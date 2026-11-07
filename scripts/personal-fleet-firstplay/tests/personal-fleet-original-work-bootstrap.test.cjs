@@ -71,6 +71,32 @@ function fixture(cb){
    assert.equal(args.enabled(),false);
    if(broken==='scoped-dock')throw Error('PF66_SCOPED_SOURCE_UNAVAILABLE');
    return {execute:()=>({success:false})};}},
+  './coopPersonalFleetOriginalTerminalDockSources':{createOriginalTerminalDockSources(args){
+   events.push('terminal-sources');
+   assert.equal(args.enabled(),false);
+   assert.equal(args.verifyFinalOriginalManifest,fakeFinalManifest);
+   if(broken==='terminal-sources')throw Error('PF60_ORIGINAL_DOCK_SOURCE_MISSING');
+   return {authenticateCommand:()=>false,verifyOriginalSceneVacant:()=>false,
+     readNativeIdentity:()=>null,verifyOriginalTerminalWitness:()=>null};}},
+  './coopPersonalFleetScopedNativeCleanup':{createScopedNativeCleanup(args){
+   events.push('scoped-cleanup');
+   assert.equal(args.nativeStore,deps['./npc/nativeNpcStore']);
+   assert.equal(typeof args.verifyOriginalSceneVacant,'function');
+   if(broken==='scoped-cleanup')throw Error('PF61_ORIGINAL_CLEANUP_MISSING');
+   return {execute:()=>({success:false})};}},
+  './coopPersonalFleetTerminalCustody':{createTerminalCustody(args){
+   events.push('terminal-custody');
+   assert.equal(typeof args.authenticateCommand,'function');
+   assert.equal(typeof args.executeScopedNativeCleanup,'function');
+   if(broken==='terminal-custody')throw Error('PF60_CUSTODY_SOURCE_MISSING');
+   return {prepare:()=>{},issue:()=>{},reconcile:()=>{},finalize:()=>{},inspect:()=>{}};}},
+  './coopPersonalFleetOriginalDockCoordinator':{createOriginalDockCoordinator(args){
+   events.push('dock-coordinator');
+   assert.equal(typeof args.scopedDock.execute,'function');
+   assert.equal(typeof args.terminalCustody.reconcile,'function');
+   if(broken==='dock-coordinator')throw Error('PF60_DOCK_COORDINATOR_MISSING');
+   return {execute:()=>({success:false}),reconcileNativeCleanup:()=>({status:'BLOCKED'}),
+    finalizeAfterPf56Dock:()=>({status:'BLOCKED'})};}},
   './coopPersonalFleetOriginalDockCompletionWitness':{createOriginalDockCompletionWitness(args){
    events.push('dock-witness');assert.equal(args.enabled(),false);
    assert.equal(args.verifyFinalOriginalManifest,fakeFinalManifest);
@@ -88,7 +114,10 @@ function fixture(cb){
    if(broken==='PF58')throw Error('PF58_BINDING_FENCED');
    return {executeOriginalHandoff:()=>{}};}},
   '../services/inventory/itemStore':{findItemById:()=>null,moveShipToSpace:()=>false,dockShipToLocation:()=>false},
-  './npc/nativeNpcStore':{getNativeEntity:()=>null},
+  './npc/nativeNpcStore':{getNativeEntity:()=>null,
+   PF61_SCOPED_ORIGINAL_NATIVE_CLEANUP_V1:true,
+   installScopedOriginalTerminalCleanupAuthority:()=>true,
+   removeScopedPersonalFleetTerminalNativeRows:()=>({success:false})},
   './npc/nativeNpcService':{PF58_ORIGINAL_ITEMSTORE_BRIDGE_V1:true,
    PF66_SCOPED_DOCK_SCENE_DETACH_V1:true},
   './npc/npcRegistry':{getControllerByEntityID:()=>null},
@@ -108,7 +137,7 @@ const call=(f)=>f.api.createOriginalWorkBootstrap({originalHooks:f.hooks,authore
 test('composition builds original source owners and publishes chat LAST',()=>fixture(f=>{
  const b=call(f);assert.equal(b.status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.equal(b.getOperationalStatus().ready,true);
- assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','order-ack','physical-order','orders','scoped-dock','dock-witness','return','owner','PF58','chat']);
+ assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','order-ack','physical-order','orders','scoped-dock','terminal-sources','scoped-cleanup','terminal-custody','dock-coordinator','dock-witness','return','owner','PF58','chat']);
 }));
 test('flags OFF after install prevent action even after previously ready',()=>fixture(f=>{
  const b=call(f);delete process.env.EVEJS_COOP_PERSONAL_FLEET_CHAT;
@@ -242,4 +271,29 @@ test('operator-supplied executeNativeDock/verifyOriginalDockReceipt cannot bypas
  assert.equal(call(f).status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.ok(f.events.indexOf('scoped-dock')<f.events.indexOf('return'));
  assert.ok(f.events.indexOf('dock-witness')<f.events.indexOf('return'));
+}));
+
+test('PF61 original native cleanup store patch required before all native side effects',()=>fixture(f=>{
+ delete f.deps['./npc/nativeNpcStore'].PF61_SCOPED_ORIGINAL_NATIVE_CLEANUP_V1;
+ assert.throws(()=>call(f),/STOCK_NATIVE_BRIDGE_MISSING/);
+ assert.deepEqual(f.events,['source']);
+}));
+test('PF60 original custody source failure blocks /pf publication',()=>fixture(f=>{
+ f.setBroken('terminal-sources');assert.throws(()=>call(f),/PF60_ORIGINAL_DOCK_SOURCE_MISSING/);
+ assert.equal(f.events.includes('return'),false);assert.equal(f.events.includes('chat'),false);
+}));
+test('PF61 scoped cleanup source failure cannot expose a partially initialized fleet',()=>fixture(f=>{
+ f.setBroken('scoped-cleanup');assert.throws(()=>call(f),/PF61_ORIGINAL_CLEANUP_MISSING/);
+ assert.equal(f.events.includes('PF58'),false);
+ assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
+}));
+test('PF60 terminal-custody source failure blocks PF56 and /pf',()=>fixture(f=>{
+ f.setBroken('terminal-custody');assert.throws(()=>call(f),/PF60_CUSTODY_SOURCE_MISSING/);
+ assert.equal(f.events.includes('return'),false);assert.equal(f.events.includes('chat'),false);
+}));
+test('no user-injected one-shot dock coordinator may replace the source-bound implementation',()=>fixture(f=>{
+ f.hooks.scopedDock={execute:()=>({success:true})};
+ f.hooks.terminalCustody={prepare:()=>({status:'PREPARED'})};
+ assert.equal(call(f).status,'INSTALLED_WORK_SOURCE_BOUND');
+ assert.ok(f.events.indexOf('dock-coordinator')<f.events.indexOf('return'));
 }));
