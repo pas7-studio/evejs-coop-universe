@@ -34,6 +34,7 @@ function fixture(fn,{action='ATTACK'}={}){
   './npc/npcRegistry':{getControllerByEntityID:id=>id===SHIP?ctrl:null},
   './npc/nativeNpcStore':{getNativeEntity:()=>stock,getNativeController:()=>stock},
   './npc/npcBehaviorLoop':{__testing:{isValidCombatTarget:()=>allowed}},
+  './coopPersonalFleetOriginalGuardAggression':{read:()=>null},
   './coopPersonalFleetHangarBridge':{
    REGISTRY_KEY:'index',ROSTER_PREFIX:'roster:',validateIndex:x=>x,validateRoster:x=>x}
  };
