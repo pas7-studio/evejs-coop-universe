@@ -1,7 +1,9 @@
 'use strict';
 /**
  * PF102: fail-closed original EveJS NPC catalogue + recurring salary preflight.
- * Source-owned, startup-only, read-only. This does NOT author hireable IDs.
+ * Source-owned and startup-only. Makes no Personal Fleet business writes;
+ * stock corporation lookup may trigger its normal source initialization.
+ * This does NOT author hireable IDs.
  * A genuine operator-authored static catalog must exist in WORK source.
  */
 const gameStore=require('../gameStore');
