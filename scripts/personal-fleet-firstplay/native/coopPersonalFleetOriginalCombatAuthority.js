@@ -107,8 +107,9 @@ function createOriginalCombatAuthority({enabled=()=>false,allWritersFenced=()=>f
    // source patch independently checks the same incident and PF55 order
    // before any actual module fires.
    const ownerShipID=tx.get('characters',String(row.ownerCharacterID))?.shipID;
-   if(!pos(ownerShipID)||!pos(ship.corporationID)||
-      ship.corporationID===target.corporationID||
+   if(!pos(ownerShipID)||
+      (pos(ship.corporationID)&&pos(target.corporationID)&&
+       ship.corporationID===target.corporationID)||
       ['WAR','PERSONAL_FLEET','MINING','CIVILIAN','EXPEDITION'].includes(
        String(registry.getControllerByEntityID(target.itemID)?.operatorKind||'')))
     return false;
