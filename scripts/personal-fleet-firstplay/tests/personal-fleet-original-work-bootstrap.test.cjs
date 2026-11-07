@@ -12,8 +12,8 @@ const hooksList=['verifyOriginalWriterHooks','allWritersFenced','allWalletWriter
  'verifyExclusiveOwnership','verifyOriginalActor','independentOriginalActorWitness',
  'originalStationUndockPoint','originalOwnershipWitness',
  'verifyNativeFlight','verifyOriginalReturnOrder','verifyStationArrival',
- 'verifyContinuousDwell','verifyOriginalManifest','verifyOriginalDockReceipt',
- 'verifyFinalOriginalManifest','executeNativeReturn','executeNativeDock',
+ 'verifyContinuousDwell','verifyOriginalManifest',
+ 'verifyFinalOriginalManifest','verifyOriginalDockReady','executeNativeReturn',
  'verifyOriginalDockedPlayerSession','readOriginalWarShipClaim'];
 function fixture(cb){
  const flags=['EVEJS_COOP_PERSONAL_FLEET_NATIVE','EVEJS_COOP_PERSONAL_FLEET_CHAT','EVEJS_COOP_NATIVE_ATOMIC_ROWS'];
@@ -66,20 +66,36 @@ function fixture(cb){
    assert.equal(args.enabled(),false);assert.equal(args.verifyNativeActor(),false);
    assert.equal(args.verifyOriginalControl(),false);assert.equal(args.verifyTarget(),false);
    return {issue:()=>{},reconcile:()=>{},inspect:()=>{}};}},
+  './coopPersonalFleetScopedDock':{createScopedDock(args){events.push('scoped-dock');
+   assert.equal(args.originalItemStore,stockItemStore);
+   assert.equal(args.enabled(),false);
+   if(broken==='scoped-dock')throw Error('PF66_SCOPED_SOURCE_UNAVAILABLE');
+   return {execute:()=>({success:false})};}},
+  './coopPersonalFleetOriginalDockCompletionWitness':{createOriginalDockCompletionWitness(args){
+   events.push('dock-witness');assert.equal(args.enabled(),false);
+   assert.equal(args.verifyFinalOriginalManifest,fakeFinalManifest);
+   if(broken==='dock-witness')throw Error('PF56_DOCK_COMPLETION_SOURCE_UNAVAILABLE');
+   return {verifyOriginalDockReceipt:()=>null};}},
   './coopPersonalFleetReturnDock':{createPersonalFleetReturnDock(args){events.push('return');
-   assert.equal(args.enabled(),false);return {requestReturn:()=>{},inspect:()=>{}};}},
+   assert.equal(args.enabled(),false);
+   assert.equal(typeof args.verifyOriginalDockReceipt,'function');
+   assert.equal(typeof args.executeNativeDock,'function');
+   assert.notEqual(args.executeNativeDock,hooks.executeNativeDock);
+   return {requestReturn:()=>{},inspect:()=>{}};}},
   './coopPersonalFleetNativeBootstrap':{createSourceBoundNativeBootstrap(args){events.push('PF58');
    assert.equal(args.enabled(),false);assert.equal(args.atomicOriginalTransfer,true);
    assert.equal(args.originalItemStore,stockItemStore);
    if(broken==='PF58')throw Error('PF58_BINDING_FENCED');
    return {executeOriginalHandoff:()=>{}};}},
-  '../services/inventory/itemStore':{findItemById:()=>null,moveShipToSpace:()=>false},
+  '../services/inventory/itemStore':{findItemById:()=>null,moveShipToSpace:()=>false,dockShipToLocation:()=>false},
   './npc/nativeNpcStore':{getNativeEntity:()=>null},
-  './npc/nativeNpcService':{PF58_ORIGINAL_ITEMSTORE_BRIDGE_V1:true},
+  './npc/nativeNpcService':{PF58_ORIGINAL_ITEMSTORE_BRIDGE_V1:true,
+   PF66_SCOPED_DOCK_SCENE_DETACH_V1:true},
   './npc/npcRegistry':{getControllerByEntityID:()=>null},
   '../services/chat/sessionRegistry':{getSessions:()=>[]},
   './runtime':{scenes:new Map()}
  };
+ const fakeFinalManifest=hooks.verifyFinalOriginalManifest;
  const stockItemStore=deps['../services/inventory/itemStore'];
  const ctx={module:{exports:{}},require:name=>{if(!(name in deps))throw Error('UNKNOWN_DEPENDENCY:'+name);
    return deps[name];},process,Date,console,Object,Array,Number,Set};
@@ -92,7 +108,7 @@ const call=(f)=>f.api.createOriginalWorkBootstrap({originalHooks:f.hooks,authore
 test('composition builds original source owners and publishes chat LAST',()=>fixture(f=>{
  const b=call(f);assert.equal(b.status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.equal(b.getOperationalStatus().ready,true);
- assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','order-ack','physical-order','orders','return','owner','PF58','chat']);
+ assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','order-ack','physical-order','orders','scoped-dock','dock-witness','return','owner','PF58','chat']);
 }));
 test('flags OFF after install prevent action even after previously ready',()=>fixture(f=>{
  const b=call(f);delete process.env.EVEJS_COOP_PERSONAL_FLEET_CHAT;
@@ -122,7 +138,7 @@ test('refuse empty fabricated operator catalog',()=>fixture(f=>{
  assert.equal(f.events.length,0);
 }));
 test('missing original engine hooks block before imports or publication',()=>fixture(f=>{
- delete f.hooks.executeNativeDock;assert.throws(()=>call(f),/BOOT_HOOKS_REQUIRED/);
+ delete f.hooks.verifyOriginalDockReady;assert.throws(()=>call(f),/BOOT_HOOKS_REQUIRED/);
  assert.equal(f.events.length,0);
 }));
 test('caller cannot substitute forged gameStore module',()=>fixture(f=>{
@@ -202,4 +218,28 @@ test('missing native PF55 durable source fails sticky without publishing /pf',()
  f.setBroken('order-ack');assert.throws(()=>call(f),/DURABLE_ACK_ORIGINAL_SOURCE_MISSING/);
  assert.equal(f.events.includes('chat'),false);
  assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
+}));
+
+test('PF66 original source failure blocks /pf and remains fail-sticky',()=>fixture(f=>{
+ f.setBroken('scoped-dock');assert.throws(()=>call(f),/PF66_SCOPED_SOURCE_UNAVAILABLE/);
+ assert.equal(f.events.includes('return'),false);
+ assert.equal(f.events.includes('PF58'),false);
+ assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
+}));
+test('PF56 original independent dock readback failure blocks /pf',()=>fixture(f=>{
+ f.setBroken('dock-witness');assert.throws(()=>call(f),/PF56_DOCK_COMPLETION_SOURCE_UNAVAILABLE/);
+ assert.equal(f.events.includes('return'),false);
+ assert.equal(f.events.includes('chat'),false);
+}));
+test('PF66 stock native scene-detach patch is mandatory',()=>fixture(f=>{
+ delete f.deps['./npc/nativeNpcService'].PF66_SCOPED_DOCK_SCENE_DETACH_V1;
+ assert.throws(()=>call(f),/STOCK_NATIVE_BRIDGE_MISSING/);
+ assert.deepEqual(f.events,['source']);
+}));
+test('operator-supplied executeNativeDock/verifyOriginalDockReceipt cannot bypass source-bound PF66 and PF56',()=>fixture(f=>{
+ f.hooks.executeNativeDock=()=>({success:true});
+ f.hooks.verifyOriginalDockReceipt=()=>({status:'FAKE'});
+ assert.equal(call(f).status,'INSTALLED_WORK_SOURCE_BOUND');
+ assert.ok(f.events.indexOf('scoped-dock')<f.events.indexOf('return'));
+ assert.ok(f.events.indexOf('dock-witness')<f.events.indexOf('return'));
 }));
