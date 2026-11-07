@@ -15,6 +15,7 @@ function fixture(){
   salaryCents:450,periodMs:86400000};
  const data={character:{ownerID:id,typeID:1373,ownerName:'Native Pilot'},
   profile:{profile:{profileID:c.profileID,shipTypeID:606,
+   corporationID:corpID,
    loadoutID:'real-native-loadout',behaviorProfileID:'real-behavior'},
    loadout:{loadoutID:'real-native-loadout'},
    behaviorProfile:{behaviorProfileID:'real-behavior'}},
@@ -59,6 +60,10 @@ const blocked=(f,reason,cs,ws)=>{
  assert.equal(result.verified,false);
  assert.equal(result.reason,reason);
 };
+test('PF104 original profile cannot silently switch to foreign NPC employer',()=>{
+ const f=fixture();f.data.profile.profile.corporationID=1000234;
+ blocked(f,'PF102_ORIGINAL_PROFILE_OR_FITTINGS_NOT_FOUND');
+});
 test('PF102 original SDE NPC + loaded profile + NPC corp wallet verifies',()=>{
  const f=fixture(),r=f.validate();
  assert.equal(r.verified,true);
