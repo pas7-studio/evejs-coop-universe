@@ -162,7 +162,7 @@ function createPersonalFleetReturnDock({gameStore,pf52,claimsPolicy,access,
  }
  function withTx(c,fn){
   const fail=admit(c);if(fail)return fail;
-  try{return atomic.transact([T,ITEMS],tx=>{
+  try{return atomic.transact([T,ITEMS,'characters'],tx=>{
    const blocked=guard(c,tx);return blocked?deny(blocked):fn(tx);
   });}catch{return deny('PF56_ATOMIC_COMMIT_OR_READ_UNCERTAIN');}
  }
