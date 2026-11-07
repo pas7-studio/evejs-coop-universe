@@ -97,3 +97,21 @@ and original source-pinned SQLite tests, integrate ItemStore/
 characterState/session write paths, then run crash/restart, concurrent
 Mining/WAR/Exploration and **two-client WORK E2E**. No PLAY restart
 or global main merge until those proofs exist.
+
+## PF96 correction — original COMMIT must reject swallowed witness errors
+
+PF95's first review diff detected direct witness writes by throwing
+from `verifyReadOnlySessionWitness`, but the outer mutation callback
+could catch that error and still return successfully to the original
+SQLite owner, which would commit. PF96 strengthens the **same**
+one-file review-only patch with private, sticky
+`witnessRunning`, `witnessPoison` and `witnessDenied` state.
+A write attempt during the witness, an async/reentrant/throwing
+callback or disabled witness permanently poisons its transaction.
+An explicit false verdict prevents earlier or later stock writes
+from committing. The owner checks these conditions immediately
+before SQLite `COMMIT`, regardless of callback exceptions caught
+by the caller. Existing PF95 write-attempt error strings are
+preserved. The added 11 original-source SQLite regressions are
+covered by the existing PF95 local WORK runner.
+See `scripts/pf96/PF96_STICKY_ORIGINAL_WITNESS_COMMIT_FENCE.md`.
