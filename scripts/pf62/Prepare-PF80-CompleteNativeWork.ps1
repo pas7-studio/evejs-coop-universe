@@ -1,0 +1,251 @@
+#Requires -Version 5.1
+<# PF80: one entrypoint for BOTH PF62 and PF55 exact native source patches.
+   Explicit WORK-only opt-in; never writes to original EveJS tracked sources,
+   never starts a server, turns flags on, merges, pushes or deploys to PLAY.
+#>
+[CmdletBinding()]
+param(
+  [Parameter(Mandatory = $true)][string]$NativeCheckout,
+  [Parameter(Mandatory = $true)][string]$ReviewOutput,
+  [Parameter(Mandatory = $true)][string]$WorktreeOutput,
+  [string]$WorkBranch = 'work/pf-native-review',
+  [switch]$ApplyToWork,
+  [string]$ConfirmWorkOnly = ''
+)
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$python = (Get-Command python -ErrorAction Stop).Source
+$script = Join-Path $PSScriptRoot 'prepare_complete_native_work.py'
+if (-not (Test-Path -LiteralPath $script -PathType Leaf)) {
+  throw 'PF80_COMPLETE_WORK_ASSEMBLER_NOT_FOUND'
+}
+$argsForPython = @('--engine', $NativeCheckout, '--repo', $repo,
+  '--review', $ReviewOutput, '--worktree', $WorktreeOutput,
+  '--branch', $WorkBranch)
+if ($ApplyToWork.IsPresent) {
+  if ($ConfirmWorkOnly -cne 'WORK-NOT-PLAY') {
+    throw 'PF80_EXPLICIT_WORK_ONLY_CONFIRMATION_REQUIRED'
+  }
+  $argsForPython += @('--apply', '--confirm-work-only', 'WORK-NOT-PLAY')
+} elseif ($ConfirmWorkOnly -ne '') {
+  throw 'PF80_CONFIRMATION_WITHOUT_APPLY_FORBIDDEN'
+}
+# PF85 is a fail-closed check against the unchanged ORIGINAL npcRuntime.js.
+# Run it BEFORE PF80 writes any review artifacts or creates a WORK worktree.
+# It executes stock source with hermetic contract dependencies; no real
+# engine process, client, network, Docker, player session or wallet is started.
+if ($ApplyToWork.IsPresent) {
+  $node = (Get-Command node -ErrorAction Stop).Source
+  $pf85Test = Join-Path $repo 'scripts\pf55\integration\pf85-original-npc-runtime.test.cjs'
+  if (-not (Test-Path -LiteralPath $pf85Test -PathType Leaf)) {
+    throw 'PF85_ORIGINAL_RUNTIME_TEST_MISSING'
+  }
+  $previousPf85Root = [Environment]::GetEnvironmentVariable('PF85_NATIVE_WORKTREE', 'Process')
+  try {
+    $env:PF85_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+    & $node --test --test-concurrency=1 $pf85Test
+    if ($LASTEXITCODE -ne 0) { throw 'PF85_ORIGINAL_RUNTIME_SOURCE_GATE_FAILED' }
+    $pf86Test = Join-Path $repo 'scripts\pf58\tests\pf86-presence-and-prewrite.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf86Test -PathType Leaf)) { throw 'PF86_PRESENCE_TEST_MISSING' }
+    & $node --test --test-concurrency=1 $pf86Test
+    if ($LASTEXITCODE -ne 0) { throw 'PF86_ORIGINAL_PRESENCE_GATE_FAILED' }
+    $pf87Test = Join-Path $repo 'scripts/pf58/tests/pf87-atomic-handoff.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf87Test -PathType Leaf)) { throw 'PF87_ATOMIC_HANDOFF_TEST_MISSING' }
+    & $node --test --test-concurrency=1 $pf87Test
+    if ($LASTEXITCODE -ne 0) { throw 'PF87_ATOMIC_HANDOFF_GATE_FAILED' }
+    $pf88Tests = @('pf88-reciprocal-writers.test.cjs', 'pf88-sourcebound-gating.test.cjs') | ForEach-Object {
+      $path = Join-Path $repo ('scripts/pf58/tests/' + $_)
+      if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'PF88_RECIPROCAL_WRITER_TEST_MISSING' }
+      $path
+    }
+    & $node --test --test-concurrency=1 @pf88Tests
+    if ($LASTEXITCODE -ne 0) { throw 'PF88_RECIPROCAL_WRITER_GATE_FAILED' }
+    $pf89Test = Join-Path $repo 'scripts/pf58/tests/pf89-actual-item-delta.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf89Test -PathType Leaf)) { throw 'PF89_ORIGINAL_ITEMS_DELTA_TEST_MISSING' }
+    & $node --test --test-concurrency=1 $pf89Test
+    if ($LASTEXITCODE -ne 0) { throw 'PF89_ACTUAL_ITEMS_DELTA_GATE_FAILED' }
+    # PF91: the OLD PF87 aggregate-character fixture was not original EveJS.
+    # Require BOTH the revised strict PF87 test and real per-character rows.
+    $pf91 = Join-Path $repo 'scripts/pf58/tests/pf91-original-character-rows.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf91 -PathType Leaf)) { throw 'PF91_NATIVE_CHARACTER_ROWS_TEST_MISSING' }
+    & $node --test --test-concurrency=1 $pf87Test $pf91
+    if ($LASTEXITCODE -ne 0) { throw 'PF91_ORIGINAL_CHARACTER_RACE_GATE_FAILED' }
+    $pf91StockSource = Join-Path $repo 'scripts/pf91/tests/pf91-original-character-owner-source.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf91StockSource -PathType Leaf)) {
+      throw 'PF91_ORIGINAL_CHARACTER_SOURCE_TEST_MISSING'
+    }
+    $priorPf91SourceRoot = [Environment]::GetEnvironmentVariable('PF91_NATIVE_WORKTREE', 'Process')
+    try {
+      $env:PF91_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf91StockSource
+      if ($LASTEXITCODE -ne 0) { throw 'PF91_NATIVE_STOCK_CHARACTER_SOURCE_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF91_NATIVE_WORKTREE', $priorPf91SourceRoot, 'Process')
+    }
+    $pf92Row = Join-Path $repo 'scripts/pf58/tests/pf92-character-record-barrier.test.cjs'
+    $pf92Source = Join-Path $repo 'scripts/pf92/tests/pf92-original-stock-character-routes.test.cjs'
+    foreach ($required in @($pf92Row,$pf92Source)) {
+      if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw 'PF92_GENERIC_CHARACTER_OWNER_TEST_MISSING'
+      }
+    }
+    $priorPf92SourceRoot = [Environment]::GetEnvironmentVariable('PF92_NATIVE_WORKTREE', 'Process')
+    try {
+      $env:PF92_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf92Row $pf92Source
+      if ($LASTEXITCODE -ne 0) { throw 'PF92_ORIGINAL_CHARACTER_OWNER_WRITE_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF92_NATIVE_WORKTREE', $priorPf92SourceRoot, 'Process')
+    }
+    $pf93Witness = Join-Path $repo 'scripts/pf58/tests/pf93-native-session-tx-isolation.test.cjs'
+    $pf93Source = Join-Path $repo 'scripts/pf93/tests/pf93-original-sqlite-writer-source.test.cjs'
+    foreach ($required in @($pf93Witness,$pf93Source)) {
+      if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw 'PF93_NATIVE_WITNESS_TEST_MISSING'
+      }
+    }
+    $priorPf93Source = [Environment]::GetEnvironmentVariable('PF93_NATIVE_WORKTREE','Process')
+    try {
+      $env:PF93_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf93Witness $pf93Source
+      if ($LASTEXITCODE -ne 0) { throw 'PF93_ORIGINAL_SQLITE_WITNESS_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF93_NATIVE_WORKTREE',$priorPf93Source,'Process')
+    }
+    # PF94: real Node SQLite owner-epoch tests and source-pinned absence of
+    # the original GameStore instrumentation. Review-only: no code installed.
+    $pf94Epoch = Join-Path $repo 'scripts/pf94/tests/pf94-owner-epoch-sqlite.test.cjs'
+    $pf94Original = Join-Path $repo 'scripts/pf94/tests/pf94-original-owner-source.test.cjs'
+    foreach ($required in @($pf94Epoch,$pf94Original)) {
+      if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw 'PF94_ORIGINAL_GAMESTORE_EPOCH_TEST_MISSING'
+      }
+    }
+    $priorPf94Source = [Environment]::GetEnvironmentVariable('PF94_NATIVE_WORKTREE','Process')
+    try {
+      $env:PF94_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf94Epoch $pf94Original
+      if ($LASTEXITCODE -ne 0) { throw 'PF94_ORIGINAL_OWNER_MUTATION_EPOCH_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF94_NATIVE_WORKTREE',$priorPf94Source,'Process')
+    }
+    # PF95: fail closed if the ORIGINAL GameStore blob differs from PF90's
+    # pin, or if the REVIEW-ONLY one-file diff fails in an isolated temp copy.
+    # This does not patch the fork and never calls the legacy patch installer.
+    $pf95Test = Join-Path $repo 'scripts/pf95/tests/pf95-original-game-store-epoch.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf95Test -PathType Leaf)) {
+      throw 'PF95_SOURCE_PINNED_ORIGINAL_GAMESTORE_TEST_MISSING'
+    }
+    $oldPf95Root = [Environment]::GetEnvironmentVariable('PF95_NATIVE_WORKTREE','Process')
+    try {
+      $env:PF95_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf95Test
+      if ($LASTEXITCODE -ne 0) { throw 'PF95_ORIGINAL_SQLITE_OWNER_TEMP_COPY_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF95_NATIVE_WORKTREE',$oldPf95Root,'Process')
+    }
+    # PF97: only temporary copies of exact-pinned original CharacterState
+    # and ItemStore; stock ship writer remains closed until native custody.
+    $pf97Character = Join-Path $repo 'scripts/pf97/tests/pf97-character-writer-source.test.cjs'
+    $pf97ItemStore = Join-Path $repo 'scripts/pf97/tests/pf97-itemstore-source.test.cjs'
+    foreach ($file in @($pf97Character,$pf97ItemStore)) {
+      if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+        throw 'PF97_ORIGINAL_CHARACTER_ITEMSTORE_TEST_MISSING'
+      }
+    }
+    $oldPf97Root = [Environment]::GetEnvironmentVariable('PF97_NATIVE_WORKTREE','Process')
+    try {
+      $env:PF97_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf97Character $pf97ItemStore
+      if ($LASTEXITCODE -ne 0) { throw 'PF97_ORIGINAL_CHARACTER_ITEMSTORE_OWNER_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF97_NATIVE_WORKTREE',$oldPf97Root,'Process')
+    }
+    & $python -m unittest discover -s (Join-Path $repo 'scripts/pf97/tests') -p 'test_pf97_*.py' -v
+    if ($LASTEXITCODE -ne 0) { throw 'PF97_ORIGINAL_OWNER_SOURCE_ARCHIVE_INVALID' }
+    # PF98: native PF91/PF92 bridge cannot silently use PF93 fingerprint
+    # in production; it must require the PF95/PF96 original owner witness.
+    $pf98 = Join-Path $repo 'scripts/pf98/tests/pf98-native-owner-bridge.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf98 -PathType Leaf)) {
+      throw 'PF98_NATIVE_SOURCE_WITNESS_BRIDGE_TEST_MISSING'
+    }
+    & $node --test --test-concurrency=1 $pf98
+    if ($LASTEXITCODE -ne 0) { throw 'PF98_NATIVE_OWNER_WITNESS_BRIDGE_GATE_FAILED' }
+    & $python -m unittest discover -s (Join-Path $repo 'scripts/pf98/tests') -p 'test_pf98_*.py' -v
+    if ($LASTEXITCODE -ne 0) { throw 'PF98_NATIVE_SOURCE_ARCHIVE_INTEGRITY_FAILED' }
+    # PF99: original authoritative registry membership, accountId -> userid
+    # equality, real station/structure docking and current physical ship title.
+    # This reads exact source-pinned WORK originals but edits only temp copies.
+    $pf99Auth = Join-Path $repo 'scripts/pf99/tests/pf99-authenticated-original-session.test.cjs'
+    $pf99SQLite = Join-Path $repo 'scripts/pf99/tests/pf99-source-bound-pf91-pf92-sqlite.test.cjs'
+    foreach ($file in @($pf99Auth,$pf99SQLite)) {
+      if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+        throw 'PF99_AUTHENTICATED_ORIGINAL_SESSION_TEST_MISSING'
+      }
+    }
+    $oldPf99Root = [Environment]::GetEnvironmentVariable('PF99_NATIVE_WORKTREE','Process')
+    try {
+      $env:PF99_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf99Auth $pf99SQLite
+      if ($LASTEXITCODE -ne 0) { throw 'PF99_ORIGINAL_SESSION_BOUND_PF91_PF92_SQLITE_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF99_NATIVE_WORKTREE',$oldPf99Root,'Process')
+    }
+    & $python -m unittest discover -s (Join-Path $repo 'scripts/pf99/tests') -p 'test_pf99_*.py' -v
+    if ($LASTEXITCODE -ne 0) { throw 'PF99_AUTHENTICATED_SESSION_SOURCE_ARCHIVE_INVALID' }
+    # PF100: read-only post-COMMIT session/physical hull consistency plus
+    # exact original owner source pins. Never publish session before COMMIT.
+    $pf100Runner = Join-Path $repo 'scripts/pf100/Test-PF100-Local.ps1'
+    if (-not (Test-Path -LiteralPath $pf100Runner -PathType Leaf)) {
+      throw 'PF100_ORIGINAL_POSTCOMMIT_PROOF_RUNNER_REQUIRED'
+    }
+    & $pf100Runner -NativeCheckout $NativeCheckout
+    if ($LASTEXITCODE -ne 0) { throw 'PF100_ORIGINAL_POSTCOMMIT_WORK_GATE_FAILED' }
+    $pf90Owner = Join-Path $repo 'scripts/pf58/tests/pf90-owner-snapshot.test.cjs'
+    $pf90Sources = Join-Path $repo 'scripts/pf90/tests/pf90-original-owners.test.cjs'
+    $pf90Audit = Join-Path $repo 'scripts/pf90/inspect-original-owner-writes.cjs'
+    foreach ($required in @($pf90Owner, $pf90Sources, $pf90Audit)) {
+      if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw 'PF90_ORIGINAL_OWNER_SOURCE_GATE_MISSING'
+      }
+    }
+    $oldPf90NativeRoot = [Environment]::GetEnvironmentVariable('PF90_NATIVE_WORKTREE', 'Process')
+    try {
+      $env:PF90_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf90Owner $pf90Sources
+      if ($LASTEXITCODE -ne 0) { throw 'PF90_ORIGINAL_OWNER_SOURCE_REGRESSION_FAILED' }
+      $ownerReportText = & $node $pf90Audit --fork-root $env:PF90_NATIVE_WORKTREE
+      $ownerAuditExit = $LASTEXITCODE
+      if ($ownerAuditExit -ne 2) { throw 'PF90_OWNER_AUDIT_EXIT_CONTRACT_FAILED' }
+      try { $ownerReport = ($ownerReportText | Out-String | ConvertFrom-Json) }
+      catch { throw 'PF90_ORIGINAL_OWNER_AUDIT_UNPARSABLE' }
+      if ($ownerReport.status -cne 'BLOCKED_FOR_ACTIVATION' -or
+          $ownerReport.releaseAuthority -ne $false -or
+          @($ownerReport.ownerPaths).Count -ne 5 -or
+          @($ownerReport.ownerPaths | Where-Object { $_.status -cne 'OWNER_HOOK_ABSENT' }).Count -ne 0 -or
+          $ownerReport.originalRisks.inventoryReadsSharedCache -ne $true -or
+          $ownerReport.originalRisks.characterShipTitleOutsidePFAtomic -ne $true) {
+        throw 'PF90_ORIGINAL_OWNER_INTEGRATION_REVIEW_REQUIRED'
+      }
+      Write-Warning 'PF90: unchanged original ItemStore/characterState owners still lack reciprocal atomic hooks. WORK staging is review-only, feature OFF.'
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF90_NATIVE_WORKTREE', $oldPf90NativeRoot, 'Process')
+    }
+    $pf86Source = Join-Path $repo 'scripts/pf58/tests/pf86-original-source-pins.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf86Source -PathType Leaf)) { throw 'PF86_ORIGINAL_SOURCE_PINS_MISSING' }
+    $oldPf86SourceRoot = [Environment]::GetEnvironmentVariable('PF86_NATIVE_WORKTREE', 'Process')
+    try {
+      $env:PF86_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf86Source
+      if ($LASTEXITCODE -ne 0) { throw 'PF86_ORIGINAL_PROVIDER_SOURCE_DRIFT' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF86_NATIVE_WORKTREE', $oldPf86SourceRoot, 'Process')
+    }
+  } finally {
+    [Environment]::SetEnvironmentVariable('PF85_NATIVE_WORKTREE', $previousPf85Root, 'Process')
+  }
+}
+& $python $script @argsForPython
+if ($LASTEXITCODE -ne 0) { throw 'PF80_COMPLETE_WORK_REVIEW_FAILED' }
+Write-Host 'PF80 complete native source review finished. NOT DEPLOYED. Personal Fleet OFF.'

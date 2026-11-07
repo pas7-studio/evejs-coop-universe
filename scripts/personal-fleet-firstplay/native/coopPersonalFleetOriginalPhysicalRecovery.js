@@ -1,0 +1,201 @@
+'use strict';
+/**
+ * PF90: original physical Personal Fleet NPC restoration after Node restart.
+ * Uses ONLY durable PF52/54 authority, stock ItemStore and original
+ * nativeNpcStore/controller. Calls stock materializeStoredNativeController
+ * exactly once per actor per process only when the genuine scene is loaded.
+ * No new ItemStore title, NPC ID, salary, order, warp or synthetic scene.
+ * Unknown previous warp -> operator reconciliation, NEVER blind replay.
+ */
+const gameStore=require('../gameStore');
+const nativeStore=require('./npc/nativeNpcStore');
+const nativeService=require('./npc/nativeNpcService');
+const runtime=require('./runtime');
+const registry=require('./npc/npcRegistry');
+const sessions=require('../services/chat/sessionRegistry');
+const pf52=require('./coopPersonalFleetHangarBridge');
+const T='corporationRuntime',ITEMS='items',P='coop-personal-fleet\u001f';
+const pos=x=>Number.isSafeInteger(x)&&x>0;
+const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+const token=x=>typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x);
+const pilot=x=>typeof x==='string'&&/^coop-pilot-[0-9]{3,}$/.test(x);
+const block=reason=>Object.freeze({status:'BLOCKED',reason});
+function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>false}={}){
+ const atomic=gameStore?.coopAtomicNativeRows;
+ if(atomic?.mode!=='SERVER_INTERNAL_FLAGGED'||
+    typeof atomic.transact!=='function'||typeof atomic.isPoisoned!=='function'||
+    typeof nativeStore.getNativeEntity!=='function'||
+    typeof nativeStore.getNativeController!=='function'||
+    typeof nativeService.materializeStoredNativeController!=='function'||
+    typeof runtime.scenes?.get!=='function'||typeof runtime.scenes?.values!=='function'||
+    typeof registry.getControllerByEntityID!=='function'||
+    typeof sessions.getSessions!=='function'||
+    typeof pf52.validateIndex!=='function'||typeof pf52.validateRoster!=='function'||
+    [enabled,allWritersFenced].some(f=>typeof f!=='function'))
+  throw Error('PF90_ORIGINAL_SOURCE_AUTHORITIES_REQUIRED');
+ const live=()=>enabled()===true&&allWritersFenced()===true&&atomic.isPoisoned()===false;
+ const attempted=new Set();let busy=false;
+ function snapshots(){
+  return atomic.transact([T,ITEMS],tx=>{
+   const index=tx.get(T,pf52.REGISTRY_KEY),claims=tx.get(T,P+'actor-claims-v1'),
+    items=tx.get(ITEMS,ITEMS);
+   if(index===null)return [];
+   if(!obj(index)||!obj(claims)||!obj(claims.claims)||!obj(items))
+    throw Error('PF90_ORIGINAL_CUSTODY_ROOT_UNAVAILABLE');
+   pf52.validateIndex(index);
+   const result=[];
+   for(const link of Object.values(index.ships)){
+    if(!obj(link)||!pos(link.shipItemID)||!pos(link.ownerCharacterID)||
+       !pilot(link.pilotID)||!token(link.assignmentID))throw Error('PF90_CORRUPT_SHIP_LINK');
+    const dep=tx.get(T,P+'deploy-v1:'+link.assignmentID);
+    if(dep===null||dep===undefined||dep.phase!=='ACTIVE')continue;
+    const rosterRaw=tx.get(T,pf52.ROSTER_PREFIX+link.ownerCharacterID),
+      roster=pf52.validateRoster(rosterRaw,link.ownerCharacterID),
+      p=roster.pilots[link.pilotID],claim=claims.claims[String(link.shipItemID)],
+      item=items[String(link.shipItemID)];
+    if(dep.shipItemID!==link.shipItemID||dep.ownerCharacterID!==link.ownerCharacterID||
+       dep.pilotID!==link.pilotID||dep.assignmentID!==link.assignmentID||
+       !pos(dep.systemID)||!pos(dep.actorGeneration)||
+       dep.generation!==link.generation||
+       p?.pilotID!==link.pilotID||p?.shipItemID!==link.shipItemID||
+       p?.assignmentID!==link.assignmentID||p?.status!=='HANGAR_RESERVED'||
+       p?.generation!==link.generation||
+       claim?.ownerType!=='PERSONAL_FLEET'||claim?.entityID!==link.shipItemID||
+       claim?.pilotID!==link.pilotID||
+       claim?.assignmentID!==link.assignmentID||
+       claim?.ownerCharacterID!==link.ownerCharacterID||
+       claim?.systemID!==dep.systemID||
+       claim?.generation!==dep.actorGeneration||
+       item?.itemID!==link.shipItemID||item?.ownerID!==link.ownerCharacterID||
+       item?.categoryID!==6||item?.flagID!==0||
+       item?.locationID!==dep.systemID||item?.typeID!==dep.typeID||
+       item?.spaceState?.systemID!==dep.systemID)
+     throw Error('PF90_DURABLE_ACTOR_CUSTODY_CONFLICT');
+    result.push(Object.freeze({shipItemID:link.shipItemID,
+      ownerCharacterID:link.ownerCharacterID,systemID:dep.systemID,
+      assignmentID:link.assignmentID,pilotID:link.pilotID,
+      generation:link.generation,actorGeneration:dep.actorGeneration,
+      typeID:dep.typeID}));
+   }
+   if(result.length>256)return null;
+   return result;
+  });
+ }
+ function saved(row){
+  const entity=nativeStore.getNativeEntity(row.shipItemID),
+    controller=nativeStore.getNativeController(row.shipItemID);
+  if(!obj(entity)||!obj(controller)||entity.transient===true||
+     controller.transient===true||entity.nativeNpc!==true||
+     entity.entityID!==row.shipItemID||controller.entityID!==row.shipItemID||
+     entity.ownerID!==row.ownerCharacterID||entity.systemID!==row.systemID||
+     controller.systemID!==row.systemID||
+     entity.typeID!==row.typeID||
+     entity.personalFleetOriginal!==true||controller.personalFleetOriginal!==true||
+     entity.personalFleetAssignmentID!==row.assignmentID||
+     controller.personalFleetAssignmentID!==row.assignmentID||
+     entity.personalFleetPilotID!==row.pilotID||
+     controller.personalFleetPilotID!==row.pilotID||
+     entity.personalFleetGeneration!==row.generation||
+     controller.personalFleetGeneration!==row.generation)
+   return null;
+  return {entity,controller};
+ }
+ function noPlayerShip(id){
+  const all=sessions.getSessions();
+  if(!Array.isArray(all))return false;
+  return all.every(s=>!s||s.socket?.destroyed===true||
+    ![s._space?.shipID,s.shipID,s.shipid,s.activeShipID].some(v=>
+      v===id||String(v)===String(id)));
+ }
+ function physical(row,scene){
+  const e=scene.getEntityByID(row.shipItemID),
+    c=registry.getControllerByEntityID(row.shipItemID);
+  return e?.kind==='ship'&&e.nativeNpc===true&&e.transient!==true&&
+    e.itemID===row.shipItemID&&e.ownerID===row.ownerCharacterID&&
+    c?.entityID===row.shipItemID&&c.systemID===row.systemID&&
+    c.personalFleetOriginal===true&&
+    c.personalFleetAssignmentID===row.assignmentID&&
+    c.personalFleetPilotID===row.pilotID&&
+    c.personalFleetGeneration===row.generation;
+ }
+ function recoverOne(row){
+  if(!live())return block('PF90_NATIVE_RECOVERY_FENCED');
+  if(!pos(row.shipItemID)||!pos(row.systemID))return block('PF90_INVALID_DURABLE_ROW');
+  const source=saved(row);
+  if(!source)return block('PF90_MISSING_OR_FOREIGN_NATIVE_RECORD');
+  const scene=runtime.scenes.get(row.systemID);
+  if(!scene)return {status:'SCENE_PENDING',shipItemID:row.shipItemID};
+  if(scene.systemID!==row.systemID||typeof scene.getEntityByID!=='function')
+   return block('PF90_ORIGINAL_SCENE_IDENTITY_UNVERIFIED');
+  if(!noPlayerShip(row.shipItemID))return block('PF90_PHYSICAL_PLAYER_SHIP_CONFLICT');
+  try{
+   for(const other of runtime.scenes.values()){
+    if(other!==scene&&other?.getEntityByID?.(row.shipItemID))
+     return block('PF90_SHIP_ALREADY_IN_ANOTHER_SCENE');
+   }
+   const occupant=scene.getEntityByID(row.shipItemID),
+    controller=registry.getControllerByEntityID(row.shipItemID);
+   if(physical(row,scene))
+    return {status:'ALREADY_PHYSICAL',shipItemID:row.shipItemID};
+   // Never mistake an already physically present warp for a lost warp.
+   // If the original actor AND original controller are still on-grid and
+   // verified, the real native runtime is already responsible for arrival.
+   // Otherwise stock materialization cannot reconstruct ingress in mid-WARP,
+   // so do not issue an independent warp on behalf of the player.
+   if(String(source.entity.mode).toUpperCase()==='WARP'||
+      source.entity.warpState||source.entity.pendingWarp||
+      source.entity.isWarping===true)
+    return block('PF90_IN_FLIGHT_WARP_NEEDS_SOURCE_RECOVERY');
+   // A partly materialized actor is repairable by stock native service
+   // only when every existing half belongs to the SAME durable original
+   // Personal Fleet ship. It must not overwrite an unrelated entity.
+   if(occupant&&(occupant.kind!=='ship'||occupant.nativeNpc!==true||
+      occupant.itemID!==row.shipItemID||occupant.ownerID!==row.ownerCharacterID||
+      occupant.transient===true))
+    return block('PF90_EXISTING_SCENE_OR_CONTROLLER_CONFLICT');
+   if(controller&&(controller.entityID!==row.shipItemID||
+      controller.systemID!==row.systemID||
+      controller.personalFleetOriginal!==true||
+      controller.personalFleetAssignmentID!==row.assignmentID||
+      controller.personalFleetPilotID!==row.pilotID||
+      controller.personalFleetGeneration!==row.generation))
+    return block('PF90_EXISTING_SCENE_OR_CONTROLLER_CONFLICT');
+   if(attempted.has(row.shipItemID))
+    return block('PF90_UNKNOWN_PRIOR_MATERIALIZATION_OUTCOME');
+   attempted.add(row.shipItemID);
+   const result=nativeService.materializeStoredNativeController(scene,row.shipItemID,{broadcast:false});
+   if(result?.success!==true||!physical(row,scene))
+    return block('PF90_ORIGINAL_MATERIALIZATION_OUTCOME_UNCERTAIN');
+   return {status:'RESTORED_PHYSICAL',shipItemID:row.shipItemID};
+  }catch{return block('PF90_MATERIALIZATION_THROWN_OUTCOME_UNCERTAIN');}
+ }
+ function recover(){
+  if(!live())return block('PF90_RECOVERY_DISABLED');
+  if(busy)return block('PF90_REENTRANT_RECOVERY');
+  busy=true;
+  try{
+   const rows=snapshots();
+   if(!Array.isArray(rows))return block('PF90_DURABLE_ROSTER_UNAVAILABLE');
+   const result={status:'RECOVERY_RECONCILED',active:rows.length,
+    restored:0,already:0,pending:0,blocked:0,issues:[]};
+   const ids=new Set();
+   for(const row of rows){
+    if(ids.has(row.shipItemID))return block('PF90_DUPLICATE_DURABLE_SHIP');
+    ids.add(row.shipItemID);
+    const status=recoverOne(row);
+    if(status.status==='RESTORED_PHYSICAL')result.restored++;
+    else if(status.status==='ALREADY_PHYSICAL')result.already++;
+    else if(status.status==='SCENE_PENDING')result.pending++;
+    else{
+     result.blocked++;result.issues.push({
+      shipItemID:row.shipItemID,reason:status.reason});
+    }
+   }
+   if(result.blocked>0)result.status='NEEDS_OPERATOR_RECONCILIATION';
+   return result;
+  }catch{return block('PF90_ORIGINAL_ROSTER_SNAPSHOT_FAILED');}
+  finally{busy=false;}
+ }
+ return Object.freeze({recover});
+}
+module.exports=Object.freeze({createOriginalPhysicalRecovery});
