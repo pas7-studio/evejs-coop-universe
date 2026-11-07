@@ -14,6 +14,7 @@ const runtime=require('./runtime');
 const registry=require('./npc/npcRegistry');
 const sessions=require('../services/chat/sessionRegistry');
 const pf52=require('./coopPersonalFleetHangarBridge');
+const ingressSource=require('./coopPersonalFleetOriginalIngressRecovery');
 const T='corporationRuntime',ITEMS='items',P='coop-personal-fleet\u001f';
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -34,6 +35,9 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
     [enabled,allWritersFenced].some(f=>typeof f!=='function'))
   throw Error('PF90_ORIGINAL_SOURCE_AUTHORITIES_REQUIRED');
  const live=()=>enabled()===true&&allWritersFenced()===true&&atomic.isPoisoned()===false;
+ const ingress=ingressSource.createOriginalIngressRecovery({enabled,allWritersFenced});
+ if(typeof ingress?.inspect!=='function'||typeof ingress.restore!=='function')
+  throw Error('PF94_ORIGINAL_INGRESS_RESTORE_AUTHORITY_REQUIRED');
  const attempted=new Set();let busy=false;
  function snapshots(){
   return atomic.transact([T,ITEMS],tx=>{
@@ -135,17 +139,31 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
    }
    const occupant=scene.getEntityByID(row.shipItemID),
     controller=registry.getControllerByEntityID(row.shipItemID);
-   if(physical(row,scene))
-    return {status:'ALREADY_PHYSICAL',shipItemID:row.shipItemID};
+   const inFlight=String(source.entity.mode).toUpperCase()==='WARP'||
+      source.entity.warpState||source.entity.pendingWarp||
+      source.entity.isWarping===true;
+   if(physical(row,scene)){
+    if(!inFlight)return {status:'ALREADY_PHYSICAL',shipItemID:row.shipItemID};
+    const restored=ingress.restore(row,scene);
+    if(restored.status==='ALREADY_ORIGINAL_INGRESS')
+     return {status:'ALREADY_PHYSICAL',shipItemID:row.shipItemID};
+    if(restored.status==='RESTORED_ORIGINAL_INGRESS')
+     return {status:'RESTORED_IN_FLIGHT',shipItemID:row.shipItemID};
+    return block(restored.reason||'PF94_ORIGINAL_INGRESS_PROOF_UNAVAILABLE');
+   }
    // Never mistake an already physically present warp for a lost warp.
    // If the original actor AND original controller are still on-grid and
    // verified, the real native runtime is already responsible for arrival.
    // Otherwise stock materialization cannot reconstruct ingress in mid-WARP,
    // so do not issue an independent warp on behalf of the player.
-   if(String(source.entity.mode).toUpperCase()==='WARP'||
-      source.entity.warpState||source.entity.pendingWarp||
-      source.entity.isWarping===true)
-    return block('PF90_IN_FLIGHT_WARP_NEEDS_SOURCE_RECOVERY');
+   // PF94 may reconstruct interpolation ONLY after the original SQLite
+   // PF56 post-effect ACK, signed ingress snapshot and original owner
+   // have been independently verified. Never send a new warp order.
+   if(inFlight){
+    const proven=ingress.inspect(row);
+    if(proven.status!=='VERIFIED_ORIGINAL_INGRESS')
+     return block(proven.reason||'PF94_IN_FLIGHT_WARP_NOT_DURABLY_PROVEN');
+   }
    // A partly materialized actor is repairable by stock native service
    // only when every existing half belongs to the SAME durable original
    // Personal Fleet ship. It must not overwrite an unrelated entity.
@@ -166,6 +184,12 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
    const result=nativeService.materializeStoredNativeController(scene,row.shipItemID,{broadcast:false});
    if(result?.success!==true||!physical(row,scene))
     return block('PF90_ORIGINAL_MATERIALIZATION_OUTCOME_UNCERTAIN');
+   if(inFlight){
+    const restored=ingress.restore(row,scene);
+    if(!['RESTORED_ORIGINAL_INGRESS','ALREADY_ORIGINAL_INGRESS'].includes(restored.status))
+     return block(restored.reason||'PF94_RESTORED_INGRESS_UNCERTAIN');
+    return {status:'RESTORED_IN_FLIGHT',shipItemID:row.shipItemID};
+   }
    return {status:'RESTORED_PHYSICAL',shipItemID:row.shipItemID};
   }catch{return block('PF90_MATERIALIZATION_THROWN_OUTCOME_UNCERTAIN');}
  }
@@ -177,13 +201,16 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
    const rows=snapshots();
    if(!Array.isArray(rows))return block('PF90_DURABLE_ROSTER_UNAVAILABLE');
    const result={status:'RECOVERY_RECONCILED',active:rows.length,
-    restored:0,already:0,pending:0,blocked:0,issues:[]};
+    restored:0,inFlightRestored:0,already:0,pending:0,blocked:0,issues:[]};
    const ids=new Set();
    for(const row of rows){
     if(ids.has(row.shipItemID))return block('PF90_DUPLICATE_DURABLE_SHIP');
     ids.add(row.shipItemID);
     const status=recoverOne(row);
     if(status.status==='RESTORED_PHYSICAL')result.restored++;
+    else if(status.status==='RESTORED_IN_FLIGHT'){
+     result.restored++;result.inFlightRestored++;
+    }
     else if(status.status==='ALREADY_PHYSICAL')result.already++;
     else if(status.status==='SCENE_PENDING')result.pending++;
     else{
