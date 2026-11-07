@@ -198,6 +198,7 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
   const combatRecovery=originalCombatRecovery.createOriginalCombatRecovery({
     combatAuthority,combatReceipt,orderWitness,
     resumeAfterOriginalAck:originalPhysicalOrders.resumeCommitted,
+    retainOriginalCombatLease:originalPhysicalOrders.retainOriginalCombatLease,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   // Original stock ItemStore, scene/registry and SDE station geometry must
   // agree on each tick. A process restart changes the unforgeable scene epoch;
