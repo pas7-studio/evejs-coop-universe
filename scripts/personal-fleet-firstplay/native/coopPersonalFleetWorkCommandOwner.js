@@ -82,7 +82,8 @@ function createOriginalWorkCommandOwner({gameStore,pf52,hangar,pf53,pf54,pf55,pf
    (pilots.length?pilots.map(x=>x.pilotID+':'+x.status+(pos(x.shipItemID)?':'+x.shipItemID:'')).join(' | '):'no NPC hired')};
  }
  function hire(ctx){
-  if(!admission(ctx)||ctx.args.length!==1||!TOKEN.test(ctx.args[0]))return blocked('PF_FIRSTPLAY_HIRE_INPUT_INVALID');
+  if(!admission(ctx)||ctx.args.length!==2||!TOKEN.test(ctx.args[0])||
+     ctx.args[1]!=='accept-recurring')return blocked('PF92_RECURRING_SALARY_CONSENT_REQUIRED');
   const snap=rosterSnapshot(ctx);if(snap.error)return blocked(snap.error);
   const offer=lookupNativeOffer({session:ctx.session,ownerCharacterID:ctx.ownerCharacterID,offerID:ctx.args[0]});
   if(!obj(offer)||offer.offerID!==ctx.args[0]||
