@@ -16,6 +16,10 @@ const originalWalletAuthority=require('./coopPersonalFleetOriginalWalletAuthorit
 const originalOrderAck=require('./coopPersonalFleetOriginalDurableOrderAck');
 const originalDockCompletion=require('./coopPersonalFleetOriginalDockCompletionWitness');
 const nativeScopedDock=require('./coopPersonalFleetScopedDock');
+const originalTerminalSources=require('./coopPersonalFleetOriginalTerminalDockSources');
+const originalDockCoordinator=require('./coopPersonalFleetOriginalDockCoordinator');
+const originalNativeCleanup=require('./coopPersonalFleetScopedNativeCleanup');
+const originalTerminalCustody=require('./coopPersonalFleetTerminalCustody');
 const offers=require('./coopPersonalFleetOriginalOfferAuthority');
 const commands=require('./coopPersonalFleetWorkCommandOwner');
 const originalOrderWitness=require('./coopPersonalFleetOriginalOrderWitness');
@@ -79,6 +83,9 @@ function assertReadiness(hooks,original){
     typeof stockItemStore.moveShipToSpace!=='function'||
     originalNpcService.PF58_ORIGINAL_ITEMSTORE_BRIDGE_V1!==true||
     originalNpcService.PF66_SCOPED_DOCK_SCENE_DETACH_V1!==true||
+    originalNpcStore.PF61_SCOPED_ORIGINAL_NATIVE_CLEANUP_V1!==true||
+    typeof originalNpcStore.installScopedOriginalTerminalCleanupAuthority!=='function'||
+    typeof originalNpcStore.removeScopedPersonalFleetTerminalNativeRows!=='function'||
     typeof originalRuntime.scenes?.get!=='function'||
     typeof originalNpcRegistry.getControllerByEntityID!=='function'||
     !positive(Date.now()))throw Error('PF_FIRSTPLAY_STOCK_NATIVE_BRIDGE_MISSING');
@@ -178,6 +185,29 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     verifyOriginalDockReady:originalHooks.verifyOriginalDockReady,
     verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
+  // PF60/PF61 are the ONLY original native cleanup writers after PF66's
+  // one-use station dock. A crash never permits redispatching either writer.
+  const terminalSources=originalTerminalSources.createOriginalTerminalDockSources({
+    enabled,allWritersFenced:originalHooks.allWritersFenced,
+    verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
+    verifyFinalOriginalManifest:originalHooks.verifyFinalOriginalManifest});
+  const scopedCleanup=originalNativeCleanup.createScopedNativeCleanup({
+    nativeStore:originalNpcStore,gameStore,
+    enabled,allWritersFenced:originalHooks.allWritersFenced,
+    verifyOriginalSceneVacant:terminalSources.verifyOriginalSceneVacant,
+    verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
+    verifyOriginalTerminalWitness:terminalSources.verifyOriginalTerminalWitness});
+  const terminalCustody=originalTerminalCustody.createTerminalCustody({
+    gameStore,pf52,claimsPolicy:originalHooks.claimsPolicy,
+    authenticateCommand:terminalSources.authenticateCommand,
+    verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
+    verifyOriginalTerminalWitness:terminalSources.verifyOriginalTerminalWitness,
+    readNativeIdentity:terminalSources.readNativeIdentity,
+    executeScopedNativeCleanup:scopedCleanup.execute,
+    enabled,allWritersFenced:originalHooks.allWritersFenced});
+  const dockCoordinator=originalDockCoordinator.createOriginalDockCoordinator({
+    scopedDock,terminalCustody,enabled,
+    allWritersFenced:originalHooks.allWritersFenced});
   const dockCompletion=originalDockCompletion.createOriginalDockCompletionWitness({
     enabled,allWritersFenced:originalHooks.allWritersFenced,
     verifyFinalOriginalManifest:originalHooks.verifyFinalOriginalManifest});
@@ -192,7 +222,7 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     verifyOriginalDockReceipt:dockCompletion.verifyOriginalDockReceipt,
     verifyFinalOriginalManifest:originalHooks.verifyFinalOriginalManifest,
     executeNativeReturn:originalHooks.executeNativeReturn,
-    executeNativeDock:scopedDock.execute,
+    executeNativeDock:dockCoordinator.execute,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   // First-play excludes recurring PF57 salary / dismiss until its ORIGINAL
   // wallet, loss and contract hook owners are present. The public command
@@ -227,6 +257,8 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
   ready=true;booted=true;
   return Object.freeze({status:'INSTALLED_WORK_SOURCE_BOUND',
     mayEnable:enabled,originalHandoff:nativeHandoff,
+    // Only trusted original WORK startup may call these; never publish in /pf.
+    originalDockCoordinator:dockCoordinator,
     getOperationalStatus:()=>Object.freeze({ready:enabled(),booted})});
  }catch(error){
   // Inability to install a required hook is NOT a partial success.
