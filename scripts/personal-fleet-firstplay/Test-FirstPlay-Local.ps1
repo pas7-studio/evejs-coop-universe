@@ -37,7 +37,7 @@ $tests=Join-Path $root 'tests'
 $prior=[Environment]::GetEnvironmentVariable('PYTHONDONTWRITEBYTECODE','Process')
 try{
  $env:PYTHONDONTWRITEBYTECODE='1'
- & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-chat-gateway.test.cjs') (Join-Path $tests 'personal-fleet-work-command-owner.test.cjs') (Join-Path $tests 'personal-fleet-original-offers.test.cjs') (Join-Path $tests 'personal-fleet-original-source-bindings.test.cjs') (Join-Path $tests 'personal-fleet-original-work-bootstrap.test.cjs') (Join-Path $tests 'personal-fleet-original-work-bootstrap.test.cjs')
+ & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-chat-gateway.test.cjs') (Join-Path $tests 'personal-fleet-work-command-owner.test.cjs') (Join-Path $tests 'personal-fleet-original-offers.test.cjs') (Join-Path $tests 'personal-fleet-original-source-bindings.test.cjs') (Join-Path $tests 'personal-fleet-original-work-bootstrap.test.cjs') (Join-Path $tests 'personal-fleet-original-wallet-authority.test.cjs') (Join-Path $tests 'personal-fleet-original-work-bootstrap.test.cjs')
  if($LASTEXITCODE -ne 0){throw 'PF_FIRSTPLAY_NODE_TEST_FAILED'}
  & $python -m unittest discover -s $tests -p 'test_*.py' -v
  if($LASTEXITCODE -ne 0){throw 'PF_FIRSTPLAY_PYTHON_TEST_FAILED'}
@@ -62,6 +62,9 @@ if($NativeCheckout){
   'Code/server/src/services/_shared/stationStaticData.js'='15512a5320dc7979f3bab90cab0281d9fff15332'
   'Code/server/src/space/runtime.js'='0de66d2ab0499bfcff2b1bb57176e775c9b8df22'
   'Code/server/src/gameStore/sqliteStore.js'='d851fb5a84added2d4527c34407879e8a009bb74'
+  'Code/server/src/services/account/plexVaultLogState.js'='62a03b8578a390f5614fc67b6693ffa74b2b2ee5'
+  'Code/server/src/services/account/walletState.js'='ef4799d896ce8dbb854e75b810057b1208932e13'
+  'Code/server/src/services/corporation/corpWalletState.js'='42f7f3ba3d1c66824ce566523df2da19d9da26cf'
  }
  foreach($name in $sourcePins.Keys){
   $seen=(& $git -C $native hash-object $name).Trim()
