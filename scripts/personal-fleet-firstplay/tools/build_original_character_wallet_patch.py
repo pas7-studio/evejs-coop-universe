@@ -37,6 +37,11 @@ MODULES={
   "    if(!obj(owner)||owner.characterID!==command.ownerCharacterID||"),
  ("    tx.put(CHARACTERS,CHARACTERS,{...chars,[String(command.ownerCharacterID)]:updatedOwner});",
   "    tx.put(CHARACTERS,String(command.ownerCharacterID),updatedOwner);"),
+ // PF91: PF53 paid hire only debits characters and credits corporationRuntime;
+ // it neither reads nor writes NPC entities. Avoid blocking ordinary hire
+ // whenever unrelated transient NPCs are active in the original GameStore.
+ ("const result=atomic.transact([CHARACTERS,TABLE,'npcEntities'],tx=>{",
+  "const result=atomic.transact([CHARACTERS,TABLE],tx=>{"),
 ],
 'coopPersonalFleetContractLifecycle.js':[
  ("    const rec=old.receipt,chars=tx.get(CHAR,CHAR),ch=chars?.[String(c.ownerCharacterID)],",
