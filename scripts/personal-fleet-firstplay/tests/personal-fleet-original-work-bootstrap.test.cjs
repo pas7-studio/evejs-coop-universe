@@ -44,7 +44,7 @@ function fixture(cb){
    assert.equal(args.enabled(),false);
    if(broken==='physical-order')throw Error('SHARED_ARBITER_NOT_INSTALLED');
    return {execute:()=>({success:false}),supports:()=>false,
-    executeNativeReturn:()=>({success:false})};}},
+    resumeCommitted:()=>({success:false}),executeNativeReturn:()=>({success:false})};}},
   './coopPersonalFleetOriginalSalaryTerms':{createOriginalSalaryTerms(args){
    assert.equal(args.enabled(),false);
    assert.equal(Array.isArray(args.authoredPolicies),true);
@@ -72,6 +72,7 @@ function fixture(cb){
    assert.equal(typeof args.stationDwell.sample,'function');
    assert.equal(typeof args.advanceReturn,'function');
    assert.equal(typeof args.recoverPhysical,'function');
+   assert.equal(typeof args.recoverCombat,'function');
    assert.equal(typeof args.settlePayroll,'function');
    assert.equal(args.enabled(),false);
    if(broken==='station-tick-source')throw Error('PF56_NATIVE_STATION_TICK_SOURCE_MISSING');
@@ -91,6 +92,11 @@ function fixture(cb){
   './coopPersonalFleetOriginalCombatReceipt':{createOriginalCombatReceipt(args){
    assert.equal(typeof args.combatAuthority.verify,'function');
    return {recordAfterEffect:()=>({success:false}),verifyPersisted:()=>null};}},
+  './coopPersonalFleetOriginalCombatRecovery':{createOriginalCombatRecovery(args){
+   assert.equal(args.enabled(),false);
+   assert.equal(typeof args.resumeAfterOriginalAck,'function');
+   assert.equal(typeof args.combatReceipt.verifyPersisted,'function');
+   return {recover:()=>({status:'RECOVERY_SCANNED',total:0})};}},
   './coopPersonalFleetOriginalOrderWitness':{createOriginalOrderWitness(args){
    assert.equal(typeof args.combatAuthority.verify,'function');events.push('order-witness');
    if(broken==='order-witness')throw Error('ORIGINAL_ORDER_SOURCE_UNAVAILABLE');
