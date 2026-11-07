@@ -19,7 +19,7 @@ class WalletPatchTest(unittest.TestCase):
    for before,after in b.MODULES[name]:
     self.assertIn(after,out)
     self.assertNotIn(before,out)
-   if name!='coopPersonalFleetHangarBridge.js':self.assertIn('String(',out)
+   if name in ('coopPersonalFleetPaidHiring.js','coopPersonalFleetContractLifecycle.js'):self.assertIn('String(',out)
  def test_rejects_missing_and_duplicate_exact_original_snippets(self):
   for name in b.MODULES:
    with self.assertRaisesRegex(ValueError,'SOURCE_ANCHOR_DRIFT'):
@@ -27,7 +27,7 @@ class WalletPatchTest(unittest.TestCase):
    before=self.example(name)
    with self.assertRaisesRegex(ValueError,'SOURCE_ANCHOR_DRIFT'):
     b.transform(name,before+before)
- def test_manifest_gates_real_three_file_native_work_patch(self):
+ def test_manifest_gates_real_four_file_native_work_patch(self):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);subprocess.run(['git','init','-q',str(root)],check=True,capture_output=True)
    files={}
@@ -38,7 +38,7 @@ class WalletPatchTest(unittest.TestCase):
    manifest=root/'PF62-MANIFEST.json'
    manifest.write_text(json.dumps({'name':'PF62_NATIVE_REVIEW_BUNDLE','featureEnabled':False,'files':files}))
    diff=b.build(root,manifest)
-   self.assertTrue(diff.count('--- a/')==3 and diff.count('+++ b/')==3)
+   self.assertTrue(diff.count('--- a/')==4 and diff.count('+++ b/')==4)
    subprocess.run(['git','-C',str(root),'apply','--check','-'],input=diff,text=True,check=True,capture_output=True)
    subprocess.run(['git','-C',str(root),'apply','-'],input=diff,text=True,check=True,capture_output=True)
    for name in b.MODULES:
@@ -47,6 +47,8 @@ class WalletPatchTest(unittest.TestCase):
     self.assertNotIn('tx.get(CHARACTERS,CHARACTERS)',s)
    if name=='coopPersonalFleetHangarBridge.js':
     self.assertIn("transact([TABLE,ITEM_TABLE,'characters'],tx=>",s)
+   if name=='coopPersonalFleetNativeOrders.js':
+    self.assertEqual(s.count("atomic.transact([TABLE,ITEMS,'characters'],tx=>"),2)
  def test_rejects_staged_workfile_tampering(self):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);files={}
