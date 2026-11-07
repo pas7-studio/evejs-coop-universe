@@ -88,6 +88,7 @@ function f(){
   unfence:()=>fenced=false,poison:()=>poisoned=true,
   changeMode:x=>originalEntity.mode=x,
   changeSavedOwner:x=>originalEntity.ownerID=x,
+  mutateSaved:(which,change)=>change(which==='controller'?originalController:originalEntity),
   failService:()=>materializeFailure=true,
   missingSaved:()=>saveMissing=true,
   setLiveOwner:x=>liveOwner=x,authorizeIngress:()=>ingressAuthorized=true,
@@ -306,3 +307,18 @@ test('PF101 accepts original nativeCombat controller as PF82 recovery continuity
  assert.equal(r.already,1);
  assert.equal(x.getMaterializations(),0);
 });
+
+for(const [name,which,change] of [
+ ['missing native occupied witness','entity',x=>{x.nativeNpcOccupied=false;}],
+ ['foreign persisted actor operator','entity',x=>{x.operatorKind='WAR';}],
+ ['foreign persisted NPC type','entity',x=>{x.npcEntityType='mining';}],
+ ['persisted controller assignment','controller',x=>{x.selectionID='other';}],
+ ['persisted combat runtime owner','controller',x=>{x.runtimeKind='warCombat';}],
+]){
+ test('PF101 blocks '+name+' before native materialization',()=>{
+  const x=f();x.mount();x.mutateSaved(which,change);
+  const result=x.recovery.recover();
+  assert.equal(result.issues[0].reason,'PF90_MISSING_OR_FOREIGN_NATIVE_RECORD');
+  assert.equal(x.getMaterializations(),0);
+ });
+}
