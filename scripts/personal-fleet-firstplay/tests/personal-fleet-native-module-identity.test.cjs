@@ -42,3 +42,16 @@ test('PF92 recurring consent is mandatory in exact native ingress and work owner
  assert.match(owner,/ctx\.args\[1\]!=='accept-recurring'/);
  assert.match(owner,/salaryConsentRequired!==true/);
 });
+
+test('PF95 stock-combat verifier and durable original controller writer remain in exact native modules',()=>{
+ const auth=fs.readFileSync(path.join(__dirname,'../native/coopPersonalFleetOriginalCombatAuthority.js'),'utf8');
+ const receipt=fs.readFileSync(path.join(__dirname,'../native/coopPersonalFleetOriginalCombatReceipt.js'),'utf8');
+ assert.match(auth,/module\.exports=Object\.freeze\(\{createOriginalCombatAuthority\}\)/);
+ assert.match(receipt,/module\.exports=Object\.freeze\(\{createOriginalCombatReceipt\}\)/);
+ assert.match(auth,/isValidCombatTarget/);
+ assert.match(receipt,/npcRuntimeControllers/);
+ assert.match(chat,/attack:\{arity:2,method:'attack'\}/);
+ assert.match(chat,/guard:\{arity:1,method:'guard'\}/);
+ assert.match(owner,/function attack\(ctx\)/);
+ assert.match(owner,/function guard\(ctx\)/);
+});
