@@ -20,9 +20,9 @@ function fixture(){
      del:(kind,key)=>snapshot.delete(kind+'\u001f'+key)};
    const r=fn(tx);table.clear();for(const [a,b] of snapshot)table.set(a,b);return r;
  }};
- const actor={entityID:1400,itemID:1400,ownerID:1900,nativeNpc:true,mode:'STOP',
+ const actor={kind:'ship',entityID:1400,itemID:1400,ownerID:1900,nativeNpc:true,mode:'STOP',
    position:V(1100),velocity:V(),radius:65,warpState:null,pendingWarp:null,isWarping:false};
- const stationBall={entityID:60000002,itemID:60000002,position:V(1000),radius:300};
+ const stationBall={kind:'station',entityID:60000002,itemID:60000002,position:V(1000),radius:300};
  const entities=new Map([[1400,actor],[60000002,stationBall]]);
  const scene={systemID:30000001,getEntityByID:id=>entities.get(id)||null};
  const scenes=new Map([[30000001,scene]]);
@@ -186,4 +186,11 @@ label('wrong stock station itemID is not equivalent to an entityID',f=>{
 });
 label('wrong native ship itemID blocks physical arrival',f=>{
  f.actor.itemID=2301;assert.equal(f.source.sample(base).status,'BLOCKED');
+});
+
+label('a dynamic ship shadowing the station ID cannot authorize original dock',f=>{
+ f.stationBall.kind='ship';assert.equal(f.source.sample(base).status,'BLOCKED');
+});
+label('non-ship object cannot masquerade as the native PF actor',f=>{
+ f.actor.kind='wreck';assert.equal(f.source.sample(base).status,'BLOCKED');
 });
