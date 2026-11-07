@@ -263,3 +263,18 @@ may NOT authorize PF91 or PF92 protected active ship changes.
 These tests alone do not attest an original authenticated live
 session, WORK two-client gameplay or deployment to the original
 EveJS fork. See `scripts/pf98/PF98_ORIGINAL_SQLITE_WITNESS_BRIDGE.md`.
+
+## PF99 source-bound original live session and player ship authority
+
+The PF80 WORK preflight now requires PF99's 33 Node source-bound
+session / PF91-PF92 SQLite cases and five Python archive tests.
+With `PF99_NATIVE_WORKTREE`, it pins the exact original session
+registry, docking authority and account ownership selection
+source files. The verified callbacks use exact original live
+socket identity and account/ship/dock state rather than a
+caller-supplied `()=>true`; source-bound factory constructors
+ignore injected session verifiers. The two candidate modules
+remain only in PR #350, not the native original server.
+Production wiring into original GameStore, CharacterState,
+ItemStore and two-client WORK gameplay is still required.
+See `scripts/pf99/PF99_ORIGINAL_AUTHENTICATED_SESSION_WORK_HANDOFF.md`.
