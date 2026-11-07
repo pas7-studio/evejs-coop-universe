@@ -5,6 +5,51 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF103 — real native WAR ownership readback and writer boundary (2026-11-08)
+
+PF103 adds two original-native-only modules to the source-pinned WORK
+package, not to the owner PLAY deployment:
+
+1. `coopPersonalFleetOriginalWarClaim.js` imports the **original**
+   `coopWarFleetRegistry`, and reads its canonical
+   `corporationRuntime` WAR fleet key through the **original GameStore**
+   atomic transaction. It calls the original registry's `validate` /
+   `empty` logic. Exact pilot/hull/system match is `ASSIGNED`.
+   A **proven absent** WAR record or unclaimed hull is `UNASSIGNED`.
+   Any missing read, corrupt row, poisoned SQLite, mismatched pilot or
+   competing in-flight WAR transfer is `UNKNOWN` (deny competing
+   Personal Fleet control). No WAR writer, ItemStore mutation or private
+   fleet registry is introduced.
+2. `coopPersonalFleetOriginalNativeWriterBoundary.js` is now a concrete
+   native module with PF102B's expected source interface. It binds the
+   WAR claim from the above real original source (a caller cannot replace
+   the `readOriginalWarShipClaim` callback). All **other**
+   writer/actor/equipment/ownership/wallet/Mining/Exploration hooks and
+   the same shared NPC arbiter must come from the explicitly
+   source-owned `coopPersonalFleetOriginalReciprocalWriterOwners.js`.
+   Missing/partial original owners block startup before writer publication.
+
+**Crucial remaining P0:** there is still no authenticated
+`coopPersonalFleetOriginalReciprocalWriterOwners.js` with verified
+reciprocal original writer fences, and no real 1–12 NPC
+`coopPersonalFleetOriginalAuthoredPolicy.js` using validated SDE IDs,
+player-ownable physical hulls and server-authored hire/wage terms.
+PF103 does not forge either. A real native server with PF flags ON
+must therefore still fail closed. The native fork is read-only to
+this GitHub integration (403 on a safe WORK branch create).
+
+**Evidence at this HEAD:** 16/16 isolated original-WAR witness tests
+and 12/12 writer-boundary tests PASS in controlled V8, not actual
+original on-disk SQLite. Previously 25/25 config, 11/11 starter,
+22/22 SDE proof tests also PASS in the same isolated mode.
+This is not gameplay or a real native WORK boot.
+
+**Bundle:** PF80 22 baseline paths plus first-play 43 delta paths
+(4 overlaps) = **61 unique native WORK paths**. Two new test files
+are included in the explicit local PowerShell runner. The
+first-play SHA256 manifest has **84 source/tool/test entries**.
+Keep `main` and `PLAY` untouched, Personal Fleet OFF, PR Draft.
+
 ## PF102B — original source-owned WORK configuration (2026-11-08)
 
 **Integrated:** `coopPersonalFleetOriginalWorkConfiguration.js` is now
