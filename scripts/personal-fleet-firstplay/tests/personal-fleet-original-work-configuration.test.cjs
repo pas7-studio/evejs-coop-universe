@@ -3,6 +3,7 @@ const {test}=require('node:test'),a=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const source=fs.readFileSync(path.join(__dirname,
  '../native/coopPersonalFleetOriginalWorkConfiguration.js'),'utf8');
+const same=(actual,expected)=>a.deepEqual(JSON.parse(JSON.stringify(actual)),expected);
 const hooks=['verifyOriginalWriterHooks','allWritersFenced','allWalletWritersFenced',
  'verifyShipAvailable','verifyRelease','verifyOriginalEquipment',
  'verifyOriginalDeploymentAuthority','verifyExclusiveOwnership',
@@ -56,21 +57,21 @@ test('PF102B real source-owned config exports required original native bootstrap
 });
 test('PF102B captures identical exact native authored catalogue and salary pairs',()=>{
  const f=fixture();
- a.deepEqual(f.api.loadNativeAuthoredCatalog(),[c]);
- a.deepEqual(f.api.loadNativeSalaryPolicies(),[wage]);
+ same(f.api.loadNativeAuthoredCatalog(),[c]);
+ same(f.api.loadNativeSalaryPolicies(),[wage]);
 });
 test('PF102B caller cannot mutate cached NPC wage policy through return value',()=>{
  const f=fixture(),first=f.api.loadNativeSalaryPolicies();
  first[0].salaryCents=1;first.push({...wage,npcCharacterID:3001002});
- a.deepEqual(f.api.loadNativeSalaryPolicies(),[wage]);
+ same(f.api.loadNativeSalaryPolicies(),[wage]);
 });
 test('PF102B mutable original policy cannot change after first successful snapshot',()=>{
  const p={source:'ORIGINAL_EVEJS_PERSONAL_FLEET_AUTHORED_POLICY_V1',
   catalog:[{...c}],salaryPolicies:[{...wage}]};
  const f=fixture({policy:p});f.api.loadNativeAuthoredCatalog();
  p.catalog[0].shipTypeID=123;p.salaryPolicies[0].salaryCents=1;
- a.deepEqual(f.api.loadNativeAuthoredCatalog(),[c]);
- a.deepEqual(f.api.loadNativeSalaryPolicies(),[wage]);
+ same(f.api.loadNativeAuthoredCatalog(),[c]);
+ same(f.api.loadNativeSalaryPolicies(),[wage]);
 });
 test('PF102B missing source policy is fatal with exact reason',()=>{
  const f=fixture({missingPolicy:true});
@@ -116,7 +117,7 @@ test('PF102B negative salary and impossible pay period cannot enter original sta
 test('PF102B validates writer module only from original source path',()=>{
  const f=fixture();const h=f.api.createNativeWriterHooks();
  a.equal(h,f.writerHooks);
- a.deepEqual(f.calls,['./coopPersonalFleetOriginalWorkBootstrap',
+ same(f.calls,['./coopPersonalFleetOriginalWorkBootstrap',
   './coopPersonalFleetOriginalNativeWriterBoundary']);
 });
 test('PF102B missing original writer boundary cannot be faked',()=>{
