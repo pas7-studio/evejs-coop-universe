@@ -65,8 +65,43 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
    return result;
   });}catch{return [];} // Never turn unreadable SQLite into a stock order claim.
  }
+ // Original stock arbiter is process-local. A native materialized DEFEND
+ // hull may still physically FOLLOW after restart when its lease vanished.
+ // Only the same ACKED PF55 source receipt and genuinely owned actor may
+ // authorize the source-pinned bridge to re-adopt that ONE GUARD lease.
+ function sourceAckedGuard(link){
+  if(!live()||!combatReady()||!positive(link?.entityID)||
+     !positive(link?.systemID))return false;
+  try{return a.transact([T,'items','characters','npcEntities',
+    'npcRuntimeControllers'],tx=>{
+   const row=tx.get(T,pf55.key(link.entityID));
+   if(row?.phase!=='ACKED'||row.action!=='DEFEND'||
+      row.shipItemID!==link.entityID||row.systemID!==link.systemID||
+      row.pilotID!==link.pilotID||
+      row.signature!==pf55.signature(row)||
+      tx.get(T,pf55.OP_INDEX)?.operations?.[row.operationID]?.phase!=='ACKED'||
+      tx.get(T,pf55.OP_INDEX).operations[row.operationID].signature!==row.signature||
+      orderWitness.verifyNativeActor(row,tx)!==true||
+      combatReceipt.verifyPersisted(row,tx)?.orderApplied!==true||
+      combatAuthority.verify(row,tx)!==true)return false;
+   const controller=getController(link.entityID),
+    scene=sceneForSystem(link.systemID),
+    ship=scene?.getEntityByID?.(link.entityID);
+   return controller?.personalFleetOriginal===true&&
+     controller.personalFleetAssignmentID===row.assignmentID&&
+     controller.personalFleetPilotID===row.pilotID&&
+     (controller.manualOrder==null||
+      controller.manualOrder?.type==='follow'&&
+      controller.manualOrder?.targetID===row.targetEntityID&&
+      controller.manualOrder?.allowWeapons===false)&&
+     ship?.nativeNpc===true&&ship.itemID===row.shipItemID&&
+     ship.ownerID===row.ownerCharacterID&&ship.mode==='FOLLOW'&&
+     ship.targetEntityID===row.targetEntityID;
+  })===true;}catch{return false;}
+ }
  const orderBridge=createOrderBridge({arbiter:sharedOriginalArbiter,
   assignments,sceneForSystem,getController,
+  personalFleetRecoveryProof:sourceAckedGuard,
   warShipClaim:link=>{
    if(!live())return 'UNKNOWN';
    try{
@@ -121,7 +156,7 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
   if(['ATTACK','DEFEND'].includes(action))return Boolean(combatReady());
   return ['FOLLOW','HOLD'].includes(action)&&base.supports(action)===true;
  }
- function combatEffect(row){
+ function combatEffect(row,originalRecovery=false){
   const permitted=()=>{
    if(!live())return false;
    try{return a.transact([T,'items','characters'],tx=>
@@ -132,7 +167,8 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
   if(!permitted())return {success:false,errorMsg:'PF95_COMBAT_ORIGINAL_TARGET_NOT_AUTHORIZED'};
   return orderBridge.issue({
    entityID:row.shipItemID,systemID:row.systemID,
-   owner:'PERSONAL_FLEET',action:row.action==='ATTACK'?'pf-attack':'pf-guard',
+   owner:'PERSONAL_FLEET',action:row.action==='ATTACK'?'pf-attack':
+    originalRecovery?'pf-resume-guard':'pf-guard',
    holdMs:120000,
    execute(){
     if(!permitted())return {success:false,errorMsg:'PF95_COMBAT_TARGET_REVOKED'};
@@ -189,7 +225,7 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
      combatAuthority.verify(row,tx)===true;
   })===true;}catch{proven=false;}
   if(!proven)return {success:false,errorMsg:'PF96_ORIGINAL_ACKED_COMBAT_SOURCE_NOT_PROVEN'};
-  return combatEffect(row);
+  return combatEffect(row,true);
  }
  function canIssuePersonalCombat(row){
   if(!live()||!combatReady()||!row||
