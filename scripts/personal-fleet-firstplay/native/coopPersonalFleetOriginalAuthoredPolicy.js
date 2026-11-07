@@ -139,7 +139,10 @@ function author(){
    salaryCents:DAILY_WAGE_CENTS,periodMs:WAGE_PERIOD_MS}));
   if(catalog.length===MAX)break;
  }
- if(catalog.length<1)throw Error('PF104_NO_REAL_SDE_NPC_WITH_PHYSICAL_SHIP_PROFILE');
+ if(catalog.length<1)throw Error(
+  'PF104_NO_REAL_SDE_NPC_WITH_PHYSICAL_SHIP_PROFILE:'+
+  'sdeCorpCount='+corpSet.size+':sdeNpcEmployers='+byCorporation.size+
+  ':stockProfiles='+profiles.length+':eligiblePhysicalPairs='+candidates.length);
  return Object.freeze({source:SOURCE,catalog:Object.freeze(catalog),
   salaryPolicies:Object.freeze(salaryPolicies)});
 }
