@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Review or explicitly install the 21-path Personal Fleet first-play WORK delta.
+"""Review or explicitly install the 23-path Personal Fleet first-play WORK delta.
 
 Requires PF80's already prepared, isolated, source-pinned WORK git worktree.
 This code never starts Docker, contacts PLAY, edits the original native checkout,
@@ -27,6 +27,7 @@ ADDITIONS={
  STOCK_ROOT/'coopPersonalFleetOriginalOrderWitness.js': ROOT/'native/coopPersonalFleetOriginalOrderWitness.js',
  STOCK_ROOT/'coopPersonalFleetOriginalOrderExecutor.js': ROOT/'native/coopPersonalFleetOriginalOrderExecutor.js',
  STOCK_ROOT/'coopPersonalFleetOriginalDurableOrderAck.js': ROOT/'native/coopPersonalFleetOriginalDurableOrderAck.js',
+ STOCK_ROOT/'coopPersonalFleetNativeEntityIsolation.js': ROOT/'native/coopPersonalFleetNativeEntityIsolation.js',
  STOCK_ROOT/'coopPersonalFleetOriginalDockCompletionWitness.js': ROOT/'native/coopPersonalFleetOriginalDockCompletionWitness.js',
  STOCK_ROOT/'coopPersonalFleetOriginalTerminalDockSources.js': ROOT/'native/coopPersonalFleetOriginalTerminalDockSources.js',
  STOCK_ROOT/'coopPersonalFleetOriginalDockCoordinator.js': ROOT/'native/coopPersonalFleetOriginalDockCoordinator.js',
@@ -49,6 +50,8 @@ EXPECTED_PATCH_PATHS={
  str(STOCK_ROOT/'coopPersonalFleetOriginalOrderWitness.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalOrderExecutor.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalDurableOrderAck.js'),
+ str(STOCK_ROOT/'coopPersonalFleetNativeEntityIsolation.js'),
+ str(STOCK_ROOT/'coopGameStoreAtomic.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalDockCompletionWitness.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalTerminalDockSources.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalDockCoordinator.js'),
@@ -115,9 +118,10 @@ def make_patch(work:Path,source:Path,manifest:Path):
  wallet=import_builder(ROOT/'tools/build_original_character_wallet_patch.py','pf_firstplay_wallet')
  chat=import_builder(ROOT/'tools/build_native_chat_patch.py','pf_firstplay_chat')
  arbiter=import_builder(ROOT/'tools/build_original_order_arbiter_patch.py','pf_firstplay_order_arbiter')
+ atomic=import_builder(ROOT/'tools/build_original_atomic_entity_contract_patch.py','pf_firstplay_entity_atomic')
  w=wallet.build(work,manifest)
  c=chat.build(work,source/'scripts/personal-fleet-firstplay/native/coopPersonalFleetChatGateway.js')
- result=w+c+arbiter.build(work)
+ result=w+c+arbiter.build(work)+atomic.build(work)
  target_files={}
  for relative,src in ADDITIONS.items():
   if not src.is_file():raise ValueError('PF_FIRSTPLAY_SOURCE_MODULE_MISSING: '+str(src))
@@ -134,7 +138,7 @@ def make_patch(work:Path,source:Path,manifest:Path):
  if len(patch_paths)!=len(set(patch_paths)):
   raise ValueError('PF_FIRSTPLAY_DUPLICATE_NATIVE_PATCH_PATH')
  if set(patch_paths)!=EXPECTED_PATCH_PATHS:
-  raise ValueError('PF_FIRSTPLAY_INCOMPLETE_TWENTY_ONE_FILE_PATCH')
+  raise ValueError('PF_FIRSTPLAY_INCOMPLETE_TWENTY_THREE_FILE_PATCH')
  return result,target_files
 
 def build(work:Path,source:Path,manifest:Path,out:Path,*,apply=False,confirm=''):
@@ -146,7 +150,7 @@ def build(work:Path,source:Path,manifest:Path,out:Path,*,apply=False,confirm='')
  native_patch,new_sources=make_patch(work,source,manifest)
  git(work,'apply','--whitespace=error','--check','-',input=native_patch)
  expected_added=EXPECTED_PATCH_PATHS-baseline
- if len(expected_added)!=17 or len(EXPECTED_PATCH_PATHS.intersection(baseline))!=4:
+ if len(expected_added)!=19 or len(EXPECTED_PATCH_PATHS.intersection(baseline))!=4:
   raise ValueError('PF_FIRSTPLAY_PF80_OVERLAP_NOT_EXACT')
  result={'status':'REVIEW_ONLY','featureEnabled':False,'gameplayE2E':'NOT_RUN',
   'nativeInstall':'NOT_RUN','playTouched':False,'workBranch':git(work,'branch','--show-current'),
@@ -156,6 +160,8 @@ def build(work:Path,source:Path,manifest:Path,out:Path,*,apply=False,confirm='')
   'patchSha256':sha(native_patch.encode('utf-8')),
   'sourceModuleSha256':{k:sha(v.encode('utf-8')) for k,v in new_sources.items()},
   'nativeAuthorityWired':False,
+  'pf87SourcePinned':True,
+  'pf87TransientIsolatedForSourceScopedNativeReceipts':True,
   'liveNpcOfferAuthorityWired':False}
  if apply:
   git(work,'apply','--whitespace=error','-',input=native_patch)
