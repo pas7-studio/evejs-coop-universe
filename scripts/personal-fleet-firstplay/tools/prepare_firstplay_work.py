@@ -25,6 +25,7 @@ ADDITIONS={
  STOCK_ROOT/'coopPersonalFleetOriginalWorkBootstrap.js': ROOT/'native/coopPersonalFleetOriginalWorkBootstrap.js',
  STOCK_ROOT/'coopPersonalFleetOriginalWalletAuthority.js': ROOT/'native/coopPersonalFleetOriginalWalletAuthority.js',
  STOCK_ROOT/'coopPersonalFleetOriginalOrderWitness.js': ROOT/'native/coopPersonalFleetOriginalOrderWitness.js',
+ STOCK_ROOT/'coopPersonalFleetOriginalOrderExecutor.js': ROOT/'native/coopPersonalFleetOriginalOrderExecutor.js',
 }
 PATCH_NAME='PERSONAL-FLEET-FIRST-PLAY-WORK.patch'
 RECEIPT='PERSONAL-FLEET-FIRST-PLAY-REVIEW.json'
@@ -40,6 +41,7 @@ EXPECTED_PATCH_PATHS={
  str(STOCK_ROOT/'coopPersonalFleetOriginalWorkBootstrap.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalWalletAuthority.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalOrderWitness.js'),
+ str(STOCK_ROOT/'coopPersonalFleetOriginalOrderExecutor.js'),
  'Code/server/src/services/chat/chatCommands.js',
  'Code/server/src/space/coopNpcOrderArbiter.js',
  'Code/server/src/space/coopNpcOrderBridge.js',
