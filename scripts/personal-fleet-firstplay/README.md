@@ -5,6 +5,61 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF95 — native ATTACK + owner GUARD and original controller receipt (2026-11-08)
+
+**Latest staged source inventory:** 22 PF80 baseline + **34-path** first-play
+WORK delta with four overlaps = **52 distinct native paths**; **66**
+SHA256-pinned source/test/tool records. All earlier dated counts below
+are historical.
+
+**Native gameplay commands** (no new server/HTTP API):
+- `/pf attack <shipID> <enemyNPC>`: physical original
+  `npcRuntime.issueAttackOrder`, with `allowPodKill:false` and explicit
+  original hostile target authority. Requires original ItemStore ship,
+  original actor generation/claim, real SDE-native NPC and the **stock**
+  `npcBehaviorLoop.isValidCombatTarget` verdict. Player targets,
+  CONCORD, own and protected targets are not legal through this command.
+  When original faction/hostility policy refuses a target, ATTACK is
+  blocked, not falsely reported as combat-ready.
+- `/pf guard <shipID>`: physical `npcRuntime.issueOrder` disarms
+  hostile weapons **before** original `npcRuntime.follow` trails the
+  authenticated owner's physical player ship. The protected target is
+  derived exclusively from the genuine logged-in owner's source, never a
+  caller-supplied entity. Native owner-writer and shared NPC arbiter
+  both verify the ship.
+- PF95 uses the **existing** common `coopNpcOrderBridge` and
+  `coopNpcOrderArbiter`; the source-pinned bridge patch preserves
+  peaceful stock directors while admitting Personal Fleet combat only
+  under its own existing, non-preemptive native order lease. Other NPC
+  directors cannot take a foreign or unknown active actor.
+- The PF55 original issue transaction continues to persist a one-use
+  `ISSUING` intent *before* the stock attack/guard effect. New
+  `coopPersonalFleetOriginalCombatReceipt.js` commits the **genuine
+  original** `npcRuntimeControllers/controllers\u001f<shipID>` row,
+  entity movement row, and immutable PF55 combat receipt in **one**
+  original SQLite transaction; unknown commit is never automatically
+  redispatched. PF55 reconciliation reads and verifies all three rows,
+  including live owner/target proof and canonical operation signature.
+
+**Isolated source checks this stage:** stock target/guard authority
+**9/9**, original atomic combat receipt **10/10**, original native
+shared-bridge commands **27/27**, authenticated `/pf` gateway
+**46/46**, command owner **35/35**, bootstrap composition **42/42**,
+and **33/33** exact original PF52/55/53/57 native source
+transformations compiled in controlled V8. Original stock arbiter
+blob pins were independently checked against EveJS.
+
+**Still NOT a fully reactive combat/guard system:** Auto-retaliation
+when the protected player is attacked is not connected to stock native
+aggression events. The original native service clears `manualOrder`
+on controller materialization after a restart; persistent combat orders
+need a verified re-adoption under the stock arbiter before they can
+continue safely. General pirate eligibility depends on genuine stock
+NPC hostility/faction policy, not only passing a command. Physical
+combat damage/kills/wrecks, a two-player WORK play test and SIGKILL
+recovery have NOT been run. This remains a **Draft, OFF, unmerged**
+source-pinned WORK package, not a playable release.
+
 ## PF94 — original physical PF56 RETURN mid-flight recovery (2026-11-08)
 
 **Latest code inventory:** first-play **32-path** native WORK delta,
