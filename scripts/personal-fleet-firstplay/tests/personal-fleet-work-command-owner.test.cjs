@@ -83,28 +83,28 @@ test('offers are listed only from native original quote provider',()=>fixture(f=
  f.state.originalOffer=false;assert.equal(f.invoke('offers').message,'No native offers');
 }));
 test('hire uses persisted roster revision and native original offer not caller price',()=>fixture(f=>{
- const result=f.invoke('hire',['offer-1']);assert.equal(result.status,'APPLIED');
+ const result=f.invoke('hire',['offer-1','accept-recurring']);assert.equal(result.status,'APPLIED');
  const {c}=f.calls.at(-1);assert.equal(c.expectedRosterRevision,0);
  assert.equal(c.ownerCharacterID,CHAR);assert.equal(c.agentID,200);assert.ok(/^pf-[0-9a-f-]{36}$/.test(c.operationID));
 }));
 test('hire unknown offer cannot charge native wallet',()=>fixture(f=>{
- f.state.originalOffer=false;assert.equal(f.invoke('hire',['offer-1']).status,'BLOCKED');assert.equal(f.calls.length,0);
+ f.state.originalOffer=false;assert.equal(f.invoke('hire',['offer-1','accept-recurring']).status,'BLOCKED');assert.equal(f.calls.length,0);
 }));
 test('assign reserves only original hangar spare ship and creates opaque assignment',()=>fixture(f=>{
- f.invoke('hire',['offer-1']);let r=f.invoke('assign',[PILOT,SHIP]);assert.equal(r.status,'APPLIED');
+ f.invoke('hire',['offer-1','accept-recurring']);let r=f.invoke('assign',[PILOT,SHIP]);assert.equal(r.status,'APPLIED');
  assert.ok(r.assignmentID.startsWith('pf-assignment-'));assert.equal(f.calls.at(-1).name,'reserve');
 }));
 test('assign rejects an original active player ship',()=>fixture(f=>{
- f.invoke('hire',['offer-1']);f.put('characters',String(CHAR),{characterID:CHAR,accountId:55,shipID:SHIP});
+ f.invoke('hire',['offer-1','accept-recurring']);f.put('characters',String(CHAR),{characterID:CHAR,accountId:55,shipID:SHIP});
  assert.equal(f.invoke('assign',[PILOT,SHIP]).status,'BLOCKED');
  assert.equal(f.calls.length,1);
 }));
 test('assign refuses owner absent from stock ItemStore',()=>fixture(f=>{
- f.invoke('hire',['offer-1']);f.put('items','items',{});
+ f.invoke('hire',['offer-1','accept-recurring']);f.put('items','items',{});
  assert.equal(f.invoke('assign',[PILOT,SHIP]).status,'BLOCKED');
 }));
 test('assign refuses wrong original docked station',()=>fixture(f=>{
- f.invoke('hire',['offer-1']);f.state.dock=false;
+ f.invoke('hire',['offer-1','accept-recurring']);f.state.dock=false;
  assert.equal(f.invoke('assign',[PILOT,SHIP]).status,'BLOCKED');
 }));
 test('deploy follows real prepare → one-shot dispatch → actor proof reconcile order',()=>fixture(f=>{
@@ -151,7 +151,7 @@ test('no return from an unverified PF54 ACTIVE actor',()=>fixture(f=>{
  f.setAssigned();assert.equal(f.invoke('returnToBase',[SHIP]).status,'BLOCKED');assert.equal(f.calls.length,0);
 }));
 test('dismiss only after ship is unassigned and original PF57 confirms',()=>fixture(f=>{
- f.invoke('hire',['offer-1']);assert.equal(f.invoke('dismiss',[PILOT]).status,'APPLIED');
+ f.invoke('hire',['offer-1','accept-recurring']);assert.equal(f.invoke('dismiss',[PILOT]).status,'APPLIED');
  assert.equal(f.calls.at(-1).name,'dismiss');
 }));
 test('dismiss refuses a pilot with reserved original physical ship',()=>fixture(f=>{
@@ -161,7 +161,7 @@ test('revoke original GameStore poison blocks all new commands',()=>fixture(f=>{
  f.state.poisoned=true;assert.equal(f.invoke('status').status,'BLOCKED');
 }));
 test('foreign account/session mismatch refuses before server effects',()=>fixture(f=>{
- const r=f.owner.hire({...f.ctx,accountID:999,args:['offer-1']});
+ const r=f.owner.hire({...f.ctx,accountID:999,args:['offer-1','accept-recurring']});
  assert.equal(r.status,'BLOCKED');assert.equal(f.calls.length,0);
 }));
 test('offers refuse invalid original price before displaying client UI',()=>fixture(f=>{
@@ -172,19 +172,19 @@ test('offers refuse invalid original price before displaying client UI',()=>fixt
  assert.match(f.invoke('offers').message,/140.00 ISK/);
 }));
 test('assign refuses a paid NPC incompatible with the original ItemStore hull type',()=>fixture(f=>{
- f.invoke('hire',['offer-1']);f.state.pilotHull=false;
+ f.invoke('hire',['offer-1','accept-recurring']);f.state.pilotHull=false;
  assert.equal(f.invoke('assign',[PILOT,SHIP]).reason,'PF_FIRSTPLAY_PAID_PILOT_SHIP_TYPE_UNVERIFIED');
  assert.equal(f.calls.filter(x=>x.name==='reserve').length,0);
 }));
 test('assign refuses mismatched original hull type before PF52 reservation',()=>fixture(f=>{
- f.invoke('hire',['offer-1']);
+ f.invoke('hire',['offer-1','accept-recurring']);
  const stored=f.get('items','items');stored[String(SHIP)].typeID=607;f.put('items','items',stored);
  assert.equal(f.invoke('assign',[PILOT,SHIP]).reason,'PF_FIRSTPLAY_PAID_PILOT_SHIP_TYPE_UNVERIFIED');
  assert.equal(f.calls.filter(x=>x.name==='reserve').length,0);
 }));
 
 test('PF91 salary selects first period from original empty lifecycle ledger',()=>fixture(f=>{
- f.invoke('hire',['offer-1']);const r=f.invoke('salary',[PILOT]);
+ f.invoke('hire',['offer-1','accept-recurring']);const r=f.invoke('salary',[PILOT]);
  assert.equal(r.status,'APPLIED');
  assert.equal(r.periodIndex,1);
  const calls=f.calls.filter(x=>x.name==='salary');
@@ -195,19 +195,19 @@ test('PF91 salary selects first period from original empty lifecycle ledger',()=
  assert.equal(calls[0].c.amountCents,undefined);
 }));
 test('PF91 salary cannot accept client-selected amount or pay period',()=>fixture(f=>{
- f.invoke('hire',['offer-1']);
+ f.invoke('hire',['offer-1','accept-recurring']);
  assert.equal(f.invoke('salary',[PILOT,'999999']).status,'BLOCKED');
  assert.equal(f.calls.filter(x=>x.name==='salary').length,0);
 }));
 test('PF91 salary uses next ledger period without reusing period 1',()=>fixture(f=>{
- f.invoke('hire',['offer-1']);
+ f.invoke('hire',['offer-1','accept-recurring']);
  f.state.salaryInspected={status:'OK',contract:{lastPeriod:3}};
  const r=f.invoke('salary',[PILOT]);
  assert.equal(r.periodIndex,4);
  assert.equal(f.calls.find(x=>x.name==='salary').c.periodIndex,4);
 }));
 test('PF91 corrupted original salary period blocks all wallet writes',()=>fixture(f=>{
- f.invoke('hire',['offer-1']);f.state.salaryInspected={status:'OK',contract:{lastPeriod:NaN}};
+ f.invoke('hire',['offer-1','accept-recurring']);f.state.salaryInspected={status:'OK',contract:{lastPeriod:NaN}};
  assert.equal(f.invoke('salary',[PILOT]).status,'BLOCKED');
  assert.equal(f.calls.filter(x=>x.name==='salary').length,0);
 }));
@@ -215,4 +215,10 @@ test('PF92 player sees recurring NPC salary and explicit recurrence before paid 
  const r=f.invoke('offers');
  assert.match(r.message,/140.00 ISK hire/);
  assert.match(r.message,/27.50 ISK salary every 24h/);
+}));
+test('PF92 original native command owner refuses one-token hire without wage consent',()=>fixture(f=>{
+ assert.equal(f.invoke('hire',['offer-1']).status,'BLOCKED');
+ assert.equal(f.calls.length,0);
+ assert.equal(f.invoke('hire',['offer-1','wrong']).status,'BLOCKED');
+ assert.equal(f.calls.length,0);
 }));
