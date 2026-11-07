@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Review or explicitly install the 8-path Personal Fleet first-play WORK delta.
+"""Review or explicitly install the 9-path Personal Fleet first-play WORK delta.
 
 Requires PF80's already prepared, isolated, source-pinned WORK git worktree.
 This code never starts Docker, contacts PLAY, edits the original native checkout,
@@ -22,6 +22,7 @@ ADDITIONS={
  STOCK_ROOT/'coopPersonalFleetWorkCommandOwner.js': ROOT/'native/coopPersonalFleetWorkCommandOwner.js',
  STOCK_ROOT/'coopPersonalFleetOriginalOfferAuthority.js': ROOT/'native/coopPersonalFleetOriginalOfferAuthority.js',
  STOCK_ROOT/'coopPersonalFleetOriginalSourceBindings.js': ROOT/'native/coopPersonalFleetOriginalSourceBindings.js',
+ STOCK_ROOT/'coopPersonalFleetOriginalWorkBootstrap.js': ROOT/'native/coopPersonalFleetOriginalWorkBootstrap.js',
 }
 PATCH_NAME='PERSONAL-FLEET-FIRST-PLAY-WORK.patch'
 RECEIPT='PERSONAL-FLEET-FIRST-PLAY-REVIEW.json'
@@ -33,6 +34,7 @@ EXPECTED_PATCH_PATHS={
  str(STOCK_ROOT/'coopPersonalFleetWorkCommandOwner.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalOfferAuthority.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalSourceBindings.js'),
+ str(STOCK_ROOT/'coopPersonalFleetOriginalWorkBootstrap.js'),
  'Code/server/src/services/chat/chatCommands.js',
 }
 
@@ -107,7 +109,7 @@ def make_patch(work:Path,source:Path,manifest:Path):
     fromfile='/dev/null',tofile='b/'+str(relative)))
   target_files[str(relative)]=content
  if set(p[6:] for p in result.splitlines() if p.startswith('+++ b/'))!=EXPECTED_PATCH_PATHS:
-  raise ValueError('PF_FIRSTPLAY_INCOMPLETE_EIGHT_FILE_PATCH')
+  raise ValueError('PF_FIRSTPLAY_INCOMPLETE_NINE_FILE_PATCH')
  return result,target_files
 
 def build(work:Path,source:Path,manifest:Path,out:Path,*,apply=False,confirm=''):
@@ -119,7 +121,7 @@ def build(work:Path,source:Path,manifest:Path,out:Path,*,apply=False,confirm='')
  native_patch,new_sources=make_patch(work,source,manifest)
  git(work,'apply','--whitespace=error','--check','-',input=native_patch)
  expected_added=EXPECTED_PATCH_PATHS-baseline
- if len(expected_added)!=5 or len(EXPECTED_PATCH_PATHS.intersection(baseline))!=3:
+ if len(expected_added)!=6 or len(EXPECTED_PATCH_PATHS.intersection(baseline))!=3:
   raise ValueError('PF_FIRSTPLAY_PF80_OVERLAP_NOT_EXACT')
  result={'status':'REVIEW_ONLY','featureEnabled':False,'gameplayE2E':'NOT_RUN',
   'nativeInstall':'NOT_RUN','playTouched':False,'workBranch':git(work,'branch','--show-current'),
