@@ -5,6 +5,56 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF94 — original physical PF56 RETURN mid-flight recovery (2026-11-08)
+
+**Latest code inventory:** first-play **32-path** native WORK delta,
+over PF80's **22** source paths with four overlaps =
+**50 distinct original native paths**; **62** source/tool/test SHA256 entries.
+Older inventory values below are historical snapshots.
+
+This stage implements genuine **in-flight return-warp reconstruction** rather
+than blindly redispatching the original warp:
+
+- New `coopPersonalFleetOriginalIngressProof.js` records the live
+  `sessionlessWarpIngress` from the already-issued, original
+  `npcRuntime.warpToPoint` call. It verifies departure coordinates against
+  the original live physical actor, genuine canonical station position and
+  live station-ball radius, original NPC owner, period, destination and
+  bounded flight duration. A stale stored movement position is allowed
+  only when the *real* original live position is independently witnessed.
+- `coopPersonalFleetOriginalDurableOrderAck.js` now commits the
+  `personalFleetReturnIngress` snapshot and its cryptographic receipt hash,
+  the observed physical departure, original `mode: WARP` and the existing
+  PF56 one-shot acceptance in the **same original GameStore SQLite
+  transaction**. Any missing original ingress or commit-unknown outcome
+  refuses the source proof; it never creates a second movement.
+- New `coopPersonalFleetOriginalIngressRecovery.js` re-verifies the PF56
+  operation index, original return receipt, native NPC entity row,
+  immutable signed ingress, unchanged player/account, original native
+  controller, exact station and time window. It restores only the original
+  **in-memory sessionless interpolation** on the same materialized
+  ItemStore-backed NPC actor: no new ship, ISK, NPC profile, warp, docking
+  acknowledgement or teleport.
+- PF90 physical restart now uses this source evidence before materializing
+  any WARP actor, and reattaches physical ingress only after the original
+  stock materializer succeeds. Already-resumed valid ingress is idempotent.
+  No original durable proof = **BLOCKED**, not an auto-generated warp.
+
+**Scope limitation:** This specifically covers PF56 in-progress **return to
+a station** with an unexpired, original native ingress snapshot. It does
+**not** yet resolve already-expired warps after a long server outage, or
+unacknowledged/other role-specific combat, mining, wormhole and expedition
+travel. Those require separate native arrival/reconciliation witnesses;
+blocking them is intentional to avoid moving a ship without physical proof.
+
+**Tests executed in a controlled mocked V8 harness:** ingress capture
+**14/14**, proof-driven source recovery **13/13**, PF90 source integration
+**23/23**, original PF55/PF56 post-effect SQLite-shaped ACK **32/32**
+(last full suite before the live-departure cache correction: 32/32).
+Actual original Node/SQLite, source installation and SIGKILL two-client
+gameplay tests are still required. `main` and `PLAY` remain unchanged;
+source feature flags remain OFF.
+
 ## PF92/PF93 native recurring wage consent + unattended payroll — 2026-11-08
 
 **Latest source revision:** PF80 **22** baseline native paths + first-play
