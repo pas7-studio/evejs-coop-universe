@@ -26,6 +26,7 @@ const originalOrderWitness=require('./coopPersonalFleetOriginalOrderWitness');
 const originalOrderExecutor=require('./coopPersonalFleetOriginalOrderExecutor');
 const originalCombatAuthority=require('./coopPersonalFleetOriginalCombatAuthority');
 const originalCombatReceipt=require('./coopPersonalFleetOriginalCombatReceipt');
+const originalCombatRecovery=require('./coopPersonalFleetOriginalCombatRecovery');
 const originalStationDwell=require('./coopPersonalFleetOriginalStationDwell');
 const originalStationTickDriver=require('./coopPersonalFleetOriginalStationTickDriver');
 const originalPhysicalRecovery=require('./coopPersonalFleetOriginalPhysicalRecovery');
@@ -193,6 +194,10 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
     readOriginalWarShipClaim:originalHooks.readOriginalWarShipClaim,
     orderWitness,orderReceipt:durableOrderAck,combatAuthority,combatReceipt,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
+  const combatRecovery=originalCombatRecovery.createOriginalCombatRecovery({
+    combatAuthority,combatReceipt,orderWitness,
+    resumeAfterOriginalAck:originalPhysicalOrders.resumeCommitted,
+    enabled,allWritersFenced:originalHooks.allWritersFenced});
   // Original stock ItemStore, scene/registry and SDE station geometry must
   // agree on each tick. A process restart changes the unforgeable scene epoch;
   // no prior dwell can authorize the new process to dock.
@@ -264,6 +269,7 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
   const stationTickDriver=originalStationTickDriver.createOriginalStationTickDriver({
     stationDwell,enabled,allWritersFenced:originalHooks.allWritersFenced,
     recoverPhysical:physicalRecovery.recover,
+    recoverCombat:combatRecovery.recover,
     settlePayroll:()=>serverPayroll?.tick()||{status:'PF93_SERVER_PAYROLL_NOT_INSTALLED'},
     advanceReturn:row=>{
       if(row.phase==='DOCK_ISSUING'){
