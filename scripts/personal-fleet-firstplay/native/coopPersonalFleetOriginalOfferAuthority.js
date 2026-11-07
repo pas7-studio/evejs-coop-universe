@@ -30,7 +30,7 @@ function validCatalogEntry(r){
 }
 function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
  originalNpcCharacters,originalNpcData,originalCorporations,
- authoredCatalog=[],enabled=()=>false,allWalletWritersFenced=()=>false,
+ authoredCatalog=[],authoredSalaryPolicies=[],enabled=()=>false,allWalletWritersFenced=()=>false,
  clock=()=>Date.now(),ttlMs=15*60*1000}={}){
  const atom=gameStore?.coopAtomicNativeRows;
  if(atom?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof atom.transact!=='function'||
@@ -45,12 +45,24 @@ function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
     typeof originalCorporations?.isNpcCorporationID!=='function'||
     !Array.isArray(authoredCatalog)||authoredCatalog.length>12||
     authoredCatalog.some(x=>!validCatalogEntry(x))||
+    !Array.isArray(authoredSalaryPolicies)||authoredSalaryPolicies.length>12||
+    authoredSalaryPolicies.some(x=>!OBJ(x)||!POS(x.npcCharacterID)||
+     !POS(x.salaryCents)||x.salaryCents>1000000000000||
+     !Number.isSafeInteger(x.periodMs)||x.periodMs<3600000||x.periodMs>604800000||
+     !POS(x.employerCorpID)||!POS(x.shipTypeID)||
+     !PROFILE.test(x.profileID)||!authoredCatalog.some(e=>
+      e.npcCharacterID===x.npcCharacterID&&e.employerCorpID===x.employerCorpID&&
+      e.profileID===x.profileID&&e.shipTypeID===x.shipTypeID))||
+    (authoredSalaryPolicies.length!==0&&
+     (authoredSalaryPolicies.length!==authoredCatalog.length||
+      new Set(authoredSalaryPolicies.map(x=>x.npcCharacterID)).size!==authoredSalaryPolicies.length))||
     new Set(authoredCatalog.map(x=>x.npcCharacterID)).size!==authoredCatalog.length||
     !Number.isSafeInteger(ttlMs)||ttlMs<60000||ttlMs>3600000||
     [enabled,allWalletWritersFenced,clock].some(x=>typeof x!=='function'))
   throw Error('PF_FIRSTPLAY_ORIGINAL_NPC_OFFER_AUTHORITIES_REQUIRED');
  // Never retain the author's mutable array; no user request can add a pilot.
  const catalog=Object.freeze(authoredCatalog.map(e=>Object.freeze(clone(e))));
+ const wageByNpc=new Map(authoredSalaryPolicies.map(p=>[p.npcCharacterID,Object.freeze(clone(p))]));
  const available=()=>enabled()===true&&allWalletWritersFenced()===true&&atom.isPoisoned()===false;
  const pilotID=c=>'coop-pilot-'+c;
  const offerID=(owner,npc)=>'pf-offer-'+owner+'-'+npc;
@@ -75,7 +87,10 @@ function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
      !Array.isArray(division.journal)||!Array.isArray(division.transactions))return null;
   return sha(['ORIGINAL_EVEJS_NPC_CATALOG_V1',entry.npcCharacterID,character.ownerName,
     entry.profileID,entry.shipTypeID,definition.profile.loadoutID,definition.profile.behaviorProfileID,
-    entry.employerCorpID,entry.amountCents]);
+    entry.employerCorpID,entry.amountCents,
+    ...(wageByNpc.has(entry.npcCharacterID)?[
+     'PF92_CONSENT_REQUIRED_V1',wageByNpc.get(entry.npcCharacterID).salaryCents,
+     wageByNpc.get(entry.npcCharacterID).periodMs]:[])]);
  }
  function guard(session,owner,tx){
   if(!available()||!POS(owner)||!OBJ(session)||session.characterID!==owner||
@@ -93,6 +108,9 @@ function createOriginalOfferAuthority({gameStore,pf52,pf53,access,
     agentID:entry.npcCharacterID,employerCorpID:entry.employerCorpID,
     ownerCharacterID:owner,profileID:entry.profileID,
     shipTypeID:entry.shipTypeID,amountCents:entry.amountCents,
+    ...(wageByNpc.has(entry.npcCharacterID)?{salaryConsentRequired:true,
+     salaryCents:wageByNpc.get(entry.npcCharacterID).salaryCents,
+     periodMs:wageByNpc.get(entry.npcCharacterID).periodMs}:{}),
     sourceProof:proof,expiresAtMs};
  }
  function integrity(row,entry,owner,proof){
