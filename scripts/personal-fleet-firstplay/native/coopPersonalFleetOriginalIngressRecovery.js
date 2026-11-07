@@ -15,6 +15,8 @@ const F='coop-personal-fleet\u001f',RECEIPT=F+'native-return-receipt-v1:';
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const same=(a,b)=>obj(a)&&obj(b)&&['x','y','z'].every(k=>a[k]===b[k]);
+const vec=a=>obj(a)&&['x','y','z'].every(k=>typeof a[k]==='number'&&Number.isFinite(a[k]));
+const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const deny=r=>Object.freeze({status:'BLOCKED',reason:r});
 function createOriginalIngressRecovery({enabled=()=>false,allWritersFenced=()=>false,
  clock=()=>Date.now()}={}){
@@ -82,9 +84,8 @@ function createOriginalIngressRecovery({enabled=()=>false,allWritersFenced=()=>f
    const originalStation=worldData.getStationByID(mark.stationID);
    if(originalStation?.stationID!==mark.stationID||
       originalStation?.solarSystemID!==row.systemID||
-      !proof.canResume({...row,operationID:mark.operationID,
-        signature:mark.signature,stationID:mark.stationID},
-       ingress,now,{...originalStation,radius:0}))
+      !vec(originalStation.position)||
+      !(now>ingress.startTimeMs&&now<ingress.travelCompleteAtMs-250))
     return deny('PF94_NATIVE_INGRESS_EXPIRED_OR_STATION_MISMATCH');
    // Stamped original NPC actor and controller must still own the same
    // physical hull. Never restore a WAR/MINING/EXPEDITION actor.
@@ -123,7 +124,8 @@ function createOriginalIngressRecovery({enabled=()=>false,allWritersFenced=()=>f
      controller.personalFleetPilotID!==row.pilotID||
      station?.kind!=='station'||station.itemID!==result.stationID||
      source?.stationID!==result.stationID||
-     !same(source.position,station.position)||
+     !vec(source.position)||!vec(station.position)||
+     distance(source.position,station.position)>100||
      !proof.canResume({...row,operationID:result.ingress.operationID,
        signature:result.ingress.signature,stationID:result.stationID},
        result.ingress,clock(),{...source,radius:station.radius}))
