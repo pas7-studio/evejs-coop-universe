@@ -82,4 +82,4 @@ if($NativeCheckout){
 }else{
  Write-Warning 'Real native source pin NOT RUN: supply -NativeCheckout.'
 }
-Write-Host 'PF_FIRSTPLAY_241_CONTRACT_TESTS_PASS. WORK and client gameplay NOT RUN.'
+Write-Host 'PF_FIRSTPLAY_242_CONTRACT_TESTS_PASS. WORK and client gameplay NOT RUN.'
