@@ -194,6 +194,14 @@ if ($ApplyToWork.IsPresent) {
     }
     & $python -m unittest discover -s (Join-Path $repo 'scripts/pf99/tests') -p 'test_pf99_*.py' -v
     if ($LASTEXITCODE -ne 0) { throw 'PF99_AUTHENTICATED_SESSION_SOURCE_ARCHIVE_INVALID' }
+    # PF100: read-only post-COMMIT session/physical hull consistency plus
+    # exact original owner source pins. Never publish session before COMMIT.
+    $pf100Runner = Join-Path $repo 'scripts/pf100/Test-PF100-Local.ps1'
+    if (-not (Test-Path -LiteralPath $pf100Runner -PathType Leaf)) {
+      throw 'PF100_ORIGINAL_POSTCOMMIT_PROOF_RUNNER_REQUIRED'
+    }
+    & $pf100Runner -NativeCheckout $NativeCheckout
+    if ($LASTEXITCODE -ne 0) { throw 'PF100_ORIGINAL_POSTCOMMIT_WORK_GATE_FAILED' }
     $pf90Owner = Join-Path $repo 'scripts/pf58/tests/pf90-owner-snapshot.test.cjs'
     $pf90Sources = Join-Path $repo 'scripts/pf90/tests/pf90-original-owners.test.cjs'
     $pf90Audit = Join-Path $repo 'scripts/pf90/inspect-original-owner-writes.cjs'
