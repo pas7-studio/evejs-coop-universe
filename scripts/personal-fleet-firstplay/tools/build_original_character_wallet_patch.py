@@ -52,6 +52,10 @@ MODULES={
   "    tx.put(TABLE,paidKey(command.operationID),paid);\n    tx.put(TABLE,originalPayrollConsent.consentKey(command.operationID),wageConsent);"),
  ("function verifyPaidReceipt(tx,receipt){",
   "function verifyPaidReceipt(tx,receipt){\n if(!originalPayrollConsent.verifyPaidWageConsent(tx,receipt))return false;"),
+ ("if(!obj(command)||!TOKEN.test(command.operationID)||",
+  "if(!obj(command)||command.recurringSalaryAcknowledged!==true||!TOKEN.test(command.operationID)||"),
+ ("   command.agentID,command.expectedRosterRevision]);",
+  "   command.agentID,command.expectedRosterRevision,command.recurringSalaryAcknowledged]);"),
 ],
 'coopPersonalFleetContractLifecycle.js':[
  ("    const rec=old.receipt,chars=tx.get(CHAR,CHAR),ch=chars?.[String(c.ownerCharacterID)],",
