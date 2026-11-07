@@ -18,7 +18,8 @@ const {createNpcRuntimeExecutor}=require('./coopPersonalFleetNpcRuntimeExecutor'
 const F='coop-personal-fleet\u001f',T='corporationRuntime';
 const positive=x=>Number.isSafeInteger(x)&&x>0;
 function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipClaim,
- orderWitness,orderReceipt,enabled=()=>false,allWritersFenced=()=>false}={}){
+ orderWitness,orderReceipt,combatAuthority=null,combatReceipt=null,
+ enabled=()=>false,allWritersFenced=()=>false}={}){
  const a=gameStore.coopAtomicNativeRows;
  if(a?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof a.transact!=='function'||
     typeof a.isPoisoned!=='function'||typeof runtime.scenes?.get!=='function'||
@@ -111,16 +112,52 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
   enabled:live});
  if(typeof nativeReturn?.execute!=='function')
   throw Error('PF_FIRSTPLAY_ORIGINAL_NATIVE_RETURN_BRIDGE_MISSING');
- function supports(action){return ['FOLLOW','HOLD'].includes(action)&&live()&&base.supports(action)===true;}
+ const combatReady=()=>combatAuthority&&combatReceipt&&
+    typeof combatAuthority.verify==='function'&&
+    typeof combatReceipt.recordAfterEffect==='function';
+ function supports(action){
+  if(!live())return false;
+  if(['ATTACK','DEFEND'].includes(action))return Boolean(combatReady());
+  return ['FOLLOW','HOLD'].includes(action)&&base.supports(action)===true;
+ }
+ function combatEffect(row){
+  const permitted=()=>{
+   if(!live())return false;
+   try{return a.transact([T,'items','characters'],tx=>
+    orderWitness.verifyNativeActor(row,tx)===true&&
+    combatAuthority.verify(row,tx)===true)===true;
+   }catch{return false;}
+  };
+  if(!permitted())return {success:false,errorMsg:'PF95_COMBAT_ORIGINAL_TARGET_NOT_AUTHORIZED'};
+  return orderBridge.issue({
+   entityID:row.shipItemID,systemID:row.systemID,
+   owner:'PERSONAL_FLEET',action:row.action==='ATTACK'?'pf-attack':'pf-guard',
+   holdMs:120000,
+   execute(){
+    if(!permitted())return {success:false,errorMsg:'PF95_COMBAT_TARGET_REVOKED'};
+    if(row.action==='ATTACK')
+     return npcRuntime.issueAttackOrder(row.shipItemID,row.targetEntityID,
+      {allowWeapons:true,keepLock:true,allowPodKill:false});
+    const follow=npcRuntime.follow(row.shipItemID,row.targetEntityID,
+       row.followRangeMeters,{wakeController:true});
+    if(follow?.success!==true)return follow;
+    return npcRuntime.issueOrder(row.shipItemID,{
+     type:'follow',targetID:row.targetEntityID,
+     followRangeMeters:row.followRangeMeters,
+     allowWeapons:false,keepLock:false,allowPodKill:false});
+   }
+  });
+ }
  function execute(row){
   if(!row||!supports(row.action))
    return {success:false,errorMsg:'PF_FIRSTPLAY_PHYSICAL_ORDER_NOT_AUTHORIZED'};
-  const physical=base.execute(row);
+  const physical=['ATTACK','DEFEND'].includes(row.action)?combatEffect(row):base.execute(row);
   // Original bridge/runtime returned physical success. Post-effect native
   // movement + PF55 receipt MUST commit together in original SQLite. If this
   // fails, PF55 keeps ISSUING and NEVER redispatches the movement.
   if(physical?.success!==true||physical?.then)return physical;
-  const persisted=orderReceipt.recordAfterNativeEffect(row);
+  const persisted=['ATTACK','DEFEND'].includes(row.action)?
+   combatReceipt.recordAfterEffect(row):orderReceipt.recordAfterNativeEffect(row);
   if(persisted?.success!==true)return {
    success:false,errorMsg:'PF55_NATIVE_EFFECT_OUTCOME_UNKNOWN_NO_RETRY'};
   return {success:true,data:{operationID:row.operationID,
