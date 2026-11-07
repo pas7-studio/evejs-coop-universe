@@ -388,7 +388,7 @@ source paths**. It includes the full first-play docking *code candidate*:
 17 source terminal and 15 coordinator). Earlier 265/265 component gates
 were green before this continuation. **Full combined current-head runner
 NOT EXECUTED**, although it now lists all 12 Node suites and accompanying
-Python/Git tests. Manifest pins 32 distinct source/test files. The original
+Python/Git tests. Manifest pins 36 distinct source/test files. The original
 native EveJS project cannot be written by the cloud GitHub integration (403).
 
 **Not yet gameplay-ready:** the original server startup and all reciprocal
@@ -404,3 +404,16 @@ completion can treat an unloaded original solar-system scene as proof that an
 NPC disappeared. Both require the exact original system scene to be mounted,
 and then check no physical duplicate exists in any mounted scene. Two new
 negative tests exercise this; the isolated dock suites now pass **68/68**.
+
+
+## Native original return flight and station dwell (2026-11-07)
+
+Original PF56 return flight is now source-wired to stock npcRuntime.warpToPoint through the exact same original shared NPC order bridge and arbiter used by PF55 FOLLOW/HOLD. The source accepts station coordinates only when original worldData.getStationByID and a matching, loaded original station scene ball agree. Client-provided destinations never substitute.
+
+New original source module coopPersonalFleetOriginalStationDwell.js verifies stock ItemStore, PF52/54 physical actor claim, original controller, scene, station geometry and stopped/warp-inactive movement. It writes a tick-bounded 2-second station dwell record in original SQLite. A departure, scene restart, controller change, missing scene, missed tick over 350ms, or a sample stale over 100ms denies PF56 continuous dwell and the PF66 native pre-dock gate. No fake player session or ItemStore mutation.
+
+New coopPersonalFleetOriginalStationTickDriver.js runs a single unref'd original-server 100ms timer after guarded native bootstrap publication; it enumerates only genuine persisted RETURNING/ARRIVAL_OBSERVED rows, samples outside the enumeration transaction, and never dispatches a warp or docking effect. A second timer startup is forbidden. Four prior callbacks (executeNativeReturn, verifyStationArrival, verifyContinuousDwell, verifyOriginalDockReady) now use original-source methods.
+
+Important remaining CODE: PF56 still needs its independently authenticated original durable RETURN order receipt (verifyOriginalReturnOrder), and its confirmReturn, observeArrival and requestDock transitions still require an authenticated player session. Completing these transitions after player logout needs a real original server-owned durable permit and integration, NOT a fabricated player session. The game engine startup and all original reciprocal writer hooks also remain uninstalled from this cloud connection.
+
+Test evidence actually executed: 66/66 fresh Node tests (22 physical-return bridge, 28 station dwell, 16 native scheduler), plus separately rerun older candidate baseline 239/239 Node and 26/26 Python. The full combined CURRENT PR head tests and actual native WORK/client/restart are NOT RUN. Do not sum independent source versions as a green current-head run. The isolated WORK patch now requires 21 additional native paths on PF80's 22 baseline (four overlapping), 39 unique final staged native paths. Manifest: 36 code/test source entries. Manual Windows runner: 14 Node suites. PLAY and main untouched.
