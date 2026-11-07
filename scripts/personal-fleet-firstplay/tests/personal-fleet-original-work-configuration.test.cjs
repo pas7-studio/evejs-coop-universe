@@ -41,7 +41,7 @@ function fixture({
   calls.push(id);
   if(id==='./coopPersonalFleetOriginalAuthoredPolicy'&&missingPolicy||
      id==='./coopPersonalFleetOriginalNativeWriterBoundary'&&missingWriters){
-   const err=Error('missing original source');err.code='MODULE_NOT_FOUND';throw err;
+   const err=Error("Cannot find module '"+id+"'");err.code='MODULE_NOT_FOUND';throw err;
   }
   if(!(id in imports))throw Error('PF102B_UNEXPECTED_IMPORT:'+id);
   return imports[id];
@@ -156,7 +156,7 @@ test('PF102B writer declaration is not a readiness assertion',()=>{
  * The bootstrap itself is inert here: this is a startup ordering test, not
  * a claimed live GameStore/ItemStore/server/network test.
  */
-function entryFixture({policy=true,writers=true,attest=true,nativeFlag='1'}={}){
+function entryFixture({policy=true,writers=true,attest=true,nativeFlag='1',policyFailure=null}={}){
  const starterSource=fs.readFileSync(path.join(__dirname,
   '../native/coopPersonalFleetOriginalWorkStarter.js'),'utf8');
  const events=[],process={env:{
@@ -183,12 +183,13 @@ function entryFixture({policy=true,writers=true,attest=true,nativeFlag='1'}={}){
   if(name==='./coopPersonalFleetOriginalWorkBootstrap')return expectedBootstrap;
   if(name==='./coopPersonalFleetOriginalAuthoredPolicy'){
    events.push('author-policy');
-   if(!policy){const e=Error('missing authored policy');e.code='MODULE_NOT_FOUND';throw e;}
+   if(!policy){const e=Error("Cannot find module './coopPersonalFleetOriginalAuthoredPolicy'");e.code='MODULE_NOT_FOUND';throw e;}
+   if(policyFailure)throw Error(policyFailure);
    return authored;
   }
   if(name==='./coopPersonalFleetOriginalNativeWriterBoundary'){
    events.push('native-writer-boundary');
-   if(!writers){const e=Error('missing original writer source');e.code='MODULE_NOT_FOUND';throw e;}
+   if(!writers){const e=Error("Cannot find module './coopPersonalFleetOriginalNativeWriterBoundary'");e.code='MODULE_NOT_FOUND';throw e;}
    return writerBoundary;
   }
   throw Error('PF102B_UNEXPECTED_CONFIG_REQUIRE:'+name);
@@ -218,6 +219,11 @@ test('PF102B absent native writer source aborts after genuine catalog proof',()=
  const f=entryFixture({writers:false});
  a.throws(()=>f.start(),/PF102B_ORIGINAL_NATIVE_WRITER_BOUNDARY_NOT_INSTALLED/);
  same(f.events,['author-policy','sde-and-wallet-proof','native-writer-boundary']);
+});
+test('PF104 no compatible real SDE NPC keeps exact blocker at startup',()=>{
+ const f=entryFixture({policyFailure:'PF104_NO_REAL_SDE_NPC_WITH_PHYSICAL_SHIP_PROFILE:profiles=450'});
+ a.throws(()=>f.start(),/PF104_NO_REAL_SDE_NPC_WITH_PHYSICAL_SHIP_PROFILE/);
+ same(f.events,['author-policy']);
 });
 test('PF102B attestor must be active before startup claims operational',()=>{
  const f=entryFixture({attest:false});
