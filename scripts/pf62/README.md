@@ -256,3 +256,15 @@ PF91/PF92 custody hooks are installed; unrelated character changes
 use an atomic native GameStore before-image fence. The original fork
 and PLAY are never patched by the runner. See
 `scripts/pf97/PF97_ORIGINAL_CHARACTER_ITEMSTORE_OWNER_HANDOFF.md`.
+
+## PF98 real SQLite session source-owner preflight
+
+The PF80 WORK review preflight now requires PF98 native PF91/PF92
+original-GameStore session witness bridge tests. In native mode,
+protected player ship changes require the PF95/PF96 original
+`tx.verifyReadOnlySessionWitness` hook; both missing owner and
+missing production flag block, never falling back to PF93
+before/after hashes. Archived PF93 fixtures can use their
+test-only fallback in Node's child-v8 test process.
+No original fork edits are applied by PF98.
+See `scripts/pf98/PF98_ORIGINAL_SQLITE_WITNESS_BRIDGE.md`.
