@@ -53,8 +53,8 @@ The native WORK staging includes:
 - **Native XMPP hook:** exact original `chatCommands.js` source-pinned patch;
   no new unauthenticated HTTP API or client modification.
 - **Isolated review assembler:** PF80's **22-file** preflight candidate +
-  this **16-path** original source delta (four overlap with PF80) =
-  **34 unique staged native paths**. The generated patch includes both
+  this **19-path** original source delta (four overlap with PF80) =
+  **37 unique staged native paths**. The generated patch includes both
   original NPC order source files, PF55 original character row scope,
   PF52 original paid hull row scope, wallet corrections, new modules
   and the original chat hook. It must pass exact Git `apply --check`.
@@ -67,7 +67,7 @@ receipts, bootstrap fail-sticky and in-memory EVE service adapters.
 **26/26 Python/Git tests PASS** on Python 3.13.5; exact original stock
 blob pins, patch transforms, `git apply`, manifest and linked-worktree gates.
 
-**265/265 total locally; all 26 candidate/test files SHA256-pinned.**
+**Previous baseline: 265/265 PASS. New PF56/60/61/66 local tests: 66/66 PASS. Full combined regression on this PR head has NOT RUN. 32 source/test files SHA256-pinned.**
 These are isolated component and controlled SQLite/VM tests.
 Original EveJS server and connected game-client E2E are **NOT RUN** here.
 Manual Windows PowerShell runner is **NOT RUN** here.
@@ -130,9 +130,11 @@ Do **not** confuse this staged package with gameplay-ready. The native
    server's `npcEntities` atomic SQLite table. A real WORK kill/restart must
    confirm that persisted FOLLOW/HOLD movement is rehydrated and PF55 can ACK
    it without a second physical command. In-memory success alone is rejected.
-4. Real source-owned PF56 sessionless RETURN/docking and exact original
-   ItemStore/scene cleanup and crash recovery. Never just teleport or
-   delete a ship after an unverified arrival.
+4. PF66 stock ItemStore docking, PF60/61 native scene cleanup and PF56
+   completion/readback are now CODE-WIRED in the source candidate. However,
+   original source-owned RETURN flight, continuous station dwell/arrival
+   monitoring and true native WORK restart proof remain outstanding.
+   Never teleport or delete an item without the original receipts.
 5. A real work-only catalog of existing SDE NPC character/profile/ship
    combinations. The operator must source authentic IDs; do not invent NPCs.
    Broader PF57 salaries, losses, dismissal, multi-NPC combat/mining and
@@ -160,7 +162,7 @@ The assembler now verifies **unique** native patch destinations before
 calling `git apply --check`. This catches repeated stock-source hunks,
 including duplicate original `coopNpcOrderArbiter.js` edits, which individual
 unit tests otherwise would not detect. Its expected exact set is **15 unique
-native paths**, four already staged by PF80, and **34 unique final WORK paths**.
+native paths**, four already staged by PF80, and **37 unique final WORK paths**.
 The two original stock order files are source-pinned and their anchors were
 independently checked against the `coop/pas7std` fork. The full original
 WORK `git apply --check` on the owner's machine remains unexecuted here.
@@ -193,9 +195,9 @@ Changing the target, assignment, actor generation or mode does.
 
 **Execution evidence**: 239/239 Node (including 19 actual SQLite durable
 receipt cases and integrated bootstrap/executor tests), plus 26/26
-Python/Git, **265/265 PASS** locally. **26 SHA256-pinned code/test files**;
-16 unique additional native patch paths over PF80's 22 source paths,
-four overlapping, producing 34 unique modified native files.
+Python/Git, **265/265 previously PASS; 66/66 newly added dock tests PASS; full combined regression NOT RUN.** **32 SHA256-pinned code/test files**;
+19 unique additional native patch paths over PF80's 22 source paths,
+four overlapping, producing 37 unique modified native files.
 
 **Not yet WORK gameplay:** Original GameStore refuses transactions on
 `npcEntities` while transient native rows are not safely quiescent; this
@@ -203,4 +205,52 @@ receipt intentionally fails closed instead of writing over them. The local
 native owner must verify that gate and the actual original npcRuntime mode,
 then run real SIGKILL/client E2E. This receipt proves accepted durable
 movement state, **not uninterrupted offline NPC AI or station docking**.
-PF56 real original return/docking/scene-detach remains the next P0.
+PF56/PF66/PF60/PF61 docking is source-wired but original RETURN flight, station arrival/dwell and native WORK gameplay remain P0.
+
+
+## Sessionless physical dock + original NPC cleanup source chain — 2026-11-07
+
+Added and tested:
+
+- `native/coopPersonalFleetOriginalDockCompletionWitness.js`: PF56 dock readback
+  checks original physical ItemStore title at the correct station; PF66 native
+  dock+scene detach **durable consumed attempts**; PF60 `NATIVE_CLEARED`
+  terminal row and PF61 scoped native cleanup attempt; no original native
+  NPC entity/controller/modules/cargo, no runtime controller, no duplicate
+  physical scene entity in any mounted system. It independently checks the
+  final original fitting/cargo manifest before granting any dock receipt.
+  **It does not move, create or destroy any item.**
+- `native/coopPersonalFleetOriginalTerminalDockSources.js`: source-owned PF60/61
+  command authentication, original entity/controller/scene witness, stable
+  terminal receipt across PF56 `DOCK_ISSUING → DOCKED`, original ItemStore
+  and unique item ID checks. No user-supplied terminal receipt.
+- `native/coopPersonalFleetOriginalDockCoordinator.js`: one-shot ordered
+  `PF66.execute → PF60.prepare → PF60.issue(PF61 scoped cleanup) →
+  PF60.reconcile`. After restart, `reconcileNativeCleanup` may only read
+  original durable state and reconcile; it NEVER dispatches PF66 or PF61
+  again. `finalizeAfterPf56Dock` delegates to PF60, whose original source
+  enforces PF56's committed `DOCKED` state and releases the final lock.
+- `native/coopPersonalFleetOriginalWorkBootstrap.js` now constructs PF66,
+  original PF60/61 and both source-bound dock witnesses from original EveJS
+  module singletons, then publishes /pf only after the complete composition
+  succeeds. Removed external `executeNativeDock` and
+  `verifyOriginalDockReceipt` hooks. Original PF66/PF61 code flags are hard
+  prerequisites. This source remains **OFF** until real native writer hooks.
+
+The WORK package now has **19 exact additional native paths** atop PF80's
+22 staged paths; four paths overlap and **37 unique native files** are staged.
+All 32 source/test files have SHA256 manifest entries. The manual Windows
+runner has 12 Node suites and is configured to announce its combined PASS
+only after every suite succeeds on the user's machine.
+
+**Executed here:** 66/66 new Node VM/source-contract tests, including 35
+PF56 completion, 16 PF60 terminal source and 15 one-shot cleanup-coordinator
+cases. Prior source baseline 265/265 passed before these changes. Full
+combined current-head test run, native WORK startup, real station flight/dwell,
+real ItemStore+NPC cleanup after kill, and two-client gameplay **NOT RUN**.
+
+Outstanding CODE/WORK work: authentic native source startup invocation and
+writer hooks, a real continuous station dwell monitor and original return-flight
+witness, plus observed crash-recovery on the running original server. A
+`DOCKED` response cannot be claimed until PF56 independently reconciles
+and PF60 finalizes the actual original ship. Do not touch PLAY.
