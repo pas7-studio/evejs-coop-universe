@@ -20,8 +20,8 @@ class PF97OriginalDamagePatchTest(unittest.TestCase):
   changed=damage.transform(stock)
   self.assertEqual(changed.count(damage.ANCHOR),1)
   self.assertEqual(changed.count(damage.ADDITION),1)
-  self.assertEqual(changed.count('CoopPlayerCombatWitness'),0)
-  self.assertIn('appliedDamage',changed)
+  self.assertEqual(changed.count('CoopPlayerCombatWitness'),1)
+  self.assertIn('damageAmount',changed)
   self.assertIn('attackerEntity, targetEntity, damageAmount',changed)
  def test_original_stock_npc_friendly_guard_only_allows_authorized_attacker(self):
   stock='"use strict";\n'+hostility.ANCHOR+'\n'
