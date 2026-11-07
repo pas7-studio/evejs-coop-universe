@@ -29,9 +29,16 @@ function createOriginalTerminalDockSources({enabled=()=>false,
  const active=()=>enabled()===true&&allWritersFenced()===true;
  const vacant=c=>{
   if(!positive(c?.shipItemID)||!positive(c?.systemID))return false;
-  try{return registry.getControllerByEntityID(c.shipItemID)===null&&
-   [...runtime.scenes.values()].every(s=>s&&typeof s.getEntityByID==='function'&&
-    s.getEntityByID(c.shipItemID)==null);}catch{return false;}
+  try{
+   // Empty or unloaded original scene is not proof that a physical NPC was
+   // detached. Never release a stock ship on an unmounted source system.
+   const original=runtime.scenes.get(c.systemID);
+   if(!original||original.systemID!==c.systemID||
+      typeof original.getEntityByID!=='function')return false;
+   return registry.getControllerByEntityID(c.shipItemID)===null&&
+    [...runtime.scenes.values()].every(s=>s&&typeof s.getEntityByID==='function'&&
+    s.getEntityByID(c.shipItemID)==null);
+  }catch{return false;}
  };
  function authority(c,tx){
   if(!active()||c?.mode!=='DOCK'||!positive(c.shipItemID)||
