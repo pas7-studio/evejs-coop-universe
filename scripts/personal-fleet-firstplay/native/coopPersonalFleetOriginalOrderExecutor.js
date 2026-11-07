@@ -94,7 +94,8 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
      !source.position||!['x','y','z'].every(k=>Number.isFinite(source.position[k])))return null;
   const scene=sceneForSystem(source.solarSystemID);
   const ball=scene?.getEntityByID?.(stationID);
-  if(scene?.systemID!==source.solarSystemID||ball?.entityID!==stationID||
+  if(scene?.systemID!==source.solarSystemID||ball?.itemID!==stationID||
+     (ball.entityID!==undefined&&ball.entityID!==stationID)||
      !ball.position||!['x','y','z'].every(k=>Number.isFinite(ball.position[k]))||
      !Number.isFinite(ball.radius)||ball.radius<1||
      Math.hypot(source.position.x-ball.position.x,
