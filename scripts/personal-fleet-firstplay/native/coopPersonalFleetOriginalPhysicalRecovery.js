@@ -173,6 +173,13 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
    const inFlight=String(source.entity.mode).toUpperCase()==='WARP'||
       source.entity.warpState||source.entity.pendingWarp||
       source.entity.isWarping===true;
+   // Physical scene warp is NOT an independent PF56 durable return receipt.
+   // When the original native row says STOP, never accept an unrelated
+   // in-flight actor as ALREADY_PHYSICAL just because the IDs match.
+   if(!inFlight&&occupant&&(String(occupant.mode).toUpperCase()==='WARP'||
+      occupant.sessionlessWarpIngress!=null||occupant.pendingWarp||
+      occupant.warpState||occupant.isWarping===true))
+    return block('PF101_UNPROVEN_SCENE_WARP_CONFLICT');
    if(physical(row,scene)){
     if(!inFlight)return {status:'ALREADY_PHYSICAL',shipItemID:row.shipItemID};
     const restored=ingress.restore(row,scene);
@@ -195,9 +202,6 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
     if(proven.status!=='VERIFIED_ORIGINAL_INGRESS')
      return block(proven.reason||'PF94_IN_FLIGHT_WARP_NOT_DURABLY_PROVEN');
    }
-   // A partly materialized actor is repairable by stock native service
-   // only when every existing half belongs to the SAME durable original
-   // Personal Fleet ship. It must not overwrite an unrelated entity.
    // A half-materialized original is repairable only when every existing
    // half is PF58-identical. Never overwrite a same-ID foreign physical actor
    // or a controller belonging to a different NPC director.
