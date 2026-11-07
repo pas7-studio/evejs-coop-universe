@@ -34,7 +34,9 @@ $pf93 = Join-Path $root 'tests/pf93-native-session-tx-isolation.test.cjs'
 if (-not (Test-Path -LiteralPath $pf93 -PathType Leaf)) { throw 'PF93_SQLITE_SESSION_WITNESS_TEST_MISSING' }
 $pf94 = Join-Path $root '../pf94/tests/pf94-owner-epoch-sqlite.test.cjs'
 if (-not (Test-Path -LiteralPath $pf94 -PathType Leaf)) { throw 'PF94_NATIVE_OWNER_SQLITE_TEST_MISSING' }
-$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87) + @($pf88) + @($pf89) + @($pf90) + @($pf91) + @($pf92) + @($pf93) + @($pf94)
+$pf98 = Join-Path $root '../pf98/tests/pf98-native-owner-bridge.test.cjs'
+if (-not (Test-Path -LiteralPath $pf98 -PathType Leaf)) { throw 'PF98_NATIVE_OWNER_WITNESS_BRIDGE_TEST_MISSING' }
+$allNodeTests = @($tests.FullName) + @($pf73) + @($pf86) + @($pf87) + @($pf88) + @($pf89) + @($pf90) + @($pf91) + @($pf92) + @($pf93) + @($pf94) + @($pf98)
 & $node --test '--test-concurrency=1' @allNodeTests
 if ($LASTEXITCODE -ne 0) { throw 'PF58_NODE_REGRESSION_FAILED' }
 $python = (Get-Command python -ErrorAction Stop).Source
