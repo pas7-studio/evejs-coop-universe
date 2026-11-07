@@ -14,6 +14,8 @@
 const core=require('./coopPersonalFleetOriginalSourceBindings');
 const originalWalletAuthority=require('./coopPersonalFleetOriginalWalletAuthority');
 const originalOrderAck=require('./coopPersonalFleetOriginalDurableOrderAck');
+const originalDockCompletion=require('./coopPersonalFleetOriginalDockCompletionWitness');
+const nativeScopedDock=require('./coopPersonalFleetScopedDock');
 const offers=require('./coopPersonalFleetOriginalOfferAuthority');
 const commands=require('./coopPersonalFleetWorkCommandOwner');
 const originalOrderWitness=require('./coopPersonalFleetOriginalOrderWitness');
@@ -42,8 +44,8 @@ const HOOKS=Object.freeze([
  'originalStationUndockPoint','originalOwnershipWitness',
  'verifyNativeFlight','verifyOriginalReturnOrder',
  'verifyStationArrival','verifyContinuousDwell','verifyOriginalManifest',
- 'verifyOriginalDockReceipt','verifyFinalOriginalManifest',
- 'executeNativeReturn','executeNativeDock','verifyOriginalDockedPlayerSession',
+ 'verifyFinalOriginalManifest','verifyOriginalDockReady',
+ 'executeNativeReturn','verifyOriginalDockedPlayerSession',
  'readOriginalWarShipClaim',
 ]);
 let booted=false;
@@ -76,6 +78,7 @@ function assertReadiness(hooks,original){
     stockItemStore?.findItemById===undefined||
     typeof stockItemStore.moveShipToSpace!=='function'||
     originalNpcService.PF58_ORIGINAL_ITEMSTORE_BRIDGE_V1!==true||
+    originalNpcService.PF66_SCOPED_DOCK_SCENE_DETACH_V1!==true||
     typeof originalRuntime.scenes?.get!=='function'||
     typeof originalNpcRegistry.getControllerByEntityID!=='function'||
     !positive(Date.now()))throw Error('PF_FIRSTPLAY_STOCK_NATIVE_BRIDGE_MISSING');
@@ -166,6 +169,18 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     nativeExecutor:originalPhysicalOrders,
     verifyPersistedNativeOrder:durableOrderAck.verifyPersistedNativeOrder,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
+  // PF66 moves the ONE original ItemStore hull and consumes its original
+  // scene-detach capability exactly once. PF60/PF61 later clean native rows;
+  // the independent readback refuses PF56 release before that cleanup.
+  const scopedDock=nativeScopedDock.createScopedDock({gameStore,
+    originalItemStore:stockItemStore,nativeNpcService:originalNpcService,
+    claimsPolicy:originalHooks.claimsPolicy,
+    verifyOriginalDockReady:originalHooks.verifyOriginalDockReady,
+    verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
+    enabled,allWritersFenced:originalHooks.allWritersFenced});
+  const dockCompletion=originalDockCompletion.createOriginalDockCompletionWitness({
+    enabled,allWritersFenced:originalHooks.allWritersFenced,
+    verifyFinalOriginalManifest:originalHooks.verifyFinalOriginalManifest});
   const returnDock=pf56.createPersonalFleetReturnDock({gameStore,pf52,
     claimsPolicy:originalHooks.claimsPolicy,access,
     verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
@@ -174,10 +189,10 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     verifyStationArrival:originalHooks.verifyStationArrival,
     verifyContinuousDwell:originalHooks.verifyContinuousDwell,
     verifyOriginalManifest:originalHooks.verifyOriginalManifest,
-    verifyOriginalDockReceipt:originalHooks.verifyOriginalDockReceipt,
+    verifyOriginalDockReceipt:dockCompletion.verifyOriginalDockReceipt,
     verifyFinalOriginalManifest:originalHooks.verifyFinalOriginalManifest,
     executeNativeReturn:originalHooks.executeNativeReturn,
-    executeNativeDock:originalHooks.executeNativeDock,
+    executeNativeDock:scopedDock.execute,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   // First-play excludes recurring PF57 salary / dismiss until its ORIGINAL
   // wallet, loss and contract hook owners are present. The public command
