@@ -93,11 +93,21 @@ function createOriginalCombatAuthority({enabled=()=>false,allWritersFenced=()=>f
    // ATTACK: only a genuine non-player NPC vessel already legal under
    // stock combat policy. No pods, CONCORD, named fleet allies, miners,
    // friendly ships, or rogue player PvP permissions.
+   const targetController=registry.getControllerByEntityID(row.targetEntityID);
    if(row.followRangeMeters!==null&&row.followRangeMeters!==undefined||
       target.session!=null||target.nativeNpc!==true||
       String(target.npcEntityType).toLowerCase()!=='npc'||
       target.ownerID===row.ownerCharacterID||
-      registry.getControllerByEntityID(row.targetEntityID)?.personalFleetOriginal===true)
+      targetController?.entityID!==row.targetEntityID||
+      targetController.systemID!==row.systemID||
+      targetController.personalFleetOriginal===true||
+      (pos(ship.corporationID)&&pos(target.corporationID)&&
+       ship.corporationID===target.corporationID)||
+      // Even if some wider original faction/combat rule calls a target
+      // hostile, Personal Fleet cannot steal another co-op director's
+      // WAR, MINING, PATROL, GATE or allied civilian NPC physical hull.
+      ['WAR','PERSONAL_FLEET','MINING','CIVILIAN','EXPEDITION','GATE','PATROL','CONCORD'].includes(
+       String(targetController.operatorKind||'').toUpperCase()))
     return false;
    if(validTarget(ship,target,{allowPodKill:false})===true)
     return on()&&scene.getEntityByID(row.targetEntityID)===target;
@@ -107,12 +117,7 @@ function createOriginalCombatAuthority({enabled=()=>false,allWritersFenced=()=>f
    // source patch independently checks the same incident and PF55 order
    // before any actual module fires.
    const ownerShipID=tx.get('characters',String(row.ownerCharacterID))?.shipID;
-   if(!pos(ownerShipID)||
-      (pos(ship.corporationID)&&pos(target.corporationID)&&
-       ship.corporationID===target.corporationID)||
-      ['WAR','PERSONAL_FLEET','MINING','CIVILIAN','EXPEDITION'].includes(
-       String(registry.getControllerByEntityID(target.itemID)?.operatorKind||'')))
-    return false;
+   if(!pos(ownerShipID))return false;
    const hit=damage.read({ownerCharacterID:row.ownerCharacterID,
     ownerShipItemID:ownerShipID,systemID:row.systemID});
    return hit?.source==='EVEJS_ORIGINAL_KILLMAIL_APPLIED_DAMAGE_V1'&&
