@@ -125,6 +125,7 @@ function fixture(cb){
   './coopPersonalFleetReturnDock':{createPersonalFleetReturnDock(args){events.push('return');
    assert.equal(args.enabled(),false);
    assert.equal(typeof args.verifyOriginalReturnOrder,'function');
+   assert.notEqual(args.verifyOriginalReturnOrder,hooks.verifyOriginalReturnOrder);
    assert.equal(typeof args.verifyOriginalDockReceipt,'function');
    assert.equal(typeof args.verifyServerReturnOwner,'function');
    assert.equal(typeof args.verifyStationArrival,'function');
@@ -337,6 +338,7 @@ test('operator fake native return and arrival callbacks are ignored',()=>fixture
  f.hooks.executeNativeReturn=()=>({success:true});
  f.hooks.verifyStationArrival=()=>({source:'FAKE'});
  f.hooks.verifyContinuousDwell=()=>({nativeMonitorPersisted:true});
+ f.hooks.verifyOriginalReturnOrder=()=>({source:'FABRICATED_NATIVE_RETURN'});
  f.hooks.verifyOriginalDockReady=()=>true;
  assert.equal(call(f).status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.ok(f.events.includes('station-dwell'));
