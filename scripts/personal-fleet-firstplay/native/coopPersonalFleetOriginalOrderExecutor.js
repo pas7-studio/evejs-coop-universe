@@ -10,6 +10,8 @@ const gameStore=require('../gameStore');
 const runtime=require('./runtime');
 const npcRuntime=require('./npc/npcRuntime');
 const registry=require('./npc/npcRegistry');
+const worldData=require('./worldData');
+const {createOriginalReturnExecutor}=require('./coopPersonalFleetNativeReturnExecutor');
 const pf52=require('./coopPersonalFleetHangarBridge');
 const {createOrderBridge}=require('./coopNpcOrderBridge');
 const {createNpcRuntimeExecutor}=require('./coopPersonalFleetNpcRuntimeExecutor');
@@ -21,7 +23,8 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
  if(a?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof a.transact!=='function'||
     typeof a.isPoisoned!=='function'||typeof runtime.scenes?.get!=='function'||
     typeof registry.getControllerByEntityID!=='function'||
-    !['follow','stop','issueOrder','issueAttackOrder','warpToEntity'].every(k=>typeof npcRuntime[k]==='function')||
+    !['follow','stop','issueOrder','issueAttackOrder','warpToEntity','warpToPoint'].every(k=>typeof npcRuntime[k]==='function')||
+    typeof worldData.getStationByID!=='function'||typeof createOriginalReturnExecutor!=='function'||
     typeof pf52.validateIndex!=='function'||typeof pf52.validateRoster!=='function'||
     !sharedOriginalArbiter||!['issue','blocked','snapshot','retainWithNativeProof','blocksForSystem'].every(k=>
      typeof sharedOriginalArbiter[k]==='function')||
@@ -81,6 +84,31 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
   },enabled:live});
  if(!base||typeof base.execute!=='function'||typeof base.supports!=='function')
   throw Error('PF_FIRSTPLAY_ORIGINAL_ORDER_EXECUTOR_UNAVAILABLE');
+ // PF56 returns use the EXACT SAME shared order bridge and arbiter as PF55.
+ // Stock worldData plus the live original station ball are both required:
+ // arbitrary client-provided coordinates can never initiate native warp.
+ function originalStation(stationID){
+  if(!positive(stationID)||!live())return null;
+  const source=worldData.getStationByID(stationID);
+  if(source?.stationID!==stationID||!positive(source.solarSystemID)||
+     !source.position||!['x','y','z'].every(k=>Number.isFinite(source.position[k])))return null;
+  const scene=sceneForSystem(source.solarSystemID);
+  const ball=scene?.getEntityByID?.(stationID);
+  if(scene?.systemID!==source.solarSystemID||ball?.entityID!==stationID||
+     !ball.position||!['x','y','z'].every(k=>Number.isFinite(ball.position[k]))||
+     !Number.isFinite(ball.radius)||ball.radius<1||
+     Math.hypot(source.position.x-ball.position.x,
+       source.position.y-ball.position.y,
+       source.position.z-ball.position.z)>100)return null;
+  return {stationID,systemID:source.solarSystemID,position:{...source.position},
+    radius:ball.radius};
+ }
+ const nativeReturn=createOriginalReturnExecutor({npcRuntime,orderBridge,
+  sceneForSystem,getController,getCanonicalStation:originalStation,
+  verifyPersonalClaim:row=>live()&&orderWitness.verifyPersonalClaim(row)===true,
+  enabled:live});
+ if(typeof nativeReturn?.execute!=='function')
+  throw Error('PF_FIRSTPLAY_ORIGINAL_NATIVE_RETURN_BRIDGE_MISSING');
  function supports(action){return ['FOLLOW','HOLD'].includes(action)&&live()&&base.supports(action)===true;}
  function execute(row){
   if(!row||!supports(row.action))
@@ -97,6 +125,12 @@ function createOriginalOrderExecutor({sharedOriginalArbiter,readOriginalWarShipC
    durability:'ORIGINAL_NPC_ENTITIES_AND_PF55_RECEIPT_COMMITTED'}};
  }
  return Object.freeze({supports,execute,
+  executeNativeReturn(row){
+   if(!live()||!row||!positive(row.shipItemID)||!positive(row.stationID)||
+      !positive(row.systemID)||!positive(row.actorGeneration))
+    return {success:false,errorMsg:'PF56_RETURN_NATIVE_SOURCE_UNAVAILABLE'};
+   return nativeReturn.execute(row);
+  },
   // Read-only; useful to diagnose a missing native assignment on WORK.
   inspectAssignments:()=>assignments().map(x=>Object.freeze({...x}))});
 }
