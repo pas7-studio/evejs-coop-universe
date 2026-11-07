@@ -7,7 +7,7 @@ const base=Object.freeze({operationID:'pfret-001',assignmentID:'job-001',shipIte
   ownerCharacterID:1900,pilotID:'coop-pilot-101',stationID:60000002,systemID:30000001,
   actorGeneration:2,signature:SIG,returnDispatchCount:1,phase:'RETURNING'});
 function fixture(){
- let now=1000000,failCommit=false,deny=false,poison=false,transactions=0;
+ let now=1000000,failCommit=false,deny=false,poison=false,transactions=0,criminal=false;
  const t='corporationRuntime',k='coop-personal-fleet\u001freturn-dock-v1:'+base.assignmentID;
  const table=new Map([[t+'\u001f'+k,{...base}],['items\u001fitems',{'1400':{itemID:1400,ownerID:1900,
  categoryID:6,flagID:0,locationID:30000001,spaceState:{systemID:30000001}}}]]);
@@ -30,6 +30,7 @@ function fixture(){
  const deps={
   'node:crypto':require('node:crypto'),
   '../gameStore':{coopAtomicNativeRows:atomic},
+  '../services/security/crimewatchState':{isCriminallyFlagged:()=>criminal},
   './worldData':{getStationByID(id){return id===60000002?{stationID:60000002,solarSystemID:30000001,position:V(1000)}:null;}},
   './runtime':{scenes},
   './npc/npcRegistry':{getControllerByEntityID:id=>id===1400?controller:null},
@@ -53,7 +54,7 @@ function fixture(){
     setNow:v=>now=v,now:()=>now,deny:()=>deny=true,poison:()=>poison=true,
     corrupt:()=>{const r=table.get(t+'\u001f'+k);r.signature='b'.repeat(64);table.set(t+'\u001f'+k,r)},
     setPhase:p=>{const r=table.get(t+'\u001f'+k);r.phase=p;table.set(t+'\u001f'+k,r)},
-    failCommit:()=>failCommit=true,getTransactions:()=>transactions};
+    failCommit:()=>failCommit=true,setCriminal:v=>criminal=v,getTransactions:()=>transactions};
 }
 const label=(name,fn)=>test(name,()=>fn(fixture()));
 label('first in-zone sample is original atomic receipt',f=>{
@@ -193,4 +194,11 @@ label('a dynamic ship shadowing the station ID cannot authorize original dock',f
 });
 label('non-ship object cannot masquerade as the native PF actor',f=>{
  f.actor.kind='wreck';assert.equal(f.source.sample(base).status,'BLOCKED');
+});
+
+label('original Crimewatch criminal docking restriction blocks station dwell',f=>{
+ f.setCriminal(true);assert.equal(f.source.sample(base).status,'BLOCKED');
+});
+label('missing original Crimewatch authority cannot become a station admission',f=>{
+ f.setCriminal(undefined);assert.equal(f.source.sample(base).status,'BLOCKED');
 });
