@@ -17,7 +17,8 @@ function fixture({now=START+PERIOD}={}){
   employerCorpID:1002000,amountCents:3500},
   {operationID:'pf-hire-1',offerID:'pf-offer-90000001-123456',offerRevision:1,
    contractID:CONTRACT,pilotID:PILOT,ownerCharacterID:OWNER,
-   session:{userid:ACCOUNT,characterID:OWNER,socket:{destroyed:false}}},START);
+   session:{userid:ACCOUNT,characterID:OWNER,socket:{destroyed:false}},
+   recurringSalaryAcknowledged:true},START);
  if(!wage)throw Error('TEST_CONSENT_FAILED');
  const paid={status:'PAID',operationID:'pf-hire-1',offerID:wage.offerID,
   offerRevision:1,amountCents:3500,createdAtMs:START,ownerCharacterID:OWNER,
