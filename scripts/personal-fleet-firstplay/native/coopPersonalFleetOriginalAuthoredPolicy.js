@@ -24,10 +24,23 @@ const WAGE_PERIOD_MS=86400000;
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const token=x=>typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(x);
-const name=x=>typeof x==='string'?x:obj(x)?x.en||'':'';
+const name=x=>typeof x==='string'?x:obj(x)?
+  (typeof x.en==='string'&&x.en.trim()?x.en:
+   Object.values(x).find(y=>typeof y==='string'&&y.trim())||''):'';
 function genuineStaticFolder(){
  const found=[];
- for(const root of [path.join(ROOT,'data'),path.join(ROOT,'_local','sde')]){
+ // The original corporationState reads this exact environment override
+ // before Code/data and Code/_local/sde. Its SDE record lookup may otherwise
+ // resolve a DIFFERENT release from the PF104 authored policy.
+ const originalConfiguredRoot=typeof process!=='undefined'&&
+   typeof process.env?.EVEJS_STATIC_JSONL_ROOT==='string'&&
+   process.env.EVEJS_STATIC_JSONL_ROOT.trim()
+     ?path.resolve(process.env.EVEJS_STATIC_JSONL_ROOT):null;
+ const roots=[
+  ...(originalConfiguredRoot?[originalConfiguredRoot]:[]),
+  path.join(ROOT,'data'),path.join(ROOT,'_local','sde')
+ ];
+ for(const root of roots){
   let dirs=[];
   try{
    if(fs.statSync(root).isDirectory()&&
