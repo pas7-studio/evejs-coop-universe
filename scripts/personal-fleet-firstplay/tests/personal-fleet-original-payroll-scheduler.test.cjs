@@ -40,7 +40,7 @@ function fixture({now=START+PERIOD}={}){
  const state={calls:[],poison};
  const atomic={mode:'SERVER_INTERNAL_FLAGGED',
   isPoisoned:()=>poison,transact:(tables,fn)=>{
-   assert.deepEqual(tables,[T,'characters']);
+   assert.deepEqual(Array.from(tables),[T,'characters']);
    return fn({get:(table,key)=>table===T?values[key]??null:characters[key]??null});
   }};
  const pf52={REGISTRY_KEY:P+'hangar-reservations-v1',ROSTER_PREFIX:P+'hangar-roster-v1:',
