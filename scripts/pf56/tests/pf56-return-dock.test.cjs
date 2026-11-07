@@ -226,6 +226,8 @@ test('reconcile refuses unrelated corrupted global durable operation entries',()
 }));
 
 test('PF84 server-only continuation completes after player disconnect without a new warp or dock',()=>run((f,c)=>{
+ // Never mutate the shared F.session fixture used by subsequent tests.
+ c={...c,session:{...c.session,socket:{...c.session.socket}}};
  const requested=f.returnDock.requestReturn(c);
  assert.equal(requested.status,'NEEDS_RECONCILIATION');
  const durable=f.get('corporationRuntime',f.pf56.key(c.assignmentID));
@@ -261,6 +263,8 @@ test('PF84 denies offline initiation, forged generations and owner-account trans
 }));
 
 test('PF84 unknown return or unknown dock effect is never reissued by server ticks',()=>run((f,c)=>{
+ // Never mutate the shared F.session fixture used by subsequent tests.
+ c={...c,session:{...c.session,socket:{...c.session.socket}}};
  f.shared.returnIssued=false;
  f.returnDock.requestReturn(c);
  const durable=f.get('corporationRuntime',f.pf56.key(c.assignmentID));
