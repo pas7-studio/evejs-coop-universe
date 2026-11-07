@@ -16,7 +16,7 @@ function fixture(testBody){
  const modules={
   '../gameStore':{coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',transact:(tables,cb)=>{calls.push([...tables]);return cb(tx);},isPoisoned:()=>poisoned}},
   './runtime':{scenes:new Map([[30000142,{systemID:30000142,
-    getEntityByID:id=>id===60000123?{entityID:60000123,position:{x:200,y:300,z:400},radius:270}:null}]])},
+    getEntityByID:id=>id===60000123?{entityID:60000123,itemID:60000123,position:{x:200,y:300,z:400},radius:270}:null}]])},
   './npc/npcRuntime':{follow:()=>{},stop:()=>{},issueOrder:()=>{},issueAttackOrder:()=>{},warpToEntity:()=>{},warpToPoint:()=>{}},
   './worldData':{getStationByID:id=>id===60000123?{stationID:id,solarSystemID:30000142,position:{x:200,y:300,z:400}}:null},
   './coopPersonalFleetNativeReturnExecutor':{createOriginalReturnExecutor:x=>{capture.returnSource=x;return {execute:row=>({success:true,kind:'REAL_RETURN_ADAPTER',ship:row.shipItemID})};}},
@@ -136,4 +136,9 @@ test('PF56 original native return bridge must exist at startup',()=>fixture(f=>{
  // A compiler change that removed return bridge construction cannot become success.
  assert.equal(typeof f.create().executeNativeReturn,'function');
  assert.equal(typeof f.capture.returnSource.npcRuntime.warpToPoint,'function');
+}));
+
+test('PF56 canonical original station ball uses itemID when entityID is absent',()=>fixture(f=>{
+ f.create();const s=f.capture.returnSource.getCanonicalStation(60000123);
+ assert.equal(s?.stationID,60000123);
 }));
