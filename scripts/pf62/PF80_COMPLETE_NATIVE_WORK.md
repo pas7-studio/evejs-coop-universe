@@ -226,3 +226,15 @@ runtime activation is not. The standalone implementation must
 be installed by a reviewed original owner commit, not a runtime
 wrapper around the existing public tx.
 See `scripts/pf94/PF94_ORIGINAL_OWNER_MUTATION_EPOCH.md`.
+
+## PF95 original GameStore single-writer source review
+
+PF80 now runs PF95's exact-original-source adapter test on a
+disposable copy of pinned `coopGameStoreAtomic.js`, checking
+`git apply --check` and real SQLite semantics of the review-only
+one-file epoch diff. This is **not** a patch installation in the
+fork or a WORK gameplay test. PF95 has no entry in legacy
+upstream patch registry and cannot be run by that installer.
+Native owner, ItemStore, characterState and live session hooks
+remain blocking before feature enablement. See
+`scripts/pf95/PF95_NATIVE_GAMESTORE_OWNER_HANDOFF.md`.

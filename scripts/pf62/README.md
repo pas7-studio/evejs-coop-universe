@@ -233,3 +233,15 @@ witness. Its negative test proves a raw SQLite writer bypass is
 invisible unless the original GameStore owns all writes. Therefore
 this candidate does **not** install the original hook or enable
 Personal Fleet. See `scripts/pf94/PF94_ORIGINAL_OWNER_MUTATION_EPOCH.md`.
+
+## PF95 original SQLite owner source-pinned WORK proof
+
+PF95 moves the PF94 epoch proposal to an exact single-file
+original GameStore source diff (review only, no legacy installer).
+The PF80 `-ApplyToWork` preflight now checks the source pin,
+applies the diff to a **temporary source copy** and uses actual
+Node `node:sqlite` to exercise rollback, native receipts and
+transaction lifetime, without changing the WORK fork or PLAY.
+The method is default OFF and remains unconnected to original
+characterState/ItemStore/session owners. See
+`scripts/pf95/PF95_NATIVE_GAMESTORE_OWNER_HANDOFF.md`.

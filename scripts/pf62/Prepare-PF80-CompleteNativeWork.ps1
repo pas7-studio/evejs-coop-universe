@@ -130,6 +130,21 @@ if ($ApplyToWork.IsPresent) {
     } finally {
       [Environment]::SetEnvironmentVariable('PF94_NATIVE_WORKTREE',$priorPf94Source,'Process')
     }
+    # PF95: fail closed if the ORIGINAL GameStore blob differs from PF90's
+    # pin, or if the REVIEW-ONLY one-file diff fails in an isolated temp copy.
+    # This does not patch the fork and never calls the legacy patch installer.
+    $pf95Test = Join-Path $repo 'scripts/pf95/tests/pf95-original-game-store-epoch.test.cjs'
+    if (-not (Test-Path -LiteralPath $pf95Test -PathType Leaf)) {
+      throw 'PF95_SOURCE_PINNED_ORIGINAL_GAMESTORE_TEST_MISSING'
+    }
+    $oldPf95Root = [Environment]::GetEnvironmentVariable('PF95_NATIVE_WORKTREE','Process')
+    try {
+      $env:PF95_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf95Test
+      if ($LASTEXITCODE -ne 0) { throw 'PF95_ORIGINAL_SQLITE_OWNER_TEMP_COPY_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF95_NATIVE_WORKTREE',$oldPf95Root,'Process')
+    }
     $pf90Owner = Join-Path $repo 'scripts/pf58/tests/pf90-owner-snapshot.test.cjs'
     $pf90Sources = Join-Path $repo 'scripts/pf90/tests/pf90-original-owners.test.cjs'
     $pf90Audit = Join-Path $repo 'scripts/pf90/inspect-original-owner-writes.cjs'
