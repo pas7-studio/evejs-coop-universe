@@ -490,7 +490,27 @@ function fingerprintOriginalWitnessRows(tx){
  }
  return hash.digest('hex');
 }
+/**
+ * PF98: production-like native Personal Fleet transactions MUST ask the
+ * source-owned PF95/PF96 original SQLite GameStore to verify the live
+ * character/session witness. A SHA256 before/after table fingerprint cannot
+ * prove absence of write-then-restore, identical writes or missing-row deletes.
+ *
+ * The PF93 fingerprint remains only for archived OFF-mode contract tests:
+ * flag ON MUST NEVER fall back to hashing or caller-supplied pseudo owners.
+ * Native tx provenance itself is proven only by the source-pinned original
+ * GameStore owner installation, not by this module in isolation.
+ */
 function verifyOriginalWitnessCannotWrite(tx,callback,request){
+ if(process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS==='1'){
+  if(typeof tx?.verifyReadOnlySessionWitness!=='function')
+   throw Error('PF98_ORIGINAL_SQLITE_OWNER_SESSION_WITNESS_REQUIRED');
+  const verdict=tx.verifyReadOnlySessionWitness(callback,request);
+  if(verdict&&typeof verdict.then==='function')
+   throw Error('PF98_ASYNC_ORIGINAL_OWNER_WITNESS_FORBIDDEN');
+  return verdict===true;
+ }
+ // PF93 legacy compatibility only while native witness flag is OFF.
  const before=fingerprintOriginalWitnessRows(tx);
  const reader=Object.freeze({
   get:(table,key)=>structuredClone(tx.get(table,key)),
