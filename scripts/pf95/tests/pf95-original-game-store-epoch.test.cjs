@@ -149,3 +149,88 @@ test('PF95 original SQLite source still uses synchronous FULL and BEGIN IMMEDIAT
  assert.match(h.source.changed.toString('utf8'),/BEGIN IMMEDIATE/);
  assert.match(h.source.changed.toString('utf8'),/NATIVE_SQLITE_COMMIT_OUTCOME_UNKNOWN/);
 }));
+
+test('PF96 callback catches original put attempt yet returns true: source-owner throws',t=>withNative(t,h=>{
+ assert.throws(()=>h.adapter.transact(['characters'],tx=>tx.verifyReadOnlySessionWitness(()=>{
+  try{tx.put('characters','90000001',{characterID:90000001,balance:999});}catch{}
+  return true;
+ },{})),/PF95_ORIGINAL_SESSION_WITNESS_WRITE_ATTEMPT_ROLLBACK/);
+ assert.equal(h.get('characters','90000001').balance,100);
+}));
+test('PF96 mutator swallows original witness write exception: SQLite still rolls back',t=>withNative(t,h=>{
+ assert.throws(()=>h.adapter.transact(['characters'],tx=>{
+  try{tx.verifyReadOnlySessionWitness(()=>{
+   try{tx.del('characters','90000001')}catch{}
+   return true;
+  },{})}catch{}
+  return 'WRONG_COMMIT';
+ }),/PF96_ORIGINAL_SESSION_WITNESS_POISONED_BEFORE_COMMIT/);
+ assert.equal(h.get('characters','90000001').balance,100);
+}));
+test('PF96 false original witness with no stock write remains a no-op',t=>withNative(t,h=>{
+ const out=h.adapter.transact(['characters'],tx=>tx.verifyReadOnlySessionWitness(()=>false,{}));
+ assert.equal(out.result,false);
+ assert.equal(h.get('characters','90000001').balance,100);
+}));
+test('PF96 caught write after false witness cannot commit a new character record',t=>withNative(t,h=>{
+ assert.throws(()=>h.adapter.transact(['characters'],tx=>{
+  assert.equal(tx.verifyReadOnlySessionWitness(()=>false,{}),false);
+  try{tx.put('characters','90000001',{characterID:90000001,balance:0})}catch{}
+  return 'SWALLOWED';
+ }),/PF96_ORIGINAL_SESSION_WITNESS_POISONED_BEFORE_COMMIT/);
+ assert.equal(h.get('characters','90000001').balance,100);
+}));
+test('PF96 original writes before a later rejected session witness must rollback',t=>withNative(t,h=>{
+ assert.throws(()=>h.adapter.transact(['characters'],tx=>{
+  tx.put('characters','90000001',{characterID:90000001,balance:0});
+  return tx.verifyReadOnlySessionWitness(()=>false,{});
+ }),/PF96_ORIGINAL_SESSION_WITNESS_DENIED_BEFORE_COMMIT/);
+ assert.equal(h.get('characters','90000001').balance,100);
+}));
+test('PF96 a later successful witness never cancels the earlier failed session',t=>withNative(t,h=>{
+ assert.throws(()=>h.adapter.transact(['characters'],tx=>{
+  tx.verifyReadOnlySessionWitness(()=>false,{});
+  tx.verifyReadOnlySessionWitness(()=>true,{});
+  return tx.put('characters','90000001',{characterID:90000001,balance:0});
+ }),/PF96_ORIGINAL_SESSION_WITNESS_DENIED_WRITE/);
+ assert.equal(h.get('characters','90000001').balance,100);
+}));
+test('PF96 nested witness failure, caught in both callbacks, still aborts COMMIT',t=>withNative(t,h=>{
+ assert.throws(()=>h.adapter.transact(['characters'],tx=>{
+  try{tx.verifyReadOnlySessionWitness(()=>{
+   try{tx.verifyReadOnlySessionWitness(()=>true,{})}catch{}
+   return true;
+  },{})}catch{}
+  return 'NESTED_SWALLOWED';
+ }),/PF96_ORIGINAL_SESSION_WITNESS_POISONED_BEFORE_COMMIT/);
+ assert.equal(h.get('characters','90000001').balance,100);
+}));
+test('PF96 caught asynchronous witness result poisons original COMMIT',t=>withNative(t,h=>{
+ assert.throws(()=>h.adapter.transact(['characters'],tx=>{
+  try{tx.verifyReadOnlySessionWitness(()=>Promise.resolve(true),{})}catch{}
+  return 'ASYNC_SWALLOWED';
+ }),/PF96_ORIGINAL_SESSION_WITNESS_POISONED_BEFORE_COMMIT/);
+}));
+test('PF96 thrown original session exception, swallowed by mutator, still denies COMMIT',t=>withNative(t,h=>{
+ assert.throws(()=>h.adapter.transact(['characters'],tx=>{
+  try{tx.verifyReadOnlySessionWitness(()=>{throw Error('OFFLINE_SESSION')},{})}catch{}
+  return 'SESSION_ERROR_SWALLOWED';
+ }),/PF96_ORIGINAL_SESSION_WITNESS_POISONED_BEFORE_COMMIT/);
+}));
+test('PF96 falsely accepted disabled witness never permits even an empty COMMIT',t=>withNative(t,h=>{
+ assert.throws(()=>h.adapter.transact(['characters'],tx=>{
+  try{tx.verifyReadOnlySessionWitness(()=>true,{})}catch{}
+  return 'DISABLED_SWALLOWED';
+ }),/PF96_ORIGINAL_SESSION_WITNESS_POISONED_BEFORE_COMMIT/);
+ assert.equal(h.get('characters','90000001').balance,100);
+},{witness:null}));
+test('PF96 unrelated original corporation write by a witness is never committed after caught error',t=>withNative(t,h=>{
+ assert.throws(()=>h.adapter.transact(['characters','corporationRuntime'],tx=>{
+  try{tx.verifyReadOnlySessionWitness(()=>{
+   try{tx.put('corporationRuntime','hidden',{unexpected:true})}catch{}
+   return false;
+  },{})}catch{}
+  return 'CORPORATION_WRITE_SWALLOWED';
+ }),/PF96_ORIGINAL_SESSION_WITNESS_POISONED_BEFORE_COMMIT/);
+ assert.equal(h.get('corporationRuntime','hidden'),null);
+}));
