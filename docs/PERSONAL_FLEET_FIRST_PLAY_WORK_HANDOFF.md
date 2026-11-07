@@ -160,14 +160,14 @@ The new production-facing candidate is in
 This adds an authenticated real XMPP/LSC /pf gateway, source-bound server
 command conductor, native stock chat source patch, and PF53/PF57 per-character
 wallet row fixes. All ten exact published tested source/test files are
-SHA256-pinned. Node.js 22.16.0: **62/62 PASS**, Python 3.13.5: **18/18 PASS**,
-total **80/80** isolated component checks. No original native engine boot,
+SHA256-pinned. Node.js 22.16.0: **118/118 PASS**, Python 3.13.5: **18/18 PASS**,
+total **136/136** isolated component checks. No original native engine boot,
 Windows PowerShell runner, client gameplay or true native payment/actor test.
 
 The combined WORK-only patch assembler starts from PF80's isolated
-22-path staged native worktree and adds FIVE native source paths
+22-path staged native worktree and adds SEVEN native source paths
 (two existing PF53/PF57, three new: chat hook, /pf gateway, command
-conductor). It verifies the exact final 25-path WORK inventory; both
+conductor). It verifies the exact final 27-path WORK inventory; both
 review and explicit apply modes keep all flags OFF. Read the README
 for a safe two-command staging sequence. These additional paths are
 **staging**, not a runtime boot or server-side original owner installation.
@@ -182,3 +182,43 @@ fleet policies. The original native repository still rejects GitHub
 writes (HTTP 403). Thus status remains **BLOCKED_NATIVE_INSTALL**,
 **NOT** only debugging. The first legitimate WORK gameplay test
 must be on a real original engine fork commit and authenticated EVE client.
+
+
+## Original real NPC offers and source binding — 2026-11-07
+
+The first-play WORK bundle now stages **SEVEN** native source paths beyond the
+PF80 22-path base (two existing wallet modules modified; five changed/added
+native files, 27 final staged Git paths total). Both key source adapters are in
+`scripts/personal-fleet-firstplay/native/`:
+
+- `coopPersonalFleetOriginalOfferAuthority.js`: a durable server-priced
+  per-character offer from an original named NPC **SDE person**, original
+  `npcData.buildNpcDefinition()` profile/loadout/behavior and original
+  `corporationRuntime` corporate wallet. PF53 revalidates the same offer
+  before real ISK settlement. No character, NPC entity or currency minted.
+- `coopPersonalFleetOriginalSourceBindings.js`: imports the native original
+  GameStore, sessionRegistry, structureLocation, stationStaticData and
+  space runtime, verifies exact authenticated original character/account
+  and real docked-station or in-space physical player ship ownership.
+
+Native client `/pf offers` now displays the **server-authored ISK price**.
+The catalog is EMPTY unless the operator chooses real eligible NPC character
+IDs, NPC profile IDs and employer corporation IDs in their installed EVE SDE.
+That step is not simulated. A real preexisting native NPC persona is not the
+same thing as a physically spawned native NPC ship/controller.
+
+**Evidence:** Node 22.16.0 **118/118 PASS** including 34 real-SQLite
+offer and 21 native-source-authentication tests; Python/Git 18/18 PASS;
+**136/136 total locally**. Tests use controlled original service adapters
+and are NOT proof of original EveJS integration. The Windows/manual
+runner and complete original native binary boot are unexecuted here.
+Native source hash pins cover original chatCommands, NPC data, corp
+identity/runtime, live sessions, stations, space runtime and SQLite.
+
+**The remaining code is real:** source-owned bootstrap mounting PF52–57,
+SDE-authored catalog for local WORK, native PF58 actor adoption, PF55
+real scene orders, PF56 return/docking, all original writer fences
+and gameplay restart hooks. Do not describe the project as
+`CODE_COMPLETE_ONLY_DEBUG_REMAINS` until the original fork has actual
+commits for those adapters and source-level tests. The cloud GitHub
+App cannot currently write to `pas7-studio/EveJS` (HTTP 403).
