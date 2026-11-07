@@ -101,7 +101,7 @@ function createOriginalOrderWitness({combatAuthority=null,enabled=()=>false,allW
       combatAuthority.verify(c,tx)!==true)return false;
    const pending=tx.get(T,F+'manual-order-v1:'+c.shipItemID);
    if(pending?.phase!=='ISSUING'||pending.operationID!==c.operationID||
-      pending.signature!==c.signature||
+      pending.signature!==require('./coopPersonalFleetNativeOrders').signature(c)||
       pending.action!==c.action||pending.targetEntityID!==c.targetEntityID)
      return false;
    if(c.action==='ATTACK')return order==='attack'&&
