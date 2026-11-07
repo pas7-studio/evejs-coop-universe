@@ -3,9 +3,8 @@ from pathlib import Path
 import unittest
 
 ROOT=Path(__file__).resolve().parents[1]
-REPO=ROOT.parents[1]
 BUILDER=ROOT/'tools/build_original_character_wallet_patch.py'
-ARCHIVE=REPO/'pf57/native/coopPersonalFleetContractLifecycle.cjs'
+ARCHIVE=ROOT.parent/'pf57/native/coopPersonalFleetContractLifecycle.cjs'
 spec=importlib.util.spec_from_file_location('pf89_wreck_contract',BUILDER)
 m=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
