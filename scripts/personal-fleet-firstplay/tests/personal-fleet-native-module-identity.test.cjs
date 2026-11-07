@@ -55,3 +55,15 @@ test('PF95 stock-combat verifier and durable original controller writer remain i
  assert.match(owner,/function attack\(ctx\)/);
  assert.match(owner,/function guard\(ctx\)/);
 });
+
+test('PF96/97 actual native crash recovery and reactive GUARD modules preserve their entry points',()=>{
+ const load=name=>fs.readFileSync(path.join(__dirname,'../native/'+name),'utf8');
+ const combat=load('coopPersonalFleetOriginalCombatRecovery.js');
+ const aggression=load('coopPersonalFleetOriginalGuardAggression.js');
+ const retaliation=load('coopPersonalFleetOriginalGuardReaction.js');
+ assert.match(combat,/module\.exports=Object\.freeze\(\{createOriginalCombatRecovery\}\)/);
+ assert.match(combat,/retainOriginalCombatLease/);
+ assert.match(aggression,/module\.exports=Object\.freeze\(\{note,read,listRecent,allowsRetaliation\}\)/);
+ assert.match(retaliation,/module\.exports=Object\.freeze\(\{createOriginalGuardReaction\}\)/);
+ assert.match(retaliation,/canIssuePersonalCombat/);
+});
