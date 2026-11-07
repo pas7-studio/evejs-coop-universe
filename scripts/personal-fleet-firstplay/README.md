@@ -179,7 +179,7 @@ The receipt writer independently verifies the PF55 `ISSUING` operation and
 exact signature/index, PF52/PF54 original ship/controller claim, original
 ItemStore title, original in-scene movement (`FOLLOW` target and range or
 `STOP`), and live authenticated player target. It then writes the
-actual original `npcEntities['/'].entities[shipItemID]` movement fields
+actual original `npcEntities['entities\u001f<shipItemID>']` movement fields
 (`mode`, `targetEntityID`, `followRange`, coordinates/velocity) **and
 the PF55 native applied receipt in one original GameStore
 `[corporationRuntime,items,characters,npcEntities]` SQLite transaction**.
@@ -356,7 +356,7 @@ RETURN. After the existing shared NPC arbiter reports physical warp success,
 it independently verifies the exact `RETURN_ISSUING` operation/index,
 original PF52/PF54 actor claim, the source-owned native NPC entity/controller,
 original live warp state, original station SDE+scene geometry and immutable
-character/account owner. It then writes an original `npcEntities['/']`
+character/account owner. It then writes an original `npcEntities['entities\u001f<shipItemID>']`
 return-order marker plus the same-intent
 `corporationRuntime['native-return-receipt-v1:<operationID>']`
 in **one original SQLite transaction**.
@@ -380,3 +380,31 @@ Local source/VM contract checks additionally covered 25/25 durable-order-ack
 scenarios (19 prior + 6 RETURN cases) with a mocked transactional SQLite
 adapter and 23/23 native order-executor scenarios. **No actual Node/SQLite
 or WORK E2E run was performed here.**
+
+## PF86 — P0 native SQLite NPC entity-row correction (2026-11-07)
+
+Inspected the **original** EveJS `Code/server/src/gameStore/sqliteStore.js`
+`ROW_GROUPS.npcEntities = ['entities']` and `explodeToRows`:
+the actual SQLite key for an NPC is `entities\\u001f<itemID>` (the
+single-byte Unit Separator between `entities` and the decimal item ID).
+It is **not** a `/ ` root document. Earlier isolated VM/SQLite tests created
+a fictional `npcEntities['/']` blob and therefore could not establish
+that either PF55 or PF84B receipts worked against stock native storage.
+
+Both durable order receipt readers/writers now use the original **per-entity**
+SQLite key. PF55 persists the original live FOLLOW/HOLD movement and receipt;
+PF84B persists the original source-observed RETURN acceptance marker and
+receipt. Both commits affect only the claimed physical NPC row plus the
+matching `corporationRuntime` receipt, never clobbering another NPC.
+
+Regression fixtures now seed real per-entity keys and a second unrelated
+NPC; tests reject a fabricated legacy root `/`, verify another NPC is
+untouched, check rollback/restart readback, and exercise RETURN receipt
+tampering. These test changes are essential; the old green counts were
+not proof of real stock SQLite compatibility.
+
+**Remaining P0:** GameStore's genuine `coopAtomicNativeRows` refuses
+transactions on a native table that has unquiesced transient rows. This
+preserves safety and must NOT be bypassed by an unscoped writer. A real
+original-server startup, sourced reciprocal writer fences and WORK
+SIGKILL/client tests remain mandatory. No PLAY activation.
