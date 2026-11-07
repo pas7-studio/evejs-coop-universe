@@ -30,7 +30,11 @@ An original `coopAtomicNativeRows.transact` must atomically:
 5. Check native actor absence, original equipment hashes, unique
    stock undock coordinates, reciprocal writer fence and independent
    custody authority.
-6. Write a single updated `characters/<owner>` row pointing to the
+6. Route external equipment, actor-presence, undock and timestamp
+   callbacks through the **same original owner-issued sticky read-only
+   witness**, not merely a read-only facade; caught SQL writes must
+   force rollback rather than silently allow commit.
+7. Write a single updated `characters/<owner>` row pointing to the
    capsule, the exact original source item relocated into the real
    system/space, and two PF58 handoff permit keys — all inside the
    *same BEGIN IMMEDIATE / COMMIT*.
@@ -46,12 +50,12 @@ A durable PF58 one-shot permit remains consumed; normal PF58
 ### Evidence actually executed
 
 - Node.js 22.16.0, real `node:sqlite` in-memory
-  `BEGIN IMMEDIATE` and `COMMIT`: **25/25 PASS**.
+  `BEGIN IMMEDIATE` and `COMMIT`: **26/26 PASS**.
 - Tests include: correct three-table commit, no new item IDs, wallet
   preservation, preexisting capsule validation, conflicting ownership,
   duplicate permit, account/docking change, first/second witness
   revocation, equipment/actor absence, negative writer flags, and
-  two injected post-write failures with actual SQLite rollback.
+  two injected post-write failures with actual SQLite rollback, and a\n  caught same-value write attempted inside a simulated PF96 sticky witness.
 - A simulated COMMIT acknowledgment failure verifies that no retry
   token is returned even though the durable rows may already exist.
 - The executed test loads **exact candidate source** with controlled
