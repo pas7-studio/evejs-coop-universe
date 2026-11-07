@@ -261,6 +261,7 @@ test('PF101 refuses a same-ID owner ship without the original PF58 actor markers
 for(const [name,change] of [
  ['native occupied bit',e=>{e.nativeNpcOccupied=false;}],
  ['NPC entity type',e=>{e.npcEntityType='mining';}],
+ ['ship hull type',e=>{e.typeID=999;}],
  ['operator',e=>{e.operatorKind='WAR';}],
  ['selection kind',e=>{e.selectionKind='WAR';}],
  ['selection assignment',e=>{e.selectionID='other';}],
