@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Review or explicitly install the 35-path Personal Fleet first-play WORK delta.
+"""Review or explicitly install the 39-path Personal Fleet first-play WORK delta.
 
 Requires PF80's already prepared, isolated, source-pinned WORK git worktree.
 This code never starts Docker, contacts PLAY, edits the original native checkout,
@@ -43,6 +43,8 @@ ADDITIONS={
  STOCK_ROOT/'coopPersonalFleetOriginalCombatAuthority.js': ROOT/'native/coopPersonalFleetOriginalCombatAuthority.js',
  STOCK_ROOT/'coopPersonalFleetOriginalCombatReceipt.js': ROOT/'native/coopPersonalFleetOriginalCombatReceipt.js',
  STOCK_ROOT/'coopPersonalFleetOriginalCombatRecovery.js': ROOT/'native/coopPersonalFleetOriginalCombatRecovery.js',
+ STOCK_ROOT/'coopPersonalFleetOriginalGuardAggression.js': ROOT/'native/coopPersonalFleetOriginalGuardAggression.js',
+ STOCK_ROOT/'coopPersonalFleetOriginalGuardReaction.js': ROOT/'native/coopPersonalFleetOriginalGuardReaction.js',
  STOCK_ROOT/'coopPersonalFleetOriginalStationTickDriver.js': ROOT/'native/coopPersonalFleetOriginalStationTickDriver.js',
 }
 PATCH_NAME='PERSONAL-FLEET-FIRST-PLAY-WORK.patch'
@@ -79,8 +81,12 @@ EXPECTED_PATCH_PATHS={
  str(STOCK_ROOT/'coopPersonalFleetOriginalCombatAuthority.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalCombatReceipt.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalCombatRecovery.js'),
+ str(STOCK_ROOT/'coopPersonalFleetOriginalGuardAggression.js'),
+ str(STOCK_ROOT/'coopPersonalFleetOriginalGuardReaction.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalStationTickDriver.js'),
  'Code/server/src/services/chat/chatCommands.js',
+ 'Code/server/src/space/combat/killmailTracker.js',
+ 'Code/server/src/space/npc/npcBehaviorLoop.js',
  'Code/server/src/space/coopNpcOrderArbiter.js',
  'Code/server/src/space/coopNpcOrderBridge.js',
 }
@@ -143,9 +149,11 @@ def make_patch(work:Path,source:Path,manifest:Path):
  arbiter=import_builder(ROOT/'tools/build_original_order_arbiter_patch.py','pf_firstplay_order_arbiter')
  atomic=import_builder(ROOT/'tools/build_original_atomic_entity_contract_patch.py','pf_firstplay_entity_atomic')
  startup=import_builder(ROOT/'tools/build_original_server_startup_patch.py','pf_firstplay_startup')
+ damage=import_builder(ROOT/'tools/build_original_guard_damage_patch.py','pf_firstplay_guard_damage')
+ hostility=import_builder(ROOT/'tools/build_original_guard_hostility_patch.py','pf_firstplay_guard_hostility')
  w=wallet.build(work,manifest)
  c=chat.build(work,source/'scripts/personal-fleet-firstplay/native/coopPersonalFleetChatGateway.js')
- result=w+c+arbiter.build(work)+atomic.build(work)+startup.build(work)
+ result=w+c+arbiter.build(work)+atomic.build(work)+startup.build(work)+damage.build(work)+hostility.build(work)
  target_files={}
  for relative,src in ADDITIONS.items():
   if not src.is_file():raise ValueError('PF_FIRSTPLAY_SOURCE_MODULE_MISSING: '+str(src))
@@ -162,7 +170,7 @@ def make_patch(work:Path,source:Path,manifest:Path):
  if len(patch_paths)!=len(set(patch_paths)):
   raise ValueError('PF_FIRSTPLAY_DUPLICATE_NATIVE_PATCH_PATH')
  if set(patch_paths)!=EXPECTED_PATCH_PATHS:
-  raise ValueError('PF_FIRSTPLAY_INCOMPLETE_THIRTY_FIVE_FILE_PATCH')
+  raise ValueError('PF_FIRSTPLAY_INCOMPLETE_THIRTY_NINE_FILE_PATCH')
  return result,target_files
 
 def build(work:Path,source:Path,manifest:Path,out:Path,*,apply=False,confirm=''):
@@ -174,7 +182,7 @@ def build(work:Path,source:Path,manifest:Path,out:Path,*,apply=False,confirm='')
  native_patch,new_sources=make_patch(work,source,manifest)
  git(work,'apply','--whitespace=error','--check','-',input=native_patch)
  expected_added=EXPECTED_PATCH_PATHS-baseline
- if len(expected_added)!=31 or len(EXPECTED_PATCH_PATHS.intersection(baseline))!=4:
+ if len(expected_added)!=35 or len(EXPECTED_PATCH_PATHS.intersection(baseline))!=4:
   raise ValueError('PF_FIRSTPLAY_PF80_OVERLAP_NOT_EXACT')
  result={'status':'REVIEW_ONLY','featureEnabled':False,'gameplayE2E':'NOT_RUN',
   'nativeInstall':'NOT_RUN','playTouched':False,'workBranch':git(work,'branch','--show-current'),
