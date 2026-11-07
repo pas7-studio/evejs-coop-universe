@@ -14,7 +14,7 @@ const positive=x=>Number.isSafeInteger(x)&&x>0;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const token=x=>typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x);
 const no=reason=>Object.freeze({status:'BLOCKED',reason});
-function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF56_SERVER_CONTINUATION_NOT_INSTALLED'),enabled=()=>false,
+function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF56_SERVER_CONTINUATION_NOT_INSTALLED'),recoverPhysical=()=>null,enabled=()=>false,
  allWritersFenced=()=>false,scheduler={setInterval,clearInterval}}={}){
  const atomic=gameStore?.coopAtomicNativeRows;
  if(atomic?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof atomic.transact!=='function'||
@@ -22,9 +22,9 @@ function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF5
     typeof pf56.key!=='function'||typeof pf56.signature!=='function'||
     typeof terminal.terminalKey!=='function'||
     typeof stationDwell?.sample!=='function'||
-    [advanceReturn,enabled,allWritersFenced,scheduler?.setInterval,scheduler?.clearInterval].some(f=>typeof f!=='function'))
+    [advanceReturn,recoverPhysical,enabled,allWritersFenced,scheduler?.setInterval,scheduler?.clearInterval].some(f=>typeof f!=='function'))
   throw Error('PF56_ORIGINAL_STATION_NATIVE_TICK_SOURCE_REQUIRED');
- let handle=null,busy=false,started=false;
+ let handle=null,busy=false,started=false,lastRecoveryAtMs=0,lastRecovery=null;
  const live=()=>enabled()===true&&allWritersFenced()===true&&atomic.isPoisoned()===false;
  function openReturns(){
   return atomic.transact([T],tx=>{
@@ -66,6 +66,16 @@ function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF5
   if(busy)return no('PF56_MONITOR_OVERLAPPING_TICK');
   busy=true;
   try{
+   // PF90: recover source-bound physical NPCs only when their original
+   // scenes are already loaded. A scene-less assignment is not spawned here.
+   // Do not retry a failed native materialization; recovery owns a sticky
+   // per-entity fence and reports uncertain outcomes to the operator.
+   const now=Date.now();
+   if(now>=lastRecoveryAtMs+1000){
+    lastRecoveryAtMs=now;
+    try{lastRecovery=recoverPhysical();}
+    catch{lastRecovery=no('PF90_RECOVERY_EXCEPTION');}
+   }
    const rows=openReturns();
    if(!Array.isArray(rows))return no('PF56_MONITOR_ORIGINAL_RETURN_ROWS_UNCERTAIN');
    let observed=0,blocked=0,advanced=0,pending=0;
@@ -100,6 +110,6 @@ function createOriginalStationTickDriver({stationDwell,advanceReturn=()=>no('PF5
   // Sticky start fence: never create overlapping timers in one process.
   return true;
  }
- return Object.freeze({start,stop,tick,getStatus:()=>({started,active:handle!==null})});
+ return Object.freeze({start,stop,tick,getStatus:()=>({started,active:handle!==null,recovery:lastRecovery?.status||'NOT_SAMPLED'})});
 }
 module.exports=Object.freeze({createOriginalStationTickDriver,INTERVAL_MS,MAX_OPEN});
