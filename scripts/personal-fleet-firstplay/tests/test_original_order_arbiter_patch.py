@@ -23,6 +23,12 @@ class NativeOrderOwnerPatchTest(unittest.TestCase):
             self.assertEqual(s.count('"PERSONAL_FLEET"'),1)
             self.assertNotIn(mod.MARKERS[path][0],s)
             self.assertIn(mod.MARKERS[path][1],s)
+    def test_pf95_shared_arbiter_allows_owned_combat_but_stock_peaceful_directors_remain_safe(self):
+        source=self.sample(mod.BRIDGE)
+        changed=mod.transform(mod.BRIDGE,source)
+        self.assertIn('"PERSONAL_FLEET" is NOT peaceful',changed)
+        self.assertIn('const PEACEFUL=new Set(["PATROL","CIVILIAN","GATE","EXPEDITION"]);',changed)
+        self.assertNotIn('"PERSONAL_FLEET"]);',changed)
     def test_source_pin_rejects_unrecognized_stock(self):
         for path in mod.PINS:
             with self.assertRaisesRegex(ValueError,'SOURCE_DRIFT'):
