@@ -174,8 +174,6 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
   // no prior dwell can authorize the new process to dock.
   const stationDwell=originalStationDwell.createOriginalStationDwell({
     orderWitness,enabled,allWritersFenced:originalHooks.allWritersFenced});
-  const stationTickDriver=originalStationTickDriver.createOriginalStationTickDriver({
-    stationDwell,enabled,allWritersFenced:originalHooks.allWritersFenced});
   const orders=pf55.createPersonalFleetNativeOrders({gameStore,pf52,access,
     verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
     verifyNativeActor:orderWitness.verifyNativeActor,
@@ -227,11 +225,29 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     verifyStationArrival:stationDwell.verifyStationArrival,
     verifyContinuousDwell:stationDwell.verifyContinuousDwell,
     verifyOriginalManifest:originalHooks.verifyOriginalManifest,
+    verifyServerReturnOwner:original.verifyServerReturnOwner,
     verifyOriginalDockReceipt:dockCompletion.verifyOriginalDockReceipt,
     verifyFinalOriginalManifest:originalHooks.verifyFinalOriginalManifest,
     executeNativeReturn:originalPhysicalOrders.executeNativeReturn,
     executeNativeDock:dockCoordinator.execute,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
+  // Native server continuation consumes only committed PF56 intents. On a
+  // restart, cleanup is readback/reconcile only, never PF66/PF61 redispatch.
+  const stationTickDriver=originalStationTickDriver.createOriginalStationTickDriver({
+    stationDwell,enabled,allWritersFenced:originalHooks.allWritersFenced,
+    advanceReturn:row=>{
+      if(row.phase==='DOCK_ISSUING'){
+        const cleanup=dockCoordinator.reconcileNativeCleanup(row);
+        if(cleanup?.status!=='NATIVE_CLEARED')return cleanup;
+      }
+      const result=returnDock.advanceServer(row);
+      if(['DOCKED','ALREADY_DOCKED'].includes(result?.status)){
+        const finalized=dockCoordinator.finalizeAfterPf56Dock(row);
+        return finalized?.status==='FINALIZED'?result:
+          {status:'BLOCKED',reason:'PF84_TERMINAL_FINALIZE_UNPROVEN'};
+      }
+      return result;
+    }});
   // First-play excludes recurring PF57 salary / dismiss until its ORIGINAL
   // wallet, loss and contract hook owners are present. The public command
   // conductor returns a blocked response for dismiss rather than a fake ACK.
