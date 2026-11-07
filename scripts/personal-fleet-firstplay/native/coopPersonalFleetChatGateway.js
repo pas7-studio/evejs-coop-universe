@@ -13,7 +13,7 @@ const ACTIONS=Object.freeze({
   offers:{arity:0,method:'offers'},
   status:{arity:0,method:'status'},
   roster:{arity:0,method:'roster'},
-  hire:{arity:1,method:'hire'},
+  hire:{arity:2,method:'hire'},
   assign:{arity:2,method:'assign'},
   deploy:{arity:1,method:'deploy'},
   follow:{arity:1,method:'follow'},
@@ -22,7 +22,7 @@ const ACTIONS=Object.freeze({
   salary:{arity:1,method:'salary'},
   dismiss:{arity:1,method:'dismiss'},
 });
-const HELP='Personal Fleet: /pf offers | roster | status | hire <offerID> | assign <pilotID> <hangarShipItemID> | deploy <assignmentID> | follow <shipItemID> | hold <shipItemID> | return <shipItemID> | salary <pilotID> | dismiss <pilotID>';
+const HELP='Personal Fleet: /pf offers | roster | status | hire <offerID> accept-recurring | assign <pilotID> <hangarShipItemID> | deploy <assignmentID> | follow <shipItemID> | hold <shipItemID> | return <shipItemID> | salary <pilotID> | dismiss <pilotID>';
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const own=(x,k)=>Object.prototype.hasOwnProperty.call(x,k);
 const safeString=x=>String(x??'').replace(/[\r\n\t\u0000-\u001f\u007f]/g,' ').slice(0,250);
@@ -78,6 +78,7 @@ function parseCommand(text){
  const spec=ACTIONS[action];
  if(!spec||args.length!==spec.arity)return null;
  if(args.some(a=>!TOKEN.test(a)))return null;
+ if(action==='hire'&&args[1]!=='accept-recurring')return null;
  if(action==='assign'){
   if(!/^coop-pilot-[0-9]{3,}$/.test(args[0])||!id(args[1]))return null;
   args[1]=id(args[1]);
