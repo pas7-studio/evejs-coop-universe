@@ -43,6 +43,7 @@ function createOriginalGuardReaction({orders,canIssuePersonalCombat,enabled=()=>
   try{return a.transact([T,IT,CHAR],tx=>{
    const ix=tx.get(T,pf52.REGISTRY_KEY),
     ops=tx.get(T,pf55.OP_INDEX),claims=tx.get(T,F+'actor-claims-v1');
+   if(ix===null&&ops===null&&claims===null)return {status:'READY',commands:[]};
    if(!obj(ix)||!obj(ops)||!obj(claims))return failed('PF97_ORIGINAL_FLEET_LEDGER_MISSING');
    pf52.validateIndex(ix);
    if(ops.version!==1||!obj(ops.operations)||claims.version!==1||
