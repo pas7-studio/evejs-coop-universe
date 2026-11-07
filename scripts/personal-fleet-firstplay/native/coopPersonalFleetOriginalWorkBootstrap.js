@@ -26,6 +26,7 @@ const originalOrderWitness=require('./coopPersonalFleetOriginalOrderWitness');
 const originalOrderExecutor=require('./coopPersonalFleetOriginalOrderExecutor');
 const originalStationDwell=require('./coopPersonalFleetOriginalStationDwell');
 const originalStationTickDriver=require('./coopPersonalFleetOriginalStationTickDriver');
+const originalPhysicalRecovery=require('./coopPersonalFleetOriginalPhysicalRecovery');
 const chat=require('./coopPersonalFleetChatGateway');
 const pf52=require('./coopPersonalFleetHangarBridge');
 const pf53=require('./coopPersonalFleetPaidHiring');
@@ -234,8 +235,11 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   // Native server continuation consumes only committed PF56 intents. On a
   // restart, cleanup is readback/reconcile only, never PF66/PF61 redispatch.
+  const physicalRecovery=originalPhysicalRecovery.createOriginalPhysicalRecovery({
+    enabled,allWritersFenced:originalHooks.allWritersFenced});
   const stationTickDriver=originalStationTickDriver.createOriginalStationTickDriver({
     stationDwell,enabled,allWritersFenced:originalHooks.allWritersFenced,
+    recoverPhysical:physicalRecovery.recover,
     advanceReturn:row=>{
       if(row.phase==='DOCK_ISSUING'){
         const cleanup=dockCoordinator.reconcileNativeCleanup(row);
@@ -293,6 +297,7 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     // Server-internal tick entry only: requires the original return intent;
     // it is not an in-game, chat or HTTP command handler.
     sampleOriginalStationDwell:stationDwell.sample,
+    recoverOriginalPhysicalFleet:physicalRecovery.recover,
     nativeStationTickStatus:stationTickDriver.getStatus,
     // Trusted WORK process shutdown only; never exposed via chat or HTTP.
     stopNativeStationTick:stationTickDriver.stop,
