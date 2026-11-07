@@ -22,7 +22,8 @@ function f({authoredPolicies=terms}={}){
   revision:1,contractID:CONTRACT,pilotID:PID,employerCorpID:EMPLOYER,amountCents:9900
  },{operationID:paid.operationID,offerID:paid.offerID,offerRevision:1,
    contractID:CONTRACT,pilotID:PID,ownerCharacterID:OWNER,
-   session:{characterID:OWNER,userid:900,socket:{destroyed:false}}},CREATED);
+   session:{characterID:OWNER,userid:900,socket:{destroyed:false}},
+   recurringSalaryAcknowledged:true},CREATED);
  if(!wage)throw Error('PF92_TEST_CONSENT_NOT_CREATED');
  paid.payrollConsent=wage;
  const idx={version:1,pilots:{[PID]:{pilotID:PID,ownerCharacterID:OWNER,
