@@ -27,6 +27,7 @@ const originalOrderExecutor=require('./coopPersonalFleetOriginalOrderExecutor');
 const originalCombatAuthority=require('./coopPersonalFleetOriginalCombatAuthority');
 const originalCombatReceipt=require('./coopPersonalFleetOriginalCombatReceipt');
 const originalCombatRecovery=require('./coopPersonalFleetOriginalCombatRecovery');
+const originalGuardReaction=require('./coopPersonalFleetOriginalGuardReaction');
 const originalStationDwell=require('./coopPersonalFleetOriginalStationDwell');
 const originalStationTickDriver=require('./coopPersonalFleetOriginalStationTickDriver');
 const originalPhysicalRecovery=require('./coopPersonalFleetOriginalPhysicalRecovery');
@@ -212,6 +213,9 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
     verifyPersistedNativeOrder:(row,tx)=>['ATTACK','DEFEND'].includes(row?.action)?
       combatReceipt.verifyPersisted(row,tx):durableOrderAck.verifyPersistedNativeOrder(row,tx),
     enabled,allWritersFenced:originalHooks.allWritersFenced});
+  const guardReaction=originalGuardReaction.createOriginalGuardReaction({
+    orders,canIssuePersonalCombat:originalPhysicalOrders.canIssuePersonalCombat,
+    enabled,allWritersFenced:originalHooks.allWritersFenced});
   // PF66 moves the ONE original ItemStore hull and consumes its original
   // scene-detach capability exactly once. PF60/PF61 later clean native rows;
   // the independent readback refuses PF56 release before that cleanup.
@@ -270,6 +274,7 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
     stationDwell,enabled,allWritersFenced:originalHooks.allWritersFenced,
     recoverPhysical:physicalRecovery.recover,
     recoverCombat:combatRecovery.recover,
+    reactGuards:guardReaction.tick,
     settlePayroll:()=>serverPayroll?.tick()||{status:'PF93_SERVER_PAYROLL_NOT_INSTALLED'},
     advanceReturn:row=>{
       if(row.phase==='DOCK_ISSUING'){
