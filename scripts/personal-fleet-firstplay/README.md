@@ -53,21 +53,21 @@ The native WORK staging includes:
 - **Native XMPP hook:** exact original `chatCommands.js` source-pinned patch;
   no new unauthenticated HTTP API or client modification.
 - **Isolated review assembler:** PF80's **22-file** preflight candidate +
-  this **15-path** original source delta (four overlap with PF80) =
-  **33 unique staged native paths**. The generated patch includes both
+  this **16-path** original source delta (four overlap with PF80) =
+  **34 unique staged native paths**. The generated patch includes both
   original NPC order source files, PF55 original character row scope,
   PF52 original paid hull row scope, wallet corrections, new modules
   and the original chat hook. It must pass exact Git `apply --check`.
 
 ### Real execution evidence
 
-**216/216 Node tests PASS** on Node.js 22.16.0, including original-source
+**239/239 Node tests PASS** on Node.js 22.16.0, including original-source
 actor/target identity, stock runtime command wiring, paid offers, wallet
 receipts, bootstrap fail-sticky and in-memory EVE service adapters.
 **26/26 Python/Git tests PASS** on Python 3.13.5; exact original stock
 blob pins, patch transforms, `git apply`, manifest and linked-worktree gates.
 
-**242/242 total locally; all 24 candidate/test files SHA256-pinned.**
+**265/265 total locally; all 26 candidate/test files SHA256-pinned.**
 These are isolated component and controlled SQLite/VM tests.
 Original EveJS server and connected game-client E2E are **NOT RUN** here.
 Manual Windows PowerShell runner is **NOT RUN** here.
@@ -125,9 +125,11 @@ Do **not** confuse this staged package with gameplay-ready. The native
 2. Source-owned physical PF58 original-ship handoff/actor adoption and its
    postcommit scene/world notifications, with original controller writer
    fences. The original physical hull must retain its itemID.
-3. A **durable original NPC order ACK** reader/writer that independently
-   verifies PF55's accepted physical FOLLOW/HOLD after a crash. A successful
-   in-memory `npcRuntime.follow()` is **NOT sufficient** to mark PF55 ACKED.
+3. The **durable original NPC order ACK code is now staged**, not installed.
+   Apply and test `coopPersonalFleetOriginalDurableOrderAck.js` with the original
+   server's `npcEntities` atomic SQLite table. A real WORK kill/restart must
+   confirm that persisted FOLLOW/HOLD movement is rehydrated and PF55 can ACK
+   it without a second physical command. In-memory success alone is rejected.
 4. Real source-owned PF56 sessionless RETURN/docking and exact original
    ItemStore/scene cleanup and crash recovery. Never just teleport or
    delete a ship after an unverified arrival.
@@ -158,7 +160,47 @@ The assembler now verifies **unique** native patch destinations before
 calling `git apply --check`. This catches repeated stock-source hunks,
 including duplicate original `coopNpcOrderArbiter.js` edits, which individual
 unit tests otherwise would not detect. Its expected exact set is **15 unique
-native paths**, four already staged by PF80, and **33 unique final WORK paths**.
+native paths**, four already staged by PF80, and **34 unique final WORK paths**.
 The two original stock order files are source-pinned and their anchors were
 independently checked against the `coop/pas7std` fork. The full original
 WORK `git apply --check` on the owner's machine remains unexecuted here.
+
+
+## Original durable PF55 FOLLOW/HOLD movement receipt (2026-11-07)
+
+New staged native module: `coopPersonalFleetOriginalDurableOrderAck.js`.
+This closes the *candidate-code* gap between live physical movement and a
+durable PF55 ACK. It runs **only after** the original common NPC order bridge
+and native `npcRuntime.follow/stop` return verified synchronous success.
+
+The receipt writer independently verifies the PF55 `ISSUING` operation and
+exact signature/index, PF52/PF54 original ship/controller claim, original
+ItemStore title, original in-scene movement (`FOLLOW` target and range or
+`STOP`), and live authenticated player target. It then writes the
+actual original `npcEntities['/'].entities[shipItemID]` movement fields
+(`mode`, `targetEntityID`, `followRange`, coordinates/velocity) **and
+the PF55 native applied receipt in one original GameStore
+`[corporationRuntime,items,characters,npcEntities]` SQLite transaction**.
+The exact original `nativeNpcService` restore path already consumes these
+fields. PF55 reconciliation now declares `npcEntities` and verifies the
+durable receipt and unchanged movement-command identity itself.
+
+If a crash occurs after the physical effect but before this atomic commit,
+PF55 remains `ISSUING`, without an ACK or automatic second movement.
+If the commit succeeds, the new PF55 owner can verify the receipt after
+a simulated process restart; normal position changes do not invalidate it.
+Changing the target, assignment, actor generation or mode does.
+
+**Execution evidence**: 239/239 Node (including 19 actual SQLite durable
+receipt cases and integrated bootstrap/executor tests), plus 26/26
+Python/Git, **265/265 PASS** locally. **26 SHA256-pinned code/test files**;
+16 unique additional native patch paths over PF80's 22 source paths,
+four overlapping, producing 34 unique modified native files.
+
+**Not yet WORK gameplay:** Original GameStore refuses transactions on
+`npcEntities` while transient native rows are not safely quiescent; this
+receipt intentionally fails closed instead of writing over them. The local
+native owner must verify that gate and the actual original npcRuntime mode,
+then run real SIGKILL/client E2E. This receipt proves accepted durable
+movement state, **not uninterrupted offline NPC AI or station docking**.
+PF56 real original return/docking/scene-detach remains the next P0.
