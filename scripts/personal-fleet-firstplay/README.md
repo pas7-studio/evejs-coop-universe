@@ -5,6 +5,63 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF91 native payment and employment progress — 2026-11-08
+
+**Current staging inventory:** PF80 22-path base + 28-path first-play
+WORK delta (4 overlaps) = **46 distinct native paths**. This package
+contains **54 checksum-pinned native/tool/test source files**, not an
+installed or playable server.
+
+- `coopPersonalFleetOriginalSalaryTerms.js` is a **strict server-owned
+  pricing and due-date reader**, joined 1:1 against the *genuine*
+  hireable NPC catalog. Every `salaryCents` and `periodMs` must be
+  explicitly authored by the original WORK configuration; no defaults,
+  user-specified price or fabricated account/NPC profile.
+- PF91 uses the actual PF53 paid hire receipt and original PF52
+  processed-hire source, verifies the real NPC SDE character/profile,
+  original employer corporation and original wallet journal.
+  A future period cannot be paid, while old unpaid periods remain
+  payable sequentially and block premature dismissal.
+- PF57 now composes into the native `OriginalWorkBootstrap`, using
+  `OriginalSalaryTerms` for source-verified quote, hire, employer and
+  native release proofs. Loss/competing-order witnesses must still come
+  from **authentic original native writer hooks**. Any missing hook
+  aborts the original pre-TCP startup.
+- The authenticated in-game command `/pf salary <pilotID>` derives the
+  **next** period only from PF57's original ledger; it does not accept
+  a client-provided amount, period or employer. `/pf dismiss <pilotID>`
+  now targets the real PF57 source lifecycle, never the previous
+  blocker stub.
+- The original wallet adapter independently verifies both durable
+  character/corporation salary journal entries and the global
+  transaction ID before emitting original wallet notifications.
+- The WORK PF53 native paid-hire patch removes an **unused**
+  `npcEntities` transaction table so other transient NPCs cannot
+  arbitrarily block hiring. PF57 salary and dismissal native patches
+  similarly declare only their genuinely accessed original tables.
+- Added a mandatory regression for file identity after catching and
+  correcting an accidental temporary swap of
+  `coopPersonalFleetWorkCommandOwner.js` and
+  `coopPersonalFleetChatGateway.js`. Both original module paths are
+  restored and their exports verified.
+
+**Actual isolated evidence:** salary term tests 12/12, command owner
+faux-SQL tests 29/29, chat gateway 41/41, native composition 40/40
+before the last policy match hardening, WorkStarter 10/10. These
+remain controlled mocks, NOT an original WORK client or Node/SQLite
+gameplay run.
+
+**Unfinished mandatory work:** PF53 must seal immutable recurring
+wage *consent* in the original paid contract before unattended debit
+is allowed; implement an original server-owned payroll scheduler
+that settles due periods without forging a logged-in player session;
+complete loss/wreck kill-record writer witnesses and real dismissal
+E2E; in-flight native WARP recovery; full Personal Fleet ATTACK/GUARD,
+MINING/HAUL and EXPLORATION/WORMHOLES native execution; and original
+boot/writer configuration + two-player WORK/SIGKILL E2E.
+**No unattended salary debits are enabled by this stage.**
+Default feature flags and PLAY remain OFF.
+
 ## Current PF89/PF90 source status — 2026-11-08
 
 **Latest staged source scope:** PF80 **22** files plus first-play **27** delta
