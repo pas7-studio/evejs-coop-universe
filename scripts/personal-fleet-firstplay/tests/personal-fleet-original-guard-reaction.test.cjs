@@ -110,3 +110,14 @@ test('PF97 revoked original writer authority stops all guard combat',()=>{
  a.equal(x.reaction.tick().status,'BLOCKED');
  a.equal(x.orders().length,0);
 });
+
+test('PF97 first login with genuinely empty original fleet is idle, not corrupted',()=>{
+ const x=f();
+ x.db[T].index=null;
+ x.db[T][F+'manual-order-operations-v1']=null;
+ x.db[T][F+'actor-claims-v1']=null;
+ const status=x.reaction.tick();
+ a.equal(status.status,'GUARD_SCANNED');
+ a.equal(status.issued,0);
+ a.equal(x.orders().length,0);
+});
