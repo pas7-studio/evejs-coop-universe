@@ -273,3 +273,35 @@ test('PF86 original RETURN writes only owning NPC row, not other ships',()=>fixt
  assert.deepEqual(f.read(NE,'entities\u001f2302'),before);
  assert.equal(f.read(NE,'/'),null);
 }));
+
+test('PF94 signed ingress and PF56 return receipt committed atomically',()=>fixture(f=>{
+ const row=seedOriginalReturn(f);
+ assert.equal(f.create().recordAfterNativeReturnEffect(row).success,true);
+ const entity=f.read(NE,ENTITY),stamp=f.read(T,F+'native-return-receipt-v1:'+row.operationID);
+ assert.equal(entity.mode,'WARP');
+ assert.equal(stamp.ingressHash,entity.personalFleetReturnIngress.hash);
+ assert.equal(entity.personalFleetReturnIngress.targetPoint.x,201020);
+ assert.equal(entity.personalFleetReturnIngress.startTimeMs,1700000000000);
+ assert.equal(f.create().verifyPersistedNativeReturn(row,f.tx)?.returnOrderPersisted,true);
+}));
+test('PF94 PF56 cannot acknowledge only a fabricated WARP mode without real ingress',()=>fixture(f=>{
+ const row=seedOriginalReturn(f);delete f.entity.sessionlessWarpIngress;
+ const r=f.create().recordAfterNativeReturnEffect(row);
+ assert.equal(r.success,false);
+ assert.equal(r.errorMsg,'PF94_REAL_NATIVE_RETURN_INGRESS_NOT_PROVEN');
+ assert.equal(f.read(T,F+'native-return-receipt-v1:'+row.operationID),null);
+}));
+test('PF94 native receipt replay refuses mutated ingress destination',()=>fixture(f=>{
+ const row=seedOriginalReturn(f);
+ assert.equal(f.create().recordAfterNativeReturnEffect(row).success,true);
+ const entity=f.read(NE,ENTITY);
+ entity.personalFleetReturnIngress.targetPoint.x+=999;
+ f.write(NE,ENTITY,entity);
+ assert.equal(f.create().verifyPersistedNativeReturn(row,f.tx),null);
+}));
+test('PF94 original crash before SQLite commit cannot leave a fake ingress snapshot',()=>fixture(f=>{
+ const row=seedOriginalReturn(f);f.abortNext();
+ assert.equal(f.create().recordAfterNativeReturnEffect(row).success,false);
+ assert.equal(f.read(NE,ENTITY).personalFleetReturnIngress,undefined);
+ assert.equal(f.read(T,F+'native-return-receipt-v1:'+row.operationID),null);
+}));
