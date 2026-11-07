@@ -246,3 +246,20 @@ does **not** have this hook. See
 `scripts/pf94/PF94_ORIGINAL_OWNER_MUTATION_EPOCH.md`.
 Personal Fleet OFF; unrelated PF91/92 code is not automatically
 authorized by a passing PF94 standalone suite.
+
+## PF95 original single-writer SQLite handoff (2026-11-07)
+
+PF95 supplies a one-file, source-pinned **review-only** diff against
+the original `coopGameStoreAtomic.js` owner. It installs no runtime
+patcher or other SQLite writer in this repository. Inside the
+original `BEGIN IMMEDIATE`, each `put/del` increments a private
+counter and `verifyReadOnlySessionWitness` rejects any callback
+that writes, including put/restore and delete-missing. Escaped
+transaction methods also fail after commit/rollback. The new API
+is OFF without `EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS=1`.
+
+The optional `-NativeCheckout` PF58 local runner now validates
+the exact original source blob and checks/executes the candidate
+patch **only on a temporary copy** with real Node SQLite. See
+`scripts/pf95/PF95_NATIVE_GAMESTORE_OWNER_HANDOFF.md`.
+The original fork remains unmodified and Personal Fleet OFF.
