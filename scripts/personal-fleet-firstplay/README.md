@@ -5,6 +5,32 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF101 — strict original physical actor re-adoption (2026-11-08)
+
+**Code change in the same Draft PR:** PF90's original physical recovery now
+requires the actual PF58 native scene-presentation markers and live controller
+markers before reporting `ALREADY_PHYSICAL`, repairing a half-materialized
+actor, or restoring PF94 ingress. Merely matching `shipItemID`, owner and
+controller entity ID is insufficient. It rejects player-session actors, wrong
+`personalFleet` entity types, foreign WAR/MINING operator/selection, mismatched
+assignment/pilot/generation, and non-PF runtime kinds. Both legitimate
+`nativeAmbient` and `nativeCombat` modes are preserved.
+
+The same check applies to persisted original `npcEntities` and
+`npcRuntimeControllers` records. If saved original mode is STOP but a matching
+scene ship now has a live WARP/pendingWarp/warpState/ingress, recovery refuses
+`ALREADY_PHYSICAL` without a durable PF56 ingress proof. No retry,
+teleport, ship spawn or claim overwrite is introduced.
+
+**Evidence:** 31/31 isolated direct V8 cases exercising the *actual* GitHub
+module with injected in-memory original-store/scene stubs PASS, including
+forged actor/controller/source witnesses and legitimate pre-existing NPCs.
+The expanded checked-in Node test file additionally covers all the tampering
+and divergent WARP cases, but **the full checked-in Node suite was NOT RUN**
+in this cloud environment. The actual original EveJS WORK installation,
+SQLite/SIGKILL and two-client gameplay remain NOT RUN; feature OFF,
+Draft, no `main`/`PLAY` changes.
+
 ## PF96/PF97 — crash-safe combat re-adoption + reactive owner GUARD (2026-11-08)
 
 **Current staged WORK inventory:** PF80's 22 baseline native paths + a
