@@ -91,3 +91,9 @@ test('PF89 original helper cannot silently modify any SQLite row',()=>{
  readNativeAssets(restricted,SHIP);readWreckRoot(restricted);
  assert.deepEqual(written,[]);
 });
+test('PF89 rejects duplicate original sourceCargoID preserved in stock wrecks',()=>{
+ const a=readNativeAssets(tx({items:{
+  '8001':{wreckItemID:8001,wreckID:WRECK,sourceCargoID:7001},
+  '8002':{wreckItemID:8002,wreckID:WRECK,sourceCargoID:7001}}}),SHIP);
+ assert.equal(a,null);
+});
