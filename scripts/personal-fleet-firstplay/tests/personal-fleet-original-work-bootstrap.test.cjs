@@ -10,8 +10,7 @@ const hooksList=['verifyOriginalWriterHooks','allWritersFenced','allWalletWriter
  'verifyShipAvailable',
  'verifyRelease','verifyOriginalEquipment','verifyOriginalDeploymentAuthority',
  'verifyExclusiveOwnership','verifyOriginalActor','independentOriginalActorWitness',
- 'originalStationUndockPoint','originalOwnershipWitness','verifyNativeActor',
- 'verifyTarget','verifyOriginalControl','verifyPersistedNativeOrder',
+ 'originalStationUndockPoint','originalOwnershipWitness','verifyPersistedNativeOrder',
  'verifyNativeFlight','verifyOriginalReturnOrder','verifyStationArrival',
  'verifyContinuousDwell','verifyOriginalManifest','verifyOriginalDockReceipt',
  'verifyFinalOriginalManifest','executeNativeReturn','executeNativeDock',
@@ -29,6 +28,9 @@ function fixture(cb){
   './coopPersonalFleetOriginalSourceBindings':{createOriginalSourceBindings(){events.push('source');
    return {gameStore,access:{isOwner:()=>false},resolveOwnerCorporation:()=>1,
     resolveOriginalDockContext:()=>null,resolveOriginalFollowTarget:()=>null};}},
+  './coopPersonalFleetOriginalOrderWitness':{createOriginalOrderWitness(){events.push('order-witness');
+   if(broken==='order-witness')throw Error('ORIGINAL_ORDER_SOURCE_UNAVAILABLE');
+   return {verifyNativeActor:()=>false,verifyOriginalControl:()=>false,verifyTarget:()=>false};}},
   './coopPersonalFleetOriginalWalletAuthority':{createOriginalWalletAuthority(){events.push('wallet');
    if(broken==='wallet')throw Error('PF_WALLET_SOURCE_MISSING');
    return {originalTransactionID:()=>150000001,verifyJournalID:()=>true,notifyOriginalWallet:()=>true};}},
@@ -49,7 +51,9 @@ function fixture(cb){
    assert.equal(args.enabled(),false);if(broken==='deploy')throw Error('NATIVE_NO_WRITER');
    return {prepare:()=>{},dispatch:()=>{},reconcile:()=>{},inspect:()=>{}};}},
   './coopPersonalFleetNativeOrders':{createPersonalFleetNativeOrders(args){events.push('orders');
-   assert.equal(args.enabled(),false);return {issue:()=>{},reconcile:()=>{},inspect:()=>{}};}},
+   assert.equal(args.enabled(),false);assert.equal(args.verifyNativeActor(),false);
+   assert.equal(args.verifyOriginalControl(),false);assert.equal(args.verifyTarget(),false);
+   return {issue:()=>{},reconcile:()=>{},inspect:()=>{}};}},
   './coopPersonalFleetReturnDock':{createPersonalFleetReturnDock(args){events.push('return');
    assert.equal(args.enabled(),false);return {requestReturn:()=>{},inspect:()=>{}};}},
   './coopPersonalFleetNativeBootstrap':{createSourceBoundNativeBootstrap(args){events.push('PF58');
@@ -76,7 +80,7 @@ const call=(f)=>f.api.createOriginalWorkBootstrap({originalHooks:f.hooks,authore
 test('composition builds original source owners and publishes chat LAST',()=>fixture(f=>{
  const b=call(f);assert.equal(b.status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.equal(b.getOperationalStatus().ready,true);
- assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','orders','return','owner','PF58','chat']);
+ assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','orders','return','owner','PF58','chat']);
 }));
 test('flags OFF after install prevent action even after previously ready',()=>fixture(f=>{
  const b=call(f);delete process.env.EVEJS_COOP_PERSONAL_FLEET_CHAT;
@@ -150,4 +154,18 @@ test('original wallet adapter fails before PF53/PF58/partial chat install',()=>f
  f.setBroken('wallet');assert.throws(()=>call(f),/PF_WALLET_SOURCE_MISSING/);
  assert.deepEqual(f.events,['source','wallet']);
  assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
+}));
+
+test('native PF55 physical order source failure is sticky before original PF58',()=>fixture(f=>{
+ f.setBroken('order-witness');assert.throws(()=>call(f),/ORIGINAL_ORDER_SOURCE_UNAVAILABLE/);
+ assert.equal(f.events.includes('PF58'),false);
+ assert.equal(f.events.includes('chat'),false);
+ assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
+}));
+test('PF55 physical source authority functions are NOT operator-supplied',()=>fixture(f=>{
+ f.hooks.verifyNativeActor=()=>true;f.hooks.verifyTarget=()=>true;
+ f.hooks.verifyOriginalControl=()=>true;
+ assert.equal(call(f).status,'INSTALLED_WORK_SOURCE_BOUND');
+ // Their presence on hooks is ignored; tests above assert the source-bound
+ // mock's false values are still handed to the real PF55 constructor.
 }));
