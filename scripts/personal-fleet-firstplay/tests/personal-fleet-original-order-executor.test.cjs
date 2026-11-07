@@ -8,7 +8,7 @@ function fixture(testBody){
  const idx={ships:{'2301':{shipItemID:2301,ownerCharacterID:901,pilotID:'coop-pilot-123',generation:1,assignmentID:'asgn-1'}}};
  const data=new Map([[T+'|roster-index',idx],[T+'|'+F+'deploy-v1:asgn-1',dep]]);
  const tx={get:(t,k)=>data.get(t+'|'+k)??null};
- let on=true,fenced=true,poisoned=false,war='UNASSIGNED',actorOk=true,targetOk=true;
+ let on=true,fenced=true,poisoned=false,war='UNASSIGNED',actorOk=true,targetOk=true,receiptOK=true;
  const calls=[],arbiter={issue:()=>{},blocked:()=>false,snapshot:()=>({leases:[]}),retainWithNativeProof:()=>{},blocksForSystem:()=>new Set()};
  const capture={};
  const witness={verifyNativeActor:(row)=>actorOk&&row.shipItemID===2301&&row.actorGeneration===9,
@@ -28,11 +28,13 @@ function fixture(testBody){
  vm.runInNewContext(source,context,{filename:'coopPersonalFleetOriginalOrderExecutor.js'});
  const api=context.module.exports;
  const options={sharedOriginalArbiter:arbiter,readOriginalWarShipClaim:()=>war,
-  orderWitness:witness,enabled:()=>on,allWritersFenced:()=>fenced};
+  orderWitness:witness,orderReceipt:{recordAfterNativeEffect:()=>({success:receiptOK})},
+  enabled:()=>on,allWritersFenced:()=>fenced};
  const create=()=>api.createOriginalOrderExecutor(options);
  const ctx={api,create,capture,options,data,idx,dep,calls,
   setEnabled:x=>on=x,setFenced:x=>fenced=x,setPoisoned:x=>poisoned=x,
-  setWar:x=>war=x,setActor:x=>actorOk=x,setTarget:x=>targetOk=x};
+  setWar:x=>war=x,setActor:x=>actorOk=x,setTarget:x=>targetOk=x,
+  setReceipt:x=>receiptOK=x};
  testBody(ctx);
 }
 test('reuses original shared arbiter, original runtime and canonical PF52 assignments',()=>fixture(f=>{
@@ -101,3 +103,11 @@ test('original order executor never writes native SQLite, spawns hulls, or creat
  for(const bad of ['.put(','.upsertNative','createOrderArbiter','spawnNpcForSession','moveShipToSpace'])
   assert.ok(!source.includes(bad),bad);
 });
+
+test('native physical success with failed original durable receipt remains UNKNOWN and is never reported as success',()=>fixture(f=>{
+ f.setReceipt(false);const a=f.create().execute({action:'FOLLOW',shipItemID:2301});
+ assert.equal(a.success,false);assert.match(a.errorMsg,/UNKNOWN_NO_RETRY/);
+}));
+test('missing source-owned receipt is a hard physical executor constructor failure',()=>fixture(f=>{
+ delete f.options.orderReceipt;assert.throws(f.create,/ORIGINAL_SHARED_ORDER_RUNTIME_REQUIRED/);
+}));
