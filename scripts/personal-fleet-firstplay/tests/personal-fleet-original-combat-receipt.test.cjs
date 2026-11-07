@@ -133,3 +133,12 @@ test('PF95 only real ATTACK and DEFEND action can be native combat',()=>fixture(
  const wrong={...f.row,action:'WARP'};
  assert.equal(f.receipt.recordAfterEffect(wrong).success,false);
 }));
+
+test('PF96 original PF55 ACKED combat receipt is readable after restart, not rewritten',()=>fixture(f=>{
+ assert.equal(f.receipt.recordAfterEffect(f.row).success,true);
+ const before=JSON.stringify(f.db);
+ const saved={...f.row,phase:'ACKED'};
+ assert.equal(f.receipt.verifyPersisted(saved,{get:(t,k)=>f.db[t]?.[k]??null})?.orderApplied,true);
+ assert.equal(JSON.stringify(f.db),before);
+ assert.equal(f.receipt.recordAfterEffect(saved).success,false);
+}));
