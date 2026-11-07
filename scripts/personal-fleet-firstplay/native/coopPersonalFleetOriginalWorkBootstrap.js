@@ -16,6 +16,7 @@ const originalWalletAuthority=require('./coopPersonalFleetOriginalWalletAuthorit
 const offers=require('./coopPersonalFleetOriginalOfferAuthority');
 const commands=require('./coopPersonalFleetWorkCommandOwner');
 const originalOrderWitness=require('./coopPersonalFleetOriginalOrderWitness');
+const originalOrderExecutor=require('./coopPersonalFleetOriginalOrderExecutor');
 const chat=require('./coopPersonalFleetChatGateway');
 const pf52=require('./coopPersonalFleetHangarBridge');
 const pf53=require('./coopPersonalFleetPaidHiring');
@@ -42,6 +43,7 @@ const HOOKS=Object.freeze([
  'verifyStationArrival','verifyContinuousDwell','verifyOriginalManifest',
  'verifyOriginalDockReceipt','verifyFinalOriginalManifest',
  'executeNativeReturn','executeNativeDock','verifyOriginalDockedPlayerSession',
+ 'readOriginalWarShipClaim',
 ]);
 let booted=false;
 let attempted=false;
@@ -54,9 +56,9 @@ function assertSourceHooks(hooks){
     hooks.claimsPolicy.KEY!=='coop-personal-fleet\u001factor-claims-v1'||
     typeof hooks.claimsPolicy.validate!=='function'||
     typeof hooks.claimsPolicy.empty!=='function'||
-    !object(hooks.originalOrderExecutor)||
-    typeof hooks.originalOrderExecutor.execute!=='function'||
-    typeof hooks.originalOrderExecutor.supports!=='function')
+    !object(hooks.sharedOriginalNpcOrderArbiter)||
+    !['issue','blocked','snapshot','retainWithNativeProof','blocksForSystem'].every(k=>
+      typeof hooks.sharedOriginalNpcOrderArbiter[k]==='function'))
   throw Error('PF_FIRSTPLAY_ORIGINAL_BOOT_HOOKS_REQUIRED');
  // A fake read-only stand-in or caller-chosen stock module must not substitute
  // for the physical original EveJS objects. These must be module singletons.
@@ -147,12 +149,18 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
   // The native PF55 issue/reconcile transactions must include characters.
   const orderWitness=originalOrderWitness.createOriginalOrderWitness({
     enabled,allWritersFenced:originalHooks.allWritersFenced});
+  // The physical command bridge uses the EXISTING shared stock order arbiter,
+  // never creates a second independent arbiter for Personal Fleet.
+  const originalPhysicalOrders=originalOrderExecutor.createOriginalOrderExecutor({
+    sharedOriginalArbiter:originalHooks.sharedOriginalNpcOrderArbiter,
+    readOriginalWarShipClaim:originalHooks.readOriginalWarShipClaim,
+    orderWitness,enabled,allWritersFenced:originalHooks.allWritersFenced});
   const orders=pf55.createPersonalFleetNativeOrders({gameStore,pf52,access,
     verifyExclusiveOwnership:originalHooks.verifyExclusiveOwnership,
     verifyNativeActor:orderWitness.verifyNativeActor,
     verifyTarget:orderWitness.verifyTarget,
     verifyOriginalControl:orderWitness.verifyOriginalControl,
-    nativeExecutor:originalHooks.originalOrderExecutor,
+    nativeExecutor:originalPhysicalOrders,
     verifyPersistedNativeOrder:originalHooks.verifyPersistedNativeOrder,
     enabled,allWritersFenced:originalHooks.allWritersFenced});
   const returnDock=pf56.createPersonalFleetReturnDock({gameStore,pf52,
