@@ -56,10 +56,18 @@ function readNativeAssets(tx,shipItemID){
      !obj(asset)||asset.cargoID!==Number(id)||!pos(asset.entityID))
    return null;
  }
+ const uniqueOriginalTitles=new Set();
  for(const [id,asset] of Object.entries(items)){
   if(!/^[1-9][0-9]*$/.test(id)||!pos(Number(id))||
      !obj(asset)||asset.wreckItemID!==Number(id)||!pos(asset.wreckID))
    return null;
+  // The stock wreck writer can preserve sourceCargoID (not sourceItemID).
+  // A destroyed title cannot appear twice in any original native wreck.
+  const origin=asset.originalItemID??asset.sourceItemID??asset.sourceCargoID;
+  if(origin!==undefined&&origin!==null){
+   if(!pos(origin)||uniqueOriginalTitles.has(origin))return null;
+   uniqueOriginalTitles.add(origin);
+  }
  }
  if(entity!==null&&(!obj(entity)||entity.entityID!==shipItemID))
   return null;
