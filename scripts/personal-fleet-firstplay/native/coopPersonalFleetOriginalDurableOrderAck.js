@@ -5,7 +5,7 @@
  *
  * This bridge DOES NOT issue an order, create a controller/ship, or retry an
  * uncertain command. It stores the genuine in-scene movement state into the
- * original npcEntities root and one signed PF55 receipt under a SINGLE
+ * original npcEntities entity row and one signed PF55 receipt under a SINGLE
  * original GameStore/SQLite transaction. The stock nativeNpcService restore
  * already reads mode, targetEntityID, followRange from npcEntities.
  *
@@ -24,6 +24,9 @@ const worldData=require('./worldData');
 const T='corporationRuntime', NE='npcEntities', ITEMS='items',CH='characters';
 const F='coop-personal-fleet\u001f',RECEIPT=F+'native-order-receipt-v1:',
  RETURN_RECEIPT=F+'native-return-receipt-v1:';
+// Original SQLite ROW_GROUPS.npcEntities = ['entities'] stores per-NPC rows.
+// This must NEVER write a root '/' or overwrite an unrelated NPC.
+const ENTITY_ROW='entities\u001f',entityKey=itemID=>ENTITY_ROW+String(itemID);
 const token=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const pilot=/^coop-pilot-[0-9]{3,}$/;
 const pos=x=>Number.isSafeInteger(x)&&x>0;
@@ -99,9 +102,9 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
     controller=registry.getControllerByEntityID(row.shipItemID);
   const movement=motion(row,entity,controller);
   if(!movement)return null;
-  const persisted=tx.get(NE,'/'),source=persisted?.entities?.[String(row.shipItemID)];
+  const source=tx.get(NE,entityKey(row.shipItemID));
   const controllerRecord=originalNpcStore.getNativeController(row.shipItemID);
-  if(!obj(persisted)||!obj(persisted.entities)||!obj(source)||
+  if(!obj(source)||
      source.entityID!==row.shipItemID||source.systemID!==row.systemID||
      source.personalFleetOriginal!==true||
      source.personalFleetAssignmentID!==row.assignmentID||
@@ -113,7 +116,7 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
      controllerRecord?.personalFleetPilotID!==row.pilotID||
      controllerRecord?.runtimeKind!=='nativeAmbient'||
      scene.getEntityByID(row.shipItemID)!==entity)return null;
-  return {scene,entity,movement,source,persisted};
+  return {scene,entity,movement,source};
  }
  function recordAfterNativeEffect(row){
   if(!matchesRow(row)||!on())return result(false,'PF55_NATIVE_DURABLE_RECORD_DISABLED');
@@ -133,9 +136,7 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
    const verified=ownerSource(row,tx);
    if(!verified)return result(false,'PF55_ORIGINAL_PHYSICAL_MOTION_NOT_VERIFIED');
    const timestamp=clock();if(!pos(timestamp))return result(false,'PF55_ORDER_RECEIPT_CLOCK_INVALID');
-   const persistedRoot={...verified.persisted,entities:{...verified.persisted.entities,
-    [String(row.shipItemID)]:{...verified.source,...verified.movement}}};
-   const stamped=persistedRoot.entities[String(row.shipItemID)];
+   const stamped={...verified.source,...verified.movement};
    const ack=Object.freeze({version:1,source:'EVEJS_ORIGINAL_NATIVE_ORDER_COMMITTED_V1',
     operationID:row.operationID,signature:row.signature,
     assignmentID:row.assignmentID,ownerCharacterID:row.ownerCharacterID,
@@ -144,7 +145,7 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
     targetEntityID:row.targetEntityID??null,
     followRangeMeters:row.followRangeMeters??null,
     movementHash:movementHash(stamped),committedAtMs:timestamp});
-   tx.put(NE,'/',persistedRoot);
+   tx.put(NE,entityKey(row.shipItemID),stamped);
    tx.put(T,key,ack);
    return {success:true,operationID:row.operationID,
     status:'DURABLE_NATIVE_APPLIED_AWAITING_PF55_ACK'};
@@ -155,7 +156,7 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
   try{
    // The independent PF55 reconciliation must declare BOTH original tables.
    const receipt=tx.get(T,RECEIPT+row.operationID),
-     root=tx.get(NE,'/'),stock=root?.entities?.[String(row.shipItemID)];
+     stock=tx.get(NE,entityKey(row.shipItemID));
    if(!obj(receipt)||receipt.version!==1||
       receipt.source!=='EVEJS_ORIGINAL_NATIVE_ORDER_COMMITTED_V1'||
       receipt.operationID!==row.operationID||receipt.signature!==row.signature||
@@ -222,10 +223,10 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
     ship=scene?.getEntityByID?.(row.shipItemID),
     controller=registry.getControllerByEntityID(row.shipItemID),
     station=originalStation(row,scene);
-  const root=tx.get(NE,'/'),stored=root?.entities?.[String(row.shipItemID)];
+  const stored=tx.get(NE,entityKey(row.shipItemID));
   const nativeEntity=originalNpcStore.getNativeEntity(row.shipItemID),
     nativeController=originalNpcStore.getNativeController(row.shipItemID);
-  if(!station||!obj(root)||!obj(root.entities)||!obj(stored)||
+  if(!station||!obj(stored)||
    ship?.kind!=='ship'||ship.itemID!==row.shipItemID||
    ship.ownerID!==row.ownerCharacterID||ship.nativeNpc!==true||
    ship.session!=null||controller?.entityID!==row.shipItemID||
@@ -244,7 +245,7 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
    stored.personalFleetAssignmentID!==row.assignmentID||
    stored.personalFleetPilotID!==row.pilotID||
    scene.getEntityByID(row.shipItemID)!==ship)return null;
-  return {root,stored,ship,station};
+  return {stored,ship,station};
  }
  function recordAfterNativeReturnEffect(row){
   if(!matchesReturn(row)||!on())
@@ -277,9 +278,8 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
     stationID:row.stationID,actorGeneration:row.actorGeneration,
     requestedByAccountID:row.requestedByAccountID,
     committedAtMs:timestamp};
-   const root={...physical.root,entities:{...physical.root.entities,
-    [String(row.shipItemID)]:{...physical.stored,personalFleetReturnOrder:marker}}};
-   tx.put(NE,'/',root);
+   tx.put(NE,entityKey(row.shipItemID),
+    {...physical.stored,personalFleetReturnOrder:marker});
    tx.put(T,RETURN_RECEIPT+row.operationID,
     {...marker,source:'EVEJS_ORIGINAL_NATIVE_RETURN_COMMITTED_V1'});
    return {success:true,operationID:row.operationID,
@@ -292,8 +292,8 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
    const saved=tx.get(T,pf56.key(row.assignmentID)),
     ops=tx.get(T,pf56.OPS),
     stamp=tx.get(T,RETURN_RECEIPT+row.operationID),
-    root=tx.get(NE,'/'),
-    marker=root?.entities?.[String(row.shipItemID)]?.personalFleetReturnOrder;
+    stored=tx.get(NE,entityKey(row.shipItemID)),
+    marker=stored?.personalFleetReturnOrder;
    if(!obj(saved)||saved.operationID!==row.operationID||
     saved.signature!==row.signature||saved.phase!=='RETURN_ISSUING'||
     ops?.operations?.[row.operationID]?.signature!==row.signature||
