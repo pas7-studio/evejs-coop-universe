@@ -9,6 +9,7 @@ const gameStore=require('../gameStore');
 const worldData=require('./worldData');
 const runtime=require('./runtime');
 const registry=require('./npc/npcRegistry');
+const crimewatch=require('../services/security/crimewatchState');
 const pf56=require('./coopPersonalFleetReturnDock');
 const SEP='\u001f',TABLE='corporationRuntime',ITEMS='items';
 const KEY='coop-personal-fleet'+SEP+'station-dwell-v1:';
@@ -39,6 +40,7 @@ function createOriginalStationDwell({orderWitness,enabled=()=>false,
     typeof worldData.getStationByID!=='function'||
     typeof runtime.scenes?.get!=='function'||
     typeof registry.getControllerByEntityID!=='function'||
+    typeof crimewatch.isCriminallyFlagged!=='function'||
     typeof pf56.arrivalValid!=='function'||typeof pf56.signature!=='function'||
     typeof pf56.key!=='function'||typeof orderWitness?.verifyNativeActor!=='function'||
     [enabled,allWritersFenced,clock].some(x=>typeof x!=='function'))
@@ -59,6 +61,9 @@ function createOriginalStationDwell({orderWitness,enabled=()=>false,
   if(item?.itemID!==row.shipItemID||item.ownerID!==row.ownerCharacterID||
      item.categoryID!==6||item.flagID!==0||item.locationID!==row.systemID||
      item.spaceState?.systemID!==row.systemID)return null;
+  // Mirror original sessionful station Crimewatch restriction using the
+  // authentic persisted PF52/54 owner ID (never a forged live session).
+  if(crimewatch.isCriminallyFlagged(row.ownerCharacterID,clock())!==false)return null;
   const scene=runtime.scenes.get(row.systemID),actor=scene?.getEntityByID?.(row.shipItemID),
     controller=registry.getControllerByEntityID(row.shipItemID),
     station=worldData.getStationByID(row.stationID),
