@@ -16,11 +16,27 @@ def git(cwd, *args, input=None):
 class NativeOrderOwnerPatchTest(unittest.TestCase):
     def sample(self, path):
         old, _ = mod.MARKERS[path]
-        return '"use strict";\n'+old+'\n'
+        source='"use strict";\n'+old+'\n'
+        if path == mod.BRIDGE:
+            source+=(
+             'function createOrderBridge({arbiter, assignments, sceneForSystem, getController,\n'
+             ' warShipClaim=null}={}) {\n'
+             ' if(warShipClaim!==null&&typeof warShipClaim!=="function")throw Error("WAR_SHIP_CLAIM_AUTHORITY_INVALID");\n'
+             '  if((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&\n'
+             '   (!lease||lease.owner!==owner)&&!warOwnsItsPatrol)\n'
+             '   return {success:false,errorMsg:"COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE"};\n'
+             '}\n'
+            )
+        return source
     def test_transforms_arbitration_and_peaceful_guard(self):
         for path in mod.PINS:
             s = mod.transform(path,self.sample(path))
-            self.assertEqual(s.count('"PERSONAL_FLEET"'),1)
+            self.assertEqual(s.count(mod.MARKERS[path][1]),1)
+            if path == mod.ARB:
+                self.assertEqual(s.count('"PERSONAL_FLEET"'),1)
+            else:
+                self.assertIn('personalFleetRecoveryProof?.(link)===true',s)
+                self.assertIn('action==="pf-resume-guard"',s)
             self.assertNotIn(mod.MARKERS[path][0],s)
             self.assertIn(mod.MARKERS[path][1],s)
     def test_pf95_shared_arbiter_allows_owned_combat_but_stock_peaceful_directors_remain_safe(self):
