@@ -31,7 +31,8 @@ function fixture(testBody){
  vm.runInNewContext(source,context,{filename:'coopPersonalFleetOriginalOrderExecutor.js'});
  const api=context.module.exports;
  const options={sharedOriginalArbiter:arbiter,readOriginalWarShipClaim:()=>war,
-  orderWitness:witness,orderReceipt:{recordAfterNativeEffect:()=>({success:receiptOK})},
+  orderWitness:witness,orderReceipt:{recordAfterNativeEffect:()=>({success:receiptOK}),
+   recordAfterNativeReturnEffect:()=>({success:receiptOK})},
   enabled:()=>on,allWritersFenced:()=>fenced};
  const create=()=>api.createOriginalOrderExecutor(options);
  const ctx={api,create,capture,options,data,idx,dep,calls,
@@ -118,7 +119,8 @@ test('missing source-owned receipt is a hard physical executor constructor failu
 test('PF56 original return uses the SAME original shared order bridge as PF55',()=>fixture(f=>{
  const x=f.create();assert.equal(f.capture.returnSource.orderBridge,f.capture.executor.orderBridge);
  const row={shipItemID:2301,systemID:30000142,stationID:60000123,actorGeneration:9};
- assert.equal(x.executeNativeReturn(row).kind,'REAL_RETURN_ADAPTER');
+ assert.equal(x.executeNativeReturn(row).data?.durability,
+  'ORIGINAL_NPC_ENTITIES_AND_PF56_RETURN_RECEIPT_COMMITTED');
 }));
 test('PF56 source return geometry requires both original SDE station and loaded scene ball',()=>fixture(f=>{
  const x=f.create();let p=f.capture.returnSource.getCanonicalStation(60000123);
