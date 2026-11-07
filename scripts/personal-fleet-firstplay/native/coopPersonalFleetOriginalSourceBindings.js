@@ -88,6 +88,21 @@ function createOriginalSourceBindings(){
      entity.itemID!==ship||entity.transient===true)return null;
   return Object.freeze({shipItemID:ship,systemID,nativeVerified:true});
  }
+ // Only original SQLite character ownership, not an impersonated player
+ // session or an operator-provided ACL, may extend a paid owner's return.
+ // A changed account owner / deleted character fails closed.
+ function verifyServerReturnOwner(row,tx){
+  if(atomic.isPoisoned()||!obj(row)||!obj(tx)||typeof tx.get!=='function'||
+     !pos(row.ownerCharacterID)||!pos(row.requestedByAccountID)||
+     typeof row.operationID!=='string'||typeof row.assignmentID!=='string')
+   return false;
+  try{
+   const original=tx.get('characters',String(row.ownerCharacterID));
+   return obj(original)&&original.characterID===row.ownerCharacterID&&
+     original.accountId===row.requestedByAccountID&&
+     original.isDeleted!==true;
+  }catch{return false;}
+ }
  function resolveOwnerCorporation(owner){
   if(!pos(owner)||atomic.isPoisoned())return null;
   let row;
@@ -102,6 +117,6 @@ function createOriginalSourceBindings(){
  return Object.freeze({gameStore,access,
    resolveOriginalDockContext:(session,owner)=>verifiedDock({session,owner}),
    resolveOriginalFollowTarget:originalFollowTarget,
-   resolveOwnerCorporation});
+   verifyServerReturnOwner,resolveOwnerCorporation});
 }
 module.exports=Object.freeze({createOriginalSourceBindings});
