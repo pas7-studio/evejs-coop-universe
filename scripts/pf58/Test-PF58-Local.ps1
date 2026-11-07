@@ -54,6 +54,22 @@ if ($NativeCheckout) {
   } finally {
     [Environment]::SetEnvironmentVariable('PF95_NATIVE_WORKTREE',$oldPf95Root,'Process')
   }
+  # PF97 source-pinned original character + ItemStore temp-only ownership tests.
+  $pf97Character = Join-Path $root '../pf97/tests/pf97-character-writer-source.test.cjs'
+  $pf97ItemStore = Join-Path $root '../pf97/tests/pf97-itemstore-source.test.cjs'
+  foreach ($file in @($pf97Character,$pf97ItemStore)) {
+    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+      throw 'PF97_ORIGINAL_CHARACTER_ITEMSTORE_TEST_MISSING'
+    }
+  }
+  $oldPf97Root = [Environment]::GetEnvironmentVariable('PF97_NATIVE_WORKTREE','Process')
+  try {
+    $env:PF97_NATIVE_WORKTREE = $native
+    & $node --test '--test-concurrency=1' $pf97Character $pf97ItemStore
+    if ($LASTEXITCODE -ne 0) { throw 'PF97_ORIGINAL_CHARACTER_ITEMSTORE_TEST_FAILED' }
+  } finally {
+    [Environment]::SetEnvironmentVariable('PF97_NATIVE_WORKTREE',$oldPf97Root,'Process')
+  }
   $patch = Join-Path ([System.IO.Path]::GetTempPath()) 'pf58-native-stock-fittings-review.patch'
   & $python (Join-Path $root 'build_native_stock_fittings_patch.py') $native --output $patch
   if ($LASTEXITCODE -ne 0) { throw 'PF58_NATIVE_SOURCE_PIN_FAILED' }

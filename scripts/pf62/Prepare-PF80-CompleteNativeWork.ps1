@@ -145,6 +145,25 @@ if ($ApplyToWork.IsPresent) {
     } finally {
       [Environment]::SetEnvironmentVariable('PF95_NATIVE_WORKTREE',$oldPf95Root,'Process')
     }
+    # PF97: only temporary copies of exact-pinned original CharacterState
+    # and ItemStore; stock ship writer remains closed until native custody.
+    $pf97Character = Join-Path $repo 'scripts/pf97/tests/pf97-character-writer-source.test.cjs'
+    $pf97ItemStore = Join-Path $repo 'scripts/pf97/tests/pf97-itemstore-source.test.cjs'
+    foreach ($file in @($pf97Character,$pf97ItemStore)) {
+      if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+        throw 'PF97_ORIGINAL_CHARACTER_ITEMSTORE_TEST_MISSING'
+      }
+    }
+    $oldPf97Root = [Environment]::GetEnvironmentVariable('PF97_NATIVE_WORKTREE','Process')
+    try {
+      $env:PF97_NATIVE_WORKTREE = (Resolve-Path -LiteralPath $NativeCheckout -ErrorAction Stop).Path
+      & $node --test --test-concurrency=1 $pf97Character $pf97ItemStore
+      if ($LASTEXITCODE -ne 0) { throw 'PF97_ORIGINAL_CHARACTER_ITEMSTORE_OWNER_GATE_FAILED' }
+    } finally {
+      [Environment]::SetEnvironmentVariable('PF97_NATIVE_WORKTREE',$oldPf97Root,'Process')
+    }
+    & $python -m unittest discover -s (Join-Path $repo 'scripts/pf97/tests') -p 'test_pf97_*.py' -v
+    if ($LASTEXITCODE -ne 0) { throw 'PF97_ORIGINAL_OWNER_SOURCE_ARCHIVE_INVALID' }
     $pf90Owner = Join-Path $repo 'scripts/pf58/tests/pf90-owner-snapshot.test.cjs'
     $pf90Sources = Join-Path $repo 'scripts/pf90/tests/pf90-original-owners.test.cjs'
     $pf90Audit = Join-Path $repo 'scripts/pf90/inspect-original-owner-writes.cjs'

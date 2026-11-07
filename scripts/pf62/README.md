@@ -245,3 +245,14 @@ transaction lifetime, without changing the WORK fork or PLAY.
 The method is default OFF and remains unconnected to original
 characterState/ItemStore/session owners. See
 `scripts/pf95/PF95_NATIVE_GAMESTORE_OWNER_HANDOFF.md`.
+
+## PF97 original stock character and hull writer preflight
+
+Before PF80 WORK review staging, PF97 now tests the two pinned
+original source owners (`characterState.js`, `itemStore.js`)
+from temporary patched copies. Protected hull identity and lazy
+ship provisioning are denied under native mode until original
+PF91/PF92 custody hooks are installed; unrelated character changes
+use an atomic native GameStore before-image fence. The original fork
+and PLAY are never patched by the runner. See
+`scripts/pf97/PF97_ORIGINAL_CHARACTER_ITEMSTORE_OWNER_HANDOFF.md`.

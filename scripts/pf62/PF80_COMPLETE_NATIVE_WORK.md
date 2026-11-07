@@ -238,3 +238,16 @@ upstream patch registry and cannot be run by that installer.
 Native owner, ItemStore, characterState and live session hooks
 remain blocking before feature enablement. See
 `scripts/pf95/PF95_NATIVE_GAMESTORE_OWNER_HANDOFF.md`.
+
+## PF97 protected stock character write and lazy-hull gate
+
+The PF80 preflight now requires 25 PF97 source-pinned Node test
+scenarios (18 CharacterState + 7 ItemStore) and archive integrity
+checks. Original `writeCharacterRecord`, `getCharacterRecord`
+normalization and `ItemStore.ensureCharacterActiveShipItem` are
+covered, not only the explicit ship activation endpoint.
+The review-only diffs intentionally BLOCK physical ship title
+mutations when feature mode is ON; installing them without
+actual PF91/PF92 original custody/session integration does not
+produce a usable Personal Fleet implementation. See
+`scripts/pf97/PF97_ORIGINAL_CHARACTER_ITEMSTORE_OWNER_HANDOFF.md`.
