@@ -12,6 +12,7 @@
  * native-order and docking hooks. No arbitrary success functions are supplied.
  */
 const core=require('./coopPersonalFleetOriginalSourceBindings');
+const originalWalletAuthority=require('./coopPersonalFleetOriginalWalletAuthority');
 const offers=require('./coopPersonalFleetOriginalOfferAuthority');
 const commands=require('./coopPersonalFleetWorkCommandOwner');
 const chat=require('./coopPersonalFleetChatGateway');
@@ -32,7 +33,6 @@ const positive=x=>Number.isSafeInteger(x)&&x>0;
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const HOOKS=Object.freeze([
  'verifyOriginalWriterHooks','allWritersFenced','allWalletWritersFenced',
- 'verifyJournalID','originalTransactionID','notifyOriginalWallet',
  'verifyShipAvailable','verifyRelease','verifyOriginalEquipment',
  'verifyOriginalDeploymentAuthority','verifyExclusiveOwnership',
  'verifyOriginalActor','independentOriginalActorWitness',
@@ -103,6 +103,9 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
  try{
   const original=core.createOriginalSourceBindings();
   assertReadiness(originalHooks,original);
+  // The original EveJS ID issuer and wallet notification sources are now
+  // native imports, not injectable callbacks from an operator or client.
+  const wallet=originalWalletAuthority.createOriginalWalletAuthority();
   const gameStore=original.gameStore,access=original.access;
   const offer=offers.createSourceBoundOriginalOfferAuthority({gameStore,pf52,pf53,
     access,authoredCatalog,enabled,
@@ -111,9 +114,9 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
     resolveNativeOffer:offer.resolveNativeOffer,
     verifyOriginalNpcPilot:offer.verifyOriginalNpcPilot,
     verifyNativeEmployer:offer.verifyNativeEmployer,
-    originalTransactionID:originalHooks.originalTransactionID,
-    verifyJournalID:originalHooks.verifyJournalID,
-    notifyOriginalWallet:originalHooks.notifyOriginalWallet,
+    originalTransactionID:wallet.originalTransactionID,
+    verifyJournalID:wallet.verifyJournalID,
+    notifyOriginalWallet:wallet.notifyOriginalWallet,
     allWalletWritersFenced:originalHooks.allWalletWritersFenced,enabled});
   const hangar=pf52.createPersonalFleetHangarBridge({gameStore,access,
     // PF53 is the only hire command here. Importing another paid hire through
