@@ -118,6 +118,73 @@ function createOriginalWalletAuthority(){
    return true;
   }catch{return false;}
  }
- return Object.freeze({originalTransactionID,verifyJournalID,notifyOriginalWallet});
+ function notifyOriginalSalaryWallet({command,receipt}={},originalStore=gameStore){
+  if(originalStore!==gameStore||!obj(command)||!TOKEN.test(command.operationID)||
+     !pos(command.ownerCharacterID)||!obj(receipt)||
+     receipt.type!=='PAID'||receipt.operationID!==command.operationID||
+     receipt.ownerCharacterID!==command.ownerCharacterID||
+     !pos(receipt.transactionID)||!pos(receipt.employerCorpID)||
+     !pos(receipt.amountCents)||!Number.isSafeInteger(receipt.characterAfterCents)||
+     !Number.isSafeInteger(receipt.employerAfterCents)||
+     gameStore.coopAtomicNativeRows.isPoisoned()===true)return false;
+  const salaryKey='coop-personal-fleet'+SEP+'contract-lifecycle-v1';
+  let verified;
+  try{verified=gameStore.coopAtomicNativeRows.transact([TABLE,'characters'],tx=>{
+   const ledger=tx.get(TABLE,salaryKey),
+     processed=ledger?.processed?.[command.operationID]?.receipt,
+     global=tx.get(TABLE,journalKey(receipt.transactionID)),
+     character=tx.get('characters',String(command.ownerCharacterID)),
+     employer=tx.get(TABLE,corporateKey(receipt.employerCorpID)),
+     div=employer?.wallet?.divisions?.['1000'];
+   const entries=(rows,owner,other,amount,after)=>Array.isArray(rows)&&
+     rows.filter(x=>x?.transactionID===receipt.transactionID).length===1&&
+     rows.some(x=>x?.transactionID===receipt.transactionID&&
+       x.ownerID1===owner&&x.ownerID2===other&&
+       x.amount===amount/100&&x.balance===after/100&&
+       x.description==='Personal NPC salary '+command.operationID);
+   if(!obj(processed)||processed.transactionID!==receipt.transactionID||
+      processed.amountCents!==receipt.amountCents||
+      processed.ownerCharacterID!==receipt.ownerCharacterID||
+      processed.employerCorpID!==receipt.employerCorpID||
+      processed.characterAfterCents!==receipt.characterAfterCents||
+      processed.employerAfterCents!==receipt.employerAfterCents||
+      global?.transactionID!==receipt.transactionID||
+      global.operationID!==command.operationID||
+      global.ownerCharacterID!==command.ownerCharacterID||
+      global.employerCorpID!==receipt.employerCorpID||
+      character?.characterID!==command.ownerCharacterID||
+      employer?.corporationID!==receipt.employerCorpID||
+      character.balance!==receipt.characterAfterCents/100||
+      div?.balance!==receipt.employerAfterCents/100||
+      !entries(character.walletJournal,command.ownerCharacterID,
+       receipt.employerCorpID,-receipt.amountCents,receipt.characterAfterCents)||
+      !entries(div.journal,receipt.employerCorpID,command.ownerCharacterID,
+       receipt.amountCents,receipt.employerAfterCents)||
+      !entries(div.transactions,receipt.employerCorpID,command.ownerCharacterID,
+       receipt.amountCents,receipt.employerAfterCents))
+     return null;
+   return Object.freeze({transactionID:receipt.transactionID,
+     ownerBalance:character.balance,employerBalance:div.balance,
+     employerCorpID:receipt.employerCorpID});
+  });}catch{return false;}
+  if(!verified)return false;
+  const id='salary:'+command.operationID+':'+verified.transactionID;
+  if(published.has(id))return true;
+  try{
+   const char=wallet.getCharacterWallet(command.ownerCharacterID),
+     corp=corpWallet.getCorporationWalletDivision(verified.employerCorpID,1000);
+   if(!obj(char)||!obj(corp)||char.balance!==verified.ownerBalance||
+      corp.balance!==verified.employerBalance)return false;
+   wallet.notifyCharacterWalletChange(command.ownerCharacterID,char,
+     {accountKey:'cash',balance:verified.ownerBalance});
+   corpWallet.notifyCorporationWalletChange(
+     verified.employerCorpID,1000,verified.employerBalance);
+   if(published.size>=8192)published.clear();
+   published.add(id);
+   return true;
+  }catch{return false;}
+ }
+ return Object.freeze({originalTransactionID,verifyJournalID,
+  notifyOriginalWallet,notifyOriginalSalaryWallet});
 }
 module.exports=Object.freeze({createOriginalWalletAuthority});
