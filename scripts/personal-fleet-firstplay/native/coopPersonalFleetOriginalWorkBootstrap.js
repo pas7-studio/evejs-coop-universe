@@ -111,6 +111,7 @@ function createOriginalWorkBootstrap({authoredCatalog,originalHooks}={}){
    process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE==='1'&&
    process.env.EVEJS_COOP_PERSONAL_FLEET_CHAT==='1'&&
    process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==='1'&&
+   process.env.EVEJS_COOP_PERSONAL_FLEET_ENTITY_ISOLATION==='1'&&
    originalHooks.verifyOriginalWriterHooks()===true&&
    originalHooks.allWritersFenced()===true&&
    originalHooks.allWalletWritersFenced()===true;
