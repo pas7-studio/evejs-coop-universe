@@ -2,6 +2,8 @@
 """Native-only correction: original EveJS characterState stores one SQLite row per character.
 
 PF53/PF57 archive fixture was an aggregate map under characters/characters.
+PF52 reserve must additionally declare the original characters table for a
+transaction-scoped, paid native pilot-vs-hull type witness.
 Patch exact PF62-staged WORK modules using PF62 manifest SHA256 pins.
 Output is REVIEW ONLY; no engine writes, no PLAY and no new feature flags.
 """
@@ -16,6 +18,10 @@ import sys
 
 SPACE='Code/server/src/space/'
 MODULES={
+'coopPersonalFleetHangarBridge.js': [
+ ("   const result=transact([TABLE,ITEM_TABLE],tx=>{",
+  "   const result=transact([TABLE,ITEM_TABLE,'characters'],tx=>{"),
+],
 'coopPersonalFleetPaidHiring.js':[
  (" const characters=tx.get(CHARACTERS,CHARACTERS);\n const c=characters?.[String(receipt.ownerCharacterID)];",
   " const c=tx.get(CHARACTERS,String(receipt.ownerCharacterID));"),
@@ -70,7 +76,7 @@ def build(work:Path,manifest:Path)->str:
   if not block:raise ValueError('PF_NATIVE_WALLET_EMPTY_PATCH:'+relative)
   diffs.extend(block)
  patch=''.join(diffs)
- if not patch.endswith('\n') or patch.count('--- a/')!=2 or patch.count('+++ b/')!=2:
+ if not patch.endswith('\n') or patch.count('--- a/')!=3 or patch.count('+++ b/')!=3:
   raise ValueError('PF_NATIVE_WALLET_REVIEW_DIFF_INCOMPLETE')
  return patch
 
@@ -87,7 +93,7 @@ def main():
  if v.output.exists():raise ValueError('PF_NATIVE_WALLET_REVIEW_OUTPUT_EXISTS')
  v.output.parent.mkdir(parents=True,exist_ok=True)
  v.output.write_text(patch,encoding='utf-8',newline='\n')
- print('PF_NATIVE_CHARACTER_ROW_WALLET_REVIEW_READY sha256='+hashlib.sha256(patch.encode()).hexdigest())
+ print('PF_NATIVE_CHARACTER_ROW_WALLET_AND_PF52_WITNESS_REVIEW_READY sha256='+hashlib.sha256(patch.encode()).hexdigest())
  print('Do not apply to original source or PLAY; review and commit in isolated WORK only.')
 
 if __name__=='__main__':
