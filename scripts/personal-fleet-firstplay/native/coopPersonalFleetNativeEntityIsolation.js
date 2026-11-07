@@ -29,7 +29,7 @@ function policyFor(tables,options,env=process.env){
   env.EVEJS_COOP_NATIVE_ATOMIC_ROWS!=='1')fail('POLICY_NOT_AUTHORIZED');
  const {shipItemID,operationID,assignmentID,mode}=options;
  if(!positive(shipItemID)||!token(operationID)||!token(assignmentID)||
-    !['ORDER','RETURN','CONFIRM'].includes(mode))fail('CONTRACT_INVALID');
+    !['ORDER','RETURN','CONFIRM','RECONCILE'].includes(mode))fail('CONTRACT_INVALID');
  return Object.freeze({shipItemID,operationID,assignmentID,mode});
 }
 function capture({paths,live,durable,shipItemID}={}){
@@ -72,8 +72,10 @@ function guardMutation(tx,policy){
  const nativeKey=entityKey(policy.shipItemID),
   receiptKey=PREFIX+(policy.mode==='ORDER'?'native-order-receipt-v1:':
    'native-return-receipt-v1:')+policy.operationID,
-  confirmKey=PREFIX+'return-dock-v1:'+policy.assignmentID;
- let entity=null,receipt=null,confirmed=0;
+  confirmKey=PREFIX+'return-dock-v1:'+policy.assignmentID,
+  manualKey=PREFIX+'manual-order-v1:'+policy.shipItemID,
+  manualIndexKey=PREFIX+'manual-order-operations-v1';
+ let entity=null,receipt=null,confirmed=0,manual=null,orderIndex=null;
  const pre=tx.get(NE,nativeKey);
  if(!object(pre)||pre.transient===true||pre.entityID!==policy.shipItemID||
    pre.personalFleetOriginal!==true||
@@ -86,7 +88,32 @@ function guardMutation(tx,policy){
   get:(t,k)=>tx.get(t,k),
   scan:t=>tx.scan(t),
   put(t,k,value){
-   if(policy.mode==='CONFIRM'){
+   if(policy.mode==='RECONCILE'){
+    if(t!==T||!object(value))fail('RECONCILE_FOREIGN_WRITE');
+    const old=tx.get(T,k);
+    if(k===manualKey){
+     if(manual!==null||!object(old)||old.phase!=='ISSUING'||
+        old.operationID!==policy.operationID||
+        old.shipItemID!==policy.shipItemID||
+        old.assignmentID!==policy.assignmentID||
+        value.phase!=='ACKED'||value.operationID!==old.operationID||
+        !/^[0-9a-f]{64}$/.test(value.proofHash||'')||
+        !positive(value.ackedAtMs)||
+        !sameExcept(old,value,['phase','proofHash','ackedAtMs']))
+      fail('RECONCILE_LEDGER_INVALID');
+     manual=clone(value);
+    }else if(k===manualIndexKey){
+     if(orderIndex!==null||!object(old)||!object(old.operations)||
+        !object(value.operations)||!object(old.operations[policy.operationID])||
+        old.operations[policy.operationID].phase!=='ISSUING'||
+        value.operations[policy.operationID]?.phase!=='ACKED')
+      fail('RECONCILE_INDEX_INVALID');
+     const prior=clone(old),next=clone(value);
+     prior.operations[policy.operationID].phase='ACKED';
+     if(!isDeepStrictEqual(prior,next))fail('RECONCILE_INDEX_FOREIGN_CHANGE');
+     orderIndex=clone(value);
+    }else fail('RECONCILE_UNRELATED_KEY');
+   }else if(policy.mode==='CONFIRM'){
     if(t!==T||k!==confirmKey||confirmed!==0||!object(value))
      fail('CONFIRM_FOREIGN_WRITE');
     const old=tx.get(T,k);
@@ -131,6 +158,12 @@ function guardMutation(tx,policy){
   },
   del(){fail('DELETE_FORBIDDEN');},
   assertWriteSetComplete(){
+   if(policy.mode==='RECONCILE'){
+    if(entity!==null||receipt!==null||confirmed!==0||
+       (manual===null)!==(orderIndex===null))
+      fail('INCOMPLETE_RECONCILE_WRITE_SET');
+    return;
+   }
    if(policy.mode==='CONFIRM'){
     if(entity!==null||receipt!==null)fail('CONFIRM_WRITE_SET_INVALID');
     return;
