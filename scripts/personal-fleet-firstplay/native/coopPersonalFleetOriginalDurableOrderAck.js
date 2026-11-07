@@ -149,7 +149,9 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
    tx.put(T,key,ack);
    return {success:true,operationID:row.operationID,
     status:'DURABLE_NATIVE_APPLIED_AWAITING_PF55_ACK'};
-  });}catch{return result(false,'PF55_NATIVE_DURABLE_COMMIT_UNKNOWN_NO_RETRY');}
+  },{contract:'personal-fleet-entity-receipt-v1',shipItemID:row.shipItemID,
+     operationID:row.operationID,assignmentID:row.assignmentID,mode:'ORDER'});
+  }catch{return result(false,'PF55_NATIVE_DURABLE_COMMIT_UNKNOWN_NO_RETRY');}
  }
  function verifyPersistedNativeOrder(row,tx){
   if(!matchesRow(row)||!on()||!obj(tx)||typeof tx.get!=='function')return null;
@@ -284,7 +286,9 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
     {...marker,source:'EVEJS_ORIGINAL_NATIVE_RETURN_COMMITTED_V1'});
    return {success:true,operationID:row.operationID,
     status:'ORIGINAL_NATIVE_RETURN_ORDER_DURABLE'};
-  });}catch{return result(false,'PF56_NATIVE_RETURN_COMMIT_UNKNOWN_NO_RETRY');}
+  },{contract:'personal-fleet-entity-receipt-v1',shipItemID:row.shipItemID,
+     operationID:row.operationID,assignmentID:row.assignmentID,mode:'RETURN'});
+  }catch{return result(false,'PF56_NATIVE_RETURN_COMMIT_UNKNOWN_NO_RETRY');}
  }
  function verifyPersistedNativeReturn(row,tx){
   if(!matchesReturn(row)||!on()||!obj(tx)||typeof tx.get!=='function')return null;
