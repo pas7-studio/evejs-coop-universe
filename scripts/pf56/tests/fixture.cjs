@@ -64,6 +64,11 @@ function open(file){
   claimsPolicy:f.deps.claimsPolicy,access:f.deps.access,
   enabled:()=>f.shared.enabled,allWritersFenced:()=>f.shared.writers,
   clock:()=>f.shared.clock,verifyExclusiveOwnership:()=>f.shared.exclusive,
+  verifyServerReturnOwner:(row,tx)=>{
+   const original=tx.get('characters',String(row.ownerCharacterID));
+   return original?.characterID===row.ownerCharacterID&&
+    original.accountId===row.requestedByAccountID&&original.isDeleted!==true;
+  },
   verifyNativeFlight:()=>f.shared.flight&&f.shared.native&&
    f.shared.scene?.entityID===F.SHIP,
   verifyOriginalReturnOrder(row,tx){return f.shared.nativeReturnProof?
@@ -81,7 +86,8 @@ function open(file){
   verifyFinalOriginalManifest(row){return f.shared.manifestOverride||{...manifest}},
   executeNativeReturn:nativeReturn,executeNativeDock:nativeDock};
  f.returnDock=pf56.createPersonalFleetReturnDock(opts);
- f.makeReady=()=>{f.makeActive();};
+ f.makeReady=()=>{f.makeActive();f.put('characters',String(F.OWNER),{
+  characterID:F.OWNER,accountId:F.session.userid,isDeleted:false});};
  f.returnCommand=command;
  f.progressToReturning=()=>{
   const c=command();let r=f.returnDock.requestReturn(c);
