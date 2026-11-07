@@ -384,8 +384,8 @@ source paths**. It includes the full first-play docking *code candidate*:
    `verifyOriginalDockReceipt` callbacks. All original module gates remain
    required and the source stays OFF by default.
 
-**Actual evidence:** new 66/66 Node VM tests passed (35 dock readback,
-16 source terminal and 15 coordinator). Earlier 265/265 component gates
+**Actual evidence:** new 68/68 Node VM tests passed (36 dock readback,
+17 source terminal and 15 coordinator). Earlier 265/265 component gates
 were green before this continuation. **Full combined current-head runner
 NOT EXECUTED**, although it now lists all 12 Node suites and accompanying
 Python/Git tests. Manifest pins 32 distinct source/test files. The original
@@ -397,3 +397,10 @@ station dwell and actual original return-flight reader must be installed and
 invoked by a privileged server tick, and original WORK must show a real player
 paying ISK, genuine spare stock hull appearing as an NPC, FOLLOW/HOLD/RETURN,
 same itemID docked, no duplicates after SIGKILL/restart. No PLAY changes.
+
+
+**Scene-mount safety correction:** Neither PF60 terminal custody nor PF56 dock
+completion can treat an unloaded original solar-system scene as proof that an
+NPC disappeared. Both require the exact original system scene to be mounted,
+and then check no physical duplicate exists in any mounted scene. Two new
+negative tests exercise this; the isolated dock suites now pass **68/68**.
