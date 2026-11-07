@@ -73,7 +73,7 @@ test('PF88 missing original writer proof aborts before publishing Personal Fleet
    verifyOriginalWriterHooks:()=>false,allWritersFenced:()=>true,
    allWalletWritersFenced:()=>true})}});
  assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/WRITER_FENCES_UNVERIFIED/);
- assert.deepEqual(f.events,[]);
+ assert.deepEqual(f.events,['catalog-proof']);
 });
 test('PF88 empty authored catalog fails before creating hooks',()=>{
  const f=load({config:{source:'ORIGINAL_EVEJS_PERSONAL_FLEET_WORK_CONFIGURATION_V1',
