@@ -286,7 +286,8 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
     requestedByAccountID:row.requestedByAccountID,
     committedAtMs:timestamp};
    tx.put(NE,entityKey(row.shipItemID),
-    {...physical.stored,mode:'WARP',targetPoint:{...ingress.targetPoint},
+    {...physical.stored,position:{...ingress.origin},mode:'WARP',
+     targetPoint:{...ingress.targetPoint},
      personalFleetReturnOrder:marker,personalFleetReturnIngress:ingress});
    tx.put(T,RETURN_RECEIPT+row.operationID,
     {...marker,source:'EVEJS_ORIGINAL_NATIVE_RETURN_COMMITTED_V1',
