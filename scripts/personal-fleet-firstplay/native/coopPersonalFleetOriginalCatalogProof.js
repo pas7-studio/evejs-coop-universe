@@ -71,6 +71,7 @@ function verifyOriginalCatalogAndWages(authoredCatalog,authoredSalaryPolicies){
     return reject('PF102_ORIGINAL_SDE_NPC_CHARACTER_NOT_FOUND');
    if(!object(def)||def.profile?.profileID!==c.profileID||
       def.profile?.shipTypeID!==c.shipTypeID||
+      def.profile?.corporationID!==c.employerCorpID||
       !profileID(def.profile.loadoutID)||
       !profileID(def.profile.behaviorProfileID)||
       !object(def.loadout)||!object(def.behaviorProfile)||
