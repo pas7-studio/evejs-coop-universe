@@ -164,7 +164,10 @@ function createPersonalFleetReturnDock({gameStore,pf52,claimsPolicy,access,
   const fail=admit(c);if(fail)return fail;
   try{return atomic.transact([T,ITEMS,'characters',...extras],tx=>{
    const blocked=guard(c,tx);return blocked?deny(blocked):fn(tx);
-  });}catch{return deny('PF56_ATOMIC_COMMIT_OR_READ_UNCERTAIN');}
+  },extras.includes('npcEntities')?{contract:'personal-fleet-entity-receipt-v1',
+     shipItemID:c.shipItemID,operationID:c.operationID,
+     assignmentID:c.assignmentID,mode:'CONFIRM'}:{});
+  }catch{return deny('PF56_ATOMIC_COMMIT_OR_READ_UNCERTAIN');}
  }
  // Internal server continuation: only after the original player-authorized
  // RETURN_ISSUING has committed. Never fabricate a disconnected session.
@@ -190,7 +193,10 @@ function createPersonalFleetReturnDock({gameStore,pf52,claimsPolicy,access,
       verifyExclusiveOwnership(saved,tx)!==true)
     return deny('PF56_SERVER_RETURN_NATIVE_WRITERS_REVOKED');
    return fn(tx);
-  });}catch{return deny('PF56_SERVER_RETURN_ORIGINAL_SQLITE_UNCERTAIN');}
+  },extras.includes('npcEntities')?{contract:'personal-fleet-entity-receipt-v1',
+     shipItemID:c.shipItemID,operationID:c.operationID,
+     assignmentID:c.assignmentID,mode:'CONFIRM'}:{});
+  }catch{return deny('PF56_SERVER_RETURN_ORIGINAL_SQLITE_UNCERTAIN');}
  }
  function requestReturn(c){
   const admission=withTx(c,tx=>{
