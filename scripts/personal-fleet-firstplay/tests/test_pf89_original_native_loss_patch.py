@@ -42,6 +42,8 @@ class Pf89OriginalLossNativePatchTest(unittest.TestCase):
   self.assertIn('captureOfferWageConsent(offer,command,now)',changed)
   self.assertIn('tx.put(TABLE,originalPayrollConsent.consentKey(command.operationID),wageConsent);',changed)
   self.assertIn('payrollConsent:wageConsent',changed)
+  self.assertIn('command.recurringSalaryAcknowledged!==true',changed)
+  self.assertIn('command.expectedRosterRevision,command.recurringSalaryAcknowledged',changed)
  def test_pf93_native_server_payroll_does_not_forge_player_login(self):
   raw=(ROOT.parent/'pf57/native/coopPersonalFleetContractLifecycle.cjs').read_text(encoding='utf-8')
   changed=m.transform('coopPersonalFleetContractLifecycle.js',raw)
