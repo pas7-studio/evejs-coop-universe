@@ -1,7 +1,10 @@
 diff --git a/server/src/services/character/characterState.js b/server/src/services/character/characterState.js
 --- a/server/src/services/character/characterState.js
 +++ b/server/src/services/character/characterState.js
-@@ -378,19 +378,98 @@
+@@ -375,25 +375,104 @@
+     });
+ }
+ 
 -function writeCharacterRecord(charId, record, options) {
 -  const clonedRecord = cloneValue(record);
 -  const writeResult = options
@@ -119,7 +122,13 @@ diff --git a/server/src/services/character/characterState.js b/server/src/servic
 +    data: clonedRecord,
 +  };
 +}
-@@ -400,2 +479,6 @@
+ 
+ // Owner removal API: lets other domains delete a character record without
+ // writing the characters table directly. Keeps characterRecordCache consistent.
+@@ -397,8 +476,12 @@
+ 
+ // Owner removal API: lets other domains delete a character record without
+ // writing the characters table directly. Keeps characterRecordCache consistent.
 -function removeCharacterRecord(charId) {
 -  const removeResult = repo.remove(CHARACTERS_TABLE, `/${String(charId)}`);
 +function removeCharacterRecord(charId) {
@@ -128,7 +137,13 @@ diff --git a/server/src/services/character/characterState.js b/server/src/servic
 +    return { success: false, errorMsg: "PF97_CHARACTER_DELETE_REQUIRES_NATIVE_OWNER" };
 +  }
 +  const removeResult = repo.remove(CHARACTERS_TABLE, `/${String(charId)}`);
-@@ -1019,5 +1102,11 @@
+   characterRecordCache.delete(String(charId));
+   return {
+     success: Boolean(removeResult && removeResult.success),
+@@ -1016,11 +1099,17 @@
+     return null;
+   }
+ 
 -  if (JSON.stringify(rawRecord) !== JSON.stringify(normalizedRecord)) {
 -    writeCharacterRecord(charId, normalizedRecord);
 -  }
@@ -145,3 +160,6 @@ diff --git a/server/src/services/character/characterState.js b/server/src/servic
 +  }
 +
 +  const currentCharacters = readCharacters();
+   characterRecordCache.set(cacheKey, {
+     rawRecord: currentCharacters[String(charId)] || rawRecord,
+     itemMutationVersion,
