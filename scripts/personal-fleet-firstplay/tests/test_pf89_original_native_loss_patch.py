@@ -27,6 +27,13 @@ class Pf89OriginalLossNativePatchTest(unittest.TestCase):
   self.assertNotIn("tx.put(CHAR,CHAR",changed)
   self.assertEqual(changed.count('readWreckRoot(tx)'),2)
   self.assertEqual(changed.count('readNativeAssets(tx,c.shipItemID)'),1)
+ def test_pf91_original_hire_avoids_unrelated_transient_npc_table(self):
+  source=(ROOT.parent/'pf53/native/coopPersonalFleetPaidHiring.cjs').read_text(encoding='utf-8')
+  changed=m.transform('coopPersonalFleetPaidHiring.js',source)
+  self.assertIn('atomic.transact([CHARACTERS,TABLE],tx=>{',changed)
+  self.assertNotIn("atomic.transact([CHARACTERS,TABLE,'npcEntities']",changed)
+  self.assertNotIn("tx.get(CHARACTERS,CHARACTERS)",changed)
+  self.assertNotIn("tx.put(CHARACTERS,CHARACTERS",changed)
  def test_unreviewed_root_reader_patch_drift_must_fail_closed(self):
   raw=ARCHIVE.read_text(encoding='utf-8')
   drift=raw.replace("tx.get('npcModules','npcModules')",
