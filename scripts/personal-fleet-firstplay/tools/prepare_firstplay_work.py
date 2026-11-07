@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Review or explicitly install the 41-path Personal Fleet first-play WORK delta.
+"""Review or explicitly install the 43-path Personal Fleet first-play WORK delta.
 
 Requires PF80's already prepared, isolated, source-pinned WORK git worktree.
 This code never starts Docker, contacts PLAY, edits the original native checkout,
@@ -25,6 +25,8 @@ ADDITIONS={
  STOCK_ROOT/'coopPersonalFleetOriginalWorkBootstrap.js': ROOT/'native/coopPersonalFleetOriginalWorkBootstrap.js',
  STOCK_ROOT/'coopPersonalFleetOriginalWorkStarter.js': ROOT/'native/coopPersonalFleetOriginalWorkStarter.js',
  STOCK_ROOT/'coopPersonalFleetOriginalWorkConfiguration.js': ROOT/'native/coopPersonalFleetOriginalWorkConfiguration.js',
+ STOCK_ROOT/'coopPersonalFleetOriginalNativeWriterBoundary.js': ROOT/'native/coopPersonalFleetOriginalNativeWriterBoundary.js',
+ STOCK_ROOT/'coopPersonalFleetOriginalWarClaim.js': ROOT/'native/coopPersonalFleetOriginalWarClaim.js',
  STOCK_ROOT/'coopPersonalFleetOriginalCatalogProof.js': ROOT/'native/coopPersonalFleetOriginalCatalogProof.js',
  STOCK_ROOT/'coopPersonalFleetOriginalWalletAuthority.js': ROOT/'native/coopPersonalFleetOriginalWalletAuthority.js',
  STOCK_ROOT/'coopPersonalFleetOriginalOrderWitness.js': ROOT/'native/coopPersonalFleetOriginalOrderWitness.js',
@@ -63,6 +65,8 @@ EXPECTED_PATCH_PATHS={
  str(STOCK_ROOT/'coopPersonalFleetOriginalWorkBootstrap.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalWorkStarter.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalWorkConfiguration.js'),
+ str(STOCK_ROOT/'coopPersonalFleetOriginalNativeWriterBoundary.js'),
+ str(STOCK_ROOT/'coopPersonalFleetOriginalWarClaim.js'),
  str(STOCK_ROOT/'coopPersonalFleetOriginalCatalogProof.js'),
  'Code/server/index.js',
  str(STOCK_ROOT/'coopPersonalFleetOriginalWalletAuthority.js'),
@@ -174,7 +178,7 @@ def make_patch(work:Path,source:Path,manifest:Path):
  if len(patch_paths)!=len(set(patch_paths)):
   raise ValueError('PF_FIRSTPLAY_DUPLICATE_NATIVE_PATCH_PATH')
  if set(patch_paths)!=EXPECTED_PATCH_PATHS:
-  raise ValueError('PF_FIRSTPLAY_INCOMPLETE_FORTY_ONE_FILE_PATCH')
+  raise ValueError('PF_FIRSTPLAY_INCOMPLETE_FORTY_THREE_FILE_PATCH')
  return result,target_files
 
 def build(work:Path,source:Path,manifest:Path,out:Path,*,apply=False,confirm=''):
@@ -186,7 +190,7 @@ def build(work:Path,source:Path,manifest:Path,out:Path,*,apply=False,confirm='')
  native_patch,new_sources=make_patch(work,source,manifest)
  git(work,'apply','--whitespace=error','--check','-',input=native_patch)
  expected_added=EXPECTED_PATCH_PATHS-baseline
- if len(expected_added)!=37 or len(EXPECTED_PATCH_PATHS.intersection(baseline))!=4:
+ if len(expected_added)!=39 or len(EXPECTED_PATCH_PATHS.intersection(baseline))!=4:
   raise ValueError('PF_FIRSTPLAY_PF80_OVERLAP_NOT_EXACT')
  result={'status':'REVIEW_ONLY','featureEnabled':False,'gameplayE2E':'NOT_RUN',
   'nativeInstall':'NOT_RUN','playTouched':False,'workBranch':git(work,'branch','--show-current'),
