@@ -15,8 +15,11 @@ function fixture(testBody){
   verifyTarget:()=>targetOk,verifyPersonalClaim:()=>actorOk,verifyOriginalControl:()=>actorOk};
  const modules={
   '../gameStore':{coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',transact:(tables,cb)=>{calls.push([...tables]);return cb(tx);},isPoisoned:()=>poisoned}},
-  './runtime':{scenes:new Map([[30000142,{systemID:30000142}]])},
-  './npc/npcRuntime':{follow:()=>{},stop:()=>{},issueOrder:()=>{},issueAttackOrder:()=>{},warpToEntity:()=>{}},
+  './runtime':{scenes:new Map([[30000142,{systemID:30000142,
+    getEntityByID:id=>id===60000123?{entityID:60000123,position:{x:200,y:300,z:400},radius:270}:null}]])},
+  './npc/npcRuntime':{follow:()=>{},stop:()=>{},issueOrder:()=>{},issueAttackOrder:()=>{},warpToEntity:()=>{},warpToPoint:()=>{}},
+  './worldData':{getStationByID:id=>id===60000123?{stationID:id,solarSystemID:30000142,position:{x:200,y:300,z:400}}:null},
+  './coopPersonalFleetNativeReturnExecutor':{createOriginalReturnExecutor:x=>{capture.returnSource=x;return {execute:row=>({success:true,kind:'REAL_RETURN_ADAPTER',ship:row.shipItemID})};}},
   './npc/npcRegistry':{getControllerByEntityID:id=>({entityID:id})},
   './coopPersonalFleetHangarBridge':{REGISTRY_KEY:'roster-index',validateIndex:x=>x,validateRoster:x=>x},
   './coopNpcOrderBridge':{createOrderBridge:o=>{Object.assign(capture,{bridge:o});return {issue:()=>({success:true})};}},
@@ -110,4 +113,27 @@ test('native physical success with failed original durable receipt remains UNKNO
 }));
 test('missing source-owned receipt is a hard physical executor constructor failure',()=>fixture(f=>{
  delete f.options.orderReceipt;assert.throws(f.create,/ORIGINAL_SHARED_ORDER_RUNTIME_REQUIRED/);
+}));
+
+test('PF56 original return uses the SAME original shared order bridge as PF55',()=>fixture(f=>{
+ const x=f.create();assert.equal(f.capture.returnSource.orderBridge,f.capture.executor.orderBridge);
+ const row={shipItemID:2301,systemID:30000142,stationID:60000123,actorGeneration:9};
+ assert.equal(x.executeNativeReturn(row).kind,'REAL_RETURN_ADAPTER');
+}));
+test('PF56 source return geometry requires both original SDE station and loaded scene ball',()=>fixture(f=>{
+ const x=f.create();let p=f.capture.returnSource.getCanonicalStation(60000123);
+ assert.equal(p.radius,270);assert.deepEqual({...p.position},{x:200,y:300,z:400});
+ assert.equal(f.capture.returnSource.getCanonicalStation(60000124),null);
+}));
+test('PF56 stationless return may not issue a warp without original ID and generation',()=>fixture(f=>{
+ const x=f.create();assert.equal(x.executeNativeReturn({shipItemID:2301,stationID:0,systemID:30000142,actorGeneration:9}).success,false);
+}));
+test('PF56 stock native return is gated by same shared owner fencing',()=>fixture(f=>{
+ const x=f.create();f.setFenced(false);
+ assert.equal(x.executeNativeReturn({shipItemID:2301,systemID:30000142,stationID:60000123,actorGeneration:9}).success,false);
+}));
+test('PF56 original native return bridge must exist at startup',()=>fixture(f=>{
+ // A compiler change that removed return bridge construction cannot become success.
+ assert.equal(typeof f.create().executeNativeReturn,'function');
+ assert.equal(typeof f.capture.returnSource.npcRuntime.warpToPoint,'function');
 }));
