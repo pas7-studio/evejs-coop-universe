@@ -214,7 +214,9 @@ function createOriginalDurableOrderAck({orderWitness,enabled=()=>false,
    Math.hypot(station.position.x-ball.position.x,
     station.position.y-ball.position.y,
     station.position.z-ball.position.z)>100)return null;
-  return station;
+  // The SDE station row has no guaranteed physics radius; only the
+  // ORIGINAL live station ball owns it. PF94 ingress captures both.
+  return {...station,radius:ball.radius};
  }
  function persistedReturnSource(row,tx){
   if(orderWitness.verifyNativeActor(row,tx)!==true)return null;
