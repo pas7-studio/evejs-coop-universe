@@ -153,7 +153,7 @@ test('PF95 real native ATTACK uses original shared arbiter, stock issueAttackOrd
  f.capture.executor.orderBridge.issue=cmd=>{calls.push(['arbiter',cmd.owner,cmd.action]);return cmd.execute();};
  f.capture.executor.npcRuntime.issueAttackOrder=(id,target,opts)=>{
   calls.push(['attack',id,target,opts]);return {success:true};};
- const row={action:'ATTACK',shipItemID:2301,systemID:30000142,targetEntityID:3333};
+ const row={action:'ATTACK',shipItemID:2301,systemID:30000142,actorGeneration:9,targetEntityID:3333};
  assert.equal(owner.supports('ATTACK'),true);
  assert.equal(owner.execute(row).success,true);
  assert.equal(calls.length,3);
@@ -172,7 +172,7 @@ test('PF95 native GUARD physically follows owner with weapons disabled',()=>fixt
   calls.push(['follow',id,target,range]);return {success:true};};
  f.capture.executor.npcRuntime.issueOrder=(id,order)=>{
   calls.push(['manual',id,order]);return {success:true};};
- const row={action:'DEFEND',shipItemID:2301,systemID:30000142,
+ const row={action:'DEFEND',shipItemID:2301,systemID:30000142,actorGeneration:9,
   targetEntityID:3003,followRangeMeters:2500};
  assert.equal(owner.supports('DEFEND'),true);
  assert.equal(owner.execute(row).success,true);
@@ -186,7 +186,7 @@ test('PF95 native combat cannot be reported ACKED when source receipt fails',()=
  f.options.combatReceipt={recordAfterEffect:()=>({success:false})};
  const owner=f.create();f.capture.executor.orderBridge.issue=c=>c.execute();
  f.capture.executor.npcRuntime.issueAttackOrder=()=>({success:true});
- const r=owner.execute({action:'ATTACK',shipItemID:2301,systemID:30000142,targetEntityID:3333});
+ const r=owner.execute({action:'ATTACK',shipItemID:2301,systemID:30000142,actorGeneration:9,targetEntityID:3333});
  assert.equal(r.success,false);
  assert.match(r.errorMsg,/UNKNOWN_NO_RETRY/);
 }));
