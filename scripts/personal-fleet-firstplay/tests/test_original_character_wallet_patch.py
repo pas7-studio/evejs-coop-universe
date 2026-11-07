@@ -20,6 +20,10 @@ class WalletPatchTest(unittest.TestCase):
    if not any(before in emitted for emitted in earlier):
     blocks.append(before)
    earlier.append(after)
+  if name=='coopPersonalFleetNativeOrders.js':
+   # The PF55 reconcile scope is already present in the current PF55 archive,
+   # so the review patch only adds the missing admission character witness.
+   blocks.append("  try{return atomic.transact([TABLE,ITEMS,'characters','npcEntities'],tx=>{")
   return "'use strict';\n"+'\n'.join(blocks)+"\n"
  def test_rewrites_both_original_stock_character_rows(self):
   for name in b.MODULES:
