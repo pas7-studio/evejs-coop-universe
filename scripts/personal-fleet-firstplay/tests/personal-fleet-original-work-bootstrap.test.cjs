@@ -45,6 +45,7 @@ function fixture(cb){
    if(broken==='physical-order')throw Error('SHARED_ARBITER_NOT_INSTALLED');
    return {execute:()=>({success:false}),supports:()=>false,
     resumeCommitted:()=>({success:false}),canIssuePersonalCombat:()=>false,
+    retainOriginalCombatLease:()=>false,
     executeNativeReturn:()=>({success:false})};}},
   './coopPersonalFleetOriginalSalaryTerms':{createOriginalSalaryTerms(args){
    assert.equal(args.enabled(),false);
@@ -102,6 +103,7 @@ function fixture(cb){
   './coopPersonalFleetOriginalCombatRecovery':{createOriginalCombatRecovery(args){
    assert.equal(args.enabled(),false);
    assert.equal(typeof args.resumeAfterOriginalAck,'function');
+   assert.equal(typeof args.retainOriginalCombatLease,'function');
    assert.equal(typeof args.combatReceipt.verifyPersisted,'function');
    return {recover:()=>({status:'RECOVERY_SCANNED',total:0})};}},
   './coopPersonalFleetOriginalOrderWitness':{createOriginalOrderWitness(args){
