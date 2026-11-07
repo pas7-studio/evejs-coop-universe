@@ -65,9 +65,10 @@ function createOriginalWorkCommandOwner({gameStore,pf52,hangar,pf53,pf54,pf55,pf
   if(!admission(ctx))return blocked('PF_FIRSTPLAY_ORIGINAL_AUTHORITY_OFF');
   const list=listNativeOffers({session:ctx.session,ownerCharacterID:ctx.ownerCharacterID});
   if(!Array.isArray(list)||list.length>24||list.some(x=>!obj(x)||!TOKEN.test(x.offerID)||
-      !PILOT.test(x.pilotID)||x.ownerCharacterID!==ctx.ownerCharacterID))
+      !PILOT.test(x.pilotID)||x.ownerCharacterID!==ctx.ownerCharacterID||
+      !pos(x.amountCents)||!pos(x.expiresAtMs)||x.expiresAtMs<=Date.now()))
    return blocked('PF_FIRSTPLAY_NATIVE_OFFERS_UNAVAILABLE');
-  return {status:'READY',message:list.length?list.map(x=>x.offerID+':'+x.pilotID).join(' | '):'No native offers'};
+  return {status:'READY',message:list.length?list.map(x=>x.offerID+':'+x.pilotID+':'+(x.amountCents/100).toFixed(2)+' ISK').join(' | '):'No native offers'};
  }
  function status(ctx){
   const s=rosterSnapshot(ctx);if(s.error)return blocked(s.error);
