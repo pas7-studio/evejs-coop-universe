@@ -82,9 +82,9 @@ test('invalid active character alias refuses',()=>fixture(f=>{
 }));
 test('server owner disabled refuses',()=>fixture(f=>{
  f.provider.enabled=()=>false;f.api.installServerAuthority(f.provider);
- assert.match(f.run('hire offer-7').message,/NATIVE_AUTHORITY_NOT_INSTALLED/);
+ assert.match(f.run('hire offer-7 accept-recurring').message,/NATIVE_AUTHORITY_NOT_INSTALLED/);
 }));
-for(const [command,name] of [['offers','offers'],['roster','roster'],['hire quote:1','hire'],
+for(const [command,name] of [['offers','offers'],['roster','roster'],['hire quote:1 accept-recurring','hire'],
  ['assign coop-pilot-123 2001','assign'],['deploy assignment-1','deploy'],
  ['follow 2001','follow'],['hold 2001','hold'],['return 2001','returnToBase'],['dismiss coop-pilot-123','dismiss']]){
  test('routes authorized /pf '+command,()=>fixture(f=>{
@@ -95,7 +95,7 @@ for(const [command,name] of [['offers','offers'],['roster','roster'],['hire quot
  }));
 }
 for(const command of ['assign 2001 coop-pilot-123','assign coop-pilot-123 0001','follow 0',
- 'follow 9007199254740993','hold -5','return 2001 garbage','hire','hire evil token',
+ 'follow 9007199254740993','hold -5','return 2001 garbage','hire','hire evil token','hire quote:1',
  'deploy ../../etc/passwd','dismiss 2001','what','hi\nstatus','status\u0000']){
  test('rejects invalid /pf command '+JSON.stringify(command),()=>fixture(f=>{
   f.api.installServerAuthority(f.provider);
@@ -131,4 +131,12 @@ test('PF91 salary chat requires one canonical named NPC pilot ID',()=>fixture(f=
  assert.match(f.run('salary 123').message,/INVALID_COMMAND/);
  assert.match(f.run('salary coop-pilot-123 9900').message,/INVALID_COMMAND/);
  assert.equal(f.readCalls(),1);
+}));
+test('PF92 explicit recurring salary acceptance is mandatory at ingress',()=>fixture(f=>{
+ assert.equal(f.api.installServerAuthority(f.provider),true);
+ assert.match(f.run('hire quote:1').message,/INVALID_COMMAND/);
+ assert.match(f.run('hire quote:1 acknowledge').message,/INVALID_COMMAND/);
+ assert.equal(f.readCalls(),0);
+ assert.match(f.run('hire quote:1 accept-recurring').message,/ACKED/);
+ assert.equal(f.calls.at(-1).name,'hire');
 }));
