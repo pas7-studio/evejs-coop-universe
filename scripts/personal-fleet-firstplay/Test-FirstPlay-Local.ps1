@@ -69,6 +69,7 @@ if($NativeCheckout){
   'Code/server/src/space/coopNpcOrderBridge.js'='c0f93af3e5a67703a84dc03cab8da29a65afdf3b'
   'Code/server/src/space/npc/npcRuntime.js'='8ee3d4f82db1600094df8de1060a9aa8e575af1a'
   'Code/server/src/space/worldData.js'='7c19011d1e35a090a7ed7d10288f179ab637ed40'
+  'Code/server/src/services/security/crimewatchState.js'='36c2d7025b7fb1a191582228ff03f94449444aa5'
   'Code/server/src/space/npc/npcRegistry.js'='990197ea61d89ddc3f22450840eb047bc548278c'
   'Code/server/src/space/npc/nativeNpcStore.js'='95724ab4537683e7ee933bc3149d0a891082ce7e'
  }
