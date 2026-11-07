@@ -278,3 +278,40 @@ PF57 salary/dismiss until original source-owned payroll hooks exist.
 Do not enable Personal Fleet before these native source changes and
 independent WORK E2E. Current GitHub connection still receives 403
 on `pas7-studio/EveJS` branch writes.
+
+
+## Original NPC shared order arbitration — live code continuation 2026-11-07
+
+**Latest authoritative runbook:** [first-play package README](../scripts/personal-fleet-firstplay/README.md).
+
+Verified a hard original native blocker: `coopNpcOrderArbiter.js` refuses the
+`PERSONAL_FLEET` owner because `OWNERS` excludes it; `coopNpcOrderBridge.js`
+also excludes it from `PEACEFUL`. A new exact-source-Git-blob-pinned WORK
+patch adds both, without forking/creating a second arbiter. Original fork
+source blobs were re-read and both patch anchors match once each.
+
+Implemented source-bound `coopPersonalFleetOriginalOrderWitness.js` and
+`coopPersonalFleetOriginalOrderExecutor.js`. They require PF52 reservations,
+PF54 ACTIVE claim, original stock ItemStore, original persisted native store,
+the same live NPC registry controller and physical scene entity, and a single
+authenticated owner/target ship. PF55 issue/reconcile now declare
+`[corporationRuntime, items, characters]` in the **same** original SQLite
+transaction to verify the friendly player target. The source-bound physical
+executor invokes original `npcRuntime.follow/stop` only through original
+`coopNpcOrderBridge` with the **existing shared NPC order arbiter** and
+independent canonical WAR ownership proof. No ATTACK/DEFEND/WARP for first play.
+
+The complete first-play review package is now **15 paths** beyond PF80's
+already staged 22 paths, with **33 unique changed native paths** (four
+overlap), all feature flags OFF. Manual Node/Python/Git component checks
+**216+25=241 PASS**, and 24 source/test SHA256 entries pinned. No original
+native WORK build, client gameplay or crash/restart run was performed here.
+
+**Not just debugging:** the local original EveJS source still needs an
+actual trusted server startup composition, the same existing shared arbiter
+instance, genuine WAR claim reader and writer-fence hooks, original PF58
+physical scene adoption, **durable PF55 order ACK** (an in-memory follow is
+not sufficient after crash), source-owned PF56 docking and a real authored
+SDE catalogue. Cloud GitHub write access to `pas7-studio/EveJS` still 403.
+Keep PR Draft, main and PLAY untouched and Personal Fleet disabled until
+native WORK E2E validates these facts.
