@@ -19,7 +19,7 @@ function fixture(work){
  vm.runInNewContext(source,sandbox,{filename:'coopPersonalFleetChatGateway.js'});
  const api=sandbox.module.exports;
  const provider={source:'ORIGINAL_EVEJS_PERSONAL_FLEET_OWNER_V1',enabled:()=>true};
- for(const name of ['offers','status','roster','hire','assign','deploy','follow','hold','returnToBase','salary','dismiss'])
+ for(const name of ['offers','status','roster','hire','assign','deploy','follow','hold','attack','guard','returnToBase','salary','dismiss'])
    provider[name]=ctx=>{pending++;calls.push({name,ctx});return {status:'ACKED',shipItemID:2001};};
  const run=(command,who=session)=>api.handleChat({session:who,argumentText:command});
  try{work({api,provider,run,session,calls,readCalls:()=>pending,
@@ -86,7 +86,7 @@ test('server owner disabled refuses',()=>fixture(f=>{
 }));
 for(const [command,name] of [['offers','offers'],['roster','roster'],['hire quote:1 accept-recurring','hire'],
  ['assign coop-pilot-123 2001','assign'],['deploy assignment-1','deploy'],
- ['follow 2001','follow'],['hold 2001','hold'],['return 2001','returnToBase'],['dismiss coop-pilot-123','dismiss']]){
+ ['follow 2001','follow'],['hold 2001','hold'],['attack 2001 2999','attack'],['guard 2001','guard'],['return 2001','returnToBase'],['dismiss coop-pilot-123','dismiss']]){
  test('routes authorized /pf '+command,()=>fixture(f=>{
   f.api.installServerAuthority(f.provider);
   assert.match(f.run(command).message,/ACKED/);
@@ -139,4 +139,12 @@ test('PF92 explicit recurring salary acceptance is mandatory at ingress',()=>fix
  assert.equal(f.readCalls(),0);
  assert.match(f.run('hire quote:1 accept-recurring').message,/ACKED/);
  assert.equal(f.calls.at(-1).name,'hire');
+}));
+test('PF95 attack forbids malformed or same-ship targets at ingress',()=>fixture(f=>{
+ assert.equal(f.api.installServerAuthority(f.provider),true);
+ for(const command of ['attack 2001','attack 2001 2001','attack 2001 abc','guard abc',
+  'guard 2001 2999']){
+  assert.match(f.run(command).message,/INVALID_COMMAND/);
+ }
+ assert.equal(f.readCalls(),0);
 }));
