@@ -64,10 +64,10 @@ The native WORK staging includes:
 **216/216 Node tests PASS** on Node.js 22.16.0, including original-source
 actor/target identity, stock runtime command wiring, paid offers, wallet
 receipts, bootstrap fail-sticky and in-memory EVE service adapters.
-**25/25 Python/Git tests PASS** on Python 3.13.5; exact original stock
+**26/26 Python/Git tests PASS** on Python 3.13.5; exact original stock
 blob pins, patch transforms, `git apply`, manifest and linked-worktree gates.
 
-**241/241 total locally; all 24 candidate/test files SHA256-pinned.**
+**242/242 total locally; all 24 candidate/test files SHA256-pinned.**
 These are isolated component and controlled SQLite/VM tests.
 Original EveJS server and connected game-client E2E are **NOT RUN** here.
 Manual Windows PowerShell runner is **NOT RUN** here.
@@ -151,3 +151,14 @@ without duplicate hull or controller, remains correct after restart, and
 a second character cannot take it. Record original engine SHA, WORK image,
 GameStore/wallet/ship evidence and client observation. No PLAY activation
 without a separate explicit approval after WORK proof.
+
+### Full WORK patch assembly review gate
+
+The assembler now verifies **unique** native patch destinations before
+calling `git apply --check`. This catches repeated stock-source hunks,
+including duplicate original `coopNpcOrderArbiter.js` edits, which individual
+unit tests otherwise would not detect. Its expected exact set is **15 unique
+native paths**, four already staged by PF80, and **33 unique final WORK paths**.
+The two original stock order files are source-pinned and their anchors were
+independently checked against the `coop/pas7std` fork. The full original
+WORK `git apply --check` on the owner's machine remains unexecuted here.
