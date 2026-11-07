@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../native/coopPersonalFleetOriginalOrderWitness.js'),'utf8');
 const T='corporationRuntime',F='coop-personal-fleet\u001f';
-function harness(run){
+function harness(run,{combatAuthority=null}={}){
  const owner=900101,ship=2001,target=3003,system=30000142,station=600001,
   assignment='pf-assignment-1',pilot='coop-pilot-123';
  const c={shipItemID:ship,ownerCharacterID:owner,systemID:system,actorGeneration:2,
@@ -45,6 +45,7 @@ function harness(run){
   './npc/npcRegistry':{getControllerByEntityID:()=>storedActive},
   './runtime':{scenes:new Map([[system,scene]])},
   '../services/chat/sessionRegistry':{getSessions:()=>registered},
+  './coopPersonalFleetNativeOrders':{signature:x=>x.signature},
   './coopPersonalFleetHangarBridge':{REGISTRY_KEY:'roster-index',ROSTER_PREFIX:'roster:',
      validateIndex:x=>x,validateRoster:x=>x},
   './coopPersonalFleetNativeActorProof':{matchesOriginalPersonalFleetActor:(row,e,ctrl)=>
@@ -54,7 +55,7 @@ function harness(run){
   if(!(name in modules))throw Error('UNKNOWN_IMPORT '+name);return modules[name];
  },process,structuredClone,Object,Array,Number,RegExp,String,Map,Set};
  vm.runInNewContext(source,scope,{filename:'coopPersonalFleetOriginalOrderWitness.js'});
- const witness=scope.module.exports.createOriginalOrderWitness({enabled:()=>enabled,allWritersFenced:()=>fenced});
+ const witness=scope.module.exports.createOriginalOrderWitness({combatAuthority,enabled:()=>enabled,allWritersFenced:()=>fenced});
  const fixture={c,tx,witness,owner,ship,target,player,entity,other,controller,storedEntity,
   storedController,claims,dep,idx,roster,items,character,map,scene,values,
   setEnabled:x=>enabled=x,setFenced:x=>fenced=x,setPoisoned:x=>poisoned=x,
@@ -114,3 +115,31 @@ test('source witness never issues original writes or creates NPCs',()=>{
  assert.ok(!s.includes('.upsertNative'));
  assert.ok(!s.includes('.issueManualOrder('));
 });
+
+test('PF97 real prior ACKED GUARD may retaliate against stock-reported attacker',()=>harness(f=>{
+ f.c.operationID='guard-react-1';
+ f.c.action='ATTACK';f.c.targetEntityID=5555;
+ f.controller.runtimeKind='nativeCombat';
+ f.controller.manualOrder={type:'follow',targetID:f.target,allowWeapons:false,allowPodKill:false};
+ const prev={version:1,phase:'ACKED',action:'DEFEND',operationID:'guard-1',
+  signature:'a'.repeat(64),ownerCharacterID:f.owner,shipItemID:f.ship,
+  assignmentID:f.c.assignmentID,pilotID:f.c.pilotID,
+  actorGeneration:f.c.actorGeneration,systemID:f.c.systemID,
+  targetEntityID:f.target};
+ f.values.set('corporationRuntime|coop-personal-fleet\u001fmanual-order-v1:'+f.ship,prev);
+ f.values.set('corporationRuntime|coop-personal-fleet\u001fmanual-order-operations-v1',{
+  operations:{'guard-1':{phase:'ACKED',signature:prev.signature}}});
+ assert.equal(f.witness.verifyOriginalControl(f.c,f.tx),true);
+ f.controller.manualOrder.targetID=8888;
+ assert.equal(f.witness.verifyOriginalControl(f.c,f.tx),false);
+},{combatAuthority:{verify:()=>true}}));
+test('PF97 stale GUARD or unacked contract cannot authorize another attack',()=>harness(f=>{
+ f.c.action='ATTACK';f.c.targetEntityID=5555;
+ f.controller.runtimeKind='nativeCombat';
+ f.controller.manualOrder={type:'follow',targetID:f.target,allowWeapons:false};
+ f.values.set('corporationRuntime|coop-personal-fleet\u001fmanual-order-v1:'+f.ship,{
+  phase:'ISSUING',action:'DEFEND',targetEntityID:f.target,
+  ownerCharacterID:f.owner,shipItemID:f.ship,pilotID:f.c.pilotID,
+  assignmentID:f.c.assignmentID,actorGeneration:f.c.actorGeneration});
+ assert.equal(f.witness.verifyOriginalControl(f.c,f.tx),false);
+},{combatAuthority:{verify:()=>true}}));
