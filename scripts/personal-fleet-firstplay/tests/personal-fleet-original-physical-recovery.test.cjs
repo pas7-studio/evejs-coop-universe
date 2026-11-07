@@ -201,7 +201,9 @@ test('PF90 rejects foreign matching-ID controller even when physical ship is pre
 });
 test('PF90 recognizes an already physically present original in-flight warp without replay',()=>{
  const x=f();x.mount();x.changeMode('WARP');x.authorizeIngress();
- x.scene.entities.set(SHIP,{kind:'ship',itemID:SHIP,nativeNpc:true,ownerID:OWNER,mode:'WARP'});
+ x.scene.entities.set(SHIP,{kind:'ship',itemID:SHIP,nativeNpc:true,ownerID:OWNER,mode:'WARP',
+  sessionlessWarpIngress:{origin:{x:0,y:0,z:0},targetPoint:{x:100000,y:0,z:0},
+   startTimeMs:1,travelCompleteAtMs:999999}});
  x.controllers.set(SHIP,{entityID:SHIP,systemID:SYSTEM,
   personalFleetOriginal:true,personalFleetAssignmentID:x.row.assignmentID,
   personalFleetPilotID:x.row.pilotID,personalFleetGeneration:1});
