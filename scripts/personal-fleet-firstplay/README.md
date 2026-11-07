@@ -49,9 +49,11 @@ player/ItemStore/Mining/WAR/Exploration writers. It must not be
 replaced with functions returning `true`. Gameplay, original SQLite,
 SIGKILL and two-client WORK acceptance remain **NOT RUN**.
 
-**Evidence:** 15/15 PF104 authored-policy tests pass with isolated
+**Evidence:** 16/16 PF104 authored-policy tests pass with isolated
 simulated original SDE files, plus one PF102 regression for a
-foreign corporation profile. Not an actual SDE load or original
+foreign corporation profile. The combined six focused checked-in
+config/startup/catalog/WAR/writer/policy suites passed **103/103**
+with controlled V8 shims, *not native Node/SQLite*. Not an actual SDE load or original
 Node process.
 
 **Native package:** 22 PF80 paths + **44** first-play delta paths
