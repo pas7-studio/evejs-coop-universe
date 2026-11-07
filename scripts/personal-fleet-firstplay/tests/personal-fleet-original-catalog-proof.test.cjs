@@ -21,7 +21,8 @@ function fixture(){
   corp:{corporationID:corpID,isNPC:true},
   wallet:{corporationID:corpID,wallet:{divisions:{'1000':{
    balance:100000,journal:[],transactions:[]}}}}};
- let poisoned=false,throwOnRead=false,sourcePresent=true,readCount=0;
+ let poisoned=false,throwOnRead=false,sourcePresent=true,readCount=0,inTxn=false;
+ const events=[];
  const m={exports:{}};
  const deps={
   '../gameStore':{coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',
@@ -29,16 +30,20 @@ function fixture(){
     readCount++;
     assert.deepEqual(Array.from(tables),['corporationRuntime']);
     if(throwOnRead)throw Error('STOCK_SQLITE_UNAVAILABLE');
-    return cb({get:(table,key)=>{
+    assert.equal(inTxn,false);
+    inTxn=true;events.push('atomic-start');
+    try{return cb({get:(table,key)=>{
+     assert.equal(inTxn,true);
      assert.equal(table,'corporationRuntime');
      return key==='corporations\u001f'+corpID?data.wallet:null;
-    }});
+    }});}finally{inTxn=false;events.push('atomic-end');}
    }}},
   '../services/corporation/corporationState':{
-   getNpcCharacterOwnerRecord:()=>data.character,
-   getCorporationRecord:()=>data.corp,
+   getNpcCharacterOwnerRecord:()=>{assert.equal(inTxn,false);events.push('sde-npc');return data.character;},
+   getCorporationRecord:()=>{assert.equal(inTxn,false);events.push('sde-corp');return data.corp;},
    isNpcCorporationID:()=>sourcePresent},
-  './npc/npcData':{buildNpcDefinition:()=>data.profile}
+  './npc/npcData':{buildNpcDefinition:()=>{
+   assert.equal(inTxn,false);events.push('stock-profile');return data.profile;}}
  };
  vm.runInNewContext(source,{module:m,exports:m.exports,
   require:name=>{if(!(name in deps))throw Error('UNKNOWN_IMPORT:'+name);
@@ -47,7 +52,7 @@ function fixture(){
  return {id,corpID,c,wage,data,deps,validate,
   poison:()=>poisoned=true,throwRead:()=>throwOnRead=true,
   removeCorpSource:()=>sourcePresent=false,
-  getReadCount:()=>readCount};
+  getReadCount:()=>readCount,events};
 }
 const blocked=(f,reason,cs,ws)=>{
  const result=f.validate(cs,ws);
@@ -149,4 +154,11 @@ test('PF102 second original NPC requires independent exact salary mapping',()=>{
  const f=fixture(),second={...f.c,npcCharacterID:f.id+1};
  blocked(f,'PF102_SALARY_POLICY_NOT_ONE_TO_ONE',
   [f.c,second],[f.wage,{...f.wage,npcCharacterID:f.id+2}]);
+});
+
+test('PF102 stock source lookups must complete outside original SQLite transaction',()=>{
+ const f=fixture(),r=f.validate();
+ assert.equal(r.verified,true);
+ assert.deepEqual(f.events,
+  ['sde-npc','stock-profile','sde-corp','atomic-start','atomic-end']);
 });
