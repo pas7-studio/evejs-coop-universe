@@ -162,3 +162,39 @@ test('PF98 native PF92 thrown witness error forces original SQLite rollback',()=
  assert.throws(()=>update(f,n=>{n.shipID=F.SHIP;n.shipTypeID=606;},()=>{throw Error('SESSION_REVOKED')}),/SESSION_REVOKED/);
  assert.equal(f.get(C,String(F.OWNER)).shipID,undefined);
 }));
+
+test('PF98 simulated server without native flag refuses PF91 even with a true callback',()=>fixture(f=>{
+ const priorFlag=process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS;
+ const priorContext=process.env.NODE_TEST_CONTEXT;
+ try{
+  delete process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS;
+  delete process.env.NODE_TEST_CONTEXT;
+  let callbackInvocations=0;
+  const result=activate(f,()=>{callbackInvocations++;return true;});
+  assert.equal(result.reason,'PF91_ORIGINAL_CHARACTER_TRANSACTION_FAILED');
+  assert.equal(callbackInvocations,0);
+  assert.equal(f.get(C,String(F.OWNER)).shipID,undefined);
+ }finally{
+  process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS=priorFlag;
+  if(priorContext===undefined)delete process.env.NODE_TEST_CONTEXT;
+  else process.env.NODE_TEST_CONTEXT=priorContext;
+ }
+}));
+test('PF98 simulated server without native flag denies PF92 protected original write',()=>fixture(f=>{
+ const priorFlag=process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS;
+ const priorContext=process.env.NODE_TEST_CONTEXT;
+ try{
+  delete process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS;
+  delete process.env.NODE_TEST_CONTEXT;
+  let callbackInvocations=0;
+  assert.throws(()=>update(f,next=>{next.shipID=F.SHIP;next.shipTypeID=606;},
+   ()=>{callbackInvocations++;return true;}),
+   /PF92_CHARACTER_TRANSACTION_ABORT:PF98_NATIVE_SOURCE_OWNER_WITNESS_FLAG_REQUIRED/);
+  assert.equal(callbackInvocations,0);
+  assert.equal(f.get(C,String(F.OWNER)).shipID,undefined);
+ }finally{
+  process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS=priorFlag;
+  if(priorContext===undefined)delete process.env.NODE_TEST_CONTEXT;
+  else process.env.NODE_TEST_CONTEXT=priorContext;
+ }
+}));
