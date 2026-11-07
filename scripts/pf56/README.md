@@ -83,7 +83,8 @@ and independently reconcile the physical hull and controller cleanup.
 There is no synthetic player session and no second native warp/dock after
 an uncertain external effect.
 
-**The original durable RETURN flight/receipt authority remains unimplemented**
-in this staging package; source binding and true WORK gameplay are not
-confirmed. The new fixture tests and first-play PowerShell runner provide
+**PF84B adds a source-bound original durable RETURN acceptance receipt**
+in the first-play `coopPersonalFleetOriginalDurableOrderAck.js` candidate.
+This does not confirm native persistence against the real active writer, resume
+an interrupted warp, or establish real WORK gameplay. The new fixture tests and first-play PowerShell runner provide
 local verification paths, not evidence of live gameplay.
