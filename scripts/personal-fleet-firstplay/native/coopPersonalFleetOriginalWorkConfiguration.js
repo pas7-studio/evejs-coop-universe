@@ -31,7 +31,19 @@ const validID=x=>typeof x==='string'&&TOKEN.test(x);
 const shared=c=>[c.npcCharacterID,c.employerCorpID,c.profileID,c.shipTypeID].join(':');
 const safeLoad=(sourceName,errorCode)=>{
  try{return require(sourceName);}
- catch(e){throw Error(errorCode+':'+String(e?.code||'SOURCE_LOAD_FAILED'));}
+ catch(e){
+  // Only a missing DIRECT source import is "not installed". A genuine
+  // source file throwing on unavailable SDE, incomplete original writers,
+  // a missing transitive dependency or uncertain GameStore is a DIFFERENT
+  // P0 failure and must not be hidden behind a misleading missing-file code.
+  if(e?.code==='MODULE_NOT_FOUND'&&
+     String(e?.message||'').includes("'"+sourceName+"'"))
+   throw Error(errorCode+':MODULE_NOT_FOUND');
+  if(e?.code==='MODULE_NOT_FOUND')
+   throw Error('PF102B_NATIVE_SOURCE_DEPENDENCY_MISSING:'+sourceName);
+  throw Error('PF102B_NATIVE_SOURCE_INITIALIZATION_FAILED:'+sourceName+':'+
+   String(e?.message||'UNKNOWN'));
+ }
 };
 let snapshot=null;
 function load(){
