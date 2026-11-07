@@ -38,6 +38,8 @@ function fixture(cb){
     recordAfterNativeReturnEffect:()=>({success:false}),verifyPersistedNativeReturn:()=>null};}},
   './coopPersonalFleetOriginalOrderExecutor':{createOriginalOrderExecutor(args){events.push('physical-order');
    assert.equal(typeof args.orderReceipt.recordAfterNativeEffect,'function');
+   assert.equal(typeof args.combatAuthority.verify,'function');
+   assert.equal(typeof args.combatReceipt.recordAfterEffect,'function');
    assert.equal(args.sharedOriginalArbiter,hooks.sharedOriginalNpcOrderArbiter);
    assert.equal(args.enabled(),false);
    if(broken==='physical-order')throw Error('SHARED_ARBITER_NOT_INSTALLED');
@@ -84,7 +86,13 @@ function fixture(cb){
    if(broken==='station-dwell')throw Error('PF56_ORIGINAL_STATION_MONITOR_MISSING');
    return {sample:()=>({status:'BLOCKED'}),verifyStationArrival:()=>null,
      verifyContinuousDwell:()=>null,verifyOriginalDockReady:()=>false};}},
-  './coopPersonalFleetOriginalOrderWitness':{createOriginalOrderWitness(){events.push('order-witness');
+  './coopPersonalFleetOriginalCombatAuthority':{createOriginalCombatAuthority(args){
+   assert.equal(args.enabled(),false);return {verify:()=>false};}},
+  './coopPersonalFleetOriginalCombatReceipt':{createOriginalCombatReceipt(args){
+   assert.equal(typeof args.combatAuthority.verify,'function');
+   return {recordAfterEffect:()=>({success:false}),verifyPersisted:()=>null};}},
+  './coopPersonalFleetOriginalOrderWitness':{createOriginalOrderWitness(args){
+   assert.equal(typeof args.combatAuthority.verify,'function');events.push('order-witness');
    if(broken==='order-witness')throw Error('ORIGINAL_ORDER_SOURCE_UNAVAILABLE');
    return {verifyNativeActor:()=>false,verifyOriginalControl:()=>false,verifyTarget:()=>false};}},
   './coopPersonalFleetOriginalWalletAuthority':{createOriginalWalletAuthority(){events.push('wallet');
