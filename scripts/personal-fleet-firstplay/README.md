@@ -333,11 +333,12 @@ cannot be checked, the tick returns `BLOCKED`. A lost scene never becomes
 proof that the ship disappeared. A failed/unknown dock effect is **not**
 dispatched again; operator-controlled reconciliation remains necessary.
 
-**Important remaining blockers:** the original `verifyOriginalReturnOrder`
-durable native receipt is still supplied by a trusted engine hook, not
-implemented by this change. Original native boot/writer hooks, true persisted
-NPC return/flight state, actual WORK patch apply, Node/SQLite full-current-head
-run, engine restart and two-client gameplay have not been verified. PF84 does
+**Subsequent PF84B source update:** original `verifyOriginalReturnOrder`
+no longer comes from an externally supplied boot hook. A dedicated writer and
+reader now live in `coopPersonalFleetOriginalDurableOrderAck.js`, see below.
+Native boot/writer hooks, rehydrated physical warp, actual WORK patch apply,
+Node/SQLite full-current-head run, engine restart and two-client gameplay
+have not been verified. PF84 does
 not make the feature playable or authorize main/PLAY deployment.
 
 **Isolated verification in this change:** 10 in-memory PF56 transition
@@ -347,3 +348,35 @@ are contract/VM checks, not a full real Node/SQLite, Windows or native WORK
 gameplay run. The first-play PowerShell runner now additionally invokes
 PF56's actual Node/SQLite, original native API and SIGKILL suites locally;
 its new combined result is **NOT RUN** in this cloud session.
+
+## PF84B — original durable RETURN native acceptance (2026-11-07)
+
+The original `coopPersonalFleetOriginalDurableOrderAck.js` now also covers
+RETURN. After the existing shared NPC arbiter reports physical warp success,
+it independently verifies the exact `RETURN_ISSUING` operation/index,
+original PF52/PF54 actor claim, the source-owned native NPC entity/controller,
+original live warp state, original station SDE+scene geometry and immutable
+character/account owner. It then writes an original `npcEntities['/']`
+return-order marker plus the same-intent
+`corporationRuntime['native-return-receipt-v1:<operationID>']`
+in **one original SQLite transaction**.
+
+PF56 `confirmReturn` now opens the original `npcEntities` table only when
+reconciling this native proof. The bootstrap obtains the proof from the
+source-owned durable writer, not `originalHooks.verifyOriginalReturnOrder`,
+and the physical return executor refuses to claim success when the original
+SQLite receipt could not be committed. After a process restart, confirmation
+reads the durable marker and receipt; a missing or changed original owner,
+ship, actor-generation, operation or signature blocks progression. It does not
+invoke a second warp.
+
+**Limits:** this is a *durable physical warp acceptance marker*, not automatic
+rehydration of a disrupted in-flight NPC AI after a real kill. Live native
+`npcEntities` writer races, restored flight, station docking and two-player
+WORK gameplay remain unverified. The original server startup hook and
+reciprocal writers still need native WORK installation. No PLAY or main merge.
+
+Local source/VM contract checks additionally covered 25/25 durable-order-ack
+scenarios (19 prior + 6 RETURN cases) with a mocked transactional SQLite
+adapter and 23/23 native order-executor scenarios. **No actual Node/SQLite
+or WORK E2E run was performed here.**
