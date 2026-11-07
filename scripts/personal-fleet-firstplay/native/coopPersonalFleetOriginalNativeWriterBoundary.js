@@ -10,6 +10,7 @@
  */
 const bootstrap=require('./coopPersonalFleetOriginalWorkBootstrap');
 const originalWar=require('./coopPersonalFleetOriginalWarClaim');
+const originalClaims=require('./coopPersonalFleetOriginalClaimsPolicy');
 const SOURCE='ORIGINAL_EVEJS_PERSONAL_FLEET_NATIVE_WRITERS_V1';
 const OWNERS_SOURCE='ORIGINAL_EVEJS_PERSONAL_FLEET_RECIPROCAL_WRITER_OWNERS_V1';
 const BOOT_SOURCE='ORIGINAL_EVEJS_PERSONAL_FLEET_BOOT_OWNER_V1';
@@ -28,10 +29,9 @@ function createNativeWriterHooks(){
     bootstrap.HOOKS.some(x=>x!=='readOriginalWarShipClaim'&&
       typeof native[x]!=='function')||
     Object.prototype.hasOwnProperty.call(native,'readOriginalWarShipClaim')||
-    !obj(native.claimsPolicy)||
-    native.claimsPolicy.KEY!=='coop-personal-fleet\u001factor-claims-v1'||
-    typeof native.claimsPolicy.validate!=='function'||
-    typeof native.claimsPolicy.empty!=='function'||
+    // The native owner must NOT inject a second claims parser. The source
+    // policy is the exact original PF58 permit validator.
+    Object.prototype.hasOwnProperty.call(native,'claimsPolicy')||
     !obj(native.sharedOriginalNpcOrderArbiter)||
     ['issue','blocked','snapshot','retainWithNativeProof','blocksForSystem'].some(
       k=>typeof native.sharedOriginalNpcOrderArbiter[k]!=='function')||
@@ -43,10 +43,13 @@ function createNativeWriterHooks(){
  // OriginalWorkStarter and third-party NPC directors. Missing/corrupt
  // durable WAR claim is UNKNOWN and blocks competing Personal Fleet commands.
  const war=originalWar.createOriginalWarClaim();
- if(typeof war?.readOriginalWarShipClaim!=='function')
-  throw Error('PF103_ORIGINAL_WAR_CLAIM_SOURCE_MISSING');
+ const claims=originalClaims.createOriginalClaimsPolicy();
+ if(typeof war?.readOriginalWarShipClaim!=='function'||
+    claims?.KEY!=='coop-personal-fleet\u001factor-claims-v1'||
+    typeof claims.validate!=='function'||typeof claims.empty!=='function')
+  throw Error('PF105_ORIGINAL_SOURCE_WAR_AND_ACTOR_CLAIMS_REQUIRED');
  return Object.freeze({...native,
-   source:BOOT_SOURCE,
+   source:BOOT_SOURCE,claimsPolicy:claims,
    readOriginalWarShipClaim:war.readOriginalWarShipClaim});
 }
 module.exports=Object.freeze({source:SOURCE,createNativeWriterHooks});
