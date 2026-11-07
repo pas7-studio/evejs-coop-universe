@@ -17,7 +17,7 @@ const T='corporationRuntime', SEP='\u001f', F='coop-personal-fleet'+SEP;
 const positive=x=>Number.isSafeInteger(x)&&x>0;
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const token=x=>typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x);
-function createOriginalOrderWitness({enabled=()=>false,allWritersFenced=()=>false}={}) {
+function createOriginalOrderWitness({combatAuthority=null,enabled=()=>false,allWritersFenced=()=>false}={}) {
  const atomic=gameStore.coopAtomicNativeRows;
  if(atomic?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof atomic.transact!=='function'||
     typeof atomic.isPoisoned!=='function'||
@@ -92,13 +92,32 @@ function createOriginalOrderWitness({enabled=()=>false,allWritersFenced=()=>fals
    if(!x)return false;
    const order=String(x.controller.manualOrder?.type||'').toLowerCase();
    // For first play, never let an existing combat order compete with FOLLOW/HOLD.
-   if(x.controller.runtimeKind!=='nativeAmbient'||['attack','defend','warp'].includes(order))
-    return false;
-   return true;
+   if(x.controller.runtimeKind==='nativeAmbient'&&
+      !['attack','defend','warp'].includes(order))return true;
+   // PF95: after original ATTACK/GUARD effect, the stock controller
+   // legitimately changes to nativeCombat. Only the EXACT still-ISSUING
+   // PF55 operation can be reconciled, not any competing new order.
+   if(!['ATTACK','DEFEND'].includes(c.action)||!combatAuthority||
+      combatAuthority.verify(c,tx)!==true)return false;
+   const pending=tx.get(T,F+'manual-order-v1:'+c.shipItemID);
+   if(pending?.phase!=='ISSUING'||pending.operationID!==c.operationID||
+      pending.signature!==c.signature||
+      pending.action!==c.action||pending.targetEntityID!==c.targetEntityID)
+     return false;
+   if(c.action==='ATTACK')return order==='attack'&&
+      x.controller.manualOrder?.targetID===c.targetEntityID&&
+      x.controller.manualOrder?.allowWeapons===true;
+   return order==='follow'&&
+      x.controller.manualOrder?.targetID===c.targetEntityID&&
+      x.controller.manualOrder?.allowWeapons===false;
   }catch{return false;}
  }
  function verifyTarget(c,tx){
-  if(!on()||!['FOLLOW','HOLD'].includes(c?.action))return false;
+  if(!on())return false;
+  if(['ATTACK','DEFEND'].includes(c?.action))
+   return typeof combatAuthority?.verify==='function'&&
+      combatAuthority.verify(c,tx)===true;
+  if(!['FOLLOW','HOLD'].includes(c?.action))return false;
   if(c.action==='HOLD')return c.targetEntityID==null&&verifyNativeActor(c,tx);
   if(!positive(c.targetEntityID)||c.targetEntityID===c.shipItemID)return false;
   try{
