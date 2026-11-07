@@ -108,6 +108,14 @@ function createOriginalWorkBootstrap({authoredCatalog,authoredSalaryPolicies,ori
   throw Error('PF_FIRSTPLAY_REAL_NPC_CATALOG_EMPTY');
  if(!Array.isArray(authoredSalaryPolicies)||authoredSalaryPolicies.length===0)
   throw Error('PF91_AUTHORED_NPC_SALARY_POLICY_REQUIRED');
+ // The salary schedule must correspond one-to-one with the same ORIGINAL
+ // hireable NPCs, employer, profile and hull, never a second hidden catalog.
+ if(authoredSalaryPolicies.length!==authoredCatalog.length||
+    authoredCatalog.some(c=>!positive(c.npcCharacterID)||
+      authoredSalaryPolicies.filter(p=>p?.npcCharacterID===c.npcCharacterID&&
+       p.employerCorpID===c.employerCorpID&&
+       p.profileID===c.profileID&&p.shipTypeID===c.shipTypeID).length!==1))
+  throw Error('PF91_AUTHORED_SALARY_TERMS_HIRE_CATALOG_MISMATCH');
  assertSourceHooks(originalHooks);
  // A failed PF58 singleton/chat publication is not safe to retry in-process.
  attempted=true;
