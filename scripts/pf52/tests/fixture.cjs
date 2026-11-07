@@ -6,11 +6,11 @@ const path=require('node:path');
 const {createPersonalFleetHangarBridge,REGISTRY_KEY}=require('../native/coopPersonalFleetHangarBridge.cjs');
 function openFixture(file){
  const db=new DatabaseSync(file);
- db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS corporationRuntime (key TEXT PRIMARY KEY, json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS items (key TEXT PRIMARY KEY,json TEXT NOT NULL)');
- const statement=(table)=>{if(!['items','corporationRuntime'].includes(table))throw Error('FOREIGN_TABLE');return '"'+table+'"'};
+ db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS corporationRuntime (key TEXT PRIMARY KEY, json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS items (key TEXT PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS characters (key TEXT PRIMARY KEY,json TEXT NOT NULL)');
+ const statement=(table)=>{if(!['items','corporationRuntime','characters'].includes(table))throw Error('FOREIGN_TABLE');return '"'+table+'"'};
  let poison=false;
  const gameStore={coopAtomicNativeRows:{isPoisoned:()=>poison,transact(tables,fn){
-  if(tables.length!==new Set(tables).size||!tables.every(x=>['items','corporationRuntime'].includes(x)))throw Error('BAD_TABLES');
+  if(tables.length!==new Set(tables).size||!tables.every(x=>['items','corporationRuntime','characters'].includes(x)))throw Error('BAD_TABLES');
   db.exec('BEGIN IMMEDIATE');try{
    const tx={get(t,k){const r=db.prepare('SELECT json FROM '+statement(t)+' WHERE key=?').get(k);return r?JSON.parse(r.json):null;},put(t,k,value){db.prepare('INSERT INTO '+statement(t)+'(key,json) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json').run(k,JSON.stringify(value));},scan(t){return db.prepare('SELECT key,json FROM '+statement(t)).all().map(x=>({key:x.key,value:JSON.parse(x.json)}));}};
    const outcome=fn(tx);if(outcome&&typeof outcome.then==='function')throw Error('ASYNC_NOT_SUPPORTED');
