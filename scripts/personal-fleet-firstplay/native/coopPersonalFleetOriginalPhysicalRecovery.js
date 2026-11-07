@@ -180,6 +180,6 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
   }catch{return block('PF90_ORIGINAL_ROSTER_SNAPSHOT_FAILED');}
   finally{busy=false;}
  }
- return Object.freeze({recover,recoverOne});
+ return Object.freeze({recover});
 }
 module.exports=Object.freeze({createOriginalPhysicalRecovery});
