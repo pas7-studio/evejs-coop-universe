@@ -11,9 +11,8 @@ const hooksList=['verifyOriginalWriterHooks','allWritersFenced','allWalletWriter
  'verifyRelease','verifyOriginalEquipment','verifyOriginalDeploymentAuthority',
  'verifyExclusiveOwnership','verifyOriginalActor','independentOriginalActorWitness',
  'originalStationUndockPoint','originalOwnershipWitness',
- 'verifyNativeFlight','verifyOriginalReturnOrder','verifyStationArrival',
- 'verifyContinuousDwell','verifyOriginalManifest',
- 'verifyFinalOriginalManifest','verifyOriginalDockReady','executeNativeReturn',
+ 'verifyNativeFlight','verifyOriginalReturnOrder','verifyOriginalManifest',
+ 'verifyFinalOriginalManifest',
  'verifyOriginalDockedPlayerSession','readOriginalWarShipClaim'];
 function fixture(cb){
  const flags=['EVEJS_COOP_PERSONAL_FLEET_NATIVE','EVEJS_COOP_PERSONAL_FLEET_CHAT','EVEJS_COOP_NATIVE_ATOMIC_ROWS'];
@@ -38,7 +37,13 @@ function fixture(cb){
    assert.equal(args.sharedOriginalArbiter,hooks.sharedOriginalNpcOrderArbiter);
    assert.equal(args.enabled(),false);
    if(broken==='physical-order')throw Error('SHARED_ARBITER_NOT_INSTALLED');
-   return {execute:()=>({success:false}),supports:()=>false};}},
+   return {execute:()=>({success:false}),supports:()=>false,
+    executeNativeReturn:()=>({success:false})};}},
+  './coopPersonalFleetOriginalStationDwell':{createOriginalStationDwell(args){
+   events.push('station-dwell');assert.equal(args.enabled(),false);
+   if(broken==='station-dwell')throw Error('PF56_ORIGINAL_STATION_MONITOR_MISSING');
+   return {sample:()=>({status:'BLOCKED'}),verifyStationArrival:()=>null,
+     verifyContinuousDwell:()=>null,verifyOriginalDockReady:()=>false};}},
   './coopPersonalFleetOriginalOrderWitness':{createOriginalOrderWitness(){events.push('order-witness');
    if(broken==='order-witness')throw Error('ORIGINAL_ORDER_SOURCE_UNAVAILABLE');
    return {verifyNativeActor:()=>false,verifyOriginalControl:()=>false,verifyTarget:()=>false};}},
@@ -67,6 +72,7 @@ function fixture(cb){
    assert.equal(args.verifyOriginalControl(),false);assert.equal(args.verifyTarget(),false);
    return {issue:()=>{},reconcile:()=>{},inspect:()=>{}};}},
   './coopPersonalFleetScopedDock':{createScopedDock(args){events.push('scoped-dock');
+   assert.equal(typeof args.verifyOriginalDockReady,'function');
    assert.equal(args.originalItemStore,stockItemStore);
    assert.equal(args.enabled(),false);
    if(broken==='scoped-dock')throw Error('PF66_SCOPED_SOURCE_UNAVAILABLE');
@@ -105,6 +111,10 @@ function fixture(cb){
   './coopPersonalFleetReturnDock':{createPersonalFleetReturnDock(args){events.push('return');
    assert.equal(args.enabled(),false);
    assert.equal(typeof args.verifyOriginalDockReceipt,'function');
+   assert.equal(typeof args.verifyStationArrival,'function');
+   assert.equal(typeof args.verifyContinuousDwell,'function');
+   assert.equal(typeof args.executeNativeReturn,'function');
+   assert.notEqual(args.executeNativeReturn,hooks.executeNativeReturn);
    assert.equal(typeof args.executeNativeDock,'function');
    assert.notEqual(args.executeNativeDock,hooks.executeNativeDock);
    return {requestReturn:()=>{},inspect:()=>{}};}},
@@ -137,7 +147,7 @@ const call=(f)=>f.api.createOriginalWorkBootstrap({originalHooks:f.hooks,authore
 test('composition builds original source owners and publishes chat LAST',()=>fixture(f=>{
  const b=call(f);assert.equal(b.status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.equal(b.getOperationalStatus().ready,true);
- assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','order-ack','physical-order','orders','scoped-dock','terminal-sources','scoped-cleanup','terminal-custody','dock-coordinator','dock-witness','return','owner','PF58','chat']);
+ assert.deepEqual(f.events,['source','wallet','offers','paid','hangar','deploy','order-witness','order-ack','physical-order','station-dwell','orders','scoped-dock','terminal-sources','scoped-cleanup','terminal-custody','dock-coordinator','dock-witness','return','owner','PF58','chat']);
 }));
 test('flags OFF after install prevent action even after previously ready',()=>fixture(f=>{
  const b=call(f);delete process.env.EVEJS_COOP_PERSONAL_FLEET_CHAT;
@@ -167,7 +177,7 @@ test('refuse empty fabricated operator catalog',()=>fixture(f=>{
  assert.equal(f.events.length,0);
 }));
 test('missing original engine hooks block before imports or publication',()=>fixture(f=>{
- delete f.hooks.verifyOriginalDockReady;assert.throws(()=>call(f),/BOOT_HOOKS_REQUIRED/);
+ delete f.hooks.verifyOriginalReturnOrder;assert.throws(()=>call(f),/BOOT_HOOKS_REQUIRED/);
  assert.equal(f.events.length,0);
 }));
 test('caller cannot substitute forged gameStore module',()=>fixture(f=>{
@@ -296,4 +306,22 @@ test('no user-injected one-shot dock coordinator may replace the source-bound im
  f.hooks.terminalCustody={prepare:()=>({status:'PREPARED'})};
  assert.equal(call(f).status,'INSTALLED_WORK_SOURCE_BOUND');
  assert.ok(f.events.indexOf('dock-coordinator')<f.events.indexOf('return'));
+}));
+
+test('source-owned tick dwell is mandatory before PF55/PF56 and cannot publish partial /pf',()=>fixture(f=>{
+ f.setBroken('station-dwell');assert.throws(()=>call(f),/ORIGINAL_STATION_MONITOR_MISSING/);
+ assert.equal(f.events.includes('return'),false);assert.equal(f.events.includes('chat'),false);
+ assert.throws(()=>call(f),/ALREADY_BOOTED_OR_FAILED_STICKY/);
+}));
+test('trusted bootstrap exports server-only tick sampling, never via in-game command provider',()=>fixture(f=>{
+ const b=call(f);assert.equal(typeof b.sampleOriginalStationDwell,'function');
+ assert.ok(f.events.indexOf('station-dwell')<f.events.indexOf('scoped-dock'));
+}));
+test('operator fake native return and arrival callbacks are ignored',()=>fixture(f=>{
+ f.hooks.executeNativeReturn=()=>({success:true});
+ f.hooks.verifyStationArrival=()=>({source:'FAKE'});
+ f.hooks.verifyContinuousDwell=()=>({nativeMonitorPersisted:true});
+ f.hooks.verifyOriginalDockReady=()=>true;
+ assert.equal(call(f).status,'INSTALLED_WORK_SOURCE_BOUND');
+ assert.ok(f.events.includes('station-dwell'));
 }));
