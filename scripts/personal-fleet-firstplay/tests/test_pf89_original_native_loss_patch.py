@@ -34,6 +34,14 @@ class Pf89OriginalLossNativePatchTest(unittest.TestCase):
   self.assertNotIn("atomic.transact([CHARACTERS,TABLE,'npcEntities']",changed)
   self.assertNotIn("tx.get(CHARACTERS,CHARACTERS)",changed)
   self.assertNotIn("tx.put(CHARACTERS,CHARACTERS",changed)
+ def test_pf92_paid_hire_requires_stored_authorized_salary_consent(self):
+  source=(ROOT.parent/'pf53/native/coopPersonalFleetPaidHiring.cjs').read_text(encoding='utf-8')
+  changed=m.transform('coopPersonalFleetPaidHiring.js',source)
+  self.assertIn("require('./coopPersonalFleetOriginalPayrollConsent')",changed)
+  self.assertIn('verifyPaidWageConsent(tx,receipt)',changed)
+  self.assertIn('captureOfferWageConsent(offer,command,now)',changed)
+  self.assertIn('tx.put(TABLE,originalPayrollConsent.consentKey(command.operationID),wageConsent);',changed)
+  self.assertIn('payrollConsent:wageConsent',changed)
  def test_unreviewed_root_reader_patch_drift_must_fail_closed(self):
   raw=ARCHIVE.read_text(encoding='utf-8')
   drift=raw.replace("tx.get('npcModules','npcModules')",
