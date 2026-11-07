@@ -25,8 +25,6 @@ MODULES={
 'coopPersonalFleetNativeOrders.js':[
  ("  try{admission=atomic.transact([TABLE,ITEMS],tx=>{",
   "  try{admission=atomic.transact([TABLE,ITEMS,'characters'],tx=>{"),
- ("  try{return atomic.transact([TABLE,ITEMS],tx=>{",
-  "  try{return atomic.transact([TABLE,ITEMS,'characters','npcEntities'],tx=>{"),
 ],
 'coopPersonalFleetPaidHiring.js':[
  (" const characters=tx.get(CHARACTERS,CHARACTERS);\n const c=characters?.[String(receipt.ownerCharacterID)];",
@@ -102,6 +100,9 @@ def transform(module:str,text:str)->str:
  for before,after in MODULES[module]:
   if changed.count(before)!=1:raise ValueError('PF_NATIVE_WALLET_SOURCE_ANCHOR_DRIFT:'+module)
   changed=changed.replace(before,after,1)
+ if module=='coopPersonalFleetNativeOrders.js' and changed.count(
+    "  try{return atomic.transact([TABLE,ITEMS,'characters','npcEntities'],tx=>{")!=1:
+  raise ValueError('PF_NATIVE_WALLET_PF55_EXISTING_ORIGINAL_SCOPE_DRIFT')
  if changed==text:raise ValueError('PF_NATIVE_WALLET_NO_CHANGE')
  if 'tx.get(CHAR,CHAR)' in changed or 'tx.put(CHAR,CHAR' in changed or \
     'tx.get(CHARACTERS,CHARACTERS)' in changed or 'tx.put(CHARACTERS,CHARACTERS' in changed:
