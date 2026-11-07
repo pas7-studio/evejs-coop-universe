@@ -89,6 +89,7 @@ function author(){
   const owner=corporations.getNpcCharacterOwnerRecord(id);
   if(owner?.ownerID!==id||owner.typeID!==1373||
      typeof owner.ownerName!=='string'||owner.ownerName.trim().length<2||
+     owner.ownerName!==name(raw.name)||
      owner.ownerName.startsWith('Entity '))continue;
   if(!byCorporation.has(corp))byCorporation.set(corp,[]);
   byCorporation.get(corp).push(id);
