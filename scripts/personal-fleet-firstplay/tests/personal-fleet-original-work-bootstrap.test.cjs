@@ -91,7 +91,9 @@ function fixture(cb){
    if(broken==='wallet')throw Error('PF_WALLET_SOURCE_MISSING');
    return {originalTransactionID:()=>150000001,verifyJournalID:()=>true,
     notifyOriginalWallet:()=>true,notifyOriginalSalaryWallet:()=>true};}},
-  './coopPersonalFleetOriginalOfferAuthority':{createSourceBoundOriginalOfferAuthority(){events.push('offers');return {
+  './coopPersonalFleetOriginalOfferAuthority':{createSourceBoundOriginalOfferAuthority(args){
+   assert.equal(args.authoredSalaryPolicies,authoredSalaryPolicies);
+   events.push('offers');return {
    resolveNativeOffer:()=>null,verifyOriginalNpcPilot:()=>false,verifyNativeEmployer:()=>false,
    listNativeOffers:()=>[],lookupNativeOffer:()=>null,verifyHiredPilotHull:()=>false,
    resolvePaidNativeProfile:()=>null};}},
