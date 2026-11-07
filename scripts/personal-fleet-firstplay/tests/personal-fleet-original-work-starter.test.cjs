@@ -6,7 +6,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const target=path.join(__dirname,'../native/coopPersonalFleetOriginalWorkStarter.js');
 const source=fs.readFileSync(target,'utf8');
-function load({flags={},config,bootstrap={},missing=false}={}){
+function load({flags={},config,bootstrap={},missing=false,catalogVerified=true}={}){
  const events=[];
  const process={env:{EVEJS_COOP_PERSONAL_FLEET_NATIVE:'1',
   EVEJS_COOP_PERSONAL_FLEET_CHAT:'1',
@@ -29,6 +29,13 @@ function load({flags={},config,bootstrap={},missing=false}={}){
      getOperationalStatus:()=>({ready:true}),stopNativeStationTick:()=>true};}};
  vm.runInNewContext(source,{require:id=>{
   if(id==='./coopPersonalFleetOriginalWorkBootstrap')return originalBoot;
+  if(id==='./coopPersonalFleetOriginalCatalogProof')return {
+   verifyOriginalCatalogAndWages:(catalog,salaries)=>{
+    events.push('catalog-proof');
+    return catalogVerified?{verified:true,
+     source:'ORIGINAL_EVEJS_PF102_CATALOG_PREFLIGHT_V1',
+     npcCount:catalog.length}:{verified:false,reason:'PF102_SOURCE_PILOT_NOT_FOUND'};
+   }};
   if(id==='./coopPersonalFleetOriginalWorkConfiguration'){
    if(missing){const e=Error('module missing');e.code='MODULE_NOT_FOUND';throw e;}
    return chosen;
@@ -40,7 +47,7 @@ test('PF88 original WorkStarter enables once only with verified server configura
  const f=load();
  const result=f.starter.bootstrapOriginalWorkFromServer();
  assert.equal(result.status,'ORIGINAL_WORK_READY');
- assert.deepEqual(f.events,['catalog','salary-policies','hooks','bootstrap']);
+ assert.deepEqual(f.events,['catalog','salary-policies','catalog-proof','hooks','bootstrap']);
  assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/ATTEMPTED_STICKY/);
 });
 test('PF88 missing original WORK configuration fails before bootstrap',()=>{
@@ -82,7 +89,7 @@ test('PF88 unsuccessful original native composition cannot report READY',()=>{
  const f=load({bootstrap:{createOriginalWorkBootstrap:()=>({status:'REVIEW_ONLY',
   mayEnable:()=>true,getOperationalStatus:()=>({ready:true})})}});
  assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/BOOT_NOT_OPERATIONAL/);
- assert.deepEqual(f.events,['catalog','salary-policies','hooks','bootstrap']);
+ assert.deepEqual(f.events,['catalog','salary-policies','catalog-proof','hooks','bootstrap']);
 });
 test('PF88 post-bootstrap revoked operational gate prevents false READY',()=>{
  const f=load({bootstrap:{createOriginalWorkBootstrap:()=>({status:'INSTALLED_WORK_SOURCE_BOUND',
@@ -94,4 +101,11 @@ test('PF91 missing explicitly authored salary policies fails before native hooks
   loadNativeAuthoredCatalog:()=>[{npcCharacterID:12345}],
   loadNativeSalaryPolicies:()=>[],createNativeWriterHooks:()=>{throw Error('NO_HOOKS');}}});
  assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/SALARY_POLICIES_UNAVAILABLE/);
+});
+
+test('PF102 failed real SDE/SQLite catalogue proof aborts before writer construction',()=>{
+ const f=load({catalogVerified:false});
+ assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/PF102_ORIGINAL_CATALOG_PREFLIGHT_FAILED/);
+ assert.deepEqual(f.events,['catalog','salary-policies','catalog-proof']);
+ assert.throws(()=>f.starter.bootstrapOriginalWorkFromServer(),/ATTEMPTED_STICKY/);
 });
