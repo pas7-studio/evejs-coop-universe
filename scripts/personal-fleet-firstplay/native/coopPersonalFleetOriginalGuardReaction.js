@@ -16,7 +16,7 @@ const pos=x=>Number.isSafeInteger(x)&&x>0;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const failed=reason=>Object.freeze({status:'BLOCKED',reason});
 const proofID=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
-function createOriginalGuardReaction({orders,enabled=()=>false,
+function createOriginalGuardReaction({orders,canIssuePersonalCombat,enabled=()=>false,
  allWritersFenced=()=>false,clock=()=>Date.now(),maxPerTick=2}={}){
  const a=gameStore?.coopAtomicNativeRows;
  if(a?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof a.transact!=='function'||
@@ -24,6 +24,7 @@ function createOriginalGuardReaction({orders,enabled=()=>false,
    typeof pf52.validateIndex!=='function'||typeof pf52.validateRoster!=='function'||
    typeof pf55.key!=='function'||typeof pf55.signature!=='function'||
    typeof orders?.issue!=='function'||typeof orders?.reconcile!=='function'||
+   typeof canIssuePersonalCombat!=='function'||
    typeof damage.listRecent!=='function'||typeof damage.read!=='function'||
    typeof sessions.getSessions!=='function'||
    [enabled,allWritersFenced,clock].some(x=>typeof x!=='function')||
@@ -129,6 +130,9 @@ function createOriginalGuardReaction({orders,enabled=()=>false,
    for(const cmd of batch){
     if(!on())return failed('PF97_GUARD_REACTION_REVOKED');
     if(attempted.has(cmd.operationID))continue;
+    // Native shared arbiter can reject an expired-but-still-live lease.
+    // Never leave PF55 ISSUING for an order that bridge already says is blocked.
+    if(canIssuePersonalCombat(cmd)!==true){out.blocked++;continue;}
     attempted.add(cmd.operationID);out.issued++;
     try{
      const issued=orders.issue(cmd);
