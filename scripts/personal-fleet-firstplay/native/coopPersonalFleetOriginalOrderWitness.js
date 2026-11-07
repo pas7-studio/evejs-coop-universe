@@ -91,6 +91,29 @@ function createOriginalOrderWitness({combatAuthority=null,enabled=()=>false,allW
    const x=readActor(c,tx);
    if(!x)return false;
    const order=String(x.controller.manualOrder?.type||'').toLowerCase();
+   // PF97: a GUARD that already physically follows its own owner's
+   // player ship may retaliate against the verified native attacker only
+   // if its PREVIOUS PF55 DEFEND command is genuinely ACKED. This is the
+   // only allowed FOLLOW->ATTACK transition for a live named NPC.
+   if(c.action==='ATTACK'&&order==='follow'){
+    const previous=tx.get(T,F+'manual-order-v1:'+c.shipItemID);
+    const index=tx.get(T,F+'manual-order-operations-v1');
+    const manual=x.controller.manualOrder;
+    const canonical=require('./coopPersonalFleetNativeOrders');
+    return previous?.phase==='ACKED'&&previous.action==='DEFEND'&&
+      previous.shipItemID===c.shipItemID&&
+      previous.ownerCharacterID===c.ownerCharacterID&&
+      previous.pilotID===c.pilotID&&
+      previous.assignmentID===c.assignmentID&&
+      previous.actorGeneration===c.actorGeneration&&
+      previous.signature===canonical.signature(previous)&&
+      index?.operations?.[previous.operationID]?.phase==='ACKED'&&
+      index.operations[previous.operationID].signature===previous.signature&&
+      manual?.targetID===previous.targetEntityID&&
+      manual.allowWeapons===false&&
+      manual.allowPodKill!==true&&
+      combatAuthority?.verify(c,tx)===true;
+   }
    // For first play, never let an existing combat order compete with FOLLOW/HOLD.
    if(x.controller.runtimeKind==='nativeAmbient'&&
       !['attack','defend','warp'].includes(order))return true;
