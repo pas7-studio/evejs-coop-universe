@@ -18,7 +18,7 @@ function fixture(callback){
   catch(e){try{db.exec('ROLLBACK')}catch{}throw e;}
  }};
  let roster={version:1,revision:0,pilots:{}},calls=[];
- const state={enabled:true,poisoned:false,dock:true,target:true,originalOffer:true,
+ const state={enabled:true,poisoned:false,dock:true,target:true,originalOffer:true,pilotHull:true,
   prepared:'PREPARED',dispatched:'AWAITING_NATIVE_RECONCILIATION',reconciled:'ACTIVE',
   order:'NEEDS_RECONCILIATION',acked:'ACKED'};
  const session={characterID:CHAR,userid:55,socket:{destroyed:false},stationid:STATION};
@@ -57,6 +57,7 @@ function fixture(callback){
   amountCents:14000,expiresAtMs:Date.now()+900000}:null;
  const owner=source.createOriginalWorkCommandOwner({gameStore:{coopAtomicNativeRows:atomic},pf52,hangar,pf53,pf54,pf55,pf56,pf57,
   enabled:()=>state.enabled,listNativeOffers:()=>[lookupNativeOffer()].filter(Boolean),lookupNativeOffer,
+  verifyNativePilotHull:({shipTypeID})=>state.pilotHull&&shipTypeID===606,
   resolveOriginalDockContext:()=>state.dock?{stationID:STATION,systemID:SYSTEM,originalNativeVerified:true}:null,
   resolveOriginalFollowTarget:()=>state.target?{shipItemID:2010,nativeVerified:true}:null});
  const invoke=(method,args=[])=>owner[method]({...ctx,args});
@@ -165,4 +166,15 @@ test('offers refuse invalid original price before displaying client UI',()=>fixt
  // is tampered, no price or hire button is rendered.
  assert.equal(typeof native,'function');
  assert.match(f.invoke('offers').message,/140.00 ISK/);
+}));
+test('assign refuses a paid NPC incompatible with the original ItemStore hull type',()=>fixture(f=>{
+ f.invoke('hire',['offer-1']);f.state.pilotHull=false;
+ assert.equal(f.invoke('assign',[PILOT,SHIP]).reason,'PF_FIRSTPLAY_PAID_PILOT_SHIP_TYPE_UNVERIFIED');
+ assert.equal(f.calls.filter(x=>x.name==='reserve').length,0);
+}));
+test('assign refuses mismatched original hull type before PF52 reservation',()=>fixture(f=>{
+ f.invoke('hire',['offer-1']);
+ const stored=f.get('items','items');stored[String(SHIP)].typeID=607;f.put('items','items',stored);
+ assert.equal(f.invoke('assign',[PILOT,SHIP]).reason,'PF_FIRSTPLAY_PAID_PILOT_SHIP_TYPE_UNVERIFIED');
+ assert.equal(f.calls.filter(x=>x.name==='reserve').length,0);
 }));
