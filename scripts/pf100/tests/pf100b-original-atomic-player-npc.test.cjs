@@ -136,14 +136,14 @@ test('PF100B one SQLite COMMIT changes original active ship, physical old item a
  assert.equal(moved['2001'].flagID,0);assert.equal(moved['2010'].locationID,x.row.stationID);
  assert.equal(x.get(T,P+'handoff-v1:'+x.row.assignmentID).status,'CONSUMED');
  assert.equal(x.session.shipID,2001,'never change session during COMMIT');
- assert.equal(x.state.witnessCalls,2);
+ assert.equal(x.state.witnessCalls,4);
 }));
 test('PF100B cannot replay consumed one-shot permit',()=>fixture(x=>{
  assert.equal(x.run().status,ok);assert.equal(x.run().status,'BLOCKED');
 }));
 test('PF100B input cannot replace real PF54 dispatch row',()=>verified(x=>{x.request.pf54Row={...x.row,operationID:'other'};},'BLOCKED','PF100B_DURABLE_PF54_ROW_CHANGED'));
 test('PF100B blocked if session witness falsified on first read',()=>verified(x=>{x.state.revokeAt=1;},'BLOCKED','PF100B_LIVE_SOURCE_SESSION_UNVERIFIED'));
-test('PF100B blocked if session revoked just before write',()=>verified(x=>{x.state.revokeAt=2;},'BLOCKED','PF100B_AUTHORITY_REVOKED_BEFORE_COMMIT'));
+test('PF100B blocked if session revoked just before write',()=>verified(x=>{x.state.revokeAt=3;},'BLOCKED','PF100B_AUTHORITY_REVOKED_BEFORE_COMMIT'));
 test('PF100B blocked if session account changes',()=>verified(x=>{x.session.userid=123;},'BLOCKED','PF100B_LIVE_SOURCE_SESSION_UNVERIFIED'));
 test('PF100B blocked if session dock changes',()=>verified(x=>{x.session.stationid=600002;},'BLOCKED','PF100B_LIVE_SOURCE_SESSION_UNVERIFIED'));
 test('PF100B refuses target not a preexisting capsule',()=>verified(x=>{x.put('items','items',{'2001':x.items['2001']});},'BLOCKED','PF100B_PHYSICAL_HULL_OR_CAPSULE_INVALID'));
