@@ -119,14 +119,6 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
   if(!pos(row.shipItemID)||!pos(row.systemID))return block('PF90_INVALID_DURABLE_ROW');
   const source=saved(row);
   if(!source)return block('PF90_MISSING_OR_FOREIGN_NATIVE_RECORD');
-  // A stored WARP may have committed a physical one-shot after which the
-  // process died. Stock materializeStoredNativeController does not recreate
-  // the sessionless in-flight warp. Do NOT turn it into phantom STOP or
-  // reissue an extra warp: keep the hull for explicit recovery review.
-  if(String(source.entity.mode).toUpperCase()==='WARP'||
-     source.entity.warpState||source.entity.pendingWarp||
-     source.entity.isWarping===true)
-   return block('PF90_IN_FLIGHT_WARP_NEEDS_SOURCE_RECOVERY');
   const scene=runtime.scenes.get(row.systemID);
   if(!scene)return {status:'SCENE_PENDING',shipItemID:row.shipItemID};
   if(scene.systemID!==row.systemID||typeof scene.getEntityByID!=='function')
@@ -139,11 +131,31 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
    }
    const occupant=scene.getEntityByID(row.shipItemID),
     controller=registry.getControllerByEntityID(row.shipItemID);
-   if(occupant!==null&&occupant!==undefined||controller){
-    return physical(row,scene)?
-      {status:'ALREADY_PHYSICAL',shipItemID:row.shipItemID}:
-      block('PF90_EXISTING_SCENE_OR_CONTROLLER_CONFLICT');
-   }
+   if(physical(row,scene))
+    return {status:'ALREADY_PHYSICAL',shipItemID:row.shipItemID};
+   // Never mistake an already physically present warp for a lost warp.
+   // If the original actor AND original controller are still on-grid and
+   // verified, the real native runtime is already responsible for arrival.
+   // Otherwise stock materialization cannot reconstruct ingress in mid-WARP,
+   // so do not issue an independent warp on behalf of the player.
+   if(String(source.entity.mode).toUpperCase()==='WARP'||
+      source.entity.warpState||source.entity.pendingWarp||
+      source.entity.isWarping===true)
+    return block('PF90_IN_FLIGHT_WARP_NEEDS_SOURCE_RECOVERY');
+   // A partly materialized actor is repairable by stock native service
+   // only when every existing half belongs to the SAME durable original
+   // Personal Fleet ship. It must not overwrite an unrelated entity.
+   if(occupant&&(occupant.kind!=='ship'||occupant.nativeNpc!==true||
+      occupant.itemID!==row.shipItemID||occupant.ownerID!==row.ownerCharacterID||
+      occupant.transient===true))
+    return block('PF90_EXISTING_SCENE_OR_CONTROLLER_CONFLICT');
+   if(controller&&(controller.entityID!==row.shipItemID||
+      controller.systemID!==row.systemID||
+      controller.personalFleetOriginal!==true||
+      controller.personalFleetAssignmentID!==row.assignmentID||
+      controller.personalFleetPilotID!==row.pilotID||
+      controller.personalFleetGeneration!==row.generation))
+    return block('PF90_EXISTING_SCENE_OR_CONTROLLER_CONFLICT');
    if(attempted.has(row.shipItemID))
     return block('PF90_UNKNOWN_PRIOR_MATERIALIZATION_OUTCOME');
    attempted.add(row.shipItemID);
