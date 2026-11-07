@@ -10,6 +10,7 @@ const registry=require('./npc/npcRegistry');
 const nativeStore=require('./npc/nativeNpcStore');
 const npcBehavior=require('./npc/npcBehaviorLoop');
 const pf52=require('./coopPersonalFleetHangarBridge');
+const damage=require('./coopPersonalFleetOriginalGuardAggression');
 const T='corporationRuntime',ITEMS='items',F='coop-personal-fleet\u001f';
 const pos=v=>Number.isSafeInteger(v)&&v>0;
 const obj=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
@@ -98,8 +99,24 @@ function createOriginalCombatAuthority({enabled=()=>false,allWritersFenced=()=>f
       target.ownerID===row.ownerCharacterID||
       registry.getControllerByEntityID(row.targetEntityID)?.personalFleetOriginal===true)
     return false;
-   return validTarget(ship,target,{allowPodKill:false})===true&&
-     on()&&scene.getEntityByID(row.targetEntityID)===target;
+   if(validTarget(ship,target,{allowPodKill:false})===true)
+    return on()&&scene.getEntityByID(row.targetEntityID)===target;
+   // The stock NPC-on-NPC hostility veto is normally absolute.
+   // PF97's ONLY narrow exception is an authentic recent damaging native
+   // aggressor of this player's present ship. The original behavior-loop
+   // source patch independently checks the same incident and PF55 order
+   // before any actual module fires.
+   const ownerShipID=tx.get('characters',String(row.ownerCharacterID))?.shipID;
+   if(!pos(ownerShipID)||!pos(ship.corporationID)||
+      ship.corporationID===target.corporationID||
+      ['WAR','PERSONAL_FLEET','MINING','CIVILIAN','EXPEDITION'].includes(
+       String(registry.getControllerByEntityID(target.itemID)?.operatorKind||'')))
+    return false;
+   const hit=damage.read({ownerCharacterID:row.ownerCharacterID,
+    ownerShipItemID:ownerShipID,systemID:row.systemID});
+   return hit?.source==='EVEJS_ORIGINAL_KILLMAIL_APPLIED_DAMAGE_V1'&&
+    hit.attackerEntityID===row.targetEntityID&&
+    on()&&scene.getEntityByID(row.targetEntityID)===target;
   }catch{return false;}
  }
  return Object.freeze({verify});
