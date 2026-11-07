@@ -36,3 +36,9 @@ test('PF91 owner exports constructor without installing a chat listener',()=>{
  assert.equal(typeof m.exports.createOriginalWorkCommandOwner,'function');
  assert.equal(m.exports.handleChat,undefined);
 });
+test('PF92 recurring consent is mandatory in exact native ingress and work owner',()=>{
+ assert.match(chat,/hire:\{arity:2,method:'hire'\}/);
+ assert.match(chat,/accept-recurring/);
+ assert.match(owner,/ctx\.args\[1\]!=='accept-recurring'/);
+ assert.match(owner,/salaryConsentRequired!==true/);
+});
