@@ -83,6 +83,8 @@ if($NativeWorktree){
   if($LASTEXITCODE -ne 0){throw 'PF87_ORIGINAL_WORK_NODE_SQLITE_TEST_FAILED'}
   & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-original-entry-work.test.cjs')
   if($LASTEXITCODE -ne 0){throw 'PF88_ORIGINAL_WORK_STARTUP_ENTRY_TEST_FAILED'}
+  & $node --test --test-concurrency=1 (Join-Path $tests 'personal-fleet-original-bridge-readoption-work.test.cjs')
+  if($LASTEXITCODE -ne 0){throw 'PF96_ORIGINAL_WORK_SHARED_ARBITER_READOPTION_TEST_FAILED'}
  }finally{
   [Environment]::SetEnvironmentVariable('PF87_NATIVE_WORKTREE',$priorWork,'Process')
   [Environment]::SetEnvironmentVariable('PF88_NATIVE_WORKTREE',$priorEntry,'Process')
