@@ -350,3 +350,50 @@ transient state, atomic receipt will fail closed and require a native
 source-safe isolation patch rather than bypassing GameStore protections.
 PF56 physical return, continuous station arrival proof and PF66 scoped
 sessionless dock remain CODE integration tasks in the original fork.
+
+
+## Source-wired PF56/PF66/PF60/PF61 original station dock — 2026-11-07
+
+The first-play native WORK source package now assembles **19 additional native
+paths** over PF80's 22-path staging, four overlapping, **37 unique native
+source paths**. It includes the full first-play docking *code candidate*:
+
+1. PF56 has committed one-shot `DOCK_ISSUING` only after original station
+   arrival, same-scene continuous dwell, and original fitting/cargo manifest.
+2. PF66 consumes its original durable docking token, uses the original
+   `ItemStore.dockShipToLocation(itemID,stationID)`, confirms the *same*
+   stock item in hangar, and removes only the exact original NPC scene actor
+   via a separately consumed durable scene-detach token.
+3. New `coopPersonalFleetOriginalTerminalDockSources.js` provides source-owned
+   PF60 command/ship authorization, real native controller/entity readback,
+   original actor vacancy and stable dock receipt against the same stock
+   ItemStore and PF66 tokens.
+4. New `coopPersonalFleetOriginalDockCoordinator.js` executes
+   `PF60.prepare → PF60.issue(PF61 one-shot native cleanup) →
+   PF60.reconcile` after a successful PF66 effect. Crash recovery is
+   readback-only; it will never redispatch PF66 or PF61.
+5. New `coopPersonalFleetOriginalDockCompletionWitness.js` refuses PF56
+   reconciliation until PF60 is independently `NATIVE_CLEARED`, PF61 cleanup
+   attempt is consumed, original ItemStore still has the same hangared itemID,
+   original manifest is unchanged, native entity/controller/modules/cargo are
+   absent and no active scene has that physical ship. PF56 releases the
+   original hangar reservation and PF60.finalize subsequently releases the
+   original terminal ship lock once PF56 is proven DOCKED.
+6. Native source composition now creates PF66, PF60 and PF61 directly instead
+   of requiring operator-provided `executeNativeDock` and
+   `verifyOriginalDockReceipt` callbacks. All original module gates remain
+   required and the source stays OFF by default.
+
+**Actual evidence:** new 66/66 Node VM tests passed (35 dock readback,
+16 source terminal and 15 coordinator). Earlier 265/265 component gates
+were green before this continuation. **Full combined current-head runner
+NOT EXECUTED**, although it now lists all 12 Node suites and accompanying
+Python/Git tests. Manifest pins 32 distinct source/test files. The original
+native EveJS project cannot be written by the cloud GitHub integration (403).
+
+**Not yet gameplay-ready:** the original server startup and all reciprocal
+writer authority hooks need native fork commits, the PF56 continuous native
+station dwell and actual original return-flight reader must be installed and
+invoked by a privileged server tick, and original WORK must show a real player
+paying ISK, genuine spare stock hull appearing as an NPC, FOLLOW/HOLD/RETURN,
+same itemID docked, no duplicates after SIGKILL/restart. No PLAY changes.
