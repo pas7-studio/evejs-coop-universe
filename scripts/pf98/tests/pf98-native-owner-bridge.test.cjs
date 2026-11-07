@@ -48,6 +48,7 @@ function update(f,callback,verify=()=>true){
 function installTestOwner(f,{after=null}={}){
  const stats={calls:0,requestIDs:[],triedWrite:0};
  f.shared.onTx=tx=>{
+  stats.tx=tx;
   const rawPut=tx.put.bind(tx);
   let witnessing=false,poison=false,denied=false;
   tx.put=(...args)=>{
@@ -134,10 +135,10 @@ test('PF98 PF92 late source-owner revocation blocks writer before original row p
  assert.equal(stat.calls,2);assert.equal(f.get(C,String(F.OWNER)).shipID,undefined);
 }));
 test('PF98 PF91 forbidden callback write cannot be laundered by returning true',()=>fixture(f=>{
- const stat=installTestOwner(f);let captured;
+ const stat=installTestOwner(f);
  const result=activate(f,()=>{
-  assert.ok(captured);
-  try{captured.put(T,'some-collateral',{x:1});}catch{}
+  assert.ok(stat.tx);
+  try{stat.tx.put(T,'some-collateral',{x:1});}catch{}
   return true;
  });
  assert.equal(result.reason,'PF91_ORIGINAL_CHARACTER_TRANSACTION_FAILED');
