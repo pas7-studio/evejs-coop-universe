@@ -9,10 +9,10 @@ const CORP=1000017,CHAR=3011234,SHIP=606,PROFILE='genuine-pilot';
 function fixture({missingSde=false,wrongCorp=false,missingNpc=false,
  wrongCategory=false,wrongProfile=false,noPlayerHull=false,
  corruptStatic=false,duplicates=false,unknownCharacter=false,mismatchedStockName=false,
- emptyProfile=false,profileKind='npc'}={}){
+ emptyProfile=false,profileKind='npc',localizedOnly=false,customSdeRoot=false}={}){
  const events=[],writes=[];
  const npcCharacter={_key:CHAR,corporationID:wrongCorp?1000019:CORP,
-  name:{en:'Authentic SDE Pilot'}};
+  name:localizedOnly?{fr:'Authentic SDE Pilot'}:{en:'Authentic SDE Pilot'}};
  const npcCorp={_key:CORP,name:{en:'Authentic NPC Corporation'}};
  const p={profileID:PROFILE,entityType:profileKind,shipTypeID:SHIP,
   corporationID:CORP,loadoutID:'original-fit',behaviorProfileID:'original-behavior'};
@@ -27,12 +27,16 @@ function fixture({missingSde=false,wrongCorp=false,missingNpc=false,
     .map(x=>JSON.stringify(x)).join('\n')+'\n';
   throw Error('SOURCE_READ_FORBIDDEN:'+file);
  };
+ const customDir='/private-sde/eve-online-static-data-20261109-jsonl';
  const realFS={
   statSync(file){
    if(file===path.join(ROOT,'data'))return {isDirectory:()=>true};
+   if(customSdeRoot&&file===customDir)return {isDirectory:()=>true};
    if(file===path.join(ROOT,'_local','sde'))throw Error('NO_LOCAL_SDE');
    if(file===path.join(STATIC,'npcCorporations.jsonl')||
-      file===path.join(STATIC,'npcCharacters.jsonl')){
+      file===path.join(STATIC,'npcCharacters.jsonl')||
+      customSdeRoot&&(file===path.join(customDir,'npcCorporations.jsonl')||
+       file===path.join(customDir,'npcCharacters.jsonl'))){
     if(missingSde)throw Error('SDE_NOT_INSTALLED');
     return {isFile:()=>true};
    }
@@ -73,6 +77,7 @@ function fixture({missingSde=false,wrongCorp=false,missingNpc=false,
    if(!(name in deps))throw Error('UNAUTHORIZED_SOURCE_IMPORT:'+name);
    return deps[name];},module:m,exports:m.exports,
    __dirname:'/work/Code/server/src/space',
+   process:{env:customSdeRoot?{EVEJS_STATIC_JSONL_ROOT:customDir}:{}},
    Object,Array,Set,Map,Number,Error,JSON},{filename:'pf104.js'});
   return m.exports;
  }
@@ -87,6 +92,15 @@ test('PF104 only original SDE character+corp+stock player ship becomes a hireabl
   profileID:PROFILE,shipTypeID:SHIP,amountCents:5000000});
  a.deepEqual(cross(p.salaryPolicies[0]),{npcCharacterID:CHAR,employerCorpID:CORP,
   profileID:PROFILE,shipTypeID:SHIP,salaryCents:500000,periodMs:86400000});
+});
+test('PF105 reads same externally configured static JSONL source as native corporationState',()=>{
+ const f=fixture({customSdeRoot:true}),p=f.run();
+ a.equal(p.catalog[0].npcCharacterID,CHAR);
+ a.equal(f.events.some(e=>e[1]?.includes('20261109')),true);
+});
+test('PF105 original localized name fallback permits non-English SDE when stock uses it',()=>{
+ const f=fixture({localizedOnly:true}),p=f.run();
+ a.equal(p.catalog[0].npcCharacterID,CHAR);
 });
 test('PF104 disabled or uninstalled real JSONL returns no invented NPC',()=>{
  const f=fixture({missingSde:true});
