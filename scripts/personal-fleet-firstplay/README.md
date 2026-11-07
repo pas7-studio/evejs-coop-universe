@@ -41,6 +41,12 @@ record, empty matching set or unavailable real corporation wallet means
 ship. Whether this exact selection returns a compatible category-6
 profile on the owner's native WORK machine is **NOT YET VERIFIED**.
 Existing stock physical ItemStore and wallet rights remain mandatory.
+When no compatible original profile is found, the source now reports only
+safe inventory counts (SDE NPC employers, stock profiles, eligible physical
+pairs) to diagnose the actual WORK data gap. PF102B's native configuration
+distinguishes **a missing direct source file** from a genuine **SDE
+initialization or transitive dependency failure**, preserving the P0 reason
+instead of incorrectly reporting every problem as an uninstalled policy.
 
 **Still blocking a playable WORK server:** the genuine reciprocal owner
 source `coopPersonalFleetOriginalReciprocalWriterOwners.js` has not
@@ -52,7 +58,7 @@ SIGKILL and two-client WORK acceptance remain **NOT RUN**.
 **Evidence:** 16/16 PF104 authored-policy tests pass with isolated
 simulated original SDE files, plus one PF102 regression for a
 foreign corporation profile. The combined six focused checked-in
-config/startup/catalog/WAR/writer/policy suites passed **103/103**
+config/startup/catalog/WAR/writer/policy suites passed **104/104**
 with controlled V8 shims, *not native Node/SQLite*. Not an actual SDE load or original
 Node process.
 
