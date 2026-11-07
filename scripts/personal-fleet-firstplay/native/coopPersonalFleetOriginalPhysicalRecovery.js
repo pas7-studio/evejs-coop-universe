@@ -110,9 +110,13 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
  function physical(row,scene){
   const e=scene.getEntityByID(row.shipItemID),
     c=registry.getControllerByEntityID(row.shipItemID);
-  return e?.kind==='ship'&&e.nativeNpc===true&&
+  return e?.kind==='ship'&&e.nativeNpc===true&&e.transient!==true&&
     e.itemID===row.shipItemID&&e.ownerID===row.ownerCharacterID&&
-    c?.entityID===row.shipItemID&&c.systemID===row.systemID;
+    c?.entityID===row.shipItemID&&c.systemID===row.systemID&&
+    c.personalFleetOriginal===true&&
+    c.personalFleetAssignmentID===row.assignmentID&&
+    c.personalFleetPilotID===row.pilotID&&
+    c.personalFleetGeneration===row.generation;
  }
  function recoverOne(row){
   if(!live())return block('PF90_NATIVE_RECOVERY_FENCED');
