@@ -322,3 +322,31 @@ rejects repeated stock paths explicitly, and includes the original arbiter
 source exactly once. Local final checks **216 Node + 26 Python = 242 PASS**;
 source/test manifest still 24 exact files. The complete 15-path patch has
 NOT yet run against the owner's original native WORK checkout.
+
+
+## PF55 original durable FOLLOW/HOLD ACK — 2026-11-07
+
+The in-game first-play source package now includes
+`scripts/personal-fleet-firstplay/native/coopPersonalFleetOriginalDurableOrderAck.js`.
+After a successful original shared NPC arbiter `follow/stop` effect, it proves
+the genuine PF55 `ISSUING` signature and PF52/54 actor plus actual in-scene
+movement; it atomically persists the original `npcEntities` movement fields
+and a linked immutable `corporationRuntime` receipt using the original
+SQLite/GameStore transaction. PF55 reconcile now reads `npcEntities` within
+its original transaction and independently verifies the persisted receipt,
+not just a returned `success:true`. No automatic replay after an uncertain
+commit. Native NPC position changes do not invalidate the command proof.
+
+**Local evidence:** 239 Node tests, 26 Python/Git tests, **265 PASS**;
+26 source/test files pinned. The incremental WORK patch is **16 native paths**
+beyond PF80, **34 unique changed native paths** total. The source-only
+test simulates crash before commit and a new server-side owner after commit.
+The actual original WORK stack, two EVE clients, stock native NPC restoring
+movement after SIGKILL and station docking are **not yet proven**.
+
+The original `npcEntities` table's existing transient-state safety gate
+must be validated in the real running WORK server; on unsafe mixed
+transient state, atomic receipt will fail closed and require a native
+source-safe isolation patch rather than bypassing GameStore protections.
+PF56 physical return, continuous station arrival proof and PF66 scoped
+sessionless dock remain CODE integration tasks in the original fork.
