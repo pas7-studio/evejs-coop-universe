@@ -5,6 +5,57 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF106 — original GameStore stock ItemStore foreign-writer gateway (2026-11-08)
+
+**Actual new source:** `native/coopPersonalFleetOriginalForeignItemWriterGateway.js`
+is now staged in the first-play native WORK delta. It imports the
+actual original `coopPersonalFleetOriginalNativePermit` reciprocal
+writer fence from PF58, plus the actual native PF52 reservations index.
+It **opens an original GameStore atomic `corporationRuntime` +
+`items` transaction itself** and only ever writes to the stock
+`items/items` root, never an NPC inventory copy.
+
+For each source-owned PLAYER, MINING, WAR, EXPLORATION, MARKET or INDUSTRY
+operation using `execute({writer,declaredItemIDs,buildNext})`, the gateway:
+
+1. Reads the original stock root under its atomic transaction, clones it,
+   and runs the native mutation builder against that isolated copy.
+2. Computes the exhaustive **actual before/after item-ID diff** (bounded
+   to 256 touched IDs) and rejects any unreported changed item or invalid
+   stock identity, rather than trusting `declaredItemIDs` blindly.
+3. Executes the **real PF58 same-transaction custody predicate** for
+   the old item/parent chain and the prospective complete new root for
+   each changed item. Moving a free module *into* a protected NPC hull,
+   removing a reserved module, editing an active ship and nested module
+   additions are all blocked, even when old permissions looked free.
+4. If and only if every check is cleared and the original GameStore
+   remains unpoisoned, performs **one** original `tx.put('items','items')`.
+   An exception aborts the transaction before the mutation can commit.
+   It does not write an extra stock ship, move ISK or create NPCs.
+
+**Safety boundary:** this is a real native mutation gateway, **NOT**
+automatic modification of stock Player/ItemStore/Mining/WAR/
+Exploration/Market/Industry entrypoints. Those original native writers
+**must be patched to call this gateway** or the PF58 transactional
+custody guards before `allWritersFenced` may become true. An original
+writer that bypasses this module is not protected by its existence.
+The current `ReciprocalWriterOwners` source is not installed, so WORK
+still fails closed. Never mark native writer coverage complete based
+on isolated gateway tests.
+
+**Evidence:** **20/20** checked-in gateway contract tests PASS when
+executed against the actual checked-in PF52 and PF58 source in the
+controlled isolated V8 harness; positive control: free player hull and
+free module may move; negative controls: reserved hull, fitted module,
+nested cargo, undeclared mutation, poisoned SQLite and unknown handoff.
+The previous **123/123** isolated checks remain. **143/143** combined
+source cases, *not real Node/SQLite or gameplay tests*.
+
+**Bundle:** PF80 22 original paths + first-play **46** delta paths
+(4 overlaps) = **64 unique WORK native paths**. The SHA256 inventory
+now contains **90** pinned source/tool/test files. New manual local
+runner suite included. PR remains Draft and PLAY disabled.
+
 ## PF105 — original PF58 claims validator and true native SDE resolver (2026-11-08)
 
 **Source integration changes in Draft PR #350:**
