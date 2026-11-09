@@ -47,8 +47,8 @@ function open(file,overrides={}){
  return {db,gameStore,put,get:rawGet,shared,deps,bridge,hangar,close(){db.close()}};
 }
 function seed(f,{balance=2500,employerBalance=800}={}){
- f.put('characters','characters',{[OWNER]:{characterID:OWNER,balance,walletJournal:[{
-  transactionID:99,accountKey:1000,amount:0,balance}]}});
+ f.put('characters',String(OWNER),{characterID:OWNER,balance,walletJournal:[{
+  transactionID:99,accountKey:1000,amount:0,balance}]});
  f.put('corporationRuntime','corporations\u001f'+EMPLOYER,{corporationID:EMPLOYER,isNPC:true,
   wallet:{divisions:{'1000':{balance:employerBalance,journal:[],transactions:[]}}}});
  f.put('npcEntities','npcEntities',{pilots:{[P]:{available:true,pilotID:P,agentID:AGENT}}});
