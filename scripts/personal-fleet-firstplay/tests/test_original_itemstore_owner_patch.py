@@ -137,5 +137,41 @@ class PF107StockItemStorePatchTest(unittest.TestCase):
                 m.build(engine)
 
 
+    def _pf110_verify_schema(self, groups):
+        import hashlib
+        from unittest.mock import patch
+        source = (
+            'const ROW_GROUPS = {\\n' + groups + '\\n};\\n' +
+            'function explodeToRows(table, object) {}\\n' +
+            'function rowGroupsFor(table) {\\n' +
+            ' return ROW_GROUPS[table] || null;\\n}\\n'
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            engine = Path(folder)
+            target = engine / m.STOCK_SQLITE_STORE
+            target.parent.mkdir(parents=True)
+            raw = source.encode("utf-8")
+            target.write_bytes(raw)
+            digest = hashlib.sha1(
+                b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+            ).hexdigest()
+            with patch.object(m, "STOCK_SQLITE_BLOB", digest):
+                m.verify_original_item_sqlite_layout(engine)
+
+    def test_pf110_original_actors_grouped_and_player_wallet_flat(self):
+        self._pf110_verify_schema(
+            '  npcEntities: ["entities"],\\n  npcModules: ["modules"],')
+
+    def test_pf110_group_shape_drift_denies_work_patch(self):
+        with self.assertRaisesRegex(ValueError, "PF110_ORIGINAL_NATIVE_GROUP_LAYOUT_UNVERIFIED"):
+            self._pf110_verify_schema('  npcEntities: ["entities"],')
+
+    def test_pf110_player_character_aggregate_drift_denies_work_patch(self):
+        with self.assertRaisesRegex(ValueError, "PF110_ORIGINAL_NATIVE_FLAT_LAYOUT_UNVERIFIED"):
+            self._pf110_verify_schema(
+                '  npcEntities: ["entities"],\\n  npcModules: ["modules"],\\n'
+                '  characters: ["records"],')
+
+
 if __name__ == "__main__":
     unittest.main()
