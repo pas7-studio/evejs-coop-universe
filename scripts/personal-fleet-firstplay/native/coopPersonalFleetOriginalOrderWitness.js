@@ -40,12 +40,12 @@ function createOriginalOrderWitness({combatAuthority=null,enabled=()=>false,allW
   const claims=tx.get(T,F+'actor-claims-v1');
   const idx=tx.get(T,pf52.REGISTRY_KEY);
   const roster=tx.get(T,pf52.ROSTER_PREFIX+c.ownerCharacterID);
-  const root=tx.get('items','items');
+  const item=tx.get('items',String(c.shipItemID));
   if(!object(dep)||dep.phase!=='ACTIVE'||
-     !object(claims)||!object(idx)||!object(roster)||!object(root))return null;
+     !object(claims)||!object(idx)||!object(roster)||!object(item))return null;
   try{pf52.validateIndex(idx);pf52.validateRoster(roster,c.ownerCharacterID);}catch{return null;}
   const original=idx.ships[String(c.shipItemID)],pilot=roster.pilots[c.pilotID];
-  const claim=claims.claims?.[String(c.shipItemID)],item=root[String(c.shipItemID)];
+  const claim=claims.claims?.[String(c.shipItemID)];
   if(dep.assignmentID!==c.assignmentID||dep.shipItemID!==c.shipItemID||
      dep.ownerCharacterID!==c.ownerCharacterID||dep.systemID!==c.systemID||
      dep.pilotID!==c.pilotID||dep.actorGeneration!==c.actorGeneration||
@@ -155,7 +155,7 @@ function createOriginalOrderWitness({combatAuthority=null,enabled=()=>false,allW
       player._space?.systemID!==c.systemID||
       player._space?.initialStateSent!==true)return false;
    const row=tx.get('characters',String(c.ownerCharacterID));
-   const target=tx.get('items','items')?.[String(c.targetEntityID)];
+   const target=tx.get('items',String(c.targetEntityID));
    const entity=x.scene.getEntityByID(c.targetEntityID);
    if(row?.characterID!==c.ownerCharacterID||row?.accountId!==player.userid||
       row?.shipID!==c.targetEntityID||
