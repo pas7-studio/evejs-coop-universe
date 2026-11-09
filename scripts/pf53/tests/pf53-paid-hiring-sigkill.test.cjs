@@ -37,12 +37,12 @@ for(const n of [1,2,4,6]){
    f=F.open(temp.file);F.seed(f);f.close();f=null;
    const result=run(temp.file,'BEFORE_COMMIT_'+n);assert.equal(result.signal,'SIGKILL',JSON.stringify(result));
    f=F.open(temp.file);
-   assert.equal(f.get('characters','characters')[String(F.OWNER)].balance,2500);
+   assert.equal(f.get('characters',String(F.OWNER)).balance,2500);
    assert.equal(f.get('corporationRuntime','corporations\u001f'+F.EMPLOYER).wallet.divisions['1000'].balance,800);
    assert.equal(f.get('corporationRuntime',F.pf52.REGISTRY_KEY),null);
    assert.equal(f.get('corporationRuntime',F.api.paidKey(F.OP)),null);
    assert.equal(f.bridge.hire(F.cmd()).status,'APPLIED');
-   assert.equal(f.get('characters','characters')[String(F.OWNER)].balance,1050);
+   assert.equal(f.get('characters',String(F.OWNER)).balance,1050);
   }finally{f?.close();temp.cleanup()}
  });
 }
@@ -51,10 +51,10 @@ test('real Node SIGKILL after original SQLite COMMIT but before response replays
  f=F.open(temp.file);F.seed(f);f.close();f=null;
  const result=run(temp.file,'AFTER_COMMIT');assert.equal(result.signal,'SIGKILL',JSON.stringify(result));
  f=F.open(temp.file);
- assert.equal(f.get('characters','characters')[String(F.OWNER)].balance,1050);
+ assert.equal(f.get('characters',String(F.OWNER)).balance,1050);
  assert.equal(f.get('corporationRuntime','corporations\u001f'+F.EMPLOYER).wallet.divisions['1000'].balance,2250);
  assert.equal(f.bridge.hire(F.cmd()).status,'DUPLICATE');
- assert.equal(f.get('characters','characters')[String(F.OWNER)].walletJournal.length,2);
+ assert.equal(f.get('characters',String(F.OWNER)).walletJournal.length,2);
  }finally{f?.close();temp.cleanup()}
 });
 test('real Node SIGKILL after real paid hire and original hangar ship reservation keeps one native item and one debit',()=>{
@@ -62,7 +62,7 @@ test('real Node SIGKILL after real paid hire and original hangar ship reservatio
  f=F.open(temp.file);F.seed(f);f.close();f=null;
  const result=run(temp.file,'AFTER_ASSIGN');assert.equal(result.signal,'SIGKILL',JSON.stringify(result));
  f=F.open(temp.file);
- assert.equal(f.get('characters','characters')[String(F.OWNER)].balance,1050);
+ assert.equal(f.get('characters',String(F.OWNER)).balance,1050);
  assert.equal(f.get('corporationRuntime',F.pf52.REGISTRY_KEY).ships['2001'].pilotID,F.P);
  assert.equal(f.get('items','items')['2001'].itemID,2001);
  assert.equal(f.bridge.hire(F.cmd()).status,'DUPLICATE');
