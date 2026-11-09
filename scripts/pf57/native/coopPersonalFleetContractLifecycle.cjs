@@ -448,4 +448,4 @@ function createPersonalFleetContractLifecycle({gameStore,pf52,pf53,claimsPolicy,
  return Object.freeze({salary,dismiss,loss,inspect});
 }
 module.exports={LEDGER,CLAIMS,PF54,PF56,empty,validate,cents,journalEntry,journalHas,
- createPersonalFleetContractLifecycle};
+ createPersonalFleetContractLifecycle,nativeGroupShipVacant};
