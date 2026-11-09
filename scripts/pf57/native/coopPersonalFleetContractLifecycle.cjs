@@ -266,14 +266,15 @@ function createPersonalFleetContractLifecycle({gameStore,pf52,pf53,claimsPolicy,
    if(prior){
     if(prior.signature!==sig||prior.type!=='LOST')return deny('PF57_OPERATION_COLLISION');
     const rawIdx=tx.get(T,pf52.REGISTRY_KEY),rawRo=tx.get(T,pf52.ROSTER_PREFIX+c.ownerCharacterID),
-     rawClaims=tx.get(T,CLAIMS),dep=tx.get(T,PF54+c.assignmentID),root=tx.get(ITEMS,ITEMS),
+     rawClaims=tx.get(T,CLAIMS),dep=tx.get(T,PF54+c.assignmentID),
+      originalShipRow=tx.get(ITEMS,String(c.shipItemID)),
      wreckRoot=tx.get(WRECK,WRECK),record=ledger.losses[c.assignmentID];
     let ix,ro,claims;try{ix=pf52.validateIndex(rawIdx);ro=pf52.validateRoster(rawRo,c.ownerCharacterID);
       claims=claimsPolicy.validate(rawClaims);}catch{return deny('PF57_REPLAY_ORIGINAL_LOSS_UNVERIFIED');}
     if(!obj(record)||record.wreckID!==c.wreckID||record.shipItemID!==c.shipItemID||
       ix.ships[String(c.shipItemID)]||ro.pilots[c.pilotID]?.shipItemID!==null||
       claims.claims[String(c.shipItemID)]||dep?.phase!=='LOST'||
-      !obj(root)||own(root,String(c.shipItemID))||
+      originalShipRow!==null||
       wreckRoot?.wrecks?.[String(c.wreckID)]?.sourceEntityID!==c.shipItemID)
       return deny('PF57_REPLAY_ORIGINAL_LOSS_UNVERIFIED');
     return {status:'DUPLICATE',receipt:clone(prior.receipt)};
@@ -296,7 +297,8 @@ function createPersonalFleetContractLifecycle({gameStore,pf52,pf53,claimsPolicy,
    if(!obj(claim)||claim.pilotID!==c.pilotID||claim.assignmentID!==c.assignmentID||
     claim.generation!==c.actorGeneration||claim.ownerCharacterID!==c.ownerCharacterID)
     return deny('PF57_ACTOR_CLAIM_MISMATCH');
-   const items=tx.get(ITEMS,ITEMS),wreckRoot=tx.get(WRECK,WRECK),
+   const originalShipRow=tx.get(ITEMS,String(c.shipItemID)),
+    wreckRoot=tx.get(WRECK,WRECK),
     entityRoot=tx.get(NPC,NPC),cargoRoot=tx.get('npcCargo','npcCargo'),
     moduleRoot=tx.get('npcModules','npcModules'),wreckItems=tx.get('npcWreckItems','npcWreckItems');
    if(!obj(entityRoot)||!obj(entityRoot.entities)||!obj(cargoRoot)||!obj(cargoRoot.cargo)||
@@ -315,7 +317,7 @@ function createPersonalFleetContractLifecycle({gameStore,pf52,pf53,claimsPolicy,
       sourceItemIDs.add(original);
     }
    }
-   if(!obj(items)||own(items,String(c.shipItemID)))
+   if(originalShipRow!==null)
     return deny('PF57_ORIGINAL_SHIP_NOT_DESTROYED');
    const wreck=wreckRoot?.wrecks?.[String(c.wreckID)];
    if(!obj(wreckRoot)||!obj(wreckRoot.wrecks))
