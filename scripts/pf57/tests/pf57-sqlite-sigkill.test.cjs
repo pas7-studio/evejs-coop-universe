@@ -22,16 +22,16 @@ function die(file,scenario){const source=`const F=require(${JSON.stringify(fixtu
  assert.equal(x.signal,'SIGKILL',JSON.stringify({status:x.status,signal:x.signal,stderr:x.stderr?.slice(-1200)}));}
 linuxCrashTest('PF57 real child SIGKILL during original salary transaction rolls back wallet + journal',()=>{
  const t=setup('salary');try{die(t.file,'salary-tx');const f=F.open(t.file);
-  try{assert.equal(f.get('characters','characters')[F.OWNER].balance,3500);
+  try{assert.equal(f.get('characters',String(F.OWNER)).balance,3500);
    assert.equal(f.get('corporationRuntime',F.api.LEDGER),null);
    assert.equal(f.life.salary(F.payrollCmd()).status,'APPLIED');}
   finally{f.close();}}finally{t.cleanup();}
 });
 linuxCrashTest('PF57 real SIGKILL after salary COMMIT before wallet notification cannot double charge',()=>{
  const t=setup('salary');try{die(t.file,'salary-after-commit');const f=F.open(t.file);
-  try{assert.equal(f.get('characters','characters')[F.OWNER].balance,3455);
+  try{assert.equal(f.get('characters',String(F.OWNER)).balance,3455);
    assert.equal(f.life.salary(F.payrollCmd()).status,'DUPLICATE');
-   assert.equal(f.get('characters','characters')[F.OWNER].balance,3455);}
+   assert.equal(f.get('characters',String(F.OWNER)).balance,3455);}
   finally{f.close();}}finally{t.cleanup();}
 });
 linuxCrashTest('PF57 real SIGKILL in dismissal transaction cannot orphan pilot in global index',()=>{
@@ -45,14 +45,14 @@ linuxCrashTest('PF57 real SIGKILL in loss transaction preserves claim, reservati
  const t=setup('loss');try{die(t.file,'loss-tx');const f=F.open(t.file);
   try{assert.ok(f.get('corporationRuntime',F.pf52.REGISTRY_KEY).ships[String(F.SHIP)]);
    assert.ok(f.get('corporationRuntime',F.api.CLAIMS).claims[String(F.SHIP)]);
-   assert.equal(f.get('items','items')[String(F.SHIP)],undefined);
+   assert.equal(f.get('items',String(F.SHIP)),null);
    assert.equal(f.life.loss(F.lossCmd()).status,'APPLIED');}
   finally{f.close();}}finally{t.cleanup();}
 });
 linuxCrashTest('PF57 real SIGKILL after loss commit cannot release a second time or resurrect a ship',()=>{
  const t=setup('loss');try{die(t.file,'loss-after-commit');const f=F.open(t.file);
   try{assert.equal(f.life.loss(F.lossCmd()).status,'DUPLICATE');
-   assert.equal(f.get('items','items')[String(F.SHIP)],undefined);
+   assert.equal(f.get('items',String(F.SHIP)),null);
    assert.equal(f.get('corporationRuntime',F.pf52.REGISTRY_KEY).ships[String(F.SHIP)],undefined);}
   finally{f.close();}}finally{t.cleanup();}
 });
