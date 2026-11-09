@@ -104,7 +104,8 @@ function createPermitVerifier({gameStore,enabled=()=>false,allWritersFenced=()=>
       p.generation!==e.personalFleetGeneration||
       shipLock?.assignmentID!==row.assignmentID||
       shipLock?.sourcePF54Hash!==p.sourcePF54Hash)return false;
-   const hull=tx.get('items','items')?.[String(e.entityID)];
+   // Real original sqliteStore is keyed by the physical itemID.
+   const hull=tx.get('items',String(e.entityID));
    if(!obj(hull)||hull.itemID!==e.entityID||hull.ownerID!==e.ownerID||
       hull.typeID!==e.typeID||hull.categoryID!==6||hull.flagID!==0||
       hull.locationID!==e.systemID||hull.spaceState?.systemID!==e.systemID)return false;
