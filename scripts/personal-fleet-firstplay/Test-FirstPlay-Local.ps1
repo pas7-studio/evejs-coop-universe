@@ -53,6 +53,24 @@ try{
    (Join-Path $pf56Tests 'pf56-native-api.test.cjs') `
    (Join-Path $pf56Tests 'pf56-sqlite-sigkill.test.cjs')
  if($LASTEXITCODE -ne 0){throw 'PF84_RETURN_SQLITE_OR_NATIVE_API_TEST_FAILED'}
+ # PF110 original Node SQLite wallet, item and grouped NPC row gate.
+ # Source tests alone do not prove real on-disk SQLite or PLAY readiness.
+ $pf53Tests=Join-Path (Join-Path $root '..') 'pf53/tests'
+ $pf57Tests=Join-Path (Join-Path $root '..') 'pf57/tests'
+ $pf58Tests=Join-Path (Join-Path $root '..') 'pf58/tests'
+ & $node --test --test-concurrency=1 `
+   (Join-Path $pf53Tests 'pf53-paid-hiring.test.cjs') `
+   (Join-Path $pf53Tests 'pf53-paid-hiring-sigkill.test.cjs') `
+   (Join-Path $pf57Tests 'pf57-lifecycle.test.cjs') `
+   (Join-Path $pf57Tests 'pf57-sqlite-sigkill.test.cjs') `
+   (Join-Path $pf57Tests 'pf110-native-sqlite-row-contract.test.cjs') `
+   (Join-Path $pf58Tests 'pf88-reciprocal-writers.test.cjs') `
+   (Join-Path $pf58Tests 'pf89-actual-item-delta.test.cjs') `
+   (Join-Path $pf58Tests 'pf90-owner-snapshot.test.cjs') `
+   (Join-Path $pf58Tests 'pf91-original-character-rows.test.cjs') `
+   (Join-Path $pf58Tests 'pf92-character-record-barrier.test.cjs') `
+   (Join-Path $pf58Tests 'pf93-native-session-tx-isolation.test.cjs')
+ if($LASTEXITCODE -ne 0){throw 'PF110_ORIGINAL_NATIVE_WALLET_AND_SQLITE_ROW_TEST_FAILED'}
  & $python -m unittest discover -s $tests -p 'test_*.py' -v
  if($LASTEXITCODE -ne 0){throw 'PF_FIRSTPLAY_PYTHON_TEST_FAILED'}
 }finally{
