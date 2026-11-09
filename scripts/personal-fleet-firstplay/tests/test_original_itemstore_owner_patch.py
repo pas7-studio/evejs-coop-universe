@@ -28,6 +28,12 @@ function writeItems(data, options = {}) {
 function writeItemCustomInfo(itemID, customInfo, options = {}) {
   return repo.write(ITEMS_TABLE, `/${String(itemID)}/customInfo`, customInfo, options);
 }
+function stockRefineryMutation() {
+  const items=JSON.parse(JSON.stringify(readItems()));
+}
+function originalOreTransfer() {
+  const items=JSON.parse(JSON.stringify(current));
+}
 if (process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS === "1") module.exports.coopInvalidateAfterAtomicRows = mode => { if(mode === "probe") return true; itemIndexesDirty = true; itemIndexesCache = null; itemIndexKeys = new Map(); reservedItemIDBatch = []; itemMutationVersion += 1; return true; };
 '''
 
@@ -64,6 +70,13 @@ class PF107StockItemStorePatchTest(unittest.TestCase):
         self.assertIn("expectedOriginalRoot: pf107ReadSnapshots.get(items)", patched)
         self.assertLess(patched.index("executeOriginalStockRoot(", start),
                         patched.index("return repo.write(ITEMS_TABLE,", start))
+
+    def test_refinery_and_ore_copy_snapshots_remain_bound_under_personal_fleet(self):
+        patched = m.transform(FIXTURE)
+        self.assertIn('    ?readItems():JSON.parse(JSON.stringify(readItems()));', patched)
+        self.assertIn('    ?current:JSON.parse(JSON.stringify(current));', patched)
+        self.assertEqual(patched.count('process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE === "1"'),
+                         5)
 
     def test_original_game_store_atomic_invalidation_drops_root_cache(self):
         patched = m.transform(FIXTURE)
