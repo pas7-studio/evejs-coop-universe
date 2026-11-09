@@ -13,6 +13,38 @@ const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const PILOT=/^coop-pilot-[0-9]{3,}$/;
 const TOKEN=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const canonicalId=k=>typeof k==='string'&&pos(Number(k))&&String(Number(k))===k;
+/** PF109: real stock SQLite itemID rows, never synthetic items/items. */
+function scanOriginalStockItemRows(tx){
+ if(typeof tx?.scan!=='function')
+  throw Error('PF109_ORIGINAL_STOCK_ROW_SCAN_REQUIRED');
+ const rows=tx.scan('items');
+ if(!Array.isArray(rows)||rows.length>250000)
+  throw Error('PF109_ORIGINAL_ITEM_ROWSET_INVALID');
+ const result={};
+ for(const entry of rows){
+  const key=entry?.key,item=entry?.value;
+  if(!canonicalId(key)||!obj(item)||item.itemID!==Number(key)||
+     !pos(item.ownerID)||!pos(item.locationID)||!pos(item.categoryID)||
+     Object.prototype.hasOwnProperty.call(result,key))
+   throw Error('PF109_ORIGINAL_STOCK_ROW_CORRUPT');
+  result[key]=item;
+ }
+ return result;
+}
+function commitOriginalStockItemRowDelta(tx,before,next,changed){
+ if(typeof tx?.put!=='function'||typeof tx?.del!=='function')
+  throw Error('PF109_ORIGINAL_STOCK_ROW_MUTATOR_REQUIRED');
+ for(const id of changed){
+  const key=String(id),item=next[key];
+  if(item===undefined)tx.del('items',key);
+  else {
+   if(!obj(item)||item.itemID!==id||!pos(item.ownerID)||
+      !pos(item.locationID)||!pos(item.categoryID))
+    throw Error('PF109_ORIGINAL_STOCK_ROW_WRITE_INVALID');
+   tx.put('items',key,item);
+  }
+ }
+}
 /** Same canonical fields/limits as scripts/lib/personal-fleet-claims.cjs.
  * Keep this module self-contained for staging into EveJS's native space/ dir.
  */
@@ -239,7 +271,7 @@ function createReciprocalWriterFence({pf52}={}){
      (shipItemID===null&&affectedItemID===null&&destinationLocationID===null))
     return fail('PF88_ORIGINAL_WRITER_IDENTIFIERS_INVALID');
   try{
-   const original=tx.get('items','items');
+   const original=scanOriginalStockItemRows(tx);
    if(!rootItem(original))return fail('PF88_ORIGINAL_ITEMSTORE_UNAVAILABLE');
    const touched=new Set();
    if(shipItemID!==null){
@@ -299,7 +331,8 @@ function createReciprocalWriterFence({pf52}={}){
  function mutateOriginalItemsInTransaction({tx,writer,buildNext,
                                             declaredItemIDs=null}={}){
   if(!writerKinds.has(writer)||typeof tx?.get!=='function'||
-     typeof tx?.put!=='function'||typeof buildNext!=='function')
+     typeof tx?.put!=='function'||typeof tx?.del!=='function'||
+     typeof tx?.scan!=='function'||typeof buildNext!=='function')
     return fail('PF89_STOCK_WRITER_TRANSACTION_AND_BUILDER_REQUIRED');
   if(declaredItemIDs!==null&&(!Array.isArray(declaredItemIDs)||
       declaredItemIDs.length>1024||
@@ -307,7 +340,7 @@ function createReciprocalWriterFence({pf52}={}){
       new Set(declaredItemIDs).size!==declaredItemIDs.length))
     return fail('PF89_DECLARED_ITEMS_INVALID');
   let before;
-  try{before=tx.get('items','items');}
+  try{before=scanOriginalStockItemRows(tx);}
   catch{return fail('PF89_ORIGINAL_ITEMS_READ_FAILED');}
   if(!rootItem(before))return fail('PF89_ORIGINAL_ITEMS_UNAVAILABLE');
   // The original ItemStore also serializes the full 'items' root; cap
@@ -323,7 +356,7 @@ function createReciprocalWriterFence({pf52}={}){
   // A builder capturing tx must NEVER sneak a stock write into the same
   // transaction and then return BLOCKED/NOOP. Throw to rollback any such
   // write, including when the builder failed to acknowledge synchronously.
-  if(!isDeepStrictEqual(before,tx.get('items','items')))
+  if(!isDeepStrictEqual(before,scanOriginalStockItemRows(tx)))
    throw Error('PF89_STOCK_ITEMS_CHANGED_DURING_BUILDER_ROLLBACK');
   if(ack!==true)return fail('PF89_BUILDER_NOT_SYNCHRONOUSLY_ACKED');
   if(!rootItem(next))return fail('PF89_INVALID_NEXT_ITEMS_ROOT');
@@ -376,10 +409,10 @@ function createReciprocalWriterFence({pf52}={}){
   }
   // A builder that independently changed GameStore while we inspected its
   // clone requires a THROW, not a "blocked" return: roll back its side effects.
-  const live=tx.get('items','items');
+  const live=scanOriginalStockItemRows(tx);
   if(!isDeepStrictEqual(before,live))
    throw Error('PF89_STOCK_ITEMS_CHANGED_DURING_BUILDER_ROLLBACK');
-  tx.put('items','items',next);
+  commitOriginalStockItemRowDelta(tx,before,next,changed);
   return Object.freeze({status:'APPLIED_WITH_RECIPROCAL_CUSTODY',
    mayCommit:true,changedItemIDs:Object.freeze(changed),
    originalShipIDs:Object.freeze([...guardedShips].sort((a,b)=>a-b))});
@@ -417,7 +450,7 @@ function createReciprocalWriterFence({pf52}={}){
    };
    beforeCopy=copyJson(expectedBefore);
    proposal=copyJson(nextItems);
-   inputCurrent=tx.get('items','items');
+   inputCurrent=scanOriginalStockItemRows(tx);
   }catch{return fail('PF90_ORIGINAL_OWNER_SNAPSHOT_UNREADABLE');}
   if(!rootItem(inputCurrent)||!isDeepStrictEqual(inputCurrent,beforeCopy))
    return fail('PF90_ORIGINAL_OWNER_STALE_SNAPSHOT');
@@ -579,8 +612,7 @@ function createOriginalPlayerShipActivation({
       original.characterID!==characterID||
       !isDeepStrictEqual(original,before))
     return block('PF91_CHARACTER_OWNER_SNAPSHOT_STALE');
-   const items=tx.get('items','items');
-   const target=obj(items)?items[String(targetShipItemID)]:null;
+   const target=tx.get('items',String(targetShipItemID));
    if(!obj(target)||target.itemID!==targetShipItemID||
       target.ownerID!==characterID||target.categoryID!==6||
       target.flagID!==4||target.locationID!==stationID||
@@ -696,13 +728,13 @@ function createOriginalCharacterRecordWriteBarrier({pf52,
     // SQLite writer's put/del capability to a session/session-lease probe.
     // The witness is invoked ONLY through PF93's read-only facade with
     // a complete original SQLite rowset mutation check.
-    const items=tx.get('items','items');
+    const items=scanOriginalStockItemRows(tx);
     if(!obj(items))return fail('PF92_ORIGINAL_ITEMS_UNAVAILABLE');
     const firstLease=verifyOriginalWitnessCannotWrite(tx,verifyOriginalSessionLease,witness);
     // Callback closures can capture the outer tx despite receiving a
     // read-only view. A failed witness after any direct put must THROW
     // to roll back the transaction rather than return a BLOCKED result.
-    if(!isDeepStrictEqual(tx.get('items','items'),items)||
+    if(!isDeepStrictEqual(scanOriginalStockItemRows(tx),items)||
        !isDeepStrictEqual(tx.get('characters',String(characterID)),before))
      throw Error('PF92_SESSION_WITNESS_MODIFIED_AUTHORITY_ROLLBACK');
     if(firstLease!==true)
@@ -739,7 +771,7 @@ function createOriginalCharacterRecordWriteBarrier({pf52,
      if(scan.verified!==true)return fail(scan.reason);
     }
     const finalLease=verifyOriginalWitnessCannotWrite(tx,verifyOriginalSessionLease,witness);
-    if(!isDeepStrictEqual(tx.get('items','items'),items)||
+    if(!isDeepStrictEqual(scanOriginalStockItemRows(tx),items)||
        !isDeepStrictEqual(tx.get('characters',String(characterID)),before))
      throw Error('PF92_ORIGINAL_OWNER_CHANGED_BY_SESSION_WITNESS_ROLLBACK');
     for(const id of touched){
