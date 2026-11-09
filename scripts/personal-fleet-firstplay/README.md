@@ -31,6 +31,10 @@ When `EVEJS_COOP_PERSONAL_FLEET_NATIVE=1`, this ORIGINAL owner:
 - `writeItemCustomInfo()`: the stock direct subpath write is
   intercepted too and uses the SAME original atomic owner; metadata
   cannot silently bypass protected item custody.
+- Original refinery and player-ore stock writers are specifically
+  patched to preserve the tracked detached read snapshot. Both previously
+  made an extra untracked clone before calling `writeItems()`; their
+  extra clone is preserved when the Personal Fleet feature is OFF.
 - Original `coopInvalidateAfterAtomicRows` now additionally resets
   `itemsTableCache` after native GameStore commit, avoiding a stale
   root surviving while other stock indexes were already invalidated.
