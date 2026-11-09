@@ -4,6 +4,10 @@ const {setup,F}=require('./fixture.cjs');
 const {createReciprocalWriterFence}=require('../native/coopPersonalFleetOriginalNativePermit.cjs');
 
 const T='corporationRuntime',ITEMS='items';
+// Original SQLite items are real rows under canonical itemID keys.
+const allItems=f=>Object.fromEntries(f.scan(ITEMS).map(({key,value})=>[key,value]));
+const saveRows=(f,items)=>{for(const [key,value] of Object.entries(items))
+ f.put(ITEMS,key,value);};
 const ship=F.SHIP,owner=F.OWNER;
 const indexKey=F.pf52.REGISTRY_KEY;
 const p='coop-personal-fleet\u001f';
@@ -19,14 +23,13 @@ function check(f,gate,opts={},mutate=false){
  return f.gameStore.coopAtomicNativeRows.transact([T,ITEMS],tx=>{
   const outcome=gate.inTransaction({tx,writer:'PLAYER',shipItemID:ship,...opts});
   if(outcome.mayCommit===true&&mutate){
-   const root=tx.get(ITEMS,'items');
-   tx.put(ITEMS,'items',{...root,[String(ship)]:{
-    ...root[String(ship)],itemName:'PF88 mutation accepted'}});
+   const original=tx.get(ITEMS,String(ship));
+   tx.put(ITEMS,String(ship),{...original,itemName:'PF88 mutation accepted'});
   }
   return outcome;
  });
 }
-const noMutation=f=>f.get(ITEMS,'items')[String(ship)].itemName===undefined;
+const noMutation=f=>f.get(ITEMS,String(ship)).itemName===undefined;
 
 test('PF88 requires exact original PF52 source index authority',()=>{
  assert.throws(()=>createReciprocalWriterFence(),/PF88_ORIGINAL_PF52_INDEX_AUTHORITY_REQUIRED/);
@@ -38,7 +41,7 @@ test('PF88 in-transaction original player ship write allowed when no fleet custo
  assert.equal(result.status,'CLEAR_IN_SAME_TRANSACTION');
  assert.equal(result.mayCommit,true);
  assert.deepEqual(result.originalShipIDs,[ship]);
- assert.equal(f.get(ITEMS,'items')[String(ship)].itemName,'PF88 mutation accepted');
+ assert.equal(f.get(ITEMS,String(ship)).itemName,'PF88 mutation accepted');
 }));
 test('PF88 reservation blocks player mutation before first NPC spawn',()=>run(({f,gate,seeded})=>{
  seeded();
@@ -118,12 +121,12 @@ test('PF88 rejects direct ship ID that does not identify original stock ship',()
 }));
 test('PF88 guard covers fitted modules/cargo nested in reserved hull',()=>run(({f,gate,seeded})=>{
  seeded();
- const root=f.get(ITEMS,'items');
+ const root=allItems(f);
  root['5000']={itemID:5000,ownerID:owner,categoryID:7,typeID:34,
   locationID:ship,flagID:11,quantity:-1,singleton:1,stacksize:1};
  root['5001']={itemID:5001,ownerID:owner,categoryID:8,typeID:35,
   locationID:5000,flagID:5,quantity:1,singleton:0,stacksize:1};
- f.put(ITEMS,'items',root);
+ saveRows(f,root);
  for(const id of [5000,5001]){
   const result=f.gameStore.coopAtomicNativeRows.transact([T,ITEMS],tx=>
    gate.inTransaction({tx,writer:'PLAYER',affectedItemID:id}));
@@ -138,10 +141,10 @@ test('PF88 insertion into reserved hull blocks even if original cargo is elsewhe
 }));
 test('PF88 no original ship parent allows unrelated hangar item changes in same transaction',()=>run(({f,gate,seeded})=>{
  seeded();
- const root=f.get(ITEMS,'items');
+ const root=allItems(f);
  root['8001']={itemID:8001,ownerID:owner,typeID:34,categoryID:7,
   locationID:F.STATION,flagID:4,quantity:1,singleton:0,stacksize:1};
- f.put(ITEMS,'items',root);
+ saveRows(f,root);
  const result=f.gameStore.coopAtomicNativeRows.transact([T,ITEMS],tx=>
   gate.inTransaction({tx,writer:'PLAYER',affectedItemID:8001}));
  assert.equal(result.status,'CLEAR_IN_SAME_TRANSACTION');
@@ -156,12 +159,12 @@ test('PF88 missing source item is not silently treated as a station destination'
  assert.equal(station.status,'CLEAR_IN_SAME_TRANSACTION');
 }));
 test('PF88 cyclic item parent chain never counts as a proven empty custody path',()=>run(({f,gate})=>{
- const root=f.get(ITEMS,'items');
+ const root=allItems(f);
  root['8001']={itemID:8001,ownerID:owner,typeID:34,categoryID:7,
   locationID:8002,flagID:11,quantity:1,singleton:0,stacksize:1};
  root['8002']={itemID:8002,ownerID:owner,typeID:34,categoryID:7,
   locationID:8001,flagID:11,quantity:1,singleton:0,stacksize:1};
- f.put(ITEMS,'items',root);
+ saveRows(f,root);
  const result=f.gameStore.coopAtomicNativeRows.transact([T,ITEMS],tx=>
   gate.inTransaction({tx,writer:'PLAYER',affectedItemID:8001}));
  assert.equal(result.reason,'PF88_PARENT_CHAIN_UNVERIFIED');
@@ -171,11 +174,12 @@ test('PF88 undefined original claim read fails closed rather than accepting abse
  const items={[String(ship)]:{itemID:ship,ownerID:owner,locationID:F.STATION,categoryID:6}};
  let reads=0;
  const tx={get(table,key){
-  if(table==='items')return items;
+  if(table==='items')return items[String(key)]||null;
   if(key===indexKey)return undefined;
   reads++;
   return null;
- },put(){}};
+ },put(){},scan(table){return table==='items'?
+   Object.entries(items).map(([key,value])=>({key,value})):[];}};
  const outcome=gate.inTransaction({tx,writer:'PLAYER',shipItemID:ship});
  assert.equal(outcome.reason,'PF88_ORIGINAL_CUSTODY_READ_UNCERTAIN');
 });
