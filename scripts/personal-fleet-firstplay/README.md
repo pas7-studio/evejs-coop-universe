@@ -5,6 +5,65 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF109 — extend real SQLite itemID custody throughout native PF modules (2026-11-09)
+
+**Actual source implementation in Draft PR #350:** PF109 removes the
+nonexistent original `items/items` aggregate from the following
+source-owned native paths, each now reading `items[String(itemID)]`
+as a genuine per-item SQLite row or scanning actual rows inside the
+same native GameStore transaction:
+
+- PF52 `coopPersonalFleetHangarBridge.readStockHangar` for paid NPC
+  ship reservation and release.
+- PF54 `coopPersonalFleetOriginalDeployment.reconcile`, BOTH the
+  archive in `scripts/pf54/native` and the PF62-staged copy in
+  `scripts/pf58/native`.
+- PF58 `coopPersonalFleetNativeBootstrap.moveOriginalShipToSpaceAtomically`
+  writes the SAME physical ship using exactly one
+  `tx.put('items', String(shipItemID), nextShip)`. Its original handoff
+  readback independently checks that same physical row, and PF58
+  permit verification reads a real shipID key.
+- PF58 `createReciprocalWriterFence`, PF89 native stock delta,
+  PF90 snapshot, PF91 player activation and PF92 character writer guard
+  use actual original SQL item rows. PF89/PF90 commit only physical
+  itemID rows; no full-root SQL write. All native original item scans
+  fail closed on malformed/ambiguous rows and use a 250,000-row limit.
+- PF57 loss and loss replay check that the destroyed original physical
+  ship row is absent, not that a fabricated `items` row was absent.
+- First-play source-bound player follow target, NPC combat authorization,
+  order witness, restart physical recovery, scoped docking readback
+  and terminal title proof also use the actual original itemID rows.
+  Terminal title checks scan for forged duplicate item identities.
+- PF108 gateway's PF58 adapter now presents a read-only **flat SQL
+  item-row scan** over the verified prior/next inventory state; native
+  `put` and `del` are forbidden on that view.
+
+**Tests:** added
+`tests/personal-fleet-original-flat-sqlite-row-contract.test.cjs`
+(14 focused tests; 13 transactional scenarios executed PASS in
+controlled isolated V8; source-inventory case separately inspected).
+It covers PF52 free/absent ship titles, PF58 per-row atomic handoff,
+reserved module fencing, PF89 physical insert/remove, PF90 stale
+snapshots and rejects synthetic aggregate-row authority.
+PF52 Node/SQLite fixtures plus PF54/PF58 onboarding and handoff
+fixtures are now being migrated to the true native itemID storage.
+The manual `Test-FirstPlay-Local.ps1` runner includes the new test.
+
+**Still blocking a playable server:** other original stock NPC/runtime
+tables may use independently different `sqliteStore.ROW_GROUPS` layouts.
+PF57 loss relies on those other native tables and requires on-disk
+SQLite verification. Several historical PF58 tests still use the old
+invented inventory fixture and must be migrated; those earlier suites
+are NOT counted as a clean native test run. Original actor/order
+writer-owner integration and physical two-player WORK E2E remain
+unverified. Do not turn `allWritersFenced` on from these source
+changes. Main and PLAY remain untouched.
+
+**Packaging:** PF62 still stages its 22 native baseline paths, and
+first-play adds 47 delta paths (4 overlaps): **65 unique native
+source paths**. The first-play SHA256 manifest holds **93** files
+after the new PF109 test and updated source modules.
+
 ## PF108 — critical original SQLite per-item row correction (2026-11-09)
 
 **P0 found in actual original EveJS sources.** Earlier PF106/107 gateway
