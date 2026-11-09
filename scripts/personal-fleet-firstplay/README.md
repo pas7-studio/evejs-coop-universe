@@ -40,8 +40,8 @@ same native GameStore transaction:
 
 **Tests:** added
 `tests/personal-fleet-original-flat-sqlite-row-contract.test.cjs`
-(14 focused tests; 13 transactional scenarios executed PASS in
-controlled isolated V8; source-inventory case separately inspected).
+(14 focused tests; **14/14 PASS** in a controlled isolated V8
+harness, including source-inventory validation).
 It covers PF52 free/absent ship titles, PF58 per-row atomic handoff,
 reserved module fencing, PF89 physical insert/remove, PF90 stale
 snapshots and rejects synthetic aggregate-row authority.
