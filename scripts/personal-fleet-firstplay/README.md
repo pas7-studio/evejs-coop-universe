@@ -5,6 +5,63 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF107 — original stock ItemStore writer is now patched into WORK (2026-11-09)
+
+**Source-owned WORK patch (not just an adapter):**
+`tools/build_original_itemstore_owner_patch.py` verifies the exact
+original EveJS stock ItemStore Git blob
+`e992d56ee9cff1911d54247bf46d44d01e5d8060`, then produces a
+`git apply` patch for the **actual**
+`Code/server/src/services/inventory/itemStore.js` in the isolated WORK
+tree. Original native source checkout, main and PLAY remain untouched.
+
+When `EVEJS_COOP_PERSONAL_FLEET_NATIVE=1`, this ORIGINAL owner:
+
+- `readItems()`: returns a detached clone and remembers its exact
+  pre-mutation stock root in a private WeakMap. Legacy in-place callers
+  can no longer mutate the authoritative GameStore cache before a
+  transaction even begins.
+- `writeItems()`: invokes the PF106 **original GameStore-owned
+  atomic** `executeOriginalStockRoot` instead of the legacy
+  `repo.write(..., "/")`. A missing detached preimage, invalid
+  options, SQLite poison, a changed original snapshot, or conflicting
+  reserved ship/module/cargo denies the write. All changed item IDs
+  are discovered **inside** the transaction and both old/new complete
+  parent chains are checked by the actual PF58 reciprocal gate.
+- `writeItemCustomInfo()`: the stock direct subpath write is
+  intercepted too and uses the SAME original atomic owner; metadata
+  cannot silently bypass protected item custody.
+- Original `coopInvalidateAfterAtomicRows` now additionally resets
+  `itemsTableCache` after native GameStore commit, avoiding a stale
+  root surviving while other stock indexes were already invalidated.
+- With the Personal Fleet flag OFF, stock methods retain their
+  existing original repository code path; no alternate singleton
+  or second original item ID writer is installed.
+
+**P0 restrictions:** This does **not** cover other native writers
+that bypass `itemStore.js`, for example direct GameStore atomic
+transfers from other services. The original character active-ship
+writer, Mining/WAR/Exploration and wallet writer hooks are **still not
+fully integrated**. The `ReciprocalWriterOwners` source is still
+absent, so real native startup must remain fail-closed. The snapshot
+comparison is conservative: any intervening unrelated stock write
+blocks the stale operation; it never silently overwrites that write.
+Actual stock ItemStore root size and native GameStore 2 MB JSON-row
+limit must be exercised with real on-disk SQLite in isolated WORK.
+
+**Contract evidence:** Eight additional PF107 gateway snapshot tests
+(in addition to PF106's 20), plus source transformer unit tests;
+the controlled V8 source suite now includes **151** focused checks.
+The real original native `itemStore.js` has been inspected for all
+five exact patch anchors and its Git source blob was verified; this
+is source evidence, not a claim that the patch was applied to a local
+WORK tree or that live gameplay has passed.
+
+**Bundle:** PF80 baseline 22 paths + first-play 47 delta paths
+with four overlaps = **65 unique** WORK source paths. The first-play
+SHA256 inventory contains **92** source/tool/test records after PF107.
+No `main` merge, production start or feature activation.
+
 ## PF106 — original GameStore stock ItemStore foreign-writer gateway (2026-11-08)
 
 **Actual new source:** `native/coopPersonalFleetOriginalForeignItemWriterGateway.js`
