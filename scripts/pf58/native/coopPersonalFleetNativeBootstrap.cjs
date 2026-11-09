@@ -33,10 +33,10 @@ function moveOriginalShipToSpaceAtomically(row,spawn,tx){
     spawn?.sessionless!==true||!vec(spawn.position)||!vec(spawn.direction)||
     typeof tx?.get!=='function'||typeof tx?.put!=='function')
   return {success:false,errorMsg:'PF87_ATOMIC_SOURCE_UNVERIFIED'};
- const items=tx.get('items','items');
- if(!obj(items)||!validStockHangar(items[String(row.shipItemID)],row))
+ // Flat original native SQLite: read only the physical ship itemID.
+ const original=tx.get('items',String(row.shipItemID));
+ if(!validStockHangar(original,row))
   return {success:false,errorMsg:'PF87_ATOMIC_HANGAR_TITLE_CHANGED'};
- const original=items[String(row.shipItemID)];
  // This mirrors original ItemStore.normalizeSpaceState STOP defaults for
  // the first server-owned spawn while preserving all other original fields.
  const state={systemID:row.systemID,
@@ -45,8 +45,9 @@ function moveOriginalShipToSpaceAtomically(row,spawn,tx){
   mode:'STOP',targetEntityID:null,followRange:0,orbitDistance:0,
   orbitNormal:null,orbitSign:1,warpState:null,
   emergencyWarpReturnState:null};
- tx.put('items','items',{...items,[String(row.shipItemID)]:{
-  ...original,locationID:row.systemID,flagID:0,spaceState:state}});
+ // Transfer the same original physical title, under this same transaction.
+ tx.put('items',String(row.shipItemID),{
+  ...original,locationID:row.systemID,flagID:0,spaceState:state});
  return {success:true,shipItemID:row.shipItemID};
 }
 /**
