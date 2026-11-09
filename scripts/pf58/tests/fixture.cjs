@@ -17,18 +17,18 @@ function setup(file, opts={}){
    state.beforeMove?.(row,spawn);
    if(!state.allowMove)return {success:false,errorMsg:'SOURCE_REFUSED'};
    const moved=f.gameStore.coopAtomicNativeRows.transact(['items'],tx=>{
-    const items=tx.get('items','items'),source=items?.[String(row.shipItemID)];
+    const source=tx.get('items',String(row.shipItemID));
     if(!source||source.locationID!==row.stationID||source.flagID!==4)
       throw Error('SOURCE_CHANGED');
-    tx.put('items','items',{...items,[String(row.shipItemID)]:{...source,
+    tx.put('items',String(row.shipItemID),{...source,
       locationID:row.systemID,flagID:0,spaceState:{systemID:row.systemID,
-       position:spawn.position,velocity:{x:0,y:0,z:0},direction:spawn.direction,mode:'STOP'}}});
+       position:spawn.position,velocity:{x:0,y:0,z:0},direction:spawn.direction,mode:'STOP'}});
     return true;
    });
    state.afterMove?.(row,spawn);
    return {success:moved};
   },
-  readOriginalShip(shipID){return f.get('items','items')?.[String(shipID)]||null;},
+  readOriginalShip(shipID){return f.get('items',String(shipID))||null;},
   adoptOriginalShipAsNpc(row,stock){
    state.adoptions++;
    state.beforeAdopt?.(row,stock);
