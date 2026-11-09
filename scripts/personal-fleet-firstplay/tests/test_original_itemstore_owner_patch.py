@@ -97,9 +97,30 @@ class PF107StockItemStorePatchTest(unittest.TestCase):
             target = engine / m.TARGET
             target.parent.mkdir(parents=True)
             target.write_text(FIXTURE, encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "PF107_ORIGINAL_ITEMSTORE_SOURCE_BLOB_DRIFT"):
+            # The original sqliteStore blob is independently required.
+            with self.assertRaisesRegex(ValueError, "PF108_ORIGINAL_SQLITE_STORE_NOT_FOUND"):
                 m.build(engine)
             self.assertEqual(target.read_text(encoding="utf-8"), FIXTURE)
+
+    def test_unpinned_itemstore_refuses_after_original_sqlite_layout_pin(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            engine = Path(folder)
+            target = engine / m.TARGET
+            target.parent.mkdir(parents=True)
+            target.write_text(FIXTURE, encoding="utf-8")
+            with patch.object(m, "verify_original_item_sqlite_layout"):
+                with self.assertRaisesRegex(ValueError, "PF107_ORIGINAL_ITEMSTORE_SOURCE_BLOB_DRIFT"):
+                    m.build(engine)
+
+    def test_unpinned_original_sqlite_store_rejected_before_any_itemstore_patch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            engine = Path(folder)
+            target = engine / m.STOCK_SQLITE_STORE
+            target.parent.mkdir(parents=True)
+            target.write_text("const ROW_GROUPS = { items: ['items'] };", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "PF108_ORIGINAL_SQLITE_SOURCE_BLOB_DRIFT"):
+                m.verify_original_item_sqlite_layout(engine)
 
     def test_stock_writer_patch_builder_does_not_accept_symlink(self):
         with tempfile.TemporaryDirectory() as folder:
