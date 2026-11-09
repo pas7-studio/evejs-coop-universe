@@ -8,15 +8,10 @@ function fixture(action){
  const tmp=F.tempDb(),f=setup(tmp.file);
  try{
   f.prepare();
-  // PF91: the original stock characterState writes individual SQLite rows,
-  // not a synthetic key='characters' map. PF54/PF53 onboarding used the
-  // legacy aggregate fixture above; migrate ONLY this strict PF87 fixture
-  // after all its onboarding writes have completed.
-  const legacy=f.get('characters','characters');
-  const owner=legacy?.[String(F.OWNER)];
-  if(!owner)throw Error('PF91_FIXTURE_OWNER_RECORD_MISSING');
-  f.db.prepare('DELETE FROM "characters" WHERE key=?').run('characters');
-  f.put('characters',String(F.OWNER),owner);
+  // PF53/PF54 now persist the real characterID SQLite row from first seed.
+  const owner=f.get('characters',String(F.OWNER));
+  if(!owner||owner.characterID!==F.OWNER)
+   throw Error('PF91_ORIGINAL_PLAYER_ROW_MISSING');
   let postCommitMoves=0,atomicMoves=0;
   const state={falseAck:false,throwAfterWrite:false,denyAtomic:false,
    sessionChecks:0,sessionOccupiedOnSecondRead:false};
