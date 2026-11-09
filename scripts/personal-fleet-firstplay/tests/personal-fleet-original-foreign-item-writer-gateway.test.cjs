@@ -219,3 +219,53 @@ test('PF106 bypass by undeclared cargo mutation during a free hull write is bloc
  a.match(r.reason,/PF106_UNDECLARED_STOCK_ITEM_CHANGE/);
  a.equal(f.stats().commits,0);
 });
+
+test('PF107 original full-root owner derives item IDs within the authoritative transaction',()=>{
+ const f=fixture(),snapshot=cp(f.db.items.items);
+ snapshot['2500'].flagID=0;
+ const result=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot});
+ a.equal(result.status,'COMMITTED');
+ a.deepEqual([...result.changedItemIDs],[2500]);
+ a.equal(f.db.items.items['2500'].flagID,0);
+ a.equal(f.stats().commits,1);
+});
+test('PF107 stock owner rejects protected hull even without a caller declared-ID list',()=>{
+ const f=fixture(),snapshot=cp(f.db.items.items);
+ snapshot['2501'].ownerID=777;
+ const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot});
+ a.equal(r.status,'BLOCKED');
+ a.match(r.reason,/PF106_ORIGINAL_PREWRITE_CUSTODY_DENIED/);
+ a.equal(f.db.items.items['2501'].ownerID,500);
+ a.equal(f.stats().commits,0);
+});
+test('PF107 stock owner denies hidden protected child move even with a free hull change',()=>{
+ const f=fixture(),snapshot=cp(f.db.items.items);
+ snapshot['2500'].locationID=30000142;
+ snapshot['3002'].locationID=6001;
+ const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot});
+ a.equal(r.status,'BLOCKED');
+ a.match(r.reason,/PF106_ORIGINAL_PREWRITE_CUSTODY_DENIED/);
+ a.equal(f.stats().commits,0);
+});
+test('PF107 stock root no-op is idempotent and does not rewrite GameStore',()=>{
+ const f=fixture(),snapshot=cp(f.db.items.items);
+ const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot});
+ a.equal(r.status,'COMMITTED');
+ a.deepEqual([...r.changedItemIDs],[]);
+ a.equal(f.stats().commits,0);
+});
+test('PF107 original stock source owner forbids invalid root shape',()=>{
+ const f=fixture();
+ const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:[]});
+ a.equal(r.status,'BLOCKED');
+ a.equal(r.reason,'PF107_STOCK_ITEMSTORE_ROOT_INVALID');
+ a.equal(f.stats().attempts,0);
+});
+test('PF107 source-bound stock owner cannot write without complete original custody proof',()=>{
+ const f=fixture({missingHandoff:true}),snapshot=cp(f.db.items.items);
+ snapshot['2500'].locationID=30000142;
+ const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot});
+ a.equal(r.status,'BLOCKED');
+ a.match(r.reason,/PF106_ORIGINAL_PREWRITE_CUSTODY_DENIED/);
+ a.equal(f.stats().commits,0);
+});
