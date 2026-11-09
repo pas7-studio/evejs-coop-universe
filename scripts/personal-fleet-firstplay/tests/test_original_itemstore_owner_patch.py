@@ -45,7 +45,8 @@ class PF107StockItemStorePatchTest(unittest.TestCase):
         patched = m.transform(FIXTURE)
         start = patched.index("function readItems()")
         cache = patched.index("  if (itemsTableCache)", start)
-        self.assertLess(patched.index("return structuredClone(original.data)", start), cache)
+        self.assertLess(patched.index("return detached", start), cache)
+        self.assertIn("pf107ReadSnapshots.set(detached, expected)", patched)
 
     def test_original_stock_write_is_not_replayed_after_atomic_success(self):
         patched = m.transform(FIXTURE)
@@ -54,10 +55,13 @@ class PF107StockItemStorePatchTest(unittest.TestCase):
         original = patched.index('repo.write(ITEMS_TABLE, "/", data, dbOptions)', start)
         self.assertLess(native, original)
         self.assertIn('if (outcome?.status !== "COMMITTED") return false;', patched)
+        self.assertIn('const expectedOriginalRoot = pf107ReadSnapshots.get(data);', patched)
+        self.assertIn('expectedOriginalRoot });', patched)
 
     def test_metadata_subpath_also_routes_through_original_atomic_owner(self):
         patched = m.transform(FIXTURE)
         start = patched.index("function writeItemCustomInfo(")
+        self.assertIn("expectedOriginalRoot: pf107ReadSnapshots.get(items)", patched)
         self.assertLess(patched.index("executeOriginalStockRoot(", start),
                         patched.index("return repo.write(ITEMS_TABLE,", start))
 
