@@ -24,10 +24,12 @@ function fixture({poisoned=false,missingHandoff=false,invalidSource=false}={}){
  idx.generations['2501']=1;
  idx.ships['2501']={shipItemID:2501,ownerCharacterID:500,pilotID:pilot,
   stationID:6001,generation:1,assignmentID:'assn-1'};
- const db={items:{items:{
+ // Mirrors original sqliteStore.explodeToRows('items'): a row per itemID,
+ // NO invented SQL aggregate key named 'items'.
+ const db={items:{
   '2500':freeShip(),'2501':reservedShip(),
   '3001':moduleFree(),'3002':moduleReserved()
- }},corporationRuntime:{[pf52.REGISTRY_KEY]:idx,[actorKey]:null}};
+ },corporationRuntime:{[pf52.REGISTRY_KEY]:idx,[actorKey]:null}};
  let commits=0,attempts=0;
  let isPoisoned=poisoned,throwCommit=false;
  const stock={
@@ -45,15 +47,22 @@ function fixture({poisoned=false,missingHandoff=false,invalidSource=false}={}){
       return Object.prototype.hasOwnProperty.call(db[table]||{},key)?
        db[table][key]:null;
      },
+     // Mimic real coopGameStoreAtomic: tx.scan reads flat SQL row keys.
+     scan:table=>Object.entries(db[table]).map(([key,value])=>({
+      key,value:cp(value)
+     })),
      put:(table,key,value)=>{
       proposed.set(table+':'+key,cp(value));
-     }
+     },
+     del:(table,key)=>{proposed.set(table+':'+key,undefined);}
     };
     const result=fn(tx);
     if(throwCommit)throw Error('SIMULATED_SQLITE_ABORT');
     for(const [key,value] of proposed){
      const [table,root]=key.split(':');
-     db[table][root]=value;commits++;
+     if(value===undefined)delete db[table][root];
+     else db[table][root]=value;
+     commits++;
     }
     return result;
    }
@@ -82,23 +91,23 @@ test('PF106 authentic PF58/52 gateway permits free player hull transfer',()=>{
  const r=f.execute('PLAYER',[2500],items=>{items['2500'].locationID=30000142;return items});
  a.equal(r.status,'COMMITTED');
  a.equal(r.source,'ORIGINAL_EVEJS_PERSONAL_FLEET_FOREIGN_ITEM_WRITER_GATE_V1');
- a.equal(f.db.items.items['2500'].locationID,30000142);
+ a.equal(f.db.items['2500'].locationID,30000142);
  a.equal(f.stats().commits,1);
 });
 test('PF106 modification of reserved real Personal Fleet ship is blocked',()=>{
- const f=fixture(),before=cp(f.db.items.items);
+ const f=fixture(),before=cp(f.db.items);
  const r=f.execute('PLAYER',[2501],items=>{items['2501'].ownerID=501;return items});
  a.equal(r.mayCommit,false);
  a.match(r.reason,/PF106_ORIGINAL_PREWRITE_CUSTODY_DENIED/);
- a.deepEqual(f.db.items.items,before);
+ a.deepEqual(f.db.items,before);
  a.equal(f.stats().commits,0);
 });
 test('PF106 loading module into protected hull blocks on NEXT parent chain',()=>{
- const f=fixture(),before=cp(f.db.items.items);
+ const f=fixture(),before=cp(f.db.items);
  const r=f.execute('MARKET',[3901],items=>{items['3901']={
   itemID:3901,ownerID:500,locationID:2501,categoryID:7,typeID:216};return items});
  a.match(r.reason,/PF106_ORIGINAL_POSTWRITE_CUSTODY_DENIED/);
- a.deepEqual(f.db.items.items,before);
+ a.deepEqual(f.db.items,before);
  a.equal(f.stats().commits,0);
 });
 test('PF106 old protected module cannot leave the reserved ship',()=>{
@@ -106,31 +115,31 @@ test('PF106 old protected module cannot leave the reserved ship',()=>{
  const r=f.execute('MINING',[3002],items=>{
   items['3002'].locationID=6001;return items});
  a.match(r.reason,/PF106_ORIGINAL_PREWRITE_CUSTODY_DENIED/);
- a.equal(f.db.items.items['3002'].locationID,2501);
+ a.equal(f.db.items['3002'].locationID,2501);
 });
 test('PF106 moving free module INTO protected ship is rejected',()=>{
  const f=fixture();
  const r=f.execute('INDUSTRY',[3001],items=>{
   items['3001'].locationID=2501;return items});
  a.match(r.reason,/PF106_ORIGINAL_POSTWRITE_CUSTODY_DENIED/);
- a.equal(f.db.items.items['3001'].locationID,2500);
+ a.equal(f.db.items['3001'].locationID,2500);
 });
 test('PF106 removing original protected cargo is rejected before deletion',()=>{
  const f=fixture();
  const r=f.execute('EXPLORATION',[3002],items=>{
   delete items['3002'];return items});
  a.match(r.reason,/PF106_ORIGINAL_PREWRITE_CUSTODY_DENIED/);
- a.ok(f.db.items.items['3002']);
+ a.ok(f.db.items['3002']);
 });
 test('PF106 hidden mutation of second stock item fails exact global delta',()=>{
- const f=fixture(),before=cp(f.db.items.items);
+ const f=fixture(),before=cp(f.db.items);
  const r=f.execute('PLAYER',[2500],items=>{
   items['2500'].locationID=30000142;
   items['2501'].ownerID=501;
   return items;
  });
  a.match(r.reason,/PF106_UNDECLARED_STOCK_ITEM_CHANGE/);
- a.deepEqual(f.db.items.items,before);
+ a.deepEqual(f.db.items,before);
 });
 test('PF106 declared stock item IDs must match all mutations exactly',()=>{
  const f=fixture();
@@ -197,7 +206,7 @@ test('PF106 adding unrelated free module to a free player hull can commit',()=>{
   return items;
  });
  a.equal(r.status,'COMMITTED');
- a.equal(f.db.items.items['3902'].locationID,2500);
+ a.equal(f.db.items['3902'].locationID,2500);
 });
 test('PF106 new item cannot be inserted under reserved module nested chain',()=>{
  const f=fixture();
@@ -221,57 +230,57 @@ test('PF106 bypass by undeclared cargo mutation during a free hull write is bloc
 });
 
 test('PF107 original full-root owner derives item IDs within the authoritative transaction',()=>{
- const f=fixture(),snapshot=cp(f.db.items.items);
+ const f=fixture(),snapshot=cp(f.db.items);
  snapshot['2500'].flagID=0;
- const result=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot,expectedOriginalRoot:cp(f.db.items.items)});
+ const result=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot,expectedOriginalRoot:cp(f.db.items)});
  a.equal(result.status,'COMMITTED');
  a.deepEqual([...result.changedItemIDs],[2500]);
- a.equal(f.db.items.items['2500'].flagID,0);
+ a.equal(f.db.items['2500'].flagID,0);
  a.equal(f.stats().commits,1);
 });
 test('PF107 stock owner rejects protected hull even without a caller declared-ID list',()=>{
- const f=fixture(),snapshot=cp(f.db.items.items);
+ const f=fixture(),snapshot=cp(f.db.items);
  snapshot['2501'].ownerID=777;
- const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot,expectedOriginalRoot:cp(f.db.items.items)});
+ const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot,expectedOriginalRoot:cp(f.db.items)});
  a.equal(r.status,'BLOCKED');
  a.match(r.reason,/PF106_ORIGINAL_PREWRITE_CUSTODY_DENIED/);
- a.equal(f.db.items.items['2501'].ownerID,500);
+ a.equal(f.db.items['2501'].ownerID,500);
  a.equal(f.stats().commits,0);
 });
 test('PF107 stock owner denies hidden protected child move even with a free hull change',()=>{
- const f=fixture(),snapshot=cp(f.db.items.items);
+ const f=fixture(),snapshot=cp(f.db.items);
  snapshot['2500'].locationID=30000142;
  snapshot['3002'].locationID=6001;
- const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot,expectedOriginalRoot:cp(f.db.items.items)});
+ const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot,expectedOriginalRoot:cp(f.db.items)});
  a.equal(r.status,'BLOCKED');
  a.match(r.reason,/PF106_ORIGINAL_PREWRITE_CUSTODY_DENIED/);
  a.equal(f.stats().commits,0);
 });
 test('PF107 stock root no-op is idempotent and does not rewrite GameStore',()=>{
- const f=fixture(),snapshot=cp(f.db.items.items);
- const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot,expectedOriginalRoot:cp(f.db.items.items)});
+ const f=fixture(),snapshot=cp(f.db.items);
+ const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot,expectedOriginalRoot:cp(f.db.items)});
  a.equal(r.status,'COMMITTED');
  a.deepEqual([...r.changedItemIDs],[]);
  a.equal(f.stats().commits,0);
 });
 test('PF107 original stock source owner forbids invalid root shape',()=>{
  const f=fixture();
- const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:[],expectedOriginalRoot:cp(f.db.items.items)});
+ const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:[],expectedOriginalRoot:cp(f.db.items)});
  a.equal(r.status,'BLOCKED');
  a.equal(r.reason,'PF107_STOCK_ITEMSTORE_ROOT_INVALID');
  a.equal(f.stats().attempts,0);
 });
 test('PF107 source-bound stock owner cannot write without complete original custody proof',()=>{
- const f=fixture({missingHandoff:true}),snapshot=cp(f.db.items.items);
+ const f=fixture({missingHandoff:true}),snapshot=cp(f.db.items);
  snapshot['2500'].locationID=30000142;
- const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot,expectedOriginalRoot:cp(f.db.items.items)});
+ const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot,expectedOriginalRoot:cp(f.db.items)});
  a.equal(r.status,'BLOCKED');
  a.match(r.reason,/PF106_ORIGINAL_PREWRITE_CUSTODY_DENIED/);
  a.equal(f.stats().commits,0);
 });
 
 test('PF107 missing original detached preimage always rejects stock ItemStore snapshot',()=>{
- const f=fixture(),snapshot=cp(f.db.items.items);
+ const f=fixture(),snapshot=cp(f.db.items);
  snapshot['2500'].flagID=0;
  const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot});
  a.equal(r.status,'BLOCKED');
@@ -279,15 +288,70 @@ test('PF107 missing original detached preimage always rejects stock ItemStore sn
  a.equal(f.stats().attempts,0);
 });
 test('PF107 post-read intervening ItemStore change aborts before any mutation',()=>{
- const f=fixture(),expectedOriginalRoot=cp(f.db.items.items);
+ const f=fixture(),expectedOriginalRoot=cp(f.db.items);
  const snapshot=cp(expectedOriginalRoot);
  snapshot['2500'].flagID=0;
  // Another genuine stock native write updated this item after our read.
- f.db.items.items['2500'].locationID=6002;
+ f.db.items['2500'].locationID=6002;
  const r=f.factory().executeOriginalStockRoot({writer:'PLAYER',proposedItems:snapshot,
   expectedOriginalRoot});
  a.equal(r.status,'BLOCKED');
  a.match(r.reason,/PF107_ORIGINAL_ITEMSTORE_SNAPSHOT_DRIFT/);
- a.equal(f.db.items.items['2500'].locationID,6002);
+ a.equal(f.db.items['2500'].locationID,6002);
+ a.equal(f.stats().commits,0);
+});
+
+test('PF108 original SQLite contains one row per item and NO items/items aggregate',()=>{
+ const f=fixture();
+ a.equal(f.db.items.items,undefined);
+ a.equal(Object.keys(f.db.items).length,4);
+ const r=f.execute('PLAYER',[2500],root=>{root['2500'].flagID=0;return root});
+ a.equal(r.status,'COMMITTED');
+ a.equal(f.db.items['2500'].flagID,0);
+ a.equal(f.db.items.items,undefined);
+ a.equal(f.stats().commits,1);
+});
+test('PF108 deletion is the native tx.del(itemID), not aggregate-root overwrite',()=>{
+ const f=fixture();
+ const r=f.execute('PLAYER',[3001],root=>{delete root['3001'];return root});
+ a.equal(r.status,'COMMITTED');
+ a.equal(f.db.items['3001'],undefined);
+ a.equal(f.db.items['2501'].itemID,2501);
+ a.equal(f.stats().commits,1);
+});
+test('PF108 original rowset rejects a nonnumeric SQL inventory key',()=>{
+ const f=fixture();
+ f.db.items.items={fake:'aggregate'};
+ const r=f.execute('PLAYER',[2500],root=>{root['2500'].flagID=0;return root});
+ a.equal(r.status,'BLOCKED');
+ a.match(r.reason,/PF108_ORIGINAL_ITEMS_ROW_INVALID/);
+ a.equal(f.stats().commits,0);
+});
+test('PF108 original rowset rejects corrupted identity in unrelated SQL row',()=>{
+ const f=fixture();
+ f.db.items['3002'].itemID=9999;
+ const r=f.execute('PLAYER',[2500],root=>{root['2500'].flagID=0;return root});
+ a.equal(r.status,'BLOCKED');
+ a.match(r.reason,/PF108_ORIGINAL_ITEMS_ROW_INVALID/);
+ a.equal(f.stats().commits,0);
+});
+test('PF108 multi-item write touches only real changed native rows',()=>{
+ const f=fixture();
+ const r=f.execute('PLAYER',[2500,3001],root=>{
+  root['2500'].flagID=0;
+  root['3001'].flagID=12;
+  return root;
+ });
+ a.equal(r.status,'COMMITTED');
+ a.deepEqual([...r.changedItemIDs],[2500,3001]);
+ a.equal(f.stats().commits,2);
+ a.equal(f.db.items.items,undefined);
+});
+test('PF108 partial SQL mutation followed by COMMIT error is not reported COMMITTED',()=>{
+ const f=fixture();
+ f.throwCommit();
+ const r=f.execute('PLAYER',[2500],root=>{root['2500'].flagID=0;return root});
+ a.equal(r.status,'BLOCKED');
+ a.equal(f.db.items['2500'].flagID,4);
  a.equal(f.stats().commits,0);
 });
