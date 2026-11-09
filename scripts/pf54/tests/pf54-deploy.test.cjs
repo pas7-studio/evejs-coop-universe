@@ -4,7 +4,7 @@ const F=require('./fixture.cjs');
 const {open,tempDb,command,OWNER,PILOT,SHIP,ASSIGNMENT,claimsPolicy,pf52}=F;
 function withDb(fn,{onboard=true}={}){const temp=tempDb();let f;try{f=open(temp.file);f.seed();if(onboard)f.onboard();return fn(f)}finally{f?.close();temp.cleanup()}}
 const deployKey=()=>F.pf54.key(ASSIGNMENT);
-const item=f=>f.get('items','items')[String(SHIP)];
+const item=f=>f.get('items',String(SHIP));
 const roster=f=>f.get('corporationRuntime',pf52.ROSTER_PREFIX+OWNER);
 const characters=f=>f.get('characters','characters')[String(OWNER)];
 const wallet=f=>f.get('corporationRuntime','corporations\u001f'+F.EMPLOYER).wallet.divisions['1000'];
@@ -95,15 +95,15 @@ test('dead native ship is not ACTIVE',()=>withDb(f=>{
  assert.equal(f.bridge.reconcile(command()).reason,'PF54_ORIGINAL_PHYSICAL_ACTOR_NOT_PROVEN');
 }));
 test('stock ItemStore must contain the exact in-space original hull',()=>withDb(f=>{
- issuing(f);const root=f.get('items','items');root[String(SHIP)].ownerID=123456;f.put('items','items',root);
+ issuing(f);const root=f.get('items',String(SHIP));root.ownerID=123456;f.put('items',String(SHIP),root);
  assert.equal(f.bridge.reconcile(command()).reason,'PF54_ORIGINAL_ITEM_NOT_IN_SPACE');
 }));
 test('ItemStore without original physical spaceState fails even if actor exists',()=>withDb(f=>{
- issuing(f);const root=f.get('items','items');delete root[String(SHIP)].spaceState;f.put('items','items',root);
+ issuing(f);const root=f.get('items',String(SHIP));delete root.spaceState;f.put('items',String(SHIP),root);
  assert.equal(f.bridge.reconcile(command()).reason,'PF54_ORIGINAL_ITEM_NOT_IN_SPACE');
 }));
 test('incorrect target system cannot claim ship',()=>withDb(f=>{
- issuing(f);const root=f.get('items','items');root[String(SHIP)].spaceState.systemID+=1;f.put('items','items',root);
+ issuing(f);const root=f.get('items',String(SHIP));root.spaceState.systemID+=1;f.put('items',String(SHIP),root);
  assert.equal(f.bridge.reconcile(command()).reason,'PF54_ORIGINAL_ITEM_NOT_IN_SPACE');
 }));
 test('corrupted actor registry fails closed before claim write',()=>withDb(f=>{
@@ -126,7 +126,7 @@ test('WAR transfer reservation blocks deployment',()=>withDb(f=>{
  assert.equal(f.bridge.prepare(command()).reason,'PF52_WAR_SHIP_OR_PILOT_RESERVED');
 }));
 test('original item switched to another station before dispatch remains PREPARED',()=>withDb(f=>{
- ready(f);const items=f.get('items','items');items[String(SHIP)].locationID=100;f.put('items','items',items);
+ ready(f);const item=f.get('items',String(SHIP));item.locationID=100;f.put('items',String(SHIP),item);
  assert.equal(f.bridge.dispatch(command()).reason,'PF54_HANGAR_CHANGED_BEFORE_DISPATCH');
  assert.equal(f.get('corporationRuntime',deployKey()).phase,'PREPARED');assert.equal(f.shared.spawnCount,0);
 }));
