@@ -184,6 +184,14 @@ def verify_original_item_sqlite_layout(work: Path) -> None:
         '\n};', 1)[0]
     if 'items:' in groups or '"items":' in groups:
         raise ValueError("PF108_ORIGINAL_ITEMS_ARE_NOT_FLAT_ROWS")
+    # PF110: these native rows are grouped in the ORIGINAL source,
+    # while real player characters, cargo and wrecks remain flat.
+    if ('npcEntities: ["entities"]' not in groups or
+        'npcModules: ["modules"]' not in groups):
+        raise ValueError("PF110_ORIGINAL_NATIVE_GROUP_LAYOUT_UNVERIFIED")
+    for flat in ("characters", "npcCargo", "npcWrecks", "npcWreckItems"):
+        if __import__("re").search(r'(?m)^\\s*' + flat + r'\\s*:', groups):
+            raise ValueError("PF110_ORIGINAL_NATIVE_FLAT_LAYOUT_UNVERIFIED")
 
 
 def build(work: Path) -> str:
