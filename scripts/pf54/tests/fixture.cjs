@@ -2,7 +2,7 @@
 const {DatabaseSync}=require('node:sqlite');
 const {createHash}=require('node:crypto');
 const os=require('node:os'),fs=require('node:fs'),path=require('node:path');
-const pf52=require('../deps/pf52-reference-hangar.cjs');
+const pf52=require('../../pf52/native/coopPersonalFleetHangarBridge.cjs');
 const pf53=require('../deps/pf53-reference-paid-hiring.cjs');
 const pf54=require('../native/coopPersonalFleetOriginalDeployment.cjs');
 const OWNER=90000001,EMPLOYER=1000110,AGENT=300001,PILOT='coop-pilot-123';
@@ -72,8 +72,8 @@ function open(file,options={}){
    if(shared.onHandoff)return shared.onHandoff(row,{db,get,put,atomic,shared});
    if(!shared.native)throw Error('NATIVE_SHIP_HANDOFF_FAILED');
    atomic.transact(['items'],tx=>{
-    const items=tx.get('items','items'),hull=items[String(row.shipItemID)];
-    tx.put('items','items',{...items,[String(row.shipItemID)]:{...hull,flagID:0,locationID:row.systemID,
+    const hull=tx.get('items',String(row.shipItemID));
+    tx.put('items',String(row.shipItemID),{...hull,flagID:0,locationID:row.systemID,
      spaceState:{systemID:row.systemID,position:{x:10,y:20,z:30},velocity:{x:0,y:0,z:0},mode:'STOP'}}});
    });
    shared.scene={nativeNpc:true,shipItemID:row.shipItemID,entityID:row.shipItemID,
@@ -97,7 +97,7 @@ function open(file,options={}){
   put('corporationRuntime','corporations\u001f'+EMPLOYER,{corporationID:EMPLOYER,isNPC:true,
    wallet:{divisions:{'1000':{balance:800,journal:[],transactions:[]}}}});
   put('npcEntities','npcEntities',{pilots:{[PILOT]:{available:true,pilotID:PILOT,agentID:AGENT}}});
-  put('items','items',{[SHIP]:{itemID:SHIP,shipID:SHIP,shipTypeID:606,typeID:606,
+  put('items',String(SHIP),{itemID:SHIP,shipID:SHIP,shipTypeID:606,typeID:606,
    ownerID:OWNER,locationID:STATION,flagID:4,categoryID:6,singleton:1,stacksize:1,
    quantity:-1,spaceState:null}});
  }
