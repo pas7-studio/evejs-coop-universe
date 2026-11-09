@@ -130,6 +130,26 @@ def transform(source: str) -> str:
         '}\n',
         "metadata-subpath-write",
     )
+    # Two original warehouse/refinery paths make a SECOND clone after
+    # readItems(). When Personal Fleet is enabled the read already returned
+    # a detached clone with its exact preimage in pf107ReadSnapshots.
+    # Retaining that second clone would lose snapshot identity and block
+    # these existing stock economic writers. When OFF, keep their original
+    # defensive copies unchanged.
+    source = replace_once(
+        source,
+        '  const items=JSON.parse(JSON.stringify(readItems()));',
+        '  const items=process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE === "1"\\n'
+        '    ?readItems():JSON.parse(JSON.stringify(readItems()));',
+        "refinery-snapshot-identity",
+    )
+    source = replace_once(
+        source,
+        '  const items=JSON.parse(JSON.stringify(current));',
+        '  const items=process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE === "1"\\n'
+        '    ?current:JSON.parse(JSON.stringify(current));',
+        "player-ore-snapshot-identity",
+    )
     source = replace_once(
         source,
         'if (process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS === "1") module.exports.coopInvalidateAfterAtomicRows = mode => { if(mode === "probe") return true; itemIndexesDirty = true; itemIndexesCache = null; itemIndexKeys = new Map(); reservedItemIDBatch = []; itemMutationVersion += 1; return true; };',
