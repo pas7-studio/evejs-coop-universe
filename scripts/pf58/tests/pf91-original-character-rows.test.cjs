@@ -11,12 +11,9 @@ function withNativeCharacters(callback,{reserve=false}={}){
  try{
   f.seed();
   if(reserve)f.onboard();
-  const old=f.get(C,C)?.[String(F.OWNER)];
-  if(!old)throw Error('PF91_LEGACY_CHARACTER_FIXTURE_MISSING');
-  // Original characterState writes individual /<characterID> rows. Never
-  // let the legacy synthetic aggregate key mask a real native schema defect.
-  f.db.prepare('DELETE FROM "characters" WHERE key=?').run('characters');
-  f.put(C,String(F.OWNER),old);
+  // Real PF53/PF54 fixture already uses the native per-character SQL row.
+  if(f.get(C,String(F.OWNER))?.characterID!==F.OWNER)
+   throw Error('PF91_NATIVE_CHARACTER_FIXTURE_MISSING');
   return callback(f);
  }finally{f.close();tmp.cleanup();}
 }
