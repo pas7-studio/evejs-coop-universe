@@ -1,9 +1,56 @@
 # EveJS Personal Fleet — First playable WORK source package
 
-**Last reviewed: 2026-11-08. Status: WORK source candidate, NOT gameplay-ready.**
+**Last reviewed: 2026-11-09. Status: WORK source candidate, NOT gameplay-ready.**
 Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-universe/pull/350).
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
+
+## PF108 — critical original SQLite per-item row correction (2026-11-09)
+
+**P0 found in actual original EveJS sources.** Earlier PF106/107 gateway
+tests used a fabricated `items/items` aggregate SQL row. In the real
+`Code/server/src/gameStore/sqliteStore.js`,
+`ROW_GROUPS` does **not** list `items`. The original
+`explodeToRows('items', root)` persists each physical item in its
+own SQL row with `key=String(itemID)`.
+The original `coopGameStoreAtomic.js` confirms `tx.get`,
+`tx.scan`, `tx.put`, `tx.del` operate on individual keys.
+Therefore the previous gateway would **always block on a normal
+real SQLite database**, despite the earlier isolated PASS result.
+
+**Fix:** The PF106/107 native gateway now scans original SQL item
+rows **inside a single original native GameStore transaction**,
+validates canonical keys, original IDs and ownership, derives the
+full before/after mutation delta, and writes **only changed itemID
+rows** via original `tx.put('items', String(id), item)` or
+`tx.del('items', String(id))`.
+There is no synthetic root row and no 2 MB aggregate serialization.
+It conservatively caps full scan to 250,000 items and changed items
+to 256 per transaction; both are explicit BLOCKED conditions.
+
+PF58's older `createReciprocalWriterFence.inTransaction` still
+expects `tx.get('items','items')` as a root. PF108 adapts **only
+that read** in a non-writing view over the original scanned/prepared
+item root, while custody, actor-claim and terminal-lock reads
+remain original `corporationRuntime` transaction reads.
+This adapter does not patch other PF52/PF54/PF58 consumers that
+still assume a fabricated `items/items` root. Those must be
+migrated independently before actual gameplay can work.
+
+**New proof:** six additional PF108 flat-SQLite regression cases
+assert per-item row commits, deletion with `tx.del`, absence of
+`items/items`, multi-item mutation and rejected malformed records.
+**34/34** isolated original PF52/PF58 gateway cases PASS; **157/157**
+across the eight focused V8 suites. `build_original_itemstore_owner_patch.py`
+also pins the exact original unmodified `sqliteStore.js` Git blob
+`d851fb5a84added2d4527c34407879e8a009bb74`
+and requires `items` to remain a flat SQL row table before staging
+the stock ItemStore patch. Extra source tests cover that pin.
+
+**Limits:** this is still source-only, not original on-disk SQLite
+validation, live original runtime, native WORK build or multiplayer E2E.
+The remaining PF58/PF52/PF54 synthetic root assumptions are a
+confirmed P0. Feature flags OFF, PR Draft, PLAY and main untouched.
 
 ## PF107 — original stock ItemStore writer is now patched into WORK (2026-11-09)
 
@@ -50,8 +97,10 @@ fully integrated**. The `ReciprocalWriterOwners` source is still
 absent, so real native startup must remain fail-closed. The snapshot
 comparison is conservative: any intervening unrelated stock write
 blocks the stale operation; it never silently overwrites that write.
-Actual stock ItemStore root size and native GameStore 2 MB JSON-row
-limit must be exercised with real on-disk SQLite in isolated WORK.
+PF108 replaces the obsolete aggregate `items/items` write with
+one row per changed native itemID. The original native 2 MB
+**per-row** JSON limit and realistic full-table scan performance
+still require a real isolated WORK/SQLite test.
 
 **Contract evidence:** Eight additional PF107 gateway snapshot tests
 (in addition to PF106's 20), plus source transformer unit tests;
@@ -72,9 +121,9 @@ No `main` merge, production start or feature activation.
 is now staged in the first-play native WORK delta. It imports the
 actual original `coopPersonalFleetOriginalNativePermit` reciprocal
 writer fence from PF58, plus the actual native PF52 reservations index.
-It **opens an original GameStore atomic `corporationRuntime` +
-`items` transaction itself** and only ever writes to the stock
-`items/items` root, never an NPC inventory copy.
+It opens the original GameStore atomic `corporationRuntime` +
+`items` transaction and, **as corrected in PF108**, commits only
+the changed native itemID rows; never an NPC inventory copy.
 
 For each source-owned PLAYER, MINING, WAR, EXPLORATION, MARKET or INDUSTRY
 operation using `execute({writer,declaredItemIDs,buildNext})`, the gateway:
@@ -90,7 +139,8 @@ operation using `execute({writer,declaredItemIDs,buildNext})`, the gateway:
    removing a reserved module, editing an active ship and nested module
    additions are all blocked, even when old permissions looked free.
 4. If and only if every check is cleared and the original GameStore
-   remains unpoisoned, performs **one** original `tx.put('items','items')`.
+   remains unpoisoned, commits the actual changed itemID SQL rows
+   with `tx.put('items', String(id), item)` / `tx.del('items', String(id))`.
    An exception aborts the transaction before the mutation can commit.
    It does not write an extra stock ship, move ISK or create NPCs.
 
