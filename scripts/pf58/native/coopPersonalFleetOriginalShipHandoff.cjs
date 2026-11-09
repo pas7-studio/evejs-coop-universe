@@ -106,8 +106,8 @@ function createOriginalShipHandoff({gameStore,pf52,native,enabled=()=>false,
    if(previous!==null||previousShip!==null)return deny('PF58_HANDOFF_ALREADY_ATTEMPTED');
    const index=tx.get(T,pf52.REGISTRY_KEY),roster=tx.get(T,pf52.ROSTER_PREFIX+row.ownerCharacterID);
    if(!verifyReservation(index,roster,row))return deny('PF58_ORIGINAL_RESERVATION_UNVERIFIED');
-   const items=tx.get(ITEMS,'items');
-   if(!obj(items)||!validStockHangar(items[String(ship)],row))
+   const originalShip=tx.get(ITEMS,String(ship));
+   if(!validStockHangar(originalShip,row))
     return deny('PF58_ORIGINAL_HANGAR_SHIP_UNVERIFIED');
    const actors=tx.get(T,ACTORS);
    if(actors===undefined||actors!==null&&(!obj(actors)||!obj(actors.claims)))
@@ -158,11 +158,11 @@ function createOriginalShipHandoff({gameStore,pf52,native,enabled=()=>false,
     if(!obj(eq)||eq.fittingHash!==row.fittingHash||
        eq.cargoHash!==row.cargoHash)
       return deny('PF87_ATOMIC_EQUIPMENT_CHANGED');
-    // Transaction-scoped native callback writes ONLY the same original item
-    // under ITEMS.'items'. A bad ACK after any write throws, forcing rollback.
+    // Transaction-scoped native callback writes ONLY the original physical
+    // itemID SQL row; a failed ACK throws to roll the same transaction back.
     const moved=native.moveOriginalShipToSpaceAtomically(clone(row),clone(spawn),tx);
     if(moved?.success!==true||moved?.then||
-       !validStockSpace(tx.get(ITEMS,'items')?.[String(ship)],row))
+       !validStockSpace(tx.get(ITEMS,String(ship)),row))
       throw Error('PF87_ORIGINAL_ATOMIC_STOCK_MOVE_UNPROVEN');
    }
    tx.put(T,key(row.assignmentID),record);
