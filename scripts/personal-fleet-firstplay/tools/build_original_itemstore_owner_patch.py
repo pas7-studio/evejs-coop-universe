@@ -139,14 +139,14 @@ def transform(source: str) -> str:
     source = replace_once(
         source,
         '  const items=JSON.parse(JSON.stringify(readItems()));',
-        '  const items=process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE === "1"\\n'
+        '  const items=process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE === "1"\n'
         '    ?readItems():JSON.parse(JSON.stringify(readItems()));',
         "refinery-snapshot-identity",
     )
     source = replace_once(
         source,
         '  const items=JSON.parse(JSON.stringify(current));',
-        '  const items=process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE === "1"\\n'
+        '  const items=process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE === "1"\n'
         '    ?current:JSON.parse(JSON.stringify(current));',
         "player-ore-snapshot-identity",
     )
