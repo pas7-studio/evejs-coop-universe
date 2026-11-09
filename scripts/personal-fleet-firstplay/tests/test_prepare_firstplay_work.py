@@ -47,7 +47,7 @@ class NativeFirstPlayAssemblyTest(unittest.TestCase):
   (self.work/'untracked').write_text('hello')
   self.assertEqual(m.read_changed_paths(self.work),{'untracked'})
  def test_expected_native_patch_inventory_is_twenty_eight_paths(self):
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),46)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),47)
   self.assertTrue(m.EXPECTED_PATCH_PATHS.issuperset(str(x) for x in m.ADDITIONS))
  def test_unique_original_native_patch_sources(self):
   source=(Path(__file__).resolve().parents[1]/'tools/prepare_firstplay_work.py').read_text()
@@ -58,7 +58,7 @@ class NativeFirstPlayAssemblyTest(unittest.TestCase):
   self.assertEqual(source.count('build_original_atomic_entity_contract_patch.py'),1)
   self.assertEqual(source.count('build_original_order_arbiter_patch.py'),1)
   self.assertIn('PF_FIRSTPLAY_DUPLICATE_NATIVE_PATCH_PATH',source)
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),46)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),47)
  def test_source_bound_dock_readback_must_be_in_complete_work_bundle(self):
   self.assertIn('Code/server/src/space/coopPersonalFleetOriginalDockCompletionWitness.js',m.EXPECTED_PATCH_PATHS)
   self.assertEqual(len(m.ADDITIONS),34)
@@ -80,7 +80,7 @@ class NativeFirstPlayAssemblyTest(unittest.TestCase):
   self.assertIn('Code/server/index.js',m.EXPECTED_PATCH_PATHS)
   self.assertIn('Code/server/src/space/coopPersonalFleetOriginalWorkStarter.js',m.EXPECTED_PATCH_PATHS)
   self.assertEqual(len(m.ADDITIONS),34)
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),46)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),47)
  def test_pf89_native_wreck_loss_source_is_part_of_original_bundle(self):
   self.assertIn('Code/server/src/space/coopPersonalFleetOriginalLossRows.js',m.EXPECTED_PATCH_PATHS)
   self.assertEqual(len(m.ADDITIONS),34)
@@ -119,14 +119,14 @@ class NativeFirstPlayAssemblyTest(unittest.TestCase):
   self.assertIn(Path('Code/server/src/space/coopPersonalFleetOriginalCatalogProof.js'),
     m.ADDITIONS)
   self.assertEqual(len(m.ADDITIONS),34)
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),46)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),47)
  def test_pf102b_real_original_configuration_is_in_native_work_patch(self):
   self.assertIn('Code/server/src/space/coopPersonalFleetOriginalWorkConfiguration.js',
     m.EXPECTED_PATCH_PATHS)
   self.assertIn(Path('Code/server/src/space/coopPersonalFleetOriginalWorkConfiguration.js'),
     m.ADDITIONS)
   self.assertEqual(len(m.ADDITIONS),34)
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),46)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),47)
  def test_pf103_native_original_war_claim_and_writer_boundary_installed(self):
   self.assertIn('Code/server/src/space/coopPersonalFleetOriginalWarClaim.js',
     m.EXPECTED_PATCH_PATHS)
@@ -137,28 +137,38 @@ class NativeFirstPlayAssemblyTest(unittest.TestCase):
   self.assertIn(Path('Code/server/src/space/coopPersonalFleetOriginalNativeWriterBoundary.js'),
     m.ADDITIONS)
   self.assertEqual(len(m.ADDITIONS),34)
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),46)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),47)
  def test_pf104_authored_real_sde_policy_in_native_package(self):
   self.assertIn('Code/server/src/space/coopPersonalFleetOriginalAuthoredPolicy.js',
     m.EXPECTED_PATCH_PATHS)
   self.assertIn(Path('Code/server/src/space/coopPersonalFleetOriginalAuthoredPolicy.js'),
     m.ADDITIONS)
   self.assertEqual(len(m.ADDITIONS),34)
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),46)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),47)
  def test_pf105_canonical_original_claims_parser_is_in_native_package(self):
   self.assertIn('Code/server/src/space/coopPersonalFleetOriginalClaimsPolicy.js',
     m.EXPECTED_PATCH_PATHS)
   self.assertIn(Path('Code/server/src/space/coopPersonalFleetOriginalClaimsPolicy.js'),
     m.ADDITIONS)
   self.assertEqual(len(m.ADDITIONS),34)
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),46)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),47)
  def test_pf106_original_foreign_item_mutation_gate_source_pinned(self):
   self.assertIn('Code/server/src/space/coopPersonalFleetOriginalForeignItemWriterGateway.js',
     m.EXPECTED_PATCH_PATHS)
   self.assertIn(Path('Code/server/src/space/coopPersonalFleetOriginalForeignItemWriterGateway.js'),
     m.ADDITIONS)
   self.assertEqual(len(m.ADDITIONS),34)
-  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),46)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),47)
+ def test_pf107_original_itemstore_stock_owner_patch_is_staged(self):
+  self.assertIn('Code/server/src/services/inventory/itemStore.js',
+    m.EXPECTED_PATCH_PATHS)
+  self.assertNotIn(Path('Code/server/src/services/inventory/itemStore.js'),
+    m.ADDITIONS)
+  self.assertEqual(len(m.EXPECTED_PATCH_PATHS),47)
+  self.assertEqual(len(m.ADDITIONS),34)
+  assembler=SCRIPT.read_text(encoding='utf-8')
+  self.assertEqual(assembler.count('itemstore.build(work)'),1)
+  self.assertEqual(assembler.count('build_original_itemstore_owner_patch.py'),1)
  def test_worktree_branch_must_be_isolated(self):
   self.git(self.work,'switch','-c','unsafe')
   with self.assertRaisesRegex(ValueError,'ISOLATED_WORK_BRANCH_REQUIRED'):
