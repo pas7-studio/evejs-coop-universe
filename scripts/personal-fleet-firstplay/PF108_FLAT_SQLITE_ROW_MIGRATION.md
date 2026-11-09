@@ -4,6 +4,41 @@
 native feature **BLOCKED** until all other original readers/writers agree.
 PR #350 Draft, no PLAY or main mutation.
 
+## PF110 implementation update — 2026-11-09
+
+PF110 closes two additional original native **source-level** blockers:
+
+1. Original SQLite `characters` is flat by characterID. PF53 paid
+   hiring (and PF54/PF57/PF58 archived PF53 dependencies) and PF57
+   recurring salary now read/update exactly one original character
+   row under the SAME atomic native GameStore transaction as the
+   source corporation wallet and ledger receipts. Both hire and
+   salary replay verify that same original wallet journal.
+2. Original `ROW_GROUPS` lists `npcEntities: ["entities"]` and
+   `npcModules: ["modules"]`, not aggregate `npcEntities/npcEntities`
+   or `npcModules/npcModules` records. PF57 final loss now reads
+   `entities\u001f<entityID>`, `modules\u001f<moduleID>` via
+   the native `tx.scan` interface and validates **all** grouped
+   itemID identities and skeleton rows before approving loss custody.
+   Original `npcCargo`, `npcWrecks`, `npcWreckItems` are flat
+   table roots and retain their prior source-owned read paths.
+
+**Evidence:** 11/11 group ownership scenarios PASS in an isolated V8
+harness; a separate `node:sqlite` 11-case original grouped-row suite
+has been committed but **not executed here**. Controlled V8
+transaction-model tests using the actual archived PF53+PF57 source
+also showed one paid hire followed by one payroll, matching original
+debit/credit journals and idempotent replay with no phantom wallet.
+PF53/PF57 and related PF58 SQLite fixture source syntax was checked.
+The main local WORK runner now includes the Node SQLite suites.
+
+**Outstanding:** source-owned original writer-owner attestation,
+true original Node/SQLite and SIGKILL suite completion, native
+authoritative NPC actor/order arbitration, full WORK patch apply,
+real boot and two-player E2E. Main and PLAY are still untouched.
+The historical PF108/PF109 status paragraphs below are the
+original findings, not the current unimplemented list.
+
 ## PF109 implementation update — 2026-11-09
 
 The paths listed in the **historical PF108 findings table below** are
