@@ -41,7 +41,7 @@ test('PF93 stock switch accepts a pure read-only original session witness',()=>f
   checks++;
   assert.equal(reader.put,undefined);
   assert.equal(reader.del,undefined);
-  assert.equal(reader.get(I,'items')[String(F.SHIP)].itemID,F.SHIP);
+  assert.equal(reader.get(I,String(F.SHIP)).itemID,F.SHIP);
   assert.ok(Array.isArray(reader.scan(C)));
   return true;
  });
@@ -125,13 +125,13 @@ test('PF93 generic writer rolls back a foreign original character row written by
 }));
 test('PF93 generic writer rolls back a collateral original ItemStore row write',()=>fixture(f=>{
  let captured;f.shared.onTx=tx=>{captured=tx;};
- const before=f.get(I,'items');
+ const before=f.scan(I);
  assert.throws(()=>write(f,()=>{
   captured.put(I,'some-other-original-item-row',{unexpected:1});
   return false;
  },next=>{next.shipID=F.SHIP;}),/PF93_SESSION_WITNESS_MUTATED_ORIGINAL_SQLITE_ROLLBACK/);
  assert.equal(f.get(I,'some-other-original-item-row'),null);
- assert.deepEqual(f.get(I,'items'),before);
+ assert.deepEqual(f.scan(I),before);
 }));
 test('PF93 generic writer read-only witness gets no mutating tx capability',()=>fixture(f=>{
  const out=write(f,(_request,reader)=>{
