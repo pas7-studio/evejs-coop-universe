@@ -34,13 +34,20 @@ function createOriginalForeignItemWriterGateway(){
  const reciprocal=permit.createReciprocalWriterFence({pf52});
  if(typeof reciprocal?.inTransaction!=='function')
   throw Error('PF106_ORIGINAL_PF58_RECIPROCAL_FENCE_UNAVAILABLE');
- function execute({writer,declaredItemIDs,buildNext}={}){
-  if(!WRITERS.has(writer)||typeof buildNext!=='function'||
-     !Array.isArray(declaredItemIDs)||declaredItemIDs.length<1||
-     declaredItemIDs.length>256||
-     declaredItemIDs.some(x=>!pos(x))||
-     new Set(declaredItemIDs).size!==declaredItemIDs.length)
-   return deny('PF106_WRITER_DECLARATION_INVALID');
+ function run({writer,declaredItemIDs,buildNext,proposedItems,
+                fromOriginalStockRoot=false}={}){
+  // The generic original ItemStore owner writes an entire existing stock
+  // root, so it cannot supply a trusted "changed IDs" list. Its exact
+  // mutation set is derived INSIDE the same original SQLite transaction.
+  if(!WRITERS.has(writer)||
+     (fromOriginalStockRoot?!obj(proposedItems):
+      typeof buildNext!=='function'||
+      !Array.isArray(declaredItemIDs)||declaredItemIDs.length<1||
+      declaredItemIDs.length>256||
+      declaredItemIDs.some(x=>!pos(x))||
+      new Set(declaredItemIDs).size!==declaredItemIDs.length))
+   return deny(fromOriginalStockRoot?
+    'PF107_STOCK_ITEMSTORE_ROOT_INVALID':'PF106_WRITER_DECLARATION_INVALID');
   if(a.isPoisoned()!==false)
    return deny('PF106_ORIGINAL_GAMESTORE_POISONED');
   try{
@@ -54,7 +61,7 @@ function createOriginalForeignItemWriterGateway(){
     // a GameStore transaction, and cannot directly mutate stock ItemStore
     // through this API. It must return the ENTIRE next items root.
     const cloned=structuredClone(before);
-    const proposed=buildNext(cloned);
+    const proposed=fromOriginalStockRoot?proposedItems:buildNext(cloned);
     if(!obj(proposed))
      throw Error('PF106_NEXT_ITEMS_ROOT_REQUIRED');
     const next=structuredClone(proposed);
@@ -71,9 +78,15 @@ function createOriginalForeignItemWriterGateway(){
      }
     }
     const actual=new Set(changed);
-    if(actual.size!==declaredItemIDs.length||
-       declaredItemIDs.some(id=>!actual.has(id)))
+    if(!fromOriginalStockRoot&&
+       (actual.size!==declaredItemIDs.length||
+        declaredItemIDs.some(id=>!actual.has(id))))
      throw Error('PF106_UNDECLARED_STOCK_ITEM_CHANGE');
+    // A stock write with no actual changes is a valid idempotent no-op,
+    // but must never trigger a pointless full-root GameStore write.
+    if(fromOriginalStockRoot&&changed.length===0)
+     return Object.freeze({status:'COMMITTED',source:SOURCE,
+      changedItemIDs:Object.freeze([])});
     // The prospective view retains the original transaction's immutable
     // custody tables, but offers the complete AFTER root only to the stock
     // PF58 read-only validator. Only the actual tx performs the final put.
@@ -118,6 +131,11 @@ function createOriginalForeignItemWriterGateway(){
     String(e?.message||'UNKNOWN'));
   }
  }
- return Object.freeze({source:SOURCE,execute});
+ // Only the ORIGINAL inventory owner uses this path; no client or
+ // third-party callback can supply a mutable SQLite transaction.
+ const execute=params=>run(params);
+ const executeOriginalStockRoot=({writer='PLAYER',proposedItems}={})=>
+  run({writer,proposedItems,fromOriginalStockRoot:true});
+ return Object.freeze({source:SOURCE,execute,executeOriginalStockRoot});
 }
 module.exports=Object.freeze({createOriginalForeignItemWriterGateway});
