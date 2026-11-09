@@ -93,7 +93,7 @@ function open(file,options={}){
   allWritersFenced:()=>shared.writers,enabled:()=>shared.enabled,clock:()=>shared.clock};
  Object.assign(deps,options);
  const bridge=pf54.createOriginalDeploymentBridge(deps);
- function seed(){put('characters','characters',{[OWNER]:{characterID:OWNER,balance:5000,walletJournal:[]}});
+ function seed(){put('characters',String(OWNER),{characterID:OWNER,balance:5000,walletJournal:[]});
   put('corporationRuntime','corporations\u001f'+EMPLOYER,{corporationID:EMPLOYER,isNPC:true,
    wallet:{divisions:{'1000':{balance:800,journal:[],transactions:[]}}}});
   put('npcEntities','npcEntities',{entities:{},pilots:{[PILOT]:{available:true,pilotID:PILOT,agentID:AGENT}}});
