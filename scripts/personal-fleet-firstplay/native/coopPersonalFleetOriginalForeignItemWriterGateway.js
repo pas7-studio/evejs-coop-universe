@@ -47,10 +47,19 @@ function originalItemsFromSqlite(tx){
 // a synthetic root from tx.get('items','items'). It is read-only; adapt only
 // that ONE read to the real SQL row view. Never fabricate a stock item SQL row.
 function readonlyPF58View(tx,itemsRoot){
+ // PF109: PF58 now consumes original SQLite scans, not the nonexistent
+ // aggregate items/items row. The prospective view is read-only and
+ // its item rows come ONLY from the already-validated before/after root.
  return Object.freeze({
-  get:(table,key)=>table===ITEMS&&key===ITEMS?
-   itemsRoot:tx.get(table,key),
-  put:()=>{throw Error('PF108_PF58_READONLY_VIEW_WRITE_FORBIDDEN');}
+  get:(table,key)=>table===ITEMS?
+   (Object.prototype.hasOwnProperty.call(itemsRoot,key)?
+    structuredClone(itemsRoot[key]):null):tx.get(table,key),
+  scan:table=>table===ITEMS?
+   Object.entries(itemsRoot).map(([key,value])=>({
+    key,value:structuredClone(value)
+   })):tx.scan(table),
+  put:()=>{throw Error('PF109_PF58_READONLY_VIEW_WRITE_FORBIDDEN');},
+  del:()=>{throw Error('PF109_PF58_READONLY_VIEW_DELETE_FORBIDDEN');}
  });
 }
 function createOriginalForeignItemWriterGateway(){
