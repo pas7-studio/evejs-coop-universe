@@ -171,7 +171,7 @@ def verify_original_item_sqlite_layout(work: Path) -> None:
         raise ValueError("PF108_ORIGINAL_SQLITE_STORE_NOT_FOUND")
     raw = target.read_bytes()
     digest = hashlib.sha1(
-        b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+        b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
     ).hexdigest()
     if digest != STOCK_SQLITE_BLOB:
         raise ValueError("PF108_ORIGINAL_SQLITE_SOURCE_BLOB_DRIFT")
