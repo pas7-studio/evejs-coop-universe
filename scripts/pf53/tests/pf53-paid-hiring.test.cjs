@@ -3,11 +3,11 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const F=require('./fixture.cjs');
 const {open,tempDb,seed,cmd,OWNER,EMPLOYER,PRICE,P,CONTRACT,OP,pf52}=F;
 function withDB(run,options={}){const tmp=tempDb();let f;try{f=open(tmp.file,options);seed(f);return run(f)}finally{f?.close();tmp.cleanup()}}
-function balances(f){const c=f.get('characters','characters')[String(OWNER)],e=f.get('corporationRuntime','corporations\u001f'+EMPLOYER);return [c.balance,e.wallet.divisions['1000'].balance]}
+function balances(f){const c=f.get('characters',String(OWNER)),e=f.get('corporationRuntime','corporations\u001f'+EMPLOYER);return [c.balance,e.wallet.divisions['1000'].balance]}
 test('original wallet transfer, separate debit and credit journals and enrolled PF52 roster one SQLite commit',()=>withDB(f=>{
  const r=f.bridge.hire(cmd());assert.equal(r.status,'APPLIED');assert.equal(r.amountCents,PRICE);
  assert.deepEqual(balances(f),[1050,2250]);
- const c=f.get('characters','characters')[String(OWNER)],corp=f.get('corporationRuntime','corporations\u001f'+EMPLOYER);
+ const c=f.get('characters',String(OWNER)),corp=f.get('corporationRuntime','corporations\u001f'+EMPLOYER);
  assert.equal(c.walletJournal[0].amount,-1450);
  assert.equal(c.walletJournal[0].transactionID,r.transactionID);
  const w=corp.wallet.divisions['1000'];assert.equal(w.journal.length,1);assert.equal(w.transactions.length,1);
@@ -23,7 +23,7 @@ test('replay after committed original wallet hire never debits again',()=>withDB
  const first=f.bridge.hire(cmd());const again=f.bridge.hire(cmd());
  assert.equal(first.status,'APPLIED');assert.equal(again.status,'DUPLICATE');
  assert.deepEqual(balances(f),[1050,2250]);
- assert.equal(f.get('characters','characters')[String(OWNER)].walletJournal.length,2);
+ assert.equal(f.get('characters',String(OWNER)).walletJournal.length,2);
 }));
 test('price is only trusted server policy; no user-supplied amount can change debit',()=>withDB(f=>{
  const r=f.bridge.hire(cmd({amountCents:1,price:0,employerCorpID:777}));
@@ -50,7 +50,7 @@ test('original employer receipt can be independently verified from both ledgers'
  assert.equal(f.bridge.hire(cmd()).reason,'PF53_REPLAY_NATIVE_LEDGER_UNVERIFIED');
 }));
 test('insufficient original character ISK cannot credit employer',()=>withDB(f=>{
- const current=f.get('characters','characters');current[OWNER].balance=20;f.put('characters','characters',current);
+ const current=f.get('characters',String(OWNER));current.balance=20;f.put('characters',String(OWNER),current);
  assert.equal(f.bridge.hire(cmd()).reason,'PF53_INSUFFICIENT_ISK');
  assert.equal(f.get('corporationRuntime',pf52.REGISTRY_KEY),null);
  assert.deepEqual(balances(f),[20,800]);
@@ -105,12 +105,12 @@ test('unknown native transaction journal identity cannot be used',()=>withDB(f=>
  assert.deepEqual(balances(f),[2500,800]);
 }));
 test('a colliding original wallet transaction identity refuses debit',()=>withDB(f=>{
- const root=f.get('characters','characters');root[OWNER].walletJournal.push({transactionID:f.shared.txid});f.put('characters','characters',root);
+ const root=f.get('characters',String(OWNER));root.walletJournal.push({transactionID:f.shared.txid});f.put('characters',String(OWNER),root);
  assert.equal(f.bridge.hire(cmd()).reason,'PF53_NATIVE_TRANSACTION_ID_UNVERIFIED');
  assert.deepEqual(balances(f),[2500,800]);
 }));
 test('malformed original wallet cannot silently default to free money',()=>withDB(f=>{
- const root=f.get('characters','characters');delete root[OWNER].balance;f.put('characters','characters',root);
+ const root=f.get('characters',String(OWNER));delete root.balance;f.put('characters',String(OWNER),root);
  assert.equal(f.bridge.hire(cmd()).reason,'PF53_CHARACTER_WALLET_UNVERIFIED');
  assert.deepEqual(balances(f).slice(1),[800]);
 }));
@@ -135,7 +135,7 @@ test('recipient overflow blocks native credit and source debit',()=>withDB(f=>{
  const e=f.get('corporationRuntime','corporations\u001f'+EMPLOYER);e.wallet.divisions['1000'].balance=Number.MAX_SAFE_INTEGER/100;
  f.put('corporationRuntime','corporations\u001f'+EMPLOYER,e);
  assert.equal(f.bridge.hire(cmd()).reason,'PF53_EMPLOYER_WALLET_OVERFLOW');
- assert.equal(f.get('characters','characters')[String(OWNER)].balance,2500);
+ assert.equal(f.get('characters',String(OWNER)).balance,2500);
 }));
 test('failure in SQLite writer after source debit rolls back whole transaction',()=>withDB(f=>{
  const original=f.gameStore.coopAtomicNativeRows.transact;
@@ -153,15 +153,15 @@ test('source-poisoned atomic bridge does not begin an original wallet write',()=
 }));
 test('PF53 actual paid hire flows into PF52 ORIGINAL ItemStore hangar ship reservation without importing paid-hire twice',()=>withDB(f=>{
  const h=f.bridge.hire(cmd());assert.equal(h.status,'APPLIED');
- f.put('items','items',{'2001':{itemID:2001,shipID:2001,shipTypeID:606,typeID:606,
-  ownerID:OWNER,locationID:600001,flagID:4,categoryID:6,singleton:1,stacksize:1,quantity:-1,spaceState:null}});
+ f.put('items','2001',{itemID:2001,shipID:2001,shipTypeID:606,typeID:606,
+  ownerID:OWNER,locationID:600001,flagID:4,categoryID:6,singleton:1,stacksize:1,quantity:-1,spaceState:null});
  const command={type:'RESERVE_HANGAR_SHIP',operationID:'pf53-ship-assign',pilotID:P,
  ownerCharacterID:OWNER,session:cmd().session,expectedRosterRevision:1,
  shipItemID:2001,stationID:600001,assignmentID:'pf53-assignment',expectedPilotRevision:0};
  const assigned=f.hangar.execute(command);
  assert.equal(assigned.status,'APPLIED',JSON.stringify(assigned));
  assert.equal(f.get('corporationRuntime',pf52.REGISTRY_KEY).ships['2001'].pilotID,P);
- assert.equal(f.get('items','items')['2001'].ownerID,OWNER);
+ assert.equal(f.get('items','2001').ownerID,OWNER);
  assert.equal(f.bridge.hire(cmd()).status,'DUPLICATE');
  assert.deepEqual(balances(f),[1050,2250]);
 }));
@@ -172,7 +172,7 @@ test('paid-hire original agent offer cannot be transferred to different characte
 }));
 test('original native wallet session notification occurs only AFTER a confirmed COMMIT',()=>withDB(f=>{
  let examined=false;f.deps.notifyOriginalWallet=()=>{examined=true;
-  assert.equal(f.get('characters','characters')[String(OWNER)].balance,1050);
+  assert.equal(f.get('characters',String(OWNER)).balance,1050);
   assert.equal(f.get('corporationRuntime','corporations\u001f'+EMPLOYER).wallet.divisions['1000'].balance,2250);
   return true;};
  const b=F.api.createPersonalFleetPaidHiring(f.deps);const r=b.hire(cmd());
