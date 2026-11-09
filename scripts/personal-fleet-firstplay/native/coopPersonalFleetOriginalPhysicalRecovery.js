@@ -41,10 +41,9 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
  const attempted=new Set();let busy=false;
  function snapshots(){
   return atomic.transact([T,ITEMS],tx=>{
-   const index=tx.get(T,pf52.REGISTRY_KEY),claims=tx.get(T,P+'actor-claims-v1'),
-    items=tx.get(ITEMS,ITEMS);
+   const index=tx.get(T,pf52.REGISTRY_KEY),claims=tx.get(T,P+'actor-claims-v1');
    if(index===null)return [];
-   if(!obj(index)||!obj(claims)||!obj(claims.claims)||!obj(items))
+   if(!obj(index)||!obj(claims)||!obj(claims.claims))
     throw Error('PF90_ORIGINAL_CUSTODY_ROOT_UNAVAILABLE');
    pf52.validateIndex(index);
    const result=[];
@@ -56,7 +55,7 @@ function createOriginalPhysicalRecovery({enabled=()=>false,allWritersFenced=()=>
     const rosterRaw=tx.get(T,pf52.ROSTER_PREFIX+link.ownerCharacterID),
       roster=pf52.validateRoster(rosterRaw,link.ownerCharacterID),
       p=roster.pilots[link.pilotID],claim=claims.claims[String(link.shipItemID)],
-      item=items[String(link.shipItemID)];
+      item=tx.get(ITEMS,String(link.shipItemID));
     if(dep.shipItemID!==link.shipItemID||dep.ownerCharacterID!==link.ownerCharacterID||
        dep.pilotID!==link.pilotID||dep.assignmentID!==link.assignmentID||
        !pos(dep.systemID)||!pos(dep.actorGeneration)||
