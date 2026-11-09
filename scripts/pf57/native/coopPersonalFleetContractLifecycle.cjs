@@ -120,7 +120,7 @@ function createPersonalFleetContractLifecycle({gameStore,pf52,pf53,claimsPolicy,
    const old=preLedger.processed[c.operationID];
    if(old){
     if(old.signature!==sig||old.type!=='PAID')return deny('PF57_REPLAY_CONFLICT');
-    const rec=old.receipt,chars=tx.get(CHAR,CHAR),ch=chars?.[String(c.ownerCharacterID)],
+    const rec=old.receipt,ch=tx.get(CHAR,String(c.ownerCharacterID)),
      emp=tx.get(T,'corporations'+SEP+rec.employerCorpID),div=emp?.wallet?.divisions?.['1000'];
     if(!journalHas(ch?.walletJournal,rec.transactionID,c.operationID,c.ownerCharacterID,
       rec.employerCorpID,-rec.amountCents,rec.characterAfterCents)||
@@ -155,8 +155,8 @@ function createPersonalFleetContractLifecycle({gameStore,pf52,pf53,claimsPolicy,
     verifyNativeEmployer(c,paid,employer,tx)!==true)
     return deny('PF57_NATIVE_EMPLOYER_UNVERIFIED');
    const div=employer.wallet?.divisions?.['1000'],beforeCorp=cents(div?.balance);
-   const chars=tx.get(CHAR,CHAR),owner=chars?.[String(c.ownerCharacterID)],before=cents(owner?.balance);
-   if(!obj(chars)||!obj(owner)||owner.characterID!==c.ownerCharacterID||
+   const owner=tx.get(CHAR,String(c.ownerCharacterID)),before=cents(owner?.balance);
+   if(!obj(owner)||owner.characterID!==c.ownerCharacterID||
     !Array.isArray(owner.walletJournal)||!Array.isArray(div?.journal)||
     !Array.isArray(div?.transactions)||beforeCorp===null||before===null)
     return deny('PF57_ORIGINAL_WALLETS_UNAVAILABLE');
@@ -185,8 +185,9 @@ function createPersonalFleetContractLifecycle({gameStore,pf52,pf53,claimsPolicy,
     lossCount:prior?.lossCount||0,status:'ACTIVE'};
    s.ledger.contracts[c.pilotID]=nextPilot;
    s.ledger.processed[c.operationID]={signature:sig,type:'PAID',receipt};
-   tx.put(CHAR,CHAR,{...chars,[String(c.ownerCharacterID)]:{...owner,balance:isk(after),
-    balanceChange:isk(-quote.amountCents),walletJournal:[debit,...owner.walletJournal].slice(0,100)}});
+   // Original SQLite characters are flat, keyed by real characterID.
+   tx.put(CHAR,String(c.ownerCharacterID),{...owner,balance:isk(after),
+    balanceChange:isk(-quote.amountCents),walletJournal:[debit,...owner.walletJournal].slice(0,100)});
    tx.put(T,'corporations'+SEP+paid.employerCorpID,{...employer,wallet:{...employer.wallet,divisions:{
     ...employer.wallet.divisions,'1000':{...div,balance:isk(afterCorp),
      journal:[...div.journal,credit].slice(-100),
