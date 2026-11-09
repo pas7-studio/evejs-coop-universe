@@ -17,6 +17,45 @@ const cents=x=>{if(typeof x!=='number'||!Number.isFinite(x)||x<0)return null;con
 const isk=x=>x/100;
 const filetime=ms=>String(BigInt(ms)*10000n+116444736000000000n);
 const empty=()=>({version:1,contracts:{},processed:{},closedContracts:{},losses:{}});
+/**
+ * PF110 authoritative original SQLite npcEntities/npcModules layout:
+ * row-group skeleton 'entities' / 'modules'; actual physical rows are
+ * 'entities\\u001f<entityID>' / 'modules\\u001f<moduleID>'.
+ * A malformed OTHER entity also denies loss settlement (fail closed).
+ * Other original NPC tables (npcCargo, npcWrecks, npcWreckItems) are
+ * non-grouped and retain their existing native top-level root row.
+ */
+function nativeGroupShipVacant(tx,table,group,rowIDField,shipID){
+ if(typeof tx?.get!=='function'||typeof tx?.scan!=='function')
+  return null;
+ const skeleton=tx.get(table,group),rows=tx.scan(table);
+ if(!obj(skeleton)||Object.keys(skeleton).length!==0||
+    !Array.isArray(rows)||rows.length>250000)return null;
+ const prefix=group+SEP,ids=new Set();
+ let seenSkeleton=false;
+ for(const row of rows){
+  const k=row?.key,v=row?.value;
+  if(typeof k!=='string')return null;
+  if(k===group){
+   if(seenSkeleton||!obj(v)||Object.keys(v).length!==0)return null;
+   seenSkeleton=true;continue;
+  }
+  if(k===(table===NPC?'nextEntityID':'nextModuleID')){
+   if(!pos(v))return null;
+   continue;
+  }
+  if(!k.startsWith(prefix))return null;
+  const idstr=k.slice(prefix.length),id=Number(idstr);
+  if(!pos(id)||String(id)!==idstr||ids.has(id)||
+     !obj(v)||v[rowIDField]!==id||!pos(v.entityID))
+   return null;
+  ids.add(id);
+  if(v.entityID===shipID)return false;
+ }
+ if(!seenSkeleton)return null;
+ return true;
+}
+
 function validate(state){
  if(!obj(state)||state.version!==1||!obj(state.contracts)||!obj(state.processed)||
   !obj(state.closedContracts)||!obj(state.losses)||Object.keys(state.contracts).length>256||
@@ -300,14 +339,19 @@ function createPersonalFleetContractLifecycle({gameStore,pf52,pf53,claimsPolicy,
     return deny('PF57_ACTOR_CLAIM_MISMATCH');
    const originalShipRow=tx.get(ITEMS,String(c.shipItemID)),
     wreckRoot=tx.get(WRECK,WRECK),
-    entityRoot=tx.get(NPC,NPC),cargoRoot=tx.get('npcCargo','npcCargo'),
-    moduleRoot=tx.get('npcModules','npcModules'),wreckItems=tx.get('npcWreckItems','npcWreckItems');
-   if(!obj(entityRoot)||!obj(entityRoot.entities)||!obj(cargoRoot)||!obj(cargoRoot.cargo)||
-      !obj(moduleRoot)||!obj(moduleRoot.modules)||!obj(wreckItems)||!obj(wreckItems.items))
+    cargoRoot=tx.get('npcCargo','npcCargo'),
+    wreckItems=tx.get('npcWreckItems','npcWreckItems');
+   // The two actual grouped native tables are NOT stored as a nested
+   // aggregate 'npcEntities/npcEntities' or 'npcModules/npcModules' row.
+   const entityVacant=nativeGroupShipVacant(
+    tx,NPC,'entities','entityID',c.shipItemID);
+   const modulesVacant=nativeGroupShipVacant(
+    tx,'npcModules','modules','moduleID',c.shipItemID);
+   if(entityVacant===null||modulesVacant===null||!obj(cargoRoot)||
+      !obj(cargoRoot.cargo)||!obj(wreckItems)||!obj(wreckItems.items))
     return deny('PF57_ORIGINAL_NATIVE_ASSET_TABLES_UNAVAILABLE');
-   if(own(entityRoot.entities,String(c.shipItemID))||
-      Object.values(cargoRoot.cargo).some(v=>v?.entityID===c.shipItemID)||
-      Object.values(moduleRoot.modules).some(v=>v?.entityID===c.shipItemID))
+   if(entityVacant!==true||modulesVacant!==true||
+      Object.values(cargoRoot.cargo).some(v=>v?.entityID===c.shipItemID))
     return deny('PF57_ORIGINAL_NATIVE_ASSETS_STILL_ACTIVE');
    const sourceItemIDs=new Set();
    for(const row of Object.values(wreckItems.items)){
