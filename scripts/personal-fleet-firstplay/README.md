@@ -5,6 +5,58 @@ Source branch: [Draft PR #350](https://github.com/pas7-studio/evejs-coop-univers
 Keep `main` / `PLAY` untouched; all Personal Fleet flags OFF by default.
 No GitHub Actions, resets, auto-retry of unknown effects, or invented NPCs/ISK.
 
+## PF110 — source-owned original paid hiring, NPC payroll and native loss rows (2026-11-09)
+
+**PF53 + PF57 source implementation, not a gameplay readiness declaration.**
+An actual inspection of original `sqliteStore.js` shows that
+`characters` is a **flat** table keyed by `String(characterID)`.
+The PF53 paid-hire source and PF57 recurring salary both previously read
+and wrote the fictitious `characters/characters` aggregate. That path
+could not debit a real player's original wallet. PF110 updates:
+- `scripts/pf53/native/coopPersonalFleetPaidHiring.cjs` and the matching
+  archived PF54/PF57/PF58 reference deps: read the *actual*
+  `characters/String(ownerCharacterID)` row, atomically debit only
+  that original row, credit the existing NPC corporation wallet and
+  preserve both original journal entries in the same GameStore
+  `BEGIN IMMEDIATE`. Replay verification uses the same original row.
+- `scripts/pf57/native/coopPersonalFleetContractLifecycle.cjs`:
+  salary performs the corresponding direct original character-row
+  debit, and replay re-checks its original wallet journal; no
+  synthetic game currency, phantom `characters/characters` row,
+  second wallet or duplicate hire.
+- Native `ROW_GROUPS` splits `npcEntities.entities` and
+  `npcModules.modules` into per-entity SQLite keys
+  `entities\u001f<entityID>` / `modules\u001f<moduleID>`,
+  each with an empty group skeleton. PF57 loss now verifies true
+  source grouped rows under the original transaction, including
+  identity-key integrity, duplicate aliases and active native modules
+  from the supposedly destroyed hull. Other native `npcCargo`,
+  `npcWrecks` and `npcWreckItems` roots remain FLAT and continue
+  to use their real original top-level table row.
+- The resulting loss still requires independently proven death,
+  original wreck and cargo/fitting custody; no ship is automatically
+  recreated, and unknown/restarted one-shot outcomes remain blocked.
+
+**Test changes:** New
+`scripts/pf57/tests/pf110-native-sqlite-row-contract.test.cjs`
+adds **11 actual Node DatabaseSync test cases** for grouped original
+entities/modules and malformed row denials. The same 11 logical cases
+were executed **11/11 PASS in an isolated V8 source harness**, not
+inside Node's on-disk SQLite. Additional PF53/PF57/PF58 archived
+fixtures/tests were migrated from synthetic character/item roots to
+native characterID/itemID/group rows. Source syntax verified; complete
+Node `node --test` / SQLite SIGKILL test suites **not executed here**.
+`Test-FirstPlay-Local.ps1` now treats PF53/PF57/PF58 source and
+crash suites as an explicit failing gate: failures block readiness.
+
+**Remaining P0:** original source-owned reciprocal writer owners for
+stock character/wallet/Mining/WAR/Exploration, the shared original NPC
+arbiter and actual WRITE/WORK native boot and two-client physical E2E.
+Do not claim first-play or merge main from isolated source tests.
+The first-play patch still consists of **65 unique native WORK paths**
+and **93** first-play SHA256 pins (PF110 archived PF53/PF57 files are
+already installed by PF62, not added to this first-play manifest).
+
 ## PF109 — extend real SQLite itemID custody throughout native PF modules (2026-11-09)
 
 **Actual source implementation in Draft PR #350:** PF109 removes the
