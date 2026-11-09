@@ -7,23 +7,23 @@ const pay=(f,c=F.payrollCmd())=>f.life.salary(c);
 const release=(f,c=F.dismissCmd())=>f.life.dismiss(c);
 const loss=(f,c=F.lossCmd())=>f.life.loss(c);
 test('PF57 recurring salary debits original character, credits original corporation, original journals',()=>run('RESERVED',f=>{
- const orig=f.get('characters','characters')[F.OWNER].balance,corp=f.get('corporationRuntime','corporations\u001f'+F.EMPLOYER).wallet.divisions['1000'].balance;
+ const orig=f.get('characters',String(F.OWNER)).balance,corp=f.get('corporationRuntime','corporations\u001f'+F.EMPLOYER).wallet.divisions['1000'].balance;
  const r=pay(f);a.equal(r.status,'APPLIED');a.equal(r.receipt.amountCents,4500);
- a.equal(f.get('characters','characters')[F.OWNER].balance,orig-45);
+ a.equal(f.get('characters',String(F.OWNER)).balance,orig-45);
  a.equal(f.get('corporationRuntime','corporations\u001f'+F.EMPLOYER).wallet.divisions['1000'].balance,corp+45);
- a.equal(f.get('characters','characters')[F.OWNER].walletJournal[0].transactionID,r.receipt.transactionID);
+ a.equal(f.get('characters',String(F.OWNER)).walletJournal[0].transactionID,r.receipt.transactionID);
  a.equal(f.get('corporationRuntime',F.api.LEDGER).contracts[F.PILOT].lastPeriod,1);
 }));
 test('PF57 replay returns same journal ID and does not debit twice',()=>run('RESERVED',f=>{
- const r=pay(f);a.equal(r.status,'APPLIED');const bal=f.get('characters','characters')[F.OWNER].balance;
+ const r=pay(f);a.equal(r.status,'APPLIED');const bal=f.get('characters',String(F.OWNER)).balance;
  const again=pay(f);a.equal(again.status,'DUPLICATE');a.equal(again.receipt.transactionID,r.receipt.transactionID);
- a.equal(f.get('characters','characters')[F.OWNER].balance,bal);
+ a.equal(f.get('characters',String(F.OWNER)).balance,bal);
 }));
 test('second payroll period is ordered, not writable by client amount',()=>run('RESERVED',f=>{
  a.equal(pay(f).status,'APPLIED');f.shared.salaryTxID++;
  const c=F.payrollCmd({operationID:'pf57-salary-2',periodIndex:2,amountCents:1});
  a.equal(pay(f,c).status,'APPLIED');a.equal(f.get('corporationRuntime',F.api.LEDGER).contracts[F.PILOT].lastPeriod,2);
- a.equal(f.get('characters','characters')[F.OWNER].balance,3500-90);
+ a.equal(f.get('characters',String(F.OWNER)).balance,3500-90);
 }));
 test('cannot skip salary periods',()=>run('RESERVED',f=>{
  a.equal(pay(f,F.payrollCmd({periodIndex:3})).reason,'PF57_PERIOD_OUT_OF_SEQUENCE');
@@ -36,7 +36,7 @@ test('insufficient money blocks without contract change',()=>run('RESERVED',f=>{
  a.equal(f.get('corporationRuntime',F.api.LEDGER),null);
 }));
 test('missing PF53 hire journal blocks payroll',()=>run('RESERVED',f=>{
- const c=f.get('characters','characters');c[F.OWNER].walletJournal=[];f.put('characters','characters',c);
+ const c=f.get('characters',String(F.OWNER));c.walletJournal=[];f.put('characters',String(F.OWNER),c);
  a.equal(pay(f).reason,'PF57_ORIGINAL_PAID_HIRE_UNVERIFIED');
 }));
 test('salary quote from untrusted source blocked',()=>run('RESERVED',f=>{
@@ -50,27 +50,27 @@ test('wallet transaction id may not collide with PF53 original ID',()=>run('RESE
  a.equal(pay(f).reason,'PF57_NATIVE_JOURNAL_ID_COLLISION');
 }));
 test('revoke feature inside original transaction fails before any ISK debit',()=>run('RESERVED',f=>{
- const before=f.get('characters','characters')[F.OWNER].balance;
+ const before=f.get('characters',String(F.OWNER)).balance;
  f.shared.onTx=()=>{f.shared.enabled=false;};
  a.equal(pay(f).reason,'PF57_GATE_REVOKED');
- a.equal(f.get('characters','characters')[F.OWNER].balance,before);
+ a.equal(f.get('characters',String(F.OWNER)).balance,before);
 }));
 test('revoke session inside original transaction blocks pay',()=>run('RESERVED',f=>{
  f.shared.onTx=()=>{f.shared.auth=false;};
  a.equal(pay(f).reason,'PF57_ACCESS_REVOKED');
 }));
 test('rollback after character and corporation mutations preserves both balances',()=>run('RESERVED',f=>{
- const b=f.get('characters','characters')[F.OWNER].balance;
+ const b=f.get('characters',String(F.OWNER)).balance;
  f.shared.failAfterPut=2;
  a.equal(pay(f).reason,'PF57_SALARY_COMMIT_OUTCOME_UNKNOWN');
- a.equal(f.get('characters','characters')[F.OWNER].balance,b);
+ a.equal(f.get('characters',String(F.OWNER)).balance,b);
  a.equal(f.get('corporationRuntime',F.api.LEDGER),null);
 }));
 test('wallet notification fails after commit but no retry debit',()=>run('RESERVED',f=>{
  f.shared.notificationSuccess=false;
  a.equal(pay(f).notificationStatus,'PENDING');
- const balance=f.get('characters','characters')[F.OWNER].balance;
- a.equal(pay(f).status,'DUPLICATE');a.equal(f.get('characters','characters')[F.OWNER].balance,balance);
+ const balance=f.get('characters',String(F.OWNER)).balance;
+ a.equal(pay(f).status,'DUPLICATE');a.equal(f.get('characters',String(F.OWNER)).balance,balance);
 }));
 test('two pilots cannot share PF52 roster identity after changed ownership',()=>run('RESERVED',f=>{
  const ix=f.get('corporationRuntime',F.pf52.REGISTRY_KEY);
@@ -78,13 +78,13 @@ test('two pilots cannot share PF52 roster identity after changed ownership',()=>
  a.equal(pay(f).reason,'PF57_ORIGINAL_ROSTER_OR_LEDGER_CORRUPT');
 }));
 test('dismiss returns the original pilot to source only after confirmed release, no refund',()=>run('CONTRACTED',f=>{
- const balance=f.get('characters','characters')[F.OWNER].balance;
+ const balance=f.get('characters',String(F.OWNER)).balance;
  const r=release(f);a.equal(r.status,'APPLIED');a.equal(r.receipt.noRefund,true);
  const idx=f.get('corporationRuntime',F.pf52.REGISTRY_KEY),
   roster=f.get('corporationRuntime',F.pf52.ROSTER_PREFIX+F.OWNER);
  a.equal(idx.pilots[F.PILOT],undefined);a.equal(idx.contracts[F.OFFER.contractID],undefined);
  a.equal(roster.pilots[F.PILOT],undefined);
- a.equal(f.get('characters','characters')[F.OWNER].balance,balance);
+ a.equal(f.get('characters',String(F.OWNER)).balance,balance);
  a.equal(release(f).status,'DUPLICATE');
 }));
 test('dismiss blocked while original ship reserved or deployed',()=>run('RESERVED',f=>{
@@ -112,17 +112,17 @@ test('loss with original wreck releases actor and reservation without creating s
  a.equal(ix.ships[String(F.SHIP)],undefined);
  a.equal(rs.pilots[F.PILOT].status,'CONTRACTED');
  a.equal(rs.pilots[F.PILOT].shipItemID,null);
- a.equal(f.get('items','items')[String(F.SHIP)],undefined);
+ a.equal(f.get('items',String(F.SHIP)),null);
  a.equal(f.get('corporationRuntime',F.api.CLAIMS).claims[String(F.SHIP)],undefined);
  a.equal(f.get('corporationRuntime',F.api.PF54+F.ASSIGNMENT).phase,'LOST');
  a.equal(loss(f).status,'DUPLICATE');
 }));
 test('loss without original confirmed wreck refuses release',()=>run('ACTIVE',f=>{
- const root=f.get('items','items');delete root[String(F.SHIP)];f.put('items','items',root);
+ f.db.prepare('DELETE FROM items WHERE key=?').run(String(F.SHIP));
  a.equal(loss(f).reason,'PF57_ORIGINAL_WRECK_NOT_FOUND');
 }));
 test('loss cannot resurrect a hull still in original ItemStore',()=>run('ACTIVE',f=>{
- f.lossWreck();f.put('items','items',{[F.SHIP]:{itemID:F.SHIP}});
+ f.lossWreck();f.put('items',String(F.SHIP),{itemID:F.SHIP});
  a.equal(loss(f).reason,'PF57_ORIGINAL_SHIP_NOT_DESTROYED');
 }));
 test('loss requires original native controller death evidence',()=>run('ACTIVE',f=>{
@@ -160,10 +160,10 @@ test('loss replay with changed original wreckID is rejected',()=>run('ACTIVE',f=
 test('salary replay remains durable and unchanged even after subsequent dismissal',()=>run('CONTRACTED',f=>{
  const paid=pay(f);a.equal(paid.status,'APPLIED');
  a.equal(release(f).status,'APPLIED');
- const oldBal=f.get('characters','characters')[F.OWNER].balance;
+ const oldBal=f.get('characters',String(F.OWNER)).balance;
  const replay=pay(f);a.equal(replay.status,'DUPLICATE');
  a.equal(replay.receipt.transactionID,paid.receipt.transactionID);
- a.equal(f.get('characters','characters')[F.OWNER].balance,oldBal);
+ a.equal(f.get('characters',String(F.OWNER)).balance,oldBal);
 }));
 test('dismissal blocks overdue final service settlement',()=>run('CONTRACTED',f=>{
  f.shared.dismissalSettled=false;
@@ -175,12 +175,11 @@ test('loss requires no remaining original native cargo for the destroyed hull',(
  a.equal(loss(f).reason,'PF57_ORIGINAL_NATIVE_ASSETS_STILL_ACTIVE');
 }));
 test('loss requires original native modules to have completed wreck custody',()=>run('ACTIVE',f=>{
- f.lossWreck();f.put('npcModules','npcModules',{modules:{1:{moduleID:1,entityID:F.SHIP}}});
+ f.lossWreck();f.put('npcModules','modules\u001f1',{moduleID:1,entityID:F.SHIP});
  a.equal(loss(f).reason,'PF57_ORIGINAL_NATIVE_ASSETS_STILL_ACTIVE');
 }));
 test('loss refuses an original live NPC entity regardless of forged absent proof',()=>run('ACTIVE',f=>{
- f.lossWreck();const n=f.get('npcEntities','npcEntities');n.entities[String(F.SHIP)]={entityID:F.SHIP};
- f.put('npcEntities','npcEntities',n);
+ f.lossWreck();f.put('npcEntities','entities\u001f'+String(F.SHIP),{entityID:F.SHIP});
  a.equal(loss(f).reason,'PF57_ORIGINAL_NATIVE_ASSETS_STILL_ACTIVE');
 }));
 test('loss rejects duplicate native wrecks for the same original hull',()=>run('ACTIVE',f=>{
@@ -208,8 +207,8 @@ test('loss cannot be dismissed until ship has a final state',()=>run('ACTIVE',f=
  a.equal(release(f).reason,'PF57_SHIP_STILL_RESERVED_OR_ACTIVE');
 }));
 test('salary cannot re-use original character wallet ID already used by any existing journal entry',()=>run('RESERVED',f=>{
- const r=f.get('characters','characters');r[F.OWNER].walletJournal.unshift({transactionID:f.shared.salaryTxID});
- f.put('characters','characters',r);
+ const r=f.get('characters',String(F.OWNER));r.walletJournal.unshift({transactionID:f.shared.salaryTxID});
+ f.put('characters',String(F.OWNER),r);
  a.equal(pay(f).reason,'PF57_NATIVE_JOURNAL_ID_COLLISION');
 }));
 test('loss during unknown DOCK_ISSUING cannot race later ItemStore dock commit',()=>run('ACTIVE',f=>{
@@ -239,6 +238,6 @@ test('dismiss replay refuses to claim success if original PF52 roster was unexpe
 }));
 test('loss replay refuses success if destroyed original ship was unexpectedly recreated',()=>run('ACTIVE',f=>{
  f.lossWreck();a.equal(loss(f).status,'APPLIED');
- const root=f.get('items','items');root[String(F.SHIP)]={itemID:F.SHIP};f.put('items','items',root);
+ f.put('items',String(F.SHIP),{itemID:F.SHIP});
  a.equal(loss(f).reason,'PF57_REPLAY_ORIGINAL_LOSS_UNVERIFIED');
 }));
