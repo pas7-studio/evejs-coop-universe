@@ -56,8 +56,8 @@ function verifyPaidReceipt(tx,receipt){
     globalJournal.transactionID!==receipt.transactionID||
     globalJournal.ownerCharacterID!==receipt.ownerCharacterID||
     globalJournal.employerCorpID!==receipt.employerCorpID)return false;
- const characters=tx.get(CHARACTERS,CHARACTERS);
- const c=characters?.[String(receipt.ownerCharacterID)];
+ // Original characters are stored as one row per characterID.
+ const c=tx.get(CHARACTERS,String(receipt.ownerCharacterID));
  const employer=tx.get(TABLE,CORP_KEY(receipt.employerCorpID));
  const division=employer?.wallet?.divisions?.['1000'];
  // Historical receipt remains valid only while both original wallet journals
@@ -159,8 +159,8 @@ function createPersonalFleetPaidHiring({gameStore,pf52,access,resolveNativeOffer
     const employerBefore=cents(division?.balance);
     if(employerBefore===null||!Array.isArray(division?.journal)||
        !Array.isArray(division?.transactions))return fail('PF53_EMPLOYER_WALLET_UNVERIFIED');
-    const chars=tx.get(CHARACTERS,CHARACTERS),owner=chars?.[String(command.ownerCharacterID)];
-    if(!obj(chars)||!obj(owner)||owner.characterID!==command.ownerCharacterID||
+    const owner=tx.get(CHARACTERS,String(command.ownerCharacterID));
+    if(!obj(owner)||owner.characterID!==command.ownerCharacterID||
        !Array.isArray(owner.walletJournal))return fail('PF53_CHARACTER_WALLET_UNVERIFIED');
     const before=cents(owner.balance);
     if(before===null)return fail('PF53_CHARACTER_WALLET_UNVERIFIED');
@@ -209,7 +209,8 @@ function createPersonalFleetPaidHiring({gameStore,pf52,access,resolveNativeOffer
       amountCents:offer.amountCents,transactionID,
       characterAfterCents:before-offer.amountCents,corporationAfterCents:employerAfter,
       hireReceiptHash:hashReceipt,createdAtMs:now};
-    tx.put(CHARACTERS,CHARACTERS,{...chars,[String(command.ownerCharacterID)]:updatedOwner});
+    // Single source-owned original SQLite wallet row in the same hire transaction.
+     tx.put(CHARACTERS,String(command.ownerCharacterID),updatedOwner);
     tx.put(TABLE,CORP_KEY(offer.employerCorpID),updatedEmployer);
     tx.put(TABLE,pf52.REGISTRY_KEY,index);
     tx.put(TABLE,rosterKey(command.ownerCharacterID),roster);
