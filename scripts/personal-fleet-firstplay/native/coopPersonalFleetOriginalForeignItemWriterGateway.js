@@ -35,12 +35,12 @@ function createOriginalForeignItemWriterGateway(){
  if(typeof reciprocal?.inTransaction!=='function')
   throw Error('PF106_ORIGINAL_PF58_RECIPROCAL_FENCE_UNAVAILABLE');
  function run({writer,declaredItemIDs,buildNext,proposedItems,
-                fromOriginalStockRoot=false}={}){
+                expectedOriginalRoot,fromOriginalStockRoot=false}={}){
   // The generic original ItemStore owner writes an entire existing stock
   // root, so it cannot supply a trusted "changed IDs" list. Its exact
   // mutation set is derived INSIDE the same original SQLite transaction.
   if(!WRITERS.has(writer)||
-     (fromOriginalStockRoot?!obj(proposedItems):
+     (fromOriginalStockRoot?!obj(proposedItems)||!obj(expectedOriginalRoot):
       typeof buildNext!=='function'||
       !Array.isArray(declaredItemIDs)||declaredItemIDs.length<1||
       declaredItemIDs.length>256||
@@ -57,6 +57,13 @@ function createOriginalForeignItemWriterGateway(){
      throw Error('PF106_ORIGINAL_TRANSACTION_UNAVAILABLE');
     const before=tx.get(ITEMS,ITEMS);
     if(!obj(before))throw Error('PF106_ORIGINAL_ITEMS_ROOT_UNREADABLE');
+    // PF107: the stock owner reads a detached in-memory snapshot BEFORE
+    // its legacy inventory mutation. Recheck that original root *inside*
+    // the same SQLite write transaction; otherwise an intervening native
+    // writer's item change could be silently replaced by the stale root.
+    if(fromOriginalStockRoot&&
+       JSON.stringify(before)!==JSON.stringify(expectedOriginalRoot))
+     throw Error('PF107_ORIGINAL_ITEMSTORE_SNAPSHOT_DRIFT');
     // The mutation builder never receives the authoritative reference or
     // a GameStore transaction, and cannot directly mutate stock ItemStore
     // through this API. It must return the ENTIRE next items root.
@@ -134,8 +141,8 @@ function createOriginalForeignItemWriterGateway(){
  // Only the ORIGINAL inventory owner uses this path; no client or
  // third-party callback can supply a mutable SQLite transaction.
  const execute=params=>run(params);
- const executeOriginalStockRoot=({writer='PLAYER',proposedItems}={})=>
-  run({writer,proposedItems,fromOriginalStockRoot:true});
+ const executeOriginalStockRoot=({writer='PLAYER',proposedItems,expectedOriginalRoot}={})=>
+  run({writer,proposedItems,expectedOriginalRoot,fromOriginalStockRoot:true});
  return Object.freeze({source:SOURCE,execute,executeOriginalStockRoot});
 }
 module.exports=Object.freeze({createOriginalForeignItemWriterGateway});
