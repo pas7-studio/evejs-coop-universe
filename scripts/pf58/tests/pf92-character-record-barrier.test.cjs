@@ -5,6 +5,10 @@ const {createOriginalCharacterRecordWriteBarrier}=
  require('../native/coopPersonalFleetOriginalNativePermit.cjs');
 const C='characters',I='items',T='corporationRuntime',OTHER=2002,FOREIGN=90000002;
 const clone=x=>structuredClone(x);
+// Original ItemStore has no aggregate items/items row.
+const allItems=f=>Object.fromEntries(f.scan(I).map(({key,value})=>[key,value]));
+const saveRows=(f,root)=>{for(const [key,value] of Object.entries(root))
+ f.put(I,key,value);};
 const item=(f,id)=>({...f.get(I,String(F.SHIP)),itemID:id});
 function fixture(fn,{reserved=false}={}){
  const tmp=F.tempDb(),f=F.open(tmp.file);
@@ -54,13 +58,13 @@ test('PF92 original shipID update without independent session lease fails closed
  assertNoSelection(f);
 }));
 test('PF92 source-bound lease permits exactly one original character row update',()=>fixture(f=>{
- const prior=f.get(I,'items'),res=commit(f,next=>{
+ const prior=allItems(f),res=commit(f,next=>{
   next.shipID=F.SHIP;next.shipTypeID=606;
  },{lease:()=>true});
  assert.equal(res.status,'APPLIED_ORIGINAL_CHARACTER_ROW');
  assert.equal(res.protectedChange,true);
  assert.equal(f.get(C,String(F.OWNER)).shipID,F.SHIP);
- assert.deepEqual(f.get(I,'items'),prior);
+ assert.deepEqual(allItems(f),prior);
  assert.deepEqual(f.scan(C).map(r=>r.key),[String(F.OWNER)]);
 }));
 test('PF92 conflicting alias fields cannot hide a second active ship',()=>fixture(f=>{
@@ -94,8 +98,8 @@ test('PF92 proposed ship type must match real physical original ItemStore hull',
  assertNoSelection(f);
 }));
 test('PF92 proposed shipName may not overwrite a different physical item name',()=>fixture(f=>{
- const items=f.get(I,'items');items[String(F.SHIP)].itemName='Original Hull';
- f.put(I,'items',items);
+ const items=allItems(f);items[String(F.SHIP)].itemName='Original Hull';
+ saveRows(f,items);
  const res=commit(f,next=>{
   next.shipID=F.SHIP;next.shipTypeID=606;next.shipName='Forged';
  },{lease:()=>true});
@@ -103,7 +107,7 @@ test('PF92 proposed shipName may not overwrite a different physical item name',(
  assertNoSelection(f);
 }));
 test('PF92 can move from one original stock hull to another under one owner',()=>fixture(f=>{
- const items=f.get(I,'items');items[String(OTHER)]=item(f,OTHER);f.put(I,'items',items);
+ const items=allItems(f);items[String(OTHER)]=item(f,OTHER);saveRows(f,items);
  const owner=f.get(C,String(F.OWNER));
  f.put(C,String(F.OWNER),{...owner,shipID:F.SHIP,shipTypeID:606});
  const result=commit(f,next=>{next.shipID=OTHER;},{lease:()=>true});
@@ -111,7 +115,7 @@ test('PF92 can move from one original stock hull to another under one owner',()=
  assert.equal(f.get(C,String(F.OWNER)).shipID,OTHER);
 }));
 test('PF92 previous reserved hull cannot be abandoned to bypass custody',()=>fixture(f=>{
- const items=f.get(I,'items');items[String(OTHER)]=item(f,OTHER);f.put(I,'items',items);
+ const items=allItems(f);items[String(OTHER)]=item(f,OTHER);saveRows(f,items);
  const owner=f.get(C,String(F.OWNER));
  f.put(C,String(F.OWNER),{...owner,shipID:F.SHIP,shipTypeID:606});
  const result=commit(f,next=>{next.shipID=OTHER;},{lease:()=>true});
@@ -119,8 +123,8 @@ test('PF92 previous reserved hull cannot be abandoned to bypass custody',()=>fix
  assert.equal(f.get(C,String(F.OWNER)).shipID,F.SHIP);
 },{reserved:true}));
 test('PF92 in-place physical ship metadata repair is valid for original active owner',()=>fixture(f=>{
- const items=f.get(I,'items');items[String(F.SHIP)].itemName='Real hull';
- f.put(I,'items',items);
+ const items=allItems(f);items[String(F.SHIP)].itemName='Real hull';
+ saveRows(f,items);
  const owner=f.get(C,String(F.OWNER));
  f.put(C,String(F.OWNER),{...owner,shipID:F.SHIP,shipTypeID:606,shipName:'Old'});
  const result=commit(f,next=>{next.shipName='Real hull';},{lease:()=>true});
@@ -210,18 +214,18 @@ test('PF92 first failed witness cannot commit a captured direct character tx.put
 }));
 test('PF92 second witness cannot change original physical ship and then fail',()=>fixture(f=>{
  let captured=null,n=0;
- const original=f.get(I,'items');
+ const original=allItems(f);
  assert.throws(()=>commit(f,(next,tx)=>{
   captured=tx;next.shipID=F.SHIP;
  },{lease:()=>{
   if(++n===2){
-   const stock=captured.get(I,'items');
-   stock[String(F.SHIP)].ownerID=FOREIGN;
-   captured.put(I,'items',stock);
+   const stock=captured.get(I,String(F.SHIP));
+   stock.ownerID=FOREIGN;
+   captured.put(I,String(F.SHIP),stock);
    return false;
   }
   return true;
  }}),/PF93_SESSION_WITNESS_MUTATED_ORIGINAL_SQLITE_ROLLBACK/);
- assert.deepEqual(f.get(I,'items'),original);
+ assert.deepEqual(allItems(f),original);
  assertNoSelection(f);
 }));
