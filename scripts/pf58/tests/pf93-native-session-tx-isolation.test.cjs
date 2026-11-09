@@ -10,10 +10,8 @@ function fixture(cb){
  const temp=F.tempDb(),f=F.open(temp.file);
  try{
   f.seed();
-  const aggregate=f.get(C,C);
-  if(!aggregate?.[String(F.OWNER)])throw Error('PF93_LEGACY_FIXTURE_MISSING');
-  f.db.prepare('DELETE FROM "characters" WHERE key=?').run(C);
-  f.put(C,String(F.OWNER),aggregate[String(F.OWNER)]);
+  if(f.get(C,String(F.OWNER))?.characterID!==F.OWNER)
+   throw Error('PF93_NATIVE_OWNER_ROW_MISSING');
   return cb(f);
  }finally{f.close();temp.cleanup();}
 }
