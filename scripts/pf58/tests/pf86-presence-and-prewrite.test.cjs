@@ -104,7 +104,7 @@ test('PF86 bootstrap rechecks original session AFTER consuming permit and BEFORE
   const runtime={scenes:new Map([[F.SYSTEM,mounted]])};
   let moveCalls=0,sessionChecks=0;
   const items={
-   findItemById:id=>f.get('items','items')?.[String(id)]||null,
+   findItemById:id=>f.get('items',String(id))||null,
    moveShipToSpace(){moveCalls++;throw Error('PF86_SHOULD_NOT_WRITE');}
   };
   const store={
@@ -135,7 +135,7 @@ test('PF86 bootstrap rechecks original session AFTER consuming permit and BEFORE
   assert.equal(moveCalls,0,'no original item mutation after session became occupied');
   assert.equal(boot.inspectHandoff({assignmentID:F.ASSIGNMENT}).status,'CONSUMED',
    'durable one-shot permit cannot be silently recycled');
-  const ship=f.get('items','items')[F.SHIP];
+  const ship=f.get('items',String(F.SHIP));
   assert.equal(validStockHangar(ship,{
    shipItemID:F.SHIP,ownerCharacterID:F.OWNER,typeID:606,stationID:F.STATION}),true);
   assert.equal(f.pending().status,'BLOCKED','no second native dispatch after uncertainty');
