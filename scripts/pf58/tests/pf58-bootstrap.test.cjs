@@ -33,13 +33,13 @@ test('PF58 original bootstrap wires PF54 one-shot handoff through original ItemS
     return {success:true,data:{entity:item,controller:nativeController}};
    }};
   const originalItemStore={
-   findItemById:id=>f.get('items','items')?.[String(id)]||null,
+   findItemById:id=>f.get('items',String(id))||null,
    moveShipToSpace(id,systemID,spaceState){
     return f.gameStore.coopAtomicNativeRows.transact(['items'],tx=>{
-     const items=tx.get('items','items'),s=items?.[String(id)];
+     const s=tx.get('items',String(id));
      if(!s||s.flagID!==4)return {success:false};
-     tx.put('items','items',{...items,[String(id)]:{...s,locationID:systemID,
-       flagID:0,spaceState}});
+     tx.put('items',String(id),{...s,locationID:systemID,
+       flagID:0,spaceState});
      return {success:true};
     });
    }
@@ -63,7 +63,7 @@ test('PF58 original bootstrap wires PF54 one-shot handoff through original ItemS
   const dispatch=f.pending();assert.equal(dispatch.executorStatus,'REPORTED_COMPLETED');
   assert.equal(nativeEntity.entityID,F.SHIP);
   assert.equal(nativeController.entityID,F.SHIP);
-  assert.equal(f.get('items','items')[F.SHIP].flagID,0);
+  assert.equal(f.get('items',String(F.SHIP)).flagID,0);
   assert.equal(f.bridge.reconcile(f.c).status,'ACTIVE');
   assert.equal(adapter.verifyNativePermit({entityRecord:nativeEntity}),true);
   assert.equal(adapter.inspectHandoff({assignmentID:F.ASSIGNMENT}).status,'CONSUMED');
