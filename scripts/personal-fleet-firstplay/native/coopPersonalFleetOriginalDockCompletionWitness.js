@@ -74,8 +74,8 @@ function createOriginalDockCompletionWitness({ enabled = () => false,
       const term = tx.get(T, terminal.terminalKey(row.assignmentID));
       const nativeAttempt = tx.get(T, cleanup.attemptKey(row.assignmentID));
       const returnState = tx.get(T, PREFIX + 'return-dock-v1:' + row.assignmentID);
-      const items = tx.get(ITEMS, ITEMS);
-      if ([dock, sceneAttempt, term, nativeAttempt, returnState, items]
+      const item = tx.get(ITEMS, String(row.shipItemID));
+      if ([dock, sceneAttempt, term, nativeAttempt, returnState, item]
         .some(v => v === undefined || v === null)) return null;
       const dockSig = scopedDock.signature(row);
       const terminalSig = terminal.terminalSignature(c);
@@ -115,8 +115,8 @@ function createOriginalDockCompletionWitness({ enabled = () => false,
         returnState.shipItemID !== row.shipItemID ||
         returnState.actorGeneration !== row.actorGeneration ||
         returnState.stationID !== row.stationID ||
-        !obj(items) ||
-        !scopedDock.stockShip(items[String(row.shipItemID)], row, true))
+        !obj(item) ||
+        !scopedDock.stockShip(item, row, true))
         return null;
       const original = itemStore.findItemById(row.shipItemID);
       if (!scopedDock.stockShip(original, row, true)) return null;
