@@ -190,7 +190,7 @@ def verify_original_item_sqlite_layout(work: Path) -> None:
         'npcModules: ["modules"]' not in groups):
         raise ValueError("PF110_ORIGINAL_NATIVE_GROUP_LAYOUT_UNVERIFIED")
     for flat in ("characters", "npcCargo", "npcWrecks", "npcWreckItems"):
-        if __import__("re").search(r'(?m)^\\s*' + flat + r'\\s*:', groups):
+        if __import__("re").search(r'(?m)^\s*' + flat + r'\s*:', groups):
             raise ValueError("PF110_ORIGINAL_NATIVE_FLAT_LAYOUT_UNVERIFIED")
 
 
