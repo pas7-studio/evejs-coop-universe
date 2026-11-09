@@ -75,7 +75,7 @@ function createOriginalSourceBindings(){
   let source;
   try{source=atomic.transact(['characters','items'],tx=>{
    const r=tx.get('characters',String(owner));
-   const item=tx.get('items','items')?.[String(ship)];
+   const item=tx.get('items',String(ship));
    return obj(r)&&r.shipID===ship&&rowIsOwner(session,owner,tx)&&
      obj(item)&&item.itemID===ship&&item.ownerID===owner&&
      item.categoryID===6&&item.locationID===systemID&&item.flagID===0;
