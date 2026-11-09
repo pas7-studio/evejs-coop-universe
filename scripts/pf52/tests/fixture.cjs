@@ -34,7 +34,7 @@ function hire(overrides={}){return {...base(),type:'IMPORT_PAID_HIRE',operationI
 function reserve(overrides={}){return {...base(),type:'RESERVE_HANGAR_SHIP',operationID:'assign-1',expectedRosterRevision:1,shipItemID:1001,stationID:600001,assignmentID:'assignment-1',expectedPilotRevision:0,...overrides};}
 function release(overrides={}){return {...reserve(),type:'RELEASE_HANGAR_SHIP',operationID:'release-1',expectedRosterRevision:2,expectedPilotRevision:1,expectedGeneration:1,...overrides};}
 function item(overrides={}){return {itemID:1001,ownerID:9,locationID:600001,flagID:4,categoryID:6,quantity:-1,stacksize:1,singleton:1,typeID:606,shipID:1001,shipTypeID:606,spaceState:null,...overrides};}
-function seed(f){f.put('items','items',{'1001':item()});f.put('corporationRuntime','paidHire:contract-1',{nativeStatus:'PAID',pilotID:'coop-pilot-123',ownerCharacterID:9,receiptHash:HASH});}
+function seed(f){f.put('items','1001',item());f.put('corporationRuntime','paidHire:contract-1',{nativeStatus:'PAID',pilotID:'coop-pilot-123',ownerCharacterID:9,receiptHash:HASH});}
 function hired(f){seed(f);const r=f.bridge.execute(hire());if(r.status!=='APPLIED')throw Error('HIRE_FAILED '+JSON.stringify(r));return r;}
 function assigned(f){hired(f);const r=f.bridge.execute(reserve());if(r.status!=='APPLIED')throw Error('ASSIGN_FAILED '+JSON.stringify(r));return r;}
 module.exports={openFixture,tempDb,session,base,hire,reserve,release,item,seed,hired,assigned,HASH,REGISTRY_KEY};
