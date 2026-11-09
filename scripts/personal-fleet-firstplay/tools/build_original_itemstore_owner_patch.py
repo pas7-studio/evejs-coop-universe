@@ -138,7 +138,7 @@ def build(work: Path) -> str:
     # Git's blob hash pins the original unmodified upstream ItemStore owner.
     import hashlib
     digest = hashlib.sha1(
-        b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+        b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
     ).hexdigest()
     if digest != STOCK_BLOB:
         raise ValueError("PF107_ORIGINAL_ITEMSTORE_SOURCE_BLOB_DRIFT")
