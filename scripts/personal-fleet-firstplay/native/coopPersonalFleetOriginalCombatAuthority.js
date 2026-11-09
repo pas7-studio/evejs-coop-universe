@@ -45,7 +45,7 @@ function createOriginalCombatAuthority({enabled=()=>false,allWritersFenced=()=>f
     claims=tx.get(T,F+'actor-claims-v1'),
     index=tx.get(T,pf52.REGISTRY_KEY),
     roster=tx.get(T,pf52.ROSTER_PREFIX+row.ownerCharacterID),
-    item=tx.get(ITEMS,ITEMS)?.[String(row.shipItemID)];
+    item=tx.get(ITEMS,String(row.shipItemID));
    if(scene?.systemID!==row.systemID||ship?.kind!=='ship'||
       ship.nativeNpc!==true||ship.transient===true||ship.session!=null||
       ship.itemID!==row.shipItemID||ship.ownerID!==row.ownerCharacterID||
