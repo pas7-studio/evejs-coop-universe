@@ -15,6 +15,10 @@ import subprocess
 
 TARGET = Path("Code/server/src/services/inventory/itemStore.js")
 STOCK_BLOB = "e992d56ee9cff1911d54247bf46d44d01e5d8060"
+# Original sqliteStore.explodeToRows('items',root) yields row per itemID.
+STOCK_SQLITE_STORE = Path("Code/server/src/gameStore/sqliteStore.js")
+STOCK_SQLITE_BLOB = "d851fb5a84added2d4527c34407879e8a009bb74"
+
 
 
 def replace_once(source: str, old: str, new: str, label: str) -> str:
@@ -159,10 +163,34 @@ def transform(source: str) -> str:
     return source
 
 
+def verify_original_item_sqlite_layout(work: Path) -> None:
+    """Fail closed if original SQLite stops persisting items as flat rows."""
+    import hashlib
+    target = work / STOCK_SQLITE_STORE
+    if not target.is_file() or target.is_symlink():
+        raise ValueError("PF108_ORIGINAL_SQLITE_STORE_NOT_FOUND")
+    raw = target.read_bytes()
+    digest = hashlib.sha1(
+        b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+    ).hexdigest()
+    if digest != STOCK_SQLITE_BLOB:
+        raise ValueError("PF108_ORIGINAL_SQLITE_SOURCE_BLOB_DRIFT")
+    source = raw.decode("utf-8")
+    for anchor in ('const ROW_GROUPS = {', 'function explodeToRows(',
+                   'function rowGroupsFor(', 'return ROW_GROUPS[table] || null'):
+        if anchor not in source:
+            raise ValueError("PF108_ORIGINAL_SQLITE_ROW_LAYOUT_UNVERIFIED")
+    groups = source.split('const ROW_GROUPS = {', 1)[1].split(
+        '\n};', 1)[0]
+    if 'items:' in groups or '"items":' in groups:
+        raise ValueError("PF108_ORIGINAL_ITEMS_ARE_NOT_FLAT_ROWS")
+
+
 def build(work: Path) -> str:
     target = work / TARGET
     if not target.is_file() or target.is_symlink():
         raise ValueError("PF107_ORIGINAL_ITEMSTORE_MISSING_OR_SYMLINK")
+    verify_original_item_sqlite_layout(work)
     raw = target.read_bytes()
     # Git's blob hash pins the original unmodified upstream ItemStore owner.
     import hashlib
