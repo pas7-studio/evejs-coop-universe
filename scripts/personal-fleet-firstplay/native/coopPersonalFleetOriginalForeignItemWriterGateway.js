@@ -3,7 +3,7 @@
  * PF106 — ORIGINAL GameStore-owned stock ItemStore mutation gateway.
  *
  * The transaction is OPENED HERE using the original GameStore singleton.
- * Before the one stock items/items tx.put, calculate an exhaustive diff of
+ * Before any stock per-item SQLite row put/del, calculate an exhaustive diff of
  * the actual proposed item root and check every changed ORIGINAL item in BOTH
  * the pre-write and prospective post-write parent chains with the source
  * PF58 reciprocal fence. This prevents undeclared module/cargo inserts,
@@ -23,6 +23,36 @@ const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const canonical=x=>typeof x==='string'&&/^[1-9][0-9]*$/.test(x)&&
   pos(Number(x))&&String(Number(x))===x;
 const deny=reason=>({status:'BLOCKED',reason,mayCommit:false});
+// Native sqliteStore.explodeToRows('items',root) stores EACH item under
+// its canonical itemID. It does NOT create an 'items' aggregate SQL row.
+function originalItemsFromSqlite(tx){
+ if(typeof tx?.scan!=='function'||typeof tx?.get!=='function'||
+    typeof tx?.put!=='function'||typeof tx?.del!=='function')
+  throw Error('PF108_ORIGINAL_ITEMS_ROW_TRANSACTION_REQUIRED');
+ const rows=tx.scan(ITEMS);
+ if(!Array.isArray(rows)||rows.length>250000)
+  throw Error('PF108_ORIGINAL_ITEMS_ROWSET_INVALID');
+ const root=Object.create(null);
+ for(const entry of rows){
+  const key=entry?.key,item=entry?.value;
+  if(!canonical(key)||!obj(item)||item.itemID!==Number(key)||
+     !pos(item.ownerID)||!pos(item.locationID)||!pos(item.categoryID)||
+     Object.prototype.hasOwnProperty.call(root,key))
+   throw Error('PF108_ORIGINAL_ITEMS_ROW_INVALID');
+  root[key]=item;
+ }
+ return root;
+}
+// PF58's existing transaction-scoped custody predicate historically expects
+// a synthetic root from tx.get('items','items'). It is read-only; adapt only
+// that ONE read to the real SQL row view. Never fabricate a stock item SQL row.
+function readonlyPF58View(tx,itemsRoot){
+ return Object.freeze({
+  get:(table,key)=>table===ITEMS&&key===ITEMS?
+   itemsRoot:tx.get(table,key),
+  put:()=>{throw Error('PF108_PF58_READONLY_VIEW_WRITE_FORBIDDEN');}
+ });
+}
 function createOriginalForeignItemWriterGateway(){
  const a=gameStore?.coopAtomicNativeRows;
  if(a?.mode!=='SERVER_INTERNAL_FLAGGED'||typeof a.transact!=='function'||
@@ -53,10 +83,10 @@ function createOriginalForeignItemWriterGateway(){
   try{
    return a.transact([TABLE,ITEMS],tx=>{
     if(a.isPoisoned()!==false||typeof tx?.get!=='function'||
-       typeof tx?.put!=='function')
-     throw Error('PF106_ORIGINAL_TRANSACTION_UNAVAILABLE');
-    const before=tx.get(ITEMS,ITEMS);
-    if(!obj(before))throw Error('PF106_ORIGINAL_ITEMS_ROOT_UNREADABLE');
+       typeof tx?.put!=='function'||typeof tx?.del!=='function'||
+       typeof tx?.scan!=='function')
+     throw Error('PF108_ORIGINAL_TRANSACTION_ROW_API_REQUIRED');
+    const before=originalItemsFromSqlite(tx);
     // PF107: the stock owner reads a detached in-memory snapshot BEFORE
     // its legacy inventory mutation. Recheck that original root *inside*
     // the same SQLite write transaction; otherwise an intervening native
@@ -97,10 +127,8 @@ function createOriginalForeignItemWriterGateway(){
     // The prospective view retains the original transaction's immutable
     // custody tables, but offers the complete AFTER root only to the stock
     // PF58 read-only validator. Only the actual tx performs the final put.
-    const preview=Object.freeze({
-     get:(table,key)=>table===ITEMS&&key===ITEMS?next:tx.get(table,key),
-     put:()=>{throw Error('PF106_PREVIEW_WRITE_FORBIDDEN');}
-    });
+    const prewrite=readonlyPF58View(tx,before);
+    const preview=readonlyPF58View(tx,next);
     for(const id of changed){
      const old=before[String(id)],fresh=next[String(id)];
      for(const item of [old,fresh]){
@@ -111,7 +139,7 @@ function createOriginalForeignItemWriterGateway(){
        throw Error('PF106_ORIGINAL_ITEM_IDENTITY_INVALID');
      }
      if(old!==undefined){
-      const r=reciprocal.inTransaction({tx,writer,affectedItemID:id,
+      const r=reciprocal.inTransaction({tx:prewrite,writer,affectedItemID:id,
        destinationLocationID:old.locationID});
       if(r?.mayCommit!==true||r.status!=='CLEAR_IN_SAME_TRANSACTION')
        throw Error('PF106_ORIGINAL_PREWRITE_CUSTODY_DENIED:'+
@@ -127,7 +155,14 @@ function createOriginalForeignItemWriterGateway(){
     }
     if(a.isPoisoned()!==false)
      throw Error('PF106_ORIGINAL_TRANSACTION_POISONED');
-    tx.put(ITEMS,ITEMS,next);
+    // Native GameStore SQLite rows are flat, keyed by the canonical itemID.
+    // Only changed item rows are written: no 2MB aggregate JSON row and no
+    // replacement of unrelated items or their native stock metadata.
+    for(const id of [...changed].sort((x,y)=>x-y)){
+     const key=String(id),item=next[key];
+     if(item===undefined)tx.del(ITEMS,key);
+     else tx.put(ITEMS,key,item);
+    }
     return Object.freeze({status:'COMMITTED',source:SOURCE,
       changedItemIDs:Object.freeze([...changed].sort((x,y)=>x-y))});
    });
