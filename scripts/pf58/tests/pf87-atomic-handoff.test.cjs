@@ -50,12 +50,12 @@ function fixture(action){
    get atomicMoves(){return atomicMoves;}});
  }finally{f.close();tmp.cleanup();}
 }
-const originalShip=f=>f.get('items','items')?.[String(F.SHIP)];
+const originalShip=f=>f.get('items',String(F.SHIP));
 const permit=f=>f.get('corporationRuntime',
  'coop-personal-fleet\u001fhandoff-v1:'+F.ASSIGNMENT);
 
 test('PF87 atomic transfer commits permit and exact original ship in one SQLite transaction',()=>fixture(h=>{
- const beforeKeys=Object.keys(h.f.get('items','items')).sort();
+ const beforeKeys=h.f.scan('items').map(x=>x.key).sort();
  const beforeAccount=h.f.get('characters',String(F.OWNER));
  const result=h.f.pending();
  assert.equal(result.executorStatus,'REPORTED_COMPLETED');
@@ -65,7 +65,7 @@ test('PF87 atomic transfer commits permit and exact original ship in one SQLite 
   'coop-personal-fleet\u001fdeploy-v1:'+F.ASSIGNMENT);
  assert.equal(validStockSpace(originalShip(h.f),row),true);
  assert.equal(permit(h.f).status,'CONSUMED');
- assert.deepEqual(Object.keys(h.f.get('items','items')).sort(),beforeKeys,
+ assert.deepEqual(h.f.scan('items').map(x=>x.key).sort(),beforeKeys,
   'only original item ID may exist');
  assert.deepEqual(h.f.get('characters',String(F.OWNER)),beforeAccount,
   'title transfer must never debit wallet or silently reassign active ship');
