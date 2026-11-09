@@ -11,13 +11,22 @@ function lossCmd(extra={}){return {operationID:'pf57-loss-1',ownerCharacterID:F.
  shipItemID:F.SHIP,systemID:F.SYSTEM,actorGeneration:1,reservationGeneration:1,
  wreckID:WRECK,session:F.session,...extra};}
 function lossWreck(f){
- f.put('items','items',{});
+ // Native original stock ItemStore is flat: delete ONLY the destroyed hull.
+ f.db.prepare('DELETE FROM "items" WHERE key=?').run(String(F.SHIP));
+ // PF54 fixture's legacy pilot-profile aggregate is NOT an original entity
+ // collection. Replace it with actual original grouped NPC SQLite skeletons.
+ f.db.prepare('DELETE FROM "npcEntities" WHERE key=?').run('npcEntities');
+ f.put('npcEntities','entities',{});
+ f.put('npcEntities','nextEntityID',980000000000);
  f.put('npcWrecks','npcWrecks',{wrecks:{[WRECK]:{wreckID:WRECK,sourceEntityID:F.SHIP,
   systemID:F.SYSTEM,sourceTypeID:606,ownerID:F.OWNER}}});
- f.put('npcEntities','native-death:'+WRECK,{wreckID:WRECK,entityID:F.SHIP,originalKill:true});
+ f.put('corporationRuntime','native-death:'+WRECK,
+  {wreckID:WRECK,entityID:F.SHIP,originalKill:true});
  f.put('npcWreckItems','npcWreckItems',{items:{},receipts:{[WRECK]:{wreckID:WRECK,sourceEntityID:F.SHIP,
   originalCargoAccountedFor:true,originalFittingsAccountedFor:true,titleTransferOrDestructionPersisted:true}}});
- f.put('npcCargo','npcCargo',{cargo:{}});f.put('npcModules','npcModules',{modules:{}});
+ f.put('npcCargo','npcCargo',{cargo:{}});
+ f.put('npcModules','modules',{});
+ f.put('npcModules','nextModuleID',980100000000);
  f.shared.scene=null;
 }
 function open(file){
@@ -45,7 +54,7 @@ function open(file){
   verifyNativePilotReleased:()=>f.shared.nativePilotReleased,
   verifyDismissalSettlement:()=>f.shared.dismissalSettled,
   verifyNativeWreckLoss(c,tx){
-   if(!f.shared.wreckProof||!tx.get('npcEntities','native-death:'+c.wreckID)?.originalKill||
+   if(!f.shared.wreckProof||!tx.get('corporationRuntime','native-death:'+c.wreckID)?.originalKill||
     f.shared.scene!==null)return null;
    return {source:'ORIGINAL_EVEJS_WRECK_AND_DEATH_V1',shipItemID:c.shipItemID,
     wreckID:c.wreckID,ownerCharacterID:c.ownerCharacterID,pilotID:c.pilotID,
