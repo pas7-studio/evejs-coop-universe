@@ -47,8 +47,8 @@ function createOriginalTerminalDockSources({enabled=()=>false,
   const ret=tx.get(T,P+'return-dock-v1:'+c.assignmentID),
     dock=tx.get(T,P+'dock-native-attempt-v1:'+c.assignmentID),
     scene=tx.get(T,P+'dock-scene-attempt-v1:'+c.assignmentID),
-    items=tx.get('items','items');
-  if([ret,dock,scene,items].some(x=>x===undefined||x===null)||
+    item=tx.get('items',String(c.shipItemID));
+  if([ret,dock,scene,item].some(x=>x===undefined||x===null)||
      !same(ret,c)||!['DOCK_ISSUING','DOCKED'].includes(ret.phase)||
      !pf66.valid({...ret,phase:'DOCK_ISSUING'})||
      !obj(dock)||dock.version!==1||dock.status!=='CONSUMED'||
@@ -60,13 +60,21 @@ function createOriginalTerminalDockSources({enabled=()=>false,
      scene.shipItemID!==c.shipItemID||scene.actorGeneration!==c.actorGeneration||
      scene.reservationGeneration!==c.generation||
      scene.dockAttemptSignature!==dock.signature||!positive(scene.committedAtMs)||
-     !pf66.stockShip(items[String(c.shipItemID)],ret,true)||
+     !pf66.stockShip(item,ret,true)||
      !pf66.stockShip(stock.findItemById(c.shipItemID),ret,true)||!vacant(c))return null;
   const manifest=verifyFinalOriginalManifest(ret,tx);
   if(!pf56.manifestValid(manifest,ret)||
       JSON.stringify(manifest)!==JSON.stringify(ret.manifest))return null;
   // Exactly one original stock title, no hidden second ship with the same ID.
-  if(Object.values(items).filter(x=>x?.itemID===c.shipItemID).length!==1)
+  if(typeof tx.scan!=='function')return null;
+  const rows=tx.scan('items');
+  // Original flat SQLite has only one physical SQL row per itemID.
+  // Reject any unrelated malformed alias pretending to be this hull.
+  if(!Array.isArray(rows)||rows.length>250000||
+     rows.some(r=>typeof r?.key!=='string'||r?.value?.itemID!==Number(r.key)||
+       !Number.isSafeInteger(Number(r.key))||Number(r.key)<=0||
+       String(Number(r.key))!==r.key)||
+     rows.filter(r=>r.value.itemID===c.shipItemID).length!==1)
    return null;
   return {ret,dock,scene,manifest};
  }
