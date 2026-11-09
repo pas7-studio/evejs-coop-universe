@@ -5,15 +5,14 @@ const {createOriginalCharacterRecordWriteBarrier}=
  require('../native/coopPersonalFleetOriginalNativePermit.cjs');
 const C='characters',I='items',T='corporationRuntime',OTHER=2002,FOREIGN=90000002;
 const clone=x=>structuredClone(x);
-const item=(f,id)=>({...f.get(I,'items')[String(F.SHIP)],itemID:id});
+const item=(f,id)=>({...f.get(I,String(F.SHIP)),itemID:id});
 function fixture(fn,{reserved=false}={}){
  const tmp=F.tempDb(),f=F.open(tmp.file);
  try{
   f.seed();if(reserved)f.onboard();
-  const aggregate=f.get(C,C),owner=aggregate?.[String(F.OWNER)];
-  if(!owner)throw Error('PF92_LEGACY_PF54_FIXTURE_UNAVAILABLE');
-  f.db.prepare('DELETE FROM "characters" WHERE key=?').run(C);
-  f.put(C,String(F.OWNER),owner);
+  const owner=f.get(C,String(F.OWNER));
+  if(!owner||owner.characterID!==F.OWNER)
+   throw Error('PF92_NATIVE_PF54_OWNER_UNAVAILABLE');
   return fn(f);
  }finally{f.close();tmp.cleanup();}
 }
@@ -170,7 +169,7 @@ test('PF92 original session witness never receives a writable GameStore tx',()=>
  let calls=0;
  const result=commit(f,next=>{next.shipID=F.SHIP;},{lease:(_w,reader)=>{
   calls++;assert.equal(reader.put,undefined);assert.equal(reader.del,undefined);
-  assert.equal(reader.get('items','items')[String(F.SHIP)].itemID,F.SHIP);
+  assert.equal(reader.get('items',String(F.SHIP)).itemID,F.SHIP);
   return true;
  }});
  assert.equal(calls,2);
