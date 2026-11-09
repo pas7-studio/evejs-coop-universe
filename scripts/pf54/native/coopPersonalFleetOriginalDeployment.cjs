@@ -189,8 +189,8 @@ function createOriginalDeploymentBridge({gameStore,pf52,claimsPolicy,access,
    if(row.phase!=='ISSUING'||row.dispatchCount!==1)
     return deny('PF54_NOT_ELIGIBLE_FOR_RECONCILIATION');
    readAssigned(tx,c);
-   const root=tx.get(ITEMS,ITEMS);
-   const original=root?.[String(row.shipItemID)];
+   // Original physical stock itemID, never a fabricated 'items' aggregate.
+   const original=tx.get(ITEMS,String(row.shipItemID));
    if(!validSpaceItem(original,row))return deny('PF54_ORIGINAL_ITEM_NOT_IN_SPACE');
    // The verified native actor MUST refer to the SAME original ship ID,
    // controller, and immutable original module/cargo witnesses.
