@@ -130,9 +130,10 @@ function checkCompetingClaims(tx,cmd){
  return null;
 }
 function readStockHangar(tx,shipID,owner,stationID){
- const items=tx.get(ITEM_TABLE,'items');
- if(!obj(items)||!own(items,String(shipID)))return null;
- const item=items[String(shipID)];
+ // Original sqliteStore persists items as flat itemID SQL rows.
+ // No aggregate row named 'items' exists in native EveJS SQLite.
+ if(!positive(shipID)||typeof tx?.get!=='function')return null;
+ const item=tx.get(ITEM_TABLE,String(shipID));
  if(!obj(item)||item.itemID!==shipID||item.ownerID!==owner||
     item.locationID!==stationID||item.flagID!==4||item.categoryID!==6||
     item.singleton!==1||item.stacksize!==1||item.quantity!==-1||
