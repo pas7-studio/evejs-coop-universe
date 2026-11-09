@@ -74,7 +74,7 @@ function open(file,options={}){
    atomic.transact(['items'],tx=>{
     const hull=tx.get('items',String(row.shipItemID));
     tx.put('items',String(row.shipItemID),{...hull,flagID:0,locationID:row.systemID,
-     spaceState:{systemID:row.systemID,position:{x:10,y:20,z:30},velocity:{x:0,y:0,z:0},mode:'STOP'}}});
+     spaceState:{systemID:row.systemID,position:{x:10,y:20,z:30},velocity:{x:0,y:0,z:0},mode:'STOP'}});
    });
    shared.scene={nativeNpc:true,shipItemID:row.shipItemID,entityID:row.shipItemID,
     controllerEntityID:row.shipItemID,ownerCharacterID:row.ownerCharacterID,
@@ -99,7 +99,7 @@ function open(file,options={}){
   put('npcEntities','npcEntities',{pilots:{[PILOT]:{available:true,pilotID:PILOT,agentID:AGENT}}});
   put('items',String(SHIP),{itemID:SHIP,shipID:SHIP,shipTypeID:606,typeID:606,
    ownerID:OWNER,locationID:STATION,flagID:4,categoryID:6,singleton:1,stacksize:1,
-   quantity:-1,spaceState:null}});
+   quantity:-1,spaceState:null});
  }
  function onboard(){const hire=hiring.hire({operationID:'pf54-hire-1',offerID:OFFER.offerID,
   offerRevision:OFFER.revision,contractID:OFFER.contractID,pilotID:PILOT,agentID:AGENT,
