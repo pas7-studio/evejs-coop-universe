@@ -30,7 +30,13 @@ test('PF91 native per-character SQLite rowset admits genuinely free original hul
 }));
 test('PF91 old synthetic characters aggregate is never accepted as native evidence',()=>{
  const tmp=F.tempDb(),f=F.open(tmp.file);
- try{f.seed();assert.equal(inspected(f).reason,'PF91_ORIGINAL_CHARACTER_ROW_INVALID');}
+ try{
+   f.seed();
+   const owner=f.get(C,String(F.OWNER));
+   f.db.prepare('DELETE FROM "characters" WHERE key=?').run(String(F.OWNER));
+   f.put(C,C,{[F.OWNER]:owner});
+   assert.equal(inspected(f).reason,'PF91_ORIGINAL_CHARACTER_ROW_INVALID');
+  }
  finally{f.close();tmp.cleanup();}
 });
 test('PF91 owner original active hull is rejected under same SQLite transaction',()=>withNativeCharacters(f=>{
@@ -92,14 +98,14 @@ function activate(f,{shipID=F.SHIP,stationID=F.STATION,expectedBefore=null,
   expectedBefore:expectedBefore||f.get(C,String(F.OWNER)),session});
 }
 test('PF91 original player activation updates only the one existing character row',()=>withNativeCharacters(f=>{
- const prior=f.get(C,String(F.OWNER)),beforeItems=f.get(ITEMS,ITEMS);
+ const prior=f.get(C,String(F.OWNER)),beforeItems=f.scan(ITEMS);
  const result=activate(f);
  assert.equal(result.status,'APPLIED_IN_ORIGINAL_SQLITE_TRANSACTION');
  const updated=f.get(C,String(F.OWNER));
  assert.equal(updated.shipID,F.SHIP);
  assert.equal(updated.shipTypeID,606);
  assert.equal(updated.balance,prior.balance);
- assert.deepEqual(f.get(ITEMS,ITEMS),beforeItems);
+ assert.deepEqual(f.scan(ITEMS),beforeItems);
  assert.deepEqual(f.scan(C).map(x=>x.key),[String(F.OWNER)]);
 }));
 test('PF91 reserved original hull refuses stock player activation',()=>withNativeCharacters(f=>{
@@ -134,10 +140,10 @@ test('PF91 claimed target by unrelated original character prevents activation',(
  assert.equal(activate(f).reason,'PF91_ORIGINAL_SHIP_ACTIVE_FOR_CHARACTER');
 }));
 test('PF91 original player activation must not mint a ship or change stock inventory',()=>withNativeCharacters(f=>{
- const keys=Object.keys(f.get(ITEMS,ITEMS));
+ const keys=f.scan(ITEMS).map(x=>x.key);
  const out=activate(f);
  assert.equal(out.mayCommit,true);
- assert.deepEqual(Object.keys(f.get(ITEMS,ITEMS)),keys);
+ assert.deepEqual(f.scan(ITEMS).map(x=>x.key),keys);
 }));
 test('PF91 default-disabled source-bound guards forbid original character changes',()=>withNativeCharacters(f=>{
  assert.equal(activate(f,{enabled:()=>false}).reason,'PF91_PLAYER_ACTIVATION_DISABLED');
@@ -151,10 +157,9 @@ test('PF91 original SQLite fault after character put rolls back the entire ship 
  assert.deepEqual(f.get(C,String(F.OWNER)),before);
 }));
 test('PF91 previous active original stock ship is also fenced before switching',()=>withNativeCharacters(f=>{
- const next=f.get(ITEMS,ITEMS);
- next[String(secondShip)]={...next[String(F.SHIP)],itemID:secondShip,
-  locationID:F.STATION,flagID:4};
- f.put(ITEMS,ITEMS,next);
+ const original=f.get(ITEMS,String(F.SHIP));
+ const next={...original,itemID:secondShip,locationID:F.STATION,flagID:4};
+ f.put(ITEMS,String(secondShip),next);
  f.put(C,String(F.OWNER),{...f.get(C,String(F.OWNER)),shipID:F.SHIP});
  const out=activate(f,{shipID:secondShip});
  assert.equal(out.status,'APPLIED_IN_ORIGINAL_SQLITE_TRANSACTION');
