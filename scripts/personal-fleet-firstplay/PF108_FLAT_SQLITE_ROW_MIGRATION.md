@@ -4,6 +4,30 @@
 native feature **BLOCKED** until all other original readers/writers agree.
 PR #350 Draft, no PLAY or main mutation.
 
+## PF109 implementation update — 2026-11-09
+
+The paths listed in the **historical PF108 findings table below** are
+no longer all source-unimplemented: PF109 has changed the exact native
+PF52, PF54 (both archive/staged sources), PF57 stock ship absence,
+PF58 atomic ship title, handoff, permit and reciprocal custody, and
+FirstPlay order witness to actual native itemID rows.
+
+PF109 additionally migrated FirstPlay player-follow source, NPC combat,
+physical recovery and terminal docking checks. It staged a 14-case
+flat SQLite regression suite and updated the local first-play runner.
+PF52 and PF54/PF58 onboarding fixtures were also updated.
+
+**This does NOT close the full P0 readiness gate.** The native PF57
+loss path includes other original NPC asset tables whose native
+`ROW_GROUPS` layout still requires review. Other untouched original
+writer owners may bypass the new ItemStore gate. Historical PF58/PF89/
+PF90 test fixtures still include `items/items` and must be replaced
+before a full clean original Node/SQLite gate can be claimed. PF109
+source tests and manual syntax inspection are not physical gameplay.
+
+Follow `scripts/personal-fleet-firstplay/README.md` PF109 notes for
+the exact source modules and remaining acceptance gate.
+
 ## Original SQLite truth
 
 Original `Code/server/src/gameStore/sqliteStore.js` Git blob:
