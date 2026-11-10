@@ -3874,3 +3874,9 @@ Why: make the verified port the engine the repo builds from, with a one-command 
 Detail: coop/pas7std now carries the integrated 261108.1 tree (099603f); the previous engine is preserved byte-identical as coop/legacy-20261028 (f64fed0) and is the one-command rollback. The shared checkout is switched, node_modules refreshed, 24 content packs (572 MB) placed in Code/content-packs and excluded from git. Boot from the real tree: banner 61-90 s, stderr 0, RSS steady. state/ republished (ST
 Where: .opencode/state.md, docs/UPSTREAM.md, docs/UPSTREAM_261108_1_PORT_PLAN.md, docs/evidence/overlay-261108.1.md, state/NOW.md, state/changelog.jsonl, state/digests/20261031-183835.md, state/digests/20261110-183544.md, state/manifest.json, state/status.json
 Evidence: docs/evidence/overlay-261108.1.md integration section; branch move coop/pas7std->legacy, coop/261108->pas7std; boot from C:\Games\EveCoop\upstream-evejs 099603f; state STATE_OK
+### 2026-11-10T19:03Z · baa553a · TEST · feat(presence): warn when the comparison is a self-comparison; gates re-run on the integrated tree
+
+Why: a gate that can silently become a self-comparison is worse than no gate
+Detail: Once the port is committed the engine checkout is the branch, so presence against --ours coop/pas7std is trivially 100%. The script now says that on stderr and names the baseline that still measures overlay completeness: coop/legacy-20261028 (54/73 files, 156 lines). Audit, perf and client contracts re-run against the integrated tree: AUDIT_OK, PERF_OK, 542 calls / 0 missing / 11 stubs.
+Where: docs/evidence/overlay-261108.1.md, scripts/coop-overlay-presence.cjs
+Evidence: scripts/coop-overlay-presence.cjs self-comparison warning; docs/evidence/overlay-261108.1.md gates block; AUDIT_OK/PERF_OK/CONTRACTS_OK on the integrated tree
