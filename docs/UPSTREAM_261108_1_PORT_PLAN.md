@@ -76,6 +76,31 @@ re-anchoring):
 | `services/trade/tradeMgrService.js` | 10 | trade service rewritten (persisted trades, bound objects) |
 | `space/npc/*` (store, service, behavior loop) | 14 + 11 + 10 | durable NPC records |
 
+## Third pass, 2026-11-10 (`101c383`, `2132ef0`)
+
+* Bulk pure-insertion port with **exact anchors only** (successor lines first,
+  predecessor as fallback), idempotent, per-file `node --check` with automatic
+  restore: 2066 lines placed, 7 files restored because the anchor sat inside a
+  restructured expression.
+* `261108.1` split `space/runtime.js` into `space/runtime/*` and
+  `space/destiny/*`. Re-homed so far: the stargate warp-range fix
+  (`destiny/simulation/warpTargets.js`), the capacitor-charge authority
+  (`runtime/shipEntity.js`), the mining-trace module-stop hook
+  (`runtime/moduleEffectShutdown.js`) and the whole NPC ammo authority
+  (`runtime/loadedChargeState.js`).
+* Retired after checking upstream: `logMovementDebug` early return (261108.1
+  already returns before building the record).
+* The presence gate now searches the whole engine for a moved co-op line, so a
+  legitimate re-home is reported as `complete-relocated` instead of "missing".
+
+```
+overlay presence: 38/73 files complete, 323 co-op lines missing, 2 files gone
+```
+
+Biggest remaining: market proxy (75), mining NPC operations (41), `runtime.js`
+(40), `compose.yaml` (24), wreck service (23), item store (11), native NPC store
+(11), mining runtime (9), trade (7), dungeon sites (6).
+
 ## Remaining queue A — finish the overlay (the 64 hook files)
 
 114 hunks need a human decision, in 26 files. `syntax-fail` means the whole file

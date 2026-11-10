@@ -70,6 +70,35 @@ function coopLinesAdded(file) {
 }
 
 const results = [];
+// Re-homing means a co-op line can legitimately end up in a different file after a
+// module split (261108.1 split space/runtime.js into space/runtime/* and
+// space/destiny/*). Build a whole-engine line index once so a moved hook is
+// reported as relocated rather than lost.
+let engineIndex = null;
+function relocatedIn(line, sameFile) {
+  if (!engineIndex) {
+    engineIndex = new Map();
+    const stack = [engine];
+    while (stack.length) {
+      const dir = stack.pop();
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, entry.name);
+        if (entry.isDirectory()) { stack.push(p); continue; }
+        if (!entry.name.endsWith('.js')) continue;
+        const rel = path.relative(engine, p).split(path.sep).join('/');
+        const text = fs.readFileSync(p, 'utf8');
+        for (const l of text.split(/\r?\n/)) {
+          const key = l.trim();
+          if (!key) continue;
+          if (!engineIndex.has(key)) engineIndex.set(key, rel);
+        }
+      }
+    }
+  }
+  const hit = engineIndex.get(line.trim());
+  return hit && hit !== sameFile ? hit : null;
+}
+
 for (const file of stockFiles) {
   const rel = file.slice(5);
   const target = path.join(engine, rel);
@@ -80,8 +109,16 @@ for (const file of stockFiles) {
     continue;
   }
   const targetLines = new Set(fs.readFileSync(target, 'utf8').split(/\r?\n/).map((l) => l.trim()));
-  const missing = lines.filter((l) => !targetLines.has(l.trim()));
-  results.push({ file: rel, status: missing.length === 0 ? 'complete' : 'incomplete', total: lines.length, missing });
+  const missing = [];
+  const relocated = [];
+  for (const l of lines) {
+    if (targetLines.has(l.trim())) continue;
+    const other = relocatedIn(l, rel);
+    if (other) { relocated.push({ line: l.trim().slice(0, 120), in: other }); continue; }
+    missing.push(l);
+  }
+  const status = missing.length === 0 ? (relocated.length ? 'complete-relocated' : 'complete') : 'incomplete';
+  results.push({ file: rel, status, total: lines.length, missing, relocated });
 }
 
 const summary = {
@@ -91,7 +128,8 @@ const summary = {
   stockFilesTouched: stockFiles.length,
   stockFilesDeletedByUs: deletedByUs.length,
   filesWithCoopLines: results.length,
-  complete: results.filter((r) => r.status === 'complete').length,
+  complete: results.filter((r) => r.status === 'complete' || r.status === 'complete-relocated').length,
+  relocated: results.filter((r) => r.status === 'complete-relocated').length,
   incomplete: results.filter((r) => r.status === 'incomplete').length,
   engineFileMissing: results.filter((r) => r.status === 'engine-file-missing').length,
   missingLines: results.reduce((n, r) => n + r.missing.length, 0),
