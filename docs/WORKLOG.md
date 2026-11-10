@@ -3897,3 +3897,9 @@ Why: two measured harness traps cost two six-minute boots each
 Detail: Second harness mistake measured today: EVEJS_COOP_VIRTUAL_ROUTE=30000144 alone makes createWorld throw, which surfaces as living-startup-failed / BLOCKED_PERSISTED_WORLD_INIT / phase=persistent-state-load plus one stderr line. Recorded so the next agent reads the pair instead of suspecting the port.
 Where: docs/HEADLESS_NPC_VALIDATION.md
 Evidence: docs/HEADLESS_NPC_VALIDATION.md route row and diagnosable-failure paragraph; coopVirtualWorld.js createWorld route.length<2 guard
+### 2026-11-10T19:25Z · 4326791 · DOCS · docs(headless): EVEJS_COOP_MATERIALIZE_NPCS is the master switch, not the limit
+
+Why: the limit looks like the materializer switch and is not
+Detail: Third trap measured today: the third run booted a real Perimeter scene (3 belts, 33 waypoints, sceneReady true) and still reconciled nothing, because EVEJS_COOP_MATERIALIZE_LIMIT without EVEJS_COOP_MATERIALIZE_NPCS never reaches the bridge. Also points at Deploy-Coop-RuntimeProbe.ps1 as the canonical flag set.
+Where: docs/HEADLESS_NPC_VALIDATION.md
+Evidence: docs/HEADLESS_NPC_VALIDATION.md gate table; coopVirtualWorldRuntime.js lines 1036/2291/2908 gate on EVEJS_COOP_MATERIALIZE_NPCS
