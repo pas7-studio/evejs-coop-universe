@@ -3891,3 +3891,9 @@ Why: a silent headless run must not be read as a code verdict
 Detail: Measured today: ALIFE flags without EVEJS_COOP_VIRTUAL_WORLD=1 return from start() before any observe(), and without EVEJS_COOP_HEADLESS_WORLD_BOOT=1 the materializer bridge is never built for a client-less run. Zero events is a configuration answer, not a gameplay one.
 Where: docs/HEADLESS_NPC_VALIDATION.md
 Evidence: docs/HEADLESS_NPC_VALIDATION.md prerequisite table; coopVirtualWorldRuntime.js start() gate and materializer bridge gate
+### 2026-11-10T19:18Z · 42c535f · DOCS · docs(headless): route needs two systems; a refused boot is diagnosable
+
+Why: two measured harness traps cost two six-minute boots each
+Detail: Second harness mistake measured today: EVEJS_COOP_VIRTUAL_ROUTE=30000144 alone makes createWorld throw, which surfaces as living-startup-failed / BLOCKED_PERSISTED_WORLD_INIT / phase=persistent-state-load plus one stderr line. Recorded so the next agent reads the pair instead of suspecting the port.
+Where: docs/HEADLESS_NPC_VALIDATION.md
+Evidence: docs/HEADLESS_NPC_VALIDATION.md route row and diagnosable-failure paragraph; coopVirtualWorld.js createWorld route.length<2 guard
