@@ -269,3 +269,23 @@ on stderr and points at the baseline that still measures something: the pre-port
 line. The 156 remaining lines there are the market fence (75), the documented
 retirements, and lines that moved with a different require depth.
 
+
+## Co-op telemetry on the new engine (the `BLOCKED_TELEMETRY` rung)
+
+The event writer needs `EVEJS_COOP_EVENTS_FILE`; without it `coopRuntimeProbe` refuses
+by design (`BLOCKED_TELEMETRY_CONFIG`). With it set, a plain boot wrote **11 events**
+and every one carries an explicit status instead of silence:
+
+```
+{"event":"living-startup-entered", "status":"START_REQUESTED_NOT_READY", "headlessConfigured":false, ...}
+{"event":"living-native-war-skip", "phase":"opening",     "reason":"WAR_FLAGS_OFF",            "status":"SKIPPED", "evidence":"EXPLICIT_PRECONDITION_NOT_MET"}
+{"event":"living-native-war-skip", "phase":"mobilization","reason":"WAR_FLAGS_OFF",            "status":"SKIPPED", ...}
+{"event":"living-native-war-skip", "phase":"assault",     "reason":"WAR_FLAGS_OFF",            "status":"SKIPPED", ...}
+{"event":"living-native-war-skip", "phase":"gate-staging","reason":"GATE_APPROACH_FLAG_OFF",  "status":"SKIPPED", ...}
+{"event":"living-native-war-skip", "phase":"combat",      "reason":"COMBAT_FLAGS_OFF",         "status":"SKIPPED", ...}
+```
+
+That is the doctrine's "no silent no-op": a phase that did not run says why. It also
+confirms the port kept the telemetry path intact - the old `BLOCKED_TELEMETRY` symptom
+was this variable being unset, not the writer being broken.
+
