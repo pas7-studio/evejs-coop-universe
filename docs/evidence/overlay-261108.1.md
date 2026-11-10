@@ -117,3 +117,29 @@ No `docker build`, no container, no client, no gameplay. Docker Desktop's Linux
 engine was down; starting it would have restarted the owner's containers, which
 the two-stack rule forbids outside an explicit restart window. The boot evidence
 above is host-Node only.
+
+## Legacy overlay suite against the new engine (expected drift)
+
+34 test files read the deployed engine through `EVEJS_COOP_CODE_PATH`; run against
+`O:\tmp\c261108\Code`: **171 tests, 121 pass, 50 fail**. Every sampled failure is the
+archived overlay roundtrip class bound to the old pin, not port breakage:
+
+```
+not ok 2 - pinned native source one-statement patch is byte-exact reversible: server/src/services/inventory/itemStore.js
+  error: 'WAREHOUSE_PATCH_DRIFT'
+not ok 3 - ... tradeMgrService.js
+  error: 'Unknown/duplicated source anchor: ... const moneyTransferResult = this._completeMoneyTransfer(trade);'
+```
+
+That is exactly what `docs/DEVELOPMENT_DOCTRINE.md` predicts for the frozen installer/
+overlay library once the engine moves: its anchors no longer exist, and
+`patch-evejs-coop.cjs` is a proposal archive for the original author, not how this fork
+ships. The port's gates are the audit, perf, presence and boot checks above.
+
+## Not done in this session
+
+No `docker build`, no container, no client, no gameplay claim. Docker Desktop's Linux
+engine was down for the whole session; starting it would have restarted the owner's
+containers, which the two-stack rule forbids outside an explicit restart window. What was
+verified instead: host-Node boot, a host-Rust market daemon end to end, and
+`docker compose config` for both the engine compose and the agents override.
