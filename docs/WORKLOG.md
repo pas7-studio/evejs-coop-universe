@@ -3799,3 +3799,9 @@ Evidence: coopGcWatch via node:perf_hooks gc entries; coop-event-loop-lag now ca
 Why: the event-loop monitor, the only witness to the owner's freezes, measured lateness on a wall clock that was measured stepping backwards by 2277 ms in one 20 s window
 Where: integration/coopEventLoopMonitor.cjs, tests/coop-event-loop-monotonic.test.mjs
 Evidence: in-process clock probe: wall 18466 ms vs monotonic 20743 ms; 5 s windows within 0.6 ms; fork f64fed0; lag math on performance.now(); 3 tests; AUDIT_OK
+### 2026-11-10T12:27Z · fd89822 · DOCS · docs(upstream): inventory of EveJS 261108.1 against the coop fork
+
+Why: record what EveJS 261108.1 changes and what merging it costs the coop fork before any port begins
+Detail: Import branch upstream/261108.1 (1d6b691) carries the git-less release tree; the doc records 1380 added / 901 modified / 101 deleted files, the 137-conflict merge attempt, the 63 hook files it reopens and the four deleted movement files our branch had patched.
+Where: docs/UPSTREAM_261108_1_INTEGRATION.md
+Evidence: docs/UPSTREAM_261108_1_INTEGRATION.md; fork import commit 1d6b691; merge attempt in O:\tmp\m261108 -> 137 conflicts (63 of 64 hook files)
