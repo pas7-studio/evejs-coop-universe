@@ -3834,3 +3834,9 @@ Evidence: docs/evidence/overlay-261108.1.md; fork coop/261108 1ebf774; AUDIT_OK/
 Why: close the movement hooks and stop the unported market fence from looking guarded
 Where: docs/evidence/overlay-261108.1.md
 Evidence: fork coop/261108 099603f; COOP_MARKET_FENCE_NOT_PORTED verified both ways; boot re-verified; AUDIT_OK/PERF_OK
+### 2026-11-10T18:02Z · 2fc9225 · TEST · docs(evidence): market daemon proven end to end on the port (host Rust, no Docker)
+
+Why: prove the 261108.1 market bridge without Docker
+Detail: cargo-built market-server + market-seed, seeded 4800 orders over 40 stations, the 261108.1 world booted against it with no MarketDaemonClient warnings - the Node <-> Rust market bridge works on the new engine. Daemon stopped again.
+Where: docs/evidence/overlay-261108.1.md
+Evidence: docs/evidence/overlay-261108.1.md; market-server /health ok; 4800 open orders; boot with zero MarketDaemonClient warnings
