@@ -3805,3 +3805,9 @@ Why: record what EveJS 261108.1 changes and what merging it costs the coop fork 
 Detail: Import branch upstream/261108.1 (1d6b691) carries the git-less release tree; the doc records 1380 added / 901 modified / 101 deleted files, the 137-conflict merge attempt, the 63 hook files it reopens and the four deleted movement files our branch had patched.
 Where: docs/UPSTREAM_261108_1_INTEGRATION.md
 Evidence: docs/UPSTREAM_261108_1_INTEGRATION.md; fork import commit 1d6b691; merge attempt in O:\tmp\m261108 -> 137 conflicts (63 of 64 hook files)
+### 2026-11-10T12:52Z · 5e2c521 · DOCS · docs(upstream): port plan for the coop overlay onto 261108.1
+
+Why: give the 261108.1 port a resumable queue instead of a one-shot merge
+Detail: Records branch layout (coop/261108 at 36543ca), what the machine pass already re-anchored (30 files), the 114 hunks in 26 files left for manual work, the two movement files whose hooks have no upstream home, and queue B (our engine rewrites, market decision point).
+Where: docs/UPSTREAM_261108_1_PORT_PLAN.md
+Evidence: docs/UPSTREAM_261108_1_PORT_PLAN.md; fork commit 36543ca; port report O:\tmp\port-report.json
