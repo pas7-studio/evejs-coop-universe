@@ -971,3 +971,30 @@ would restart the owner's stacks), client login, gameplay. `coop/pas7std` is unt
 the play engine. Open: marketProxyService settlement fence (75 gated lines, needs a design decision
 against upstream's durable market), escort motion observer, coopNpcRunawayGoto, warp landing tracer.
 
+
+### 2026-11-10 (evening) вЂ” 261108.1 port: verification depth added
+
+Branch `coop/261108` head `099603f` (import `upstream/261108.1` `1d6b691`).
+New evidence beyond the first boot, all in `docs/evidence/overlay-261108.1.md`:
+
+- **market bridge, host Rust, no Docker**: `cargo build` of `market-server` + `market-seed`,
+  4800 seeded orders, world booted against the daemon with zero `MarketDaemonClient`
+  warnings; daemon stopped, ports 40110/40111/26000 verified closed.
+- **eight-minute soak**: alive, one banner, 0 stderr, RSS 2859 -> 2727 MB (no growth trend).
+- **boot with 18 co-op flags on**: alive 90 s, 0 stderr; only warnings are "no market
+  daemon" and the cosmetic `contractMgr` alias replacement (261108 still ships the dead
+  `contractMgrService`, so our `EVEJS_COOP_NATIVE_CONTRACTS` alias is still the right thing).
+- **client contracts**: `CONTRACTS_OK calls=542 missing=0 stub=11` on the port vs `stub=37`
+  on the play tree - the upgrade loses no client call and closes 26 placeholders. Needed a
+  scanner fix: 261108 splits services into `services/<svc>/*.js` attached via
+  `attach*ServiceMethods`, which `coop-client-contracts.cjs` now follows.
+- **compose**: engine compose, agents override and play-coop override all pass
+  `docker compose config` against the ported `compose.yaml`.
+- **legacy overlay suite** (34 engine-reading tests): 171 tests, 121 pass, 50 fail - all the
+  frozen `patch-evejs-coop` roundtrip class whose anchors no longer exist at the new pin.
+
+Still open: market settlement fence (design note `docs/UPSTREAM_261108_1_MARKET_FENCE.md`;
+the proxy refuses to load with any fence flag until it is ported), warp landing tracer.
+Blocked: `docker build`/containers/client (Docker Desktop Linux engine down; starting it
+would restart the owner's stacks).
+
