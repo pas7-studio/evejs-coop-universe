@@ -3840,3 +3840,9 @@ Why: prove the 261108.1 market bridge without Docker
 Detail: cargo-built market-server + market-seed, seeded 4800 orders over 40 stations, the 261108.1 world booted against it with no MarketDaemonClient warnings - the Node <-> Rust market bridge works on the new engine. Daemon stopped again.
 Where: docs/evidence/overlay-261108.1.md
 Evidence: docs/evidence/overlay-261108.1.md; market-server /health ok; 4800 open orders; boot with zero MarketDaemonClient warnings
+### 2026-11-10T18:04Z · 613fbad · TEST · docs(evidence): legacy overlay suite drift measured, compose config validated
+
+Why: state the legacy overlay drift in numbers so a red suite is not mistaken for a broken port
+Detail: 34 engine-reading tests against the port: 171 tests, 121 pass, 50 fail, all of them the frozen overlay roundtrip class whose anchors no longer exist at the new pin (WAREHOUSE_PATCH_DRIFT, unknown anchor). Also records that both compose.yaml and the agents override pass 'docker compose config' against the port.
+Where: docs/evidence/overlay-261108.1.md
+Evidence: docs/evidence/overlay-261108.1.md; 171/121/50; docker compose config rc=0 for compose.yaml and agents override
