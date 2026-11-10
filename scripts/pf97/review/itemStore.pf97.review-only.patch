@@ -1,0 +1,51 @@
+diff --git a/server/src/services/inventory/itemStore.js b/server/src/services/inventory/itemStore.js
+--- a/server/src/services/inventory/itemStore.js
++++ b/server/src/services/inventory/itemStore.js
+@@ -1876,8 +1876,14 @@
+   return cloneValue(moveResult.data || shipItem);
+ }
+ 
+-function ensureCharacterActiveShipItem(charId, existingRecord = null) {
+-  ensureMigrated();
++function ensureCharacterActiveShipItem(charId, existingRecord = null) {
++  // PF97: this lazy *read* may provision, repair, move and persist real hulls.
++  // Until PF52/PF92 original custody is installed, never enter that path in
++  // Personal Fleet native mode. Do not leave a physical orphan on blocked sync.
++  if (process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS === "1") {
++    return null;
++  }
++  ensureMigrated();
+ 
+   const numericCharId = toNumber(charId, 0);
+   if (numericCharId <= 0) {
+@@ -2070,8 +2076,13 @@
+   return ensureCharacterActiveShipItem(charId);
+ }
+ 
+-function syncCharacterActiveShip(charId, shipItem) {
+-  ensureMigrated();
++function syncCharacterActiveShip(charId, shipItem) {
++  // No stock reparenting of original ship title before source-owned PF92 gate.
++  if (process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS === "1") {
++    return { success: false,
++      errorMsg: "PF97_ITEMSTORE_SHIP_SYNC_REQUIRES_NATIVE_CUSTODY" };
++  }
++  ensureMigrated();
+   const characters = readCharacters();
+   const record = characters[String(charId)];
+   if (!record || !shipItem) {
+@@ -3917,8 +3928,12 @@
+   };
+ }
+ 
+-function setActiveShipForCharacter(charId, shipId) {
+-  const shipItem = findCharacterShipItem(charId, shipId);
++function setActiveShipForCharacter(charId, shipId) {
++  if (process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS === "1") {
++    return { success: false,
++      errorMsg: "PF97_ITEMSTORE_ACTIVATION_REQUIRES_NATIVE_CUSTODY" };
++  }
++  const shipItem = findCharacterShipItem(charId, shipId);
+   if (!shipItem) {
+     return {
+       success: false,

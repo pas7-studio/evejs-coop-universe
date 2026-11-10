@@ -1,0 +1,80 @@
+diff --git a/server/src/space/coopGameStoreAtomic.js b/server/src/space/coopGameStoreAtomic.js
+--- a/server/src/space/coopGameStoreAtomic.js
++++ b/server/src/space/coopGameStoreAtomic.js
+@@ -46,20 +46,60 @@
+   const scope=new Set(tables),changed=new Map(),writes=new Map();
+   const noteWrite=(t,k,json)=>{if(!writes.has(t))writes.set(t,[]);writes.get(t).push([k,json]);};
+   const tbl=t=>{if(!scope.has(t))throw Error("UNDECLARED_NATIVE_TABLE");return '"'+t+'"';};
+-  let begun=false;inside=true;
++  let begun=false,txLive=false,mutationEpoch=0,witnessRunning=false,witnessDenied=false,witnessPoison=null;inside=true;
+   try{
+-   db.exec("BEGIN IMMEDIATE");begun=true;
++   db.exec("BEGIN IMMEDIATE");begun=true;txLive=true;
++   const alive=()=>{if(!txLive)throw Error("PF95_NATIVE_TRANSACTION_CLOSED")};
++   const safeWrite=()=>{
++    alive();
++    if(witnessRunning){witnessPoison="PF95_ORIGINAL_SESSION_WITNESS_WRITE_ATTEMPT_ROLLBACK";throw Error(witnessPoison);}
++    if(witnessDenied){witnessPoison="PF96_ORIGINAL_SESSION_WITNESS_DENIED_WRITE";throw Error(witnessPoison);}
++    if(witnessPoison)throw Error("PF96_ORIGINAL_SESSION_WITNESS_TRANSACTION_POISONED");
++   };
+    const tx=Object.freeze({
+-    get(t,k){const table=tbl(t);assertRowKey(k);const r=db.prepare('SELECT json FROM '+table+' WHERE key=?').get(k);return r?JSON.parse(r.json):null;},
+-    scan(t){const table=tbl(t);return db.prepare('SELECT key,json FROM '+table).all().map(r=>({key:r.key,value:JSON.parse(r.json)}));},
+-    put(t,k,value){const table=tbl(t);assertRowKey(k);const json=serialize(value,t,k);
++    get(t,k){alive();const table=tbl(t);assertRowKey(k);const r=db.prepare('SELECT json FROM '+table+' WHERE key=?').get(k);return r?JSON.parse(r.json):null;},
++    scan(t){alive();const table=tbl(t);return db.prepare('SELECT key,json FROM '+table).all().map(r=>({key:r.key,value:JSON.parse(r.json)}));},
++    put(t,k,value){safeWrite();const table=tbl(t);assertRowKey(k);const json=serialize(value,t,k);
++     mutationEpoch++;
+      db.prepare('INSERT INTO '+table+'(key,json) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json').run(k,json);
+      if(!changed.has(t))changed.set(t,new Set());changed.get(t).add(k);noteWrite(t,k,json);},
+-    del(t,k){const table=tbl(t);assertRowKey(k);db.prepare('DELETE FROM '+table+' WHERE key=?').run(k);
+-     if(!changed.has(t))changed.set(t,new Set());changed.get(t).add(k);noteWrite(t,k,null);}
++    del(t,k){safeWrite();const table=tbl(t);assertRowKey(k);mutationEpoch++;db.prepare('DELETE FROM '+table+' WHERE key=?').run(k);
++     if(!changed.has(t))changed.set(t,new Set());changed.get(t).add(k);noteWrite(t,k,null);},
++    verifyReadOnlySessionWitness(callback,request){
++     alive();
++     if(witnessPoison)throw Error("PF96_ORIGINAL_SESSION_WITNESS_TRANSACTION_POISONED");
++     if(witnessRunning){witnessPoison="PF96_ORIGINAL_SESSION_WITNESS_REENTRANT";throw Error(witnessPoison);}
++     if(process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS!=="1"){
++      witnessPoison="PF95_ORIGINAL_SESSION_WITNESS_DISABLED";throw Error(witnessPoison);
++     }
++     if(typeof callback!=="function"){
++      witnessPoison="PF95_ORIGINAL_SESSION_WITNESS_REQUIRED";throw Error(witnessPoison);
++     }
++     const before=mutationEpoch;
++     const reader=Object.freeze({
++      get:(t,k)=>structuredClone(tx.get(t,k)),
++      scan:t=>structuredClone(tx.scan(t))
++     });
++     let value,failure;
++     witnessRunning=true;
++     try{
++      value=callback(request,reader);
++      if(value&&typeof value.then==="function")
++       throw Error("PF95_ASYNC_ORIGINAL_SESSION_WITNESS_FORBIDDEN");
++     }catch(e){failure=e;}finally{witnessRunning=false;}
++     if(mutationEpoch!==before)witnessPoison="PF95_ORIGINAL_SESSION_WITNESS_WRITE_ATTEMPT_ROLLBACK";
++     if(witnessPoison)throw Error(witnessPoison);
++     if(failure){witnessPoison="PF96_ORIGINAL_SESSION_WITNESS_CALLBACK_FAILED";throw failure;}
++     if(value!==true)witnessDenied=true;
++     return value===true;
++    }
+    });
+    const result=mutation(tx);
+    if(result&&typeof result.then==="function")throw Error("ASYNC_NATIVE_ATOMIC_MUTATION_FORBIDDEN");
++   // A mutator can swallow a rejected witness exception. Only the original
++   // SQLite owner decides COMMIT, and rejects every poisoned transaction.
++   if(witnessPoison)throw Error("PF96_ORIGINAL_SESSION_WITNESS_POISONED_BEFORE_COMMIT:"+witnessPoison);
++   if(witnessDenied&&mutationEpoch>0)throw Error("PF96_ORIGINAL_SESSION_WITNESS_DENIED_BEFORE_COMMIT");
+    try{db.exec("COMMIT");}catch(cause){
+     const uncertain=Error("NATIVE_SQLITE_COMMIT_OUTCOME_UNKNOWN");
+     uncertain.coopCommitOutcomeUnknown=true;uncertain.cause=cause;throw uncertain;
+@@ -68,7 +108,7 @@
+    return {result,changed:Object.fromEntries([...changed].map(([t,keys])=>[t,[...keys]])),
+      writes:Object.fromEntries([...writes].map(([t,rows])=>[t,rows]))};
+   }catch(e){if(begun){try{db.exec("ROLLBACK")}catch{}}throw e;}
+-  finally{inside=false;}
++  finally{txLive=false;inside=false;}
+  }
+  // Only the GameStore owner can claim this SQLite writer; a second caller is refused.
+  return Object.freeze({claimTransactor(){

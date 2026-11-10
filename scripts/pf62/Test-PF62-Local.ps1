@@ -1,0 +1,50 @@
+#Requires -Version 5.1
+# Manual, read-only local checks. Never edits native fork, restarts Docker,
+# activates Personal Fleet or runs GitHub Actions.
+[CmdletBinding()]
+param(
+  [string]$NativeCheckout,
+  [string]$ReviewOutput
+)
+$ErrorActionPreference = 'Stop'
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$node = (Get-Command node -ErrorAction Stop).Source
+$python = (Get-Command python -ErrorAction Stop).Source
+& $node -p 'Number(process.versions.node.split(".")[0]) >= 22 ? "PF62_NODE_OK" : process.exit(2)'
+if ($LASTEXITCODE -ne 0) { throw 'PF62_NODE22_REQUIRED' }
+& $node --test `
+  (Join-Path $repo 'scripts/pf59/tests/pf59-removal.test.cjs') `
+  (Join-Path $repo 'scripts/pf60/tests/pf60-terminal.test.cjs') `
+  (Join-Path $repo 'scripts/pf61/tests/pf61-scoped-cleanup.test.cjs')
+if ($LASTEXITCODE -ne 0) { throw 'PF62_REFERENCE_NODE_REGRESSION_FAILED' }
+# PF78: WORK native bundle now includes the PF56 return executor and a shared
+# actor/controller identity validator. Test them as part of standard preflight.
+& $node --test '--test-concurrency=1' `
+  (Join-Path $repo 'scripts/pf55/tests/pf55-native-executor.test.cjs') `
+  (Join-Path $repo 'scripts/pf55/tests/pf78-actor-identity.test.cjs') `
+  (Join-Path $repo 'scripts/pf56/tests/pf56-native-api.test.cjs')
+if ($LASTEXITCODE -ne 0) { throw 'PF78_REAL_NATIVE_ORDER_RETURN_CONTRACT_FAILED' }
+& $node --test `
+  (Join-Path $repo 'scripts/pf66/tests/pf66-dock.test.cjs') `
+  (Join-Path $repo 'scripts/pf66/tests/pf66-native-service.test.cjs')
+if ($LASTEXITCODE -ne 0) { throw 'PF66_SCOPED_DOCK_NODE_REGRESSION_FAILED' }
+& $node --test '--test-concurrency=1' (Join-Path $repo 'scripts/pf58/tests/pf73-docking-restart-permit.test.cjs')
+if ($LASTEXITCODE -ne 0) { throw 'PF73_DOCK_RESTART_SQLITE_REGRESSION_FAILED' }
+if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) {
+  & $node --test (Join-Path $repo 'scripts/pf66/tests/pf66-sigkill.test.cjs')
+  if ($LASTEXITCODE -ne 0) { throw 'PF66_SQLITE_SIGKILL_REGRESSION_FAILED' }
+}
+# PF69 original source guard regression must be part of native preflight.
+foreach ($pf in 58,59,61,62,66) {
+  & $python -m unittest discover -s (Join-Path $repo ('scripts/pf'+$pf+'/tests')) -p 'test_*.py' -v
+  if ($LASTEXITCODE -ne 0) { throw ('PF62_PYTHON_REGRESSION_FAILED_'+$pf) }
+}
+if ([bool]$NativeCheckout -xor [bool]$ReviewOutput) {
+  throw 'PF62_NATIVE_CHECKOUT_AND_REVIEW_OUTPUT_REQUIRED_TOGETHER'
+}
+if ($NativeCheckout) {
+  & $python (Join-Path $PSScriptRoot 'build_native_review_bundle.py') `
+    --engine $NativeCheckout --repo $repo --output $ReviewOutput
+  if ($LASTEXITCODE -ne 0) { throw 'PF62_NATIVE_SOURCE_OR_COMPOSITION_BLOCKED' }
+}
+Write-Host 'PF62 local reference PASS. Real WORK, client E2E and native installation NOT RUN. Feature OFF.'

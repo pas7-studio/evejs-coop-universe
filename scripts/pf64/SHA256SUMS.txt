@@ -1,0 +1,4 @@
+3b88ed7366339c0f955bb4e1bcc53cce06acd788cc0903190fe433a0aae73c8a  scripts/pf64/README.md
+fcf3d2eab2b80d04bd104a8d462c7f77a9aa8a3397b2ecd198cabeada9255786  scripts/pf64/Test-PF64-Local.ps1
+1b56f4acf04ef60609765f1850d4fbfb103ef9b6cd585bda54de6807a54eaf32  scripts/pf64/INTEGRATION_GATES.md
+4ff9bcda3ec08389d0491051521f830a2e0dd09f81dbe9f27b06de6793c0617b  scripts/pf64/tests/pf64-bootstrap.test.cjs

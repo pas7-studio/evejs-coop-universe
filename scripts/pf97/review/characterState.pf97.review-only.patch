@@ -1,0 +1,161 @@
+diff --git a/server/src/services/character/characterState.js b/server/src/services/character/characterState.js
+--- a/server/src/services/character/characterState.js
++++ b/server/src/services/character/characterState.js
+@@ -375,30 +375,113 @@
+     });
+ }
+ 
+-function writeCharacterRecord(charId, record, options) {
+-  const clonedRecord = cloneValue(record);
+-  const writeResult = options
+-    ? repo.write(CHARACTERS_TABLE, `/${String(charId)}`, clonedRecord, options)
+-    : repo.write(CHARACTERS_TABLE, `/${String(charId)}`, clonedRecord);
+-  if (!writeResult.success) {
+-    return {
+-      success: false,
+-      errorMsg: writeResult.errorMsg || "WRITE_ERROR",
+-    };
+-  }
+-
+-  characterRecordCache.delete(String(charId));
+-
+-  return {
+-    success: true,
+-    data: clonedRecord,
+-  };
+-}
++// PF97 is a source-owned CharacterState *boundary*, not full ship activation.
++// When native Personal Fleet witness mode is ON, ordinary repo.write is never
++// allowed to overwrite a character row that can also be an atomic ship owner.
++const PF97_PROTECTED_SHIP_FIELDS = Object.freeze([
++  "shipID", "shipid", "activeShipID", "shipTypeID", "shipName", "storedShips",
++]);
++function pf97ProtectedShipChanged(before, after) {
++  if (!before || !after || typeof before !== "object" || typeof after !== "object") {
++    return true;
++  }
++  return PF97_PROTECTED_SHIP_FIELDS.some(
++    key => JSON.stringify(before[key]) !== JSON.stringify(after[key]),
++  );
++}
++function writeCharacterRecord(charId, record, options) {
++  const clonedRecord = cloneValue(record);
++  if (process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS === "1") {
++    // Ship title may ONLY change via the future PF91/PF92 atomic session
++    // + physical item custody route. No writer exception/escape boolean.
++    // For ordinary wallet/skill updates, compare exact original before-image
++    // against the same native SQLite transaction and commit one row.
++    const id = String(charId);
++    if (!/^[1-9][0-9]*$/.test(id) || !clonedRecord ||
++        typeof clonedRecord !== "object" || Array.isArray(clonedRecord) ||
++        (clonedRecord.characterID !== undefined &&
++         String(clonedRecord.characterID) !== id) ||
++        (options && (typeof options !== "object" ||
++                     Object.keys(options).length > 0))) {
++      return { success: false, errorMsg: "PF97_ORIGINAL_CHARACTER_INPUT_INVALID" };
++    }
++    const beforeRow = readCharacters()[id];
++    if (!beforeRow || typeof beforeRow !== "object" ||
++        Array.isArray(beforeRow)) {
++      return { success: false, errorMsg: "PF97_ORIGINAL_CHARACTER_BEFORE_MISSING" };
++    }
++    const before = cloneValue(beforeRow);
++    if (pf97ProtectedShipChanged(before, clonedRecord)) {
++      return { success: false, errorMsg: "PF97_SHIP_IDENTITY_REQUIRES_NATIVE_CUSTODY" };
++    }
++    let atomic;
++    try {
++      const gameStore = require(path.join(__dirname, "../../gameStore"));
++      atomic = gameStore.coopAtomicNativeRows;
++      if (!atomic || atomic.mode !== "SERVER_INTERNAL_FLAGGED" ||
++          typeof atomic.transact !== "function" ||
++          typeof atomic.isPoisoned !== "function" ||
++          atomic.isPoisoned()) {
++        return { success: false, errorMsg: "PF97_NATIVE_OWNER_NOT_AVAILABLE" };
++      }
++      const result = atomic.transact(["characters"], tx => {
++        const present = tx.get("characters", id);
++        if (!present || JSON.stringify(present) !== JSON.stringify(before)) {
++          return { status: "BLOCKED", reason: "PF97_CHARACTER_BEFORE_IMAGE_STALE" };
++        }
++        if (pf97ProtectedShipChanged(present, clonedRecord)) {
++          return { status: "BLOCKED", reason: "PF97_SHIP_IDENTITY_REQUIRES_NATIVE_CUSTODY" };
++        }
++        tx.put("characters", id, clonedRecord);
++        if (JSON.stringify(tx.get("characters", id)) !==
++            JSON.stringify(clonedRecord)) {
++          throw Error("PF97_ORIGINAL_CHARACTER_READBACK_FAILED");
++        }
++        return { status: "APPLIED", characterID: id };
++      });
++      if (result?.status !== "APPLIED") {
++        return { success: false, errorMsg: result?.reason ||
++          "PF97_CHARACTER_ATOMIC_WRITE_NOT_CONFIRMED" };
++      }
++    } catch (error) {
++      // A commit-unknown/post-commit-cache-unsafe outcome is NOT a normal
++      // write failure. The original GameStore must poison/terminate; never
++      // convert this to a retryable result that could duplicate effects.
++      if (error?.coopCommitOutcomeUnknown === true ||
++          String(error?.message || "").includes("NATIVE_GAMESTORE_COMMITTED_BUT_CACHE_UNSAFE")) {
++        throw error;
++      }
++      return { success: false, errorMsg: "PF97_CHARACTER_ATOMIC_WRITE_FAILED" };
++    }
++    characterRecordCache.delete(id);
++    return { success: true, data: clonedRecord };
++  }
++  const writeResult = options
++    ? repo.write(CHARACTERS_TABLE, `/${String(charId)}`, clonedRecord, options)
++    : repo.write(CHARACTERS_TABLE, `/${String(charId)}`, clonedRecord);
++  if (!writeResult.success) {
++    return {
++      success: false,
++      errorMsg: writeResult.errorMsg || "WRITE_ERROR",
++    };
++  }
++
++  characterRecordCache.delete(String(charId));
++
++  return {
++    success: true,
++    data: clonedRecord,
++  };
++}
+ 
+ // Owner removal API: lets other domains delete a character record without
+ // writing the characters table directly. Keeps characterRecordCache consistent.
+-function removeCharacterRecord(charId) {
+-  const removeResult = repo.remove(CHARACTERS_TABLE, `/${String(charId)}`);
++function removeCharacterRecord(charId) {
++  // Deleting an owner row cannot bypass PF52 custody + PF92 lease checks.
++  if (process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS === "1") {
++    return { success: false, errorMsg: "PF97_CHARACTER_DELETE_REQUIRES_NATIVE_OWNER" };
++  }
++  const removeResult = repo.remove(CHARACTERS_TABLE, `/${String(charId)}`);
+   characterRecordCache.delete(String(charId));
+   return {
+     success: Boolean(removeResult && removeResult.success),
+@@ -1016,11 +1099,17 @@
+     return null;
+   }
+ 
+-  if (JSON.stringify(rawRecord) !== JSON.stringify(normalizedRecord)) {
+-    writeCharacterRecord(charId, normalizedRecord);
+-  }
+-
+-  const currentCharacters = readCharacters();
++  if (JSON.stringify(rawRecord) !== JSON.stringify(normalizedRecord)) {
++    const saved = writeCharacterRecord(charId, normalizedRecord);
++    // Do not serve a normalized shipID that the actual original character
++    // owner refused to persist. This path is also reached by read callers.
++    if (process.env.EVEJS_COOP_PERSONAL_FLEET_NATIVE_WITNESS === "1" &&
++        (!saved || !saved.success)) {
++      return null;
++    }
++  }
++
++  const currentCharacters = readCharacters();
+   characterRecordCache.set(cacheKey, {
+     rawRecord: currentCharacters[String(charId)] || rawRecord,
+     itemMutationVersion,
