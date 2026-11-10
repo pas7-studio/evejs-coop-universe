@@ -3885,3 +3885,9 @@ Evidence: scripts/coop-overlay-presence.cjs self-comparison warning; docs/eviden
 Why: clear the BLOCKED_TELEMETRY rung on the new engine instead of assuming it
 Where: docs/evidence/overlay-261108.1.md
 Evidence: docs/evidence/overlay-261108.1.md telemetry section; living-startup-entered START_REQUESTED_NOT_READY plus five explicit war-phase SKIPPED reasons
+### 2026-11-10T19:12Z · b349387 · DOCS · docs(headless): the prerequisite chain that makes a run silent
+
+Why: a silent headless run must not be read as a code verdict
+Detail: Measured today: ALIFE flags without EVEJS_COOP_VIRTUAL_WORLD=1 return from start() before any observe(), and without EVEJS_COOP_HEADLESS_WORLD_BOOT=1 the materializer bridge is never built for a client-less run. Zero events is a configuration answer, not a gameplay one.
+Where: docs/HEADLESS_NPC_VALIDATION.md
+Evidence: docs/HEADLESS_NPC_VALIDATION.md prerequisite table; coopVirtualWorldRuntime.js start() gate and materializer bridge gate
