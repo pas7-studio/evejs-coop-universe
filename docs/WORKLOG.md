@@ -3863,3 +3863,8 @@ Evidence: CONTRACTS_OK calls=542 missing=0 stub=11 on O:\tmp\c261108 vs stub=37 
 Why: show the port stays up under its own tick load, not just that it boots
 Where: docs/evidence/overlay-261108.1.md
 Evidence: docs/evidence/overlay-261108.1.md; soak 8 min, RSS 2859->2727 MB, 0 stderr errors, ports closed after
+### 2026-11-10T18:16Z · 02f195d · TEST · docs(evidence): boot with 18 co-op flags on - no crash, only the two expected warning families
+
+Why: catch hooks that only break when their flag is on
+Where: docs/evidence/overlay-261108.1.md
+Evidence: docs/evidence/overlay-261108.1.md; 18 flags, 90 s alive, 0 stderr; only market-daemon-absent and contractMgr alias warnings
