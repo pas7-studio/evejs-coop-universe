@@ -3829,3 +3829,8 @@ Why: bring the engine to EveJS 261108.1 without losing the co-op overlay
 Detail: - docs/evidence/overlay-261108.1.md: provenance, the eight boot-loop defects, what is retired because upstream now does it, what is still open, and the compose port changes this host forces. - docs/UPSTREAM.md: a second row for the git-less release (import 1d6b691, port head 1ebf774). The legacy installer PIN stays at c3ea396 on purpose. - coop-engine-audit / coop-perf-audit: measure OUR burden. 2
 Where: docs/UPSTREAM.md, docs/UPSTREAM_261108_1_PORT_PLAN.md, docs/evidence/overlay-261108.1.md, scripts/coop-engine-audit.cjs, scripts/coop-overlay-presence.cjs, scripts/coop-perf-audit.cjs
 Evidence: docs/evidence/overlay-261108.1.md; fork coop/261108 1ebf774; AUDIT_OK/PERF_OK; headless boot reaches EveJS Elysian is running
+### 2026-11-10T16:39Z · a2b2ecc · L2 · docs(evidence): 261108.1 market fence guard, runaway-goto and escort witness re-homed
+
+Why: close the movement hooks and stop the unported market fence from looking guarded
+Where: docs/evidence/overlay-261108.1.md
+Evidence: fork coop/261108 099603f; COOP_MARKET_FENCE_NOT_PORTED verified both ways; boot re-verified; AUDIT_OK/PERF_OK
