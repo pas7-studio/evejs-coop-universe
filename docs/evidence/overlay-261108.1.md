@@ -192,3 +192,29 @@ the window is informational startup/reconciliation.
 After the soak both processes were stopped and 40110/40111/26000 verified closed -
 the owner's ports are free again.
 
+
+## Boot with 18 co-op flags on
+
+A hook that only breaks when its flag is enabled does not show up in a silent
+boot, so the same boot was repeated with the gates switched on:
+
+```
+flags on: 18      alive after 90s: True      banner: 1      stderr lines: 0
+```
+
+Flags: `NPC_RUNAWAY_GOTO`, `SOCIAL_NATIVE_GUARDS`, `DAILY_GOALS`, `STARGATE_LOCKS`,
+`ESCORT_NATIVE_WARP_OBSERVER`, `NPC_CAPACITOR`, `PLAYER_CORP_ACCESS`,
+`NATIVE_CONTRACTS`, `ATOMIC_TRADE`, `ITEM_AUDIT`, `WAR_CLIENT_VIEW`,
+`NPE_NATIVE_SAFETY`, `NPC_BUY_NOTIFY_CATCHUP`, `INDUSTRY_PACING`,
+`FLEET_WARP_SAFETY`, `FLEET_TRADE_SAFETY`, `NATIVE_MINING_CYCLE_CONSERVATION`,
+`STRUCTURE_ALLIANCE_GUARD`.
+
+Only three warning families appear, all expected:
+
+* `[MarketDaemonClient] ... ECONNREFUSED 127.0.0.1:40111` and
+  `[MarketProxy] Startup expiry settlement deferred` - no daemon in this run.
+* `service alias already registered: contractMgr` - 261108.1 still ships the 86-line
+  dead `contractMgrService`, so our `EVEJS_COOP_NATIVE_CONTRACTS` alias replaces it
+  exactly as before and the manager logs the replacement. Cosmetic; the alias is the
+  point of the hook.
+
