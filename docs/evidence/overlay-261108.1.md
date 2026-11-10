@@ -142,7 +142,7 @@ No `docker build`, no container, no client, no gameplay claim. Docker Desktop's 
 engine was down for the whole session; starting it would have restarted the owner's
 containers, which the two-stack rule forbids outside an explicit restart window. What was
 verified instead: host-Node boot, a host-Rust market daemon end to end, and
-`docker compose config` for both the engine compose and the agents override.
+`docker compose config` for the engine compose, the agents override and the play-coop override (all rc=0 against the ported compose).
 
 ## Client contract compatibility against the port (no client needed)
 
