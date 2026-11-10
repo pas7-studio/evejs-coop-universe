@@ -954,3 +954,20 @@ Refinery inside a durable budget (238 ops, ore -> 443 383 429 ISK of minerals at
 funded by those sales), capital purchases (`BOUGHT:1130`, `11870`, `2515`, `1817`), stow at home,
 manufacture (3+ batches), and the four freight fixes made today: cycle-safe sale budget, dense-first
 loading, lift rollback on a failed cargo write, and blueprints never sold as freight.
+
+## 2026-11-10 — EveJS 261108.1 port (branch `coop/261108`, head `1ebf774`)
+
+Release is a git-less zip (`EveJS-261108.1.zip`); imported as `upstream/261108.1` = `1d6b691`
+over `c3ea396`, release root mapped onto `Code/` (content packs excluded from git).
+The port branch adds 637 restored fork files + the re-anchored overlay + ported feature blocks.
+
+Measured: `AUDIT_OK` (563 modules / 66 stock files / 372 co-op lines / 0 patching of ours),
+`PERF_OK`, presence 54/73 files with 156 lines missing, and a headless boot on host Node:
+`EveJS Elysian is running!` (8490 systems, 73 s of ticks, express secondary service up).
+Evidence: `docs/evidence/overlay-261108.1.md`. Plan/queue: `docs/UPSTREAM_261108_1_PORT_PLAN.md`.
+
+NOT done: docker build and containers (the Docker Linux engine was down; starting Docker Desktop
+would restart the owner's stacks), client login, gameplay. `coop/pas7std` is untouched and remains
+the play engine. Open: marketProxyService settlement fence (75 gated lines, needs a design decision
+against upstream's durable market), escort motion observer, coopNpcRunawayGoto, warp landing tracer.
+
