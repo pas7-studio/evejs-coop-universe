@@ -3852,3 +3852,9 @@ Why: turn the unported market fence into a task with a mapping and an acceptance
 Detail: Maps each guarantee the old hand-built fence provided onto what the new durable market already does, keeps the two that stay ours (env guards, NPC corporate settlement), and states the acceptance that must exist before the COOP_MARKET_FENCE_NOT_PORTED refusal may be removed.
 Where: docs/UPSTREAM_261108_1_MARKET_FENCE.md
 Evidence: docs/UPSTREAM_261108_1_MARKET_FENCE.md; fork guard COOP_MARKET_FENCE_NOT_PORTED at coop/261108 099603f
+### 2026-11-10T18:07Z · 24df69b · TEST · feat(contracts): follow attach*ServiceMethods modules, prove the port answers every client call
+
+Why: prove client-call compatibility of the port without a client session
+Detail: 261108.1 splits services/<svc>/*.js and attaches them to the class; the scanner only read class bodies, so dogmaIM.GetRequiredSkillLevels read as MISSING. With the attachments followed: the port answers all 542 client calls with 0 missing and 11 stubs (the play engine today: 37 stubs) - the upgrade loses nothing and gains 26 real implementations.
+Where: docs/evidence/overlay-261108.1.md, scripts/coop-client-contracts.cjs
+Evidence: CONTRACTS_OK calls=542 missing=0 stub=11 on O:\tmp\c261108 vs stub=37 on the play tree; --verify CONTRACTS_OFFLINE_OK
