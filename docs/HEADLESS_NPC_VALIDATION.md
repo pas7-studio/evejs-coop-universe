@@ -76,6 +76,7 @@ returns from `start()` before it observes anything.
 | `EVEJS_COOP_VIRTUAL_WORLD=1` | `space/coopVirtualWorldRuntime.js` `start()` | returns at the first line; not even `living-startup-entered` is written |
 | `EVEJS_COOP_HEADLESS_WORLD_BOOT=1` | same file, materializer bridge | bridge is only built for a live `session`; without a client and without this flag no NPC can materialize |
 | `EVEJS_COOP_EVENTS_FILE=<path>` | `space/coopRuntimeProbe.js` `observe()` | `BLOCKED_TELEMETRY_CONFIG` warning, every event dropped |
+| `EVEJS_COOP_VIRTUAL_ROUTE` | `createWorld` in `coopVirtualWorld.js` | a one-system route (e.g. Perimeter alone) is rejected: `living-startup-failed` with `status=BLOCKED_PERSISTED_WORLD_INIT`, `phase=persistent-state-load` |
 
 `EVEJS_COOP_MATERIALIZE_LIMIT` is read in one place only
 (`coopVirtualWorldRuntime.js`, via `coopMaterializeLimit`), so setting it
@@ -86,8 +87,15 @@ paths at a writable directory, or the run either fails on its first write or
 writes outside the tree you are inspecting.
 
 Rule: before interpreting an absent `living-headless-boot-requested`, confirm
-all three gates in the *effective* environment. Silence is a configuration
-answer, not a gameplay answer.
+every gate above in the *effective* environment. Silence, or an immediate
+failure, is a configuration answer, not a gameplay answer.
+
+A refused boot is diagnosable rather than silent: `createWorld` throwing yields
+`living-startup-failed` with `status=BLOCKED_PERSISTED_WORLD_INIT` and
+`phase=persistent-state-load`, and the one-line reason on stderr
+(`[CoopVirtualWorld] startup ...`). Read that pair before touching scened code —
+both failures measured today were harness mistakes (a one-system route and a
+missing `EVEJS_COOP_VIRTUAL_WORLD`), not engine defects.
 
 ## P0 recovery for empty but real headless EveJS scenes
 
