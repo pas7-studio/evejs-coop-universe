@@ -3846,3 +3846,9 @@ Why: state the legacy overlay drift in numbers so a red suite is not mistaken fo
 Detail: 34 engine-reading tests against the port: 171 tests, 121 pass, 50 fail, all of them the frozen overlay roundtrip class whose anchors no longer exist at the new pin (WAREHOUSE_PATCH_DRIFT, unknown anchor). Also records that both compose.yaml and the agents override pass 'docker compose config' against the port.
 Where: docs/evidence/overlay-261108.1.md
 Evidence: docs/evidence/overlay-261108.1.md; 171/121/50; docker compose config rc=0 for compose.yaml and agents override
+### 2026-11-10T18:05Z · 9832b5c · DOCS · docs(upstream): market settlement fence design note for 261108.1
+
+Why: turn the unported market fence into a task with a mapping and an acceptance instead of a silent gap
+Detail: Maps each guarantee the old hand-built fence provided onto what the new durable market already does, keeps the two that stay ours (env guards, NPC corporate settlement), and states the acceptance that must exist before the COOP_MARKET_FENCE_NOT_PORTED refusal may be removed.
+Where: docs/UPSTREAM_261108_1_MARKET_FENCE.md
+Evidence: docs/UPSTREAM_261108_1_MARKET_FENCE.md; fork guard COOP_MARKET_FENCE_NOT_PORTED at coop/261108 099603f
