@@ -8,13 +8,22 @@ stack keeps running the old engine until the new one is proven.
 
 | Branch | Commit | What it is |
 | --- | --- | --- |
-| `coop/pas7std` | `f64fed0` | the game we run today (pin `c3ea396` + 403 commits) — untouched |
+| **`coop/pas7std`** | **`099603f`** | **the integrated engine** (261108.1 base + the re-anchored co-op overlay). The shared checkout is on it. |
+| `coop/legacy-20261028` | `f64fed0` | the previous engine line (pin `c3ea396` + 403 commits) — preserved, verified untouched, and the branch any rollback builds from |
 | `upstream/261108.1` | `1d6b691` | release archive imported over `c3ea396` (content packs excluded) |
-| `integration/261108.1` | (worktree `O:\tmp\m261108`) | plain `git merge` attempt: 137 conflicts, kept as a reference of the raw merge, not to be deployed |
-| `coop/261108` | `36543ca` | **the construction branch**: new base + 637 restored additive files + first machine-assisted hook pass |
+| `integration/261108.1` | (worktree `O:\tmp\m261108`) | plain `git merge` attempt: 137 conflicts, kept as a reference of the raw merge, never to be deployed |
 
-Worktrees: `O:\tmp\c261108` (build here), `O:\tmp\m261108` (merge reference),
-`O:\tmp\w261108` (the bare import). Release extract: `O:\tmp\evejs-261108.1`.
+The port was built as `coop/261108` and, once it booted, was moved onto
+`coop/pas7std` with the old line renamed to `coop/legacy-20261028`, so the branch
+every script and doc already points at is the new engine.
+
+Content packs are **not** in git. They live in the checkout at
+`Code/content-packs/` (24 packs, 572 MB, excluded through `.git/info/exclude`) and
+are installed into the store root on first start. A build without them produces a
+server with no incursions, missions, AIR or wormhole content, silently.
+
+Worktrees: `O:\tmp\c261108` (detached verification tree), `O:\tmp\m261108` (merge
+reference), `O:\tmp\w261108` (the bare import). Release extract: `O:\tmp\evejs-261108.1`.
 
 ## What `36543ca` already contains
 

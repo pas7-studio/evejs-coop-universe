@@ -998,3 +998,24 @@ the proxy refuses to load with any fence flag until it is ported), warp landing 
 Blocked: `docker build`/containers/client (Docker Desktop Linux engine down; starting it
 would restart the owner's stacks).
 
+
+### 2026-11-10 (late) вЂ” integration landed
+
+`coop/pas7std` **is** EveJS 261108.1 now (`099603f`). The old engine line is preserved
+byte-identical as `coop/legacy-20261028` (`f64fed0`) and is the rollback: `git checkout
+coop/legacy-20261028`.
+
+The shared checkout `C:\Games\EveCoop\upstream-evejs` is on the new engine: 3 134 tracked
+files, `_local/gameStore` + `node_modules` preserved, `Code/server/node_modules` refreshed,
+24 content packs (572 MB) in `Code/content-packs/` excluded from git. Boot from that real
+tree: banner in 61-90 s (packs are installed on first start), stderr 0, RSS steady ~2.8 GB.
+
+State bundle republished (`STATE_OK`, `-SkipTests -SkipServer` because Docker is down:
+server telemetry needs the container). `overlay WRONG_PIN` in `state/NOW.md` is **expected
+and correct**: the legacy `patch-evejs-coop.cjs` pin is `c3ea396` and that installer is not
+how this fork ships; the engine is the branch itself.
+
+Next step needs the owner's restart window: `docker build -t evejs-local Code/` (packs are
+in place) -> `Start-Agents-Stack.ps1 -CodePath C:\Games\EveCoop\upstream-evejs\Code -Action Up`
+-> client. Until then the running containers still serve the old image, which is fine.
+

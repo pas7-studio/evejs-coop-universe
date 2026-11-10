@@ -1,4 +1,4 @@
-﻿# Overlay evidence - EveJS 261108.1 (import `1d6b691`, port head `099603f`)
+﻿# Overlay evidence - EveJS 261108.1 (import `1d6b691`, integrated as `coop/pas7std` `099603f`)
 
 Date: 2026-11-10. Machine: owner PC (Windows), Node 22.14.0 host run, Docker
 Desktop engine **not running** during the whole session.
@@ -12,9 +12,9 @@ gameplay acceptance: no client was launched, no owner stack was touched.
 | --- | --- |
 | Release archive | `EveJS-261108.1.zip`, SHA-256 `373266A05FD9ACF0C220D06D5469907637A6D09BF2CF926ADF4AAEE97A3CCC59` |
 | Import commit (release tree over `c3ea396`, content packs excluded) | `1d6b691` on branch `upstream/261108.1` |
-| Construction branch | `coop/261108`, head `099603f` |
+| Construction branch (now the engine) | `coop/pas7std` `099603f`; the previous line is preserved as `coop/legacy-20261028` `f64fed0` |
 | Diff vs the import | 800 files, +10 289 323 / в€’16 565 lines (637 restored files + ported hooks + ported feature blocks) |
-| Unchanged branch | `coop/pas7std` `f64fed0` вЂ” the engine the owner plays on today |
+| Previous engine | `coop/legacy-20261028` `f64fed0` - delivered untouched, kept for rollback |
 
 ## Gates
 
@@ -217,4 +217,38 @@ Only three warning families appear, all expected:
   dead `contractMgrService`, so our `EVEJS_COOP_NATIVE_CONTRACTS` alias replaces it
   exactly as before and the manager logs the replacement. Cosmetic; the alias is the
   point of the hook.
+
+
+## Integration into the engine line
+
+Once the port booted, it was moved onto the branch every script and doc already
+points at, without rewriting history:
+
+```
+git branch -m coop/pas7std        coop/legacy-20261028   # old engine, f64fed0
+git branch -m coop/261108         coop/pas7std          # the port, 099603f
+git checkout coop/pas7std                                # shared checkout now on the new engine
+```
+
+The shared checkout `C:\Games\EveCoop\upstream-evejs` is now on `coop/pas7std`
+`099603f`: 3 134 tracked files (was 1 839), `_local/gameStore` and `node_modules`
+preserved, `Code/server/node_modules` refreshed (`ws` and the 261108 dependency set
+installed), and 24 content packs (572 MB) placed in `Code/content-packs/`, excluded
+from git through `.git/info/exclude`.
+
+Boot from that real tree (host Node, temp data root, 4 minute window):
+
+```
+t+30s  : rss 2772 MB cpu 28s   ...
+t+60s  : rss 2856 MB cpu 59s   TIDI autoscaler disabled
+t+90s  : banner 1
+stop at 240s, rss 2767 MB, stderr 0
+```
+
+It is slower to answer than the bare worktree (61-90 s to the banner instead of
+~8 s) because the 572 MB of content packs are installed into the store root on the
+first start. Nothing failed: `stderr 0`, one banner, steady RSS.
+
+Rollback, if this engine has to go, is `git checkout coop/legacy-20261028` - the old
+line is byte-identical to what the containers were built from.
 
