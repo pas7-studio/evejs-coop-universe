@@ -3823,3 +3823,9 @@ Why: let the port be judged by delivered lines, not by diff size, after upstream
 Detail: A module split moves our hooks into files that did not exist at the pin, so the gate searches the whole engine for a moved co-op line and reports it as complete-relocated. Port now measures 38/73 files complete, 323 lines missing.
 Where: docs/UPSTREAM_261108_1_PORT_PLAN.md, scripts/coop-overlay-presence.cjs
 Evidence: scripts/coop-overlay-presence.cjs; fork commits 101c383, 2132ef0; gate 38/73 complete, 323 missing
+### 2026-11-10T13:51Z · 84fad09 · L2 · feat(upstream): 261108.1 port boots headless; gates re-attributed to our code
+
+Why: bring the engine to EveJS 261108.1 without losing the co-op overlay
+Detail: - docs/evidence/overlay-261108.1.md: provenance, the eight boot-loop defects, what is retired because upstream now does it, what is still open, and the compose port changes this host forces. - docs/UPSTREAM.md: a second row for the git-less release (import 1d6b691, port head 1ebf774). The legacy installer PIN stays at c3ea396 on purpose. - coop-engine-audit / coop-perf-audit: measure OUR burden. 2
+Where: docs/UPSTREAM.md, docs/UPSTREAM_261108_1_PORT_PLAN.md, docs/evidence/overlay-261108.1.md, scripts/coop-engine-audit.cjs, scripts/coop-overlay-presence.cjs, scripts/coop-perf-audit.cjs
+Evidence: docs/evidence/overlay-261108.1.md; fork coop/261108 1ebf774; AUDIT_OK/PERF_OK; headless boot reaches EveJS Elysian is running
