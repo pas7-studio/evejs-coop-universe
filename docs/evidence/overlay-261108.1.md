@@ -97,7 +97,21 @@ Warnings that are expected without Docker: `MarketDaemonClient ... 127.0.0.1:401
   upstream serves gateway binaries on its own loopback CDN responder, and the
   coop title/achievement resolvers default to `https://127.0.0.1`.
 
-## Not done in this session
+## Market daemon end-to-end without Docker (host Rust)
+
+Docker was down, so the Rust side was built and run directly on the host:
+
+| Step | Result |
+| --- | --- |
+| `cargo build --release` in `externalservices/market-server` (rustc 1.89.0, target `O:\tmp\cargo-target`) | built, 6.8 MB binary |
+| `cargo build --release` in `tools/market-seed` | built, 3.6 MB binary |
+| `market-seed --config seed.toml build --station-limit 40 --type-limit 60` | 0.3 s, 1.5 MB SQLite |
+| `market-server --config server.toml` | healthy: `/health` → `{"ok":true,...}`, RPC `tcp://127.0.0.1:40111`, 4 800 open orders (2 400 buy / 2 400 sell), 360 summary rows, 6 regions, 40 stations |
+| Game server booted against it | `EveJS Elysian is running!` and **no `MarketDaemonClient` warnings** - the only warnings of the earlier runs (`ECONNREFUSED 127.0.0.1:40111` every 10 s) are gone, so the Node ↔ Rust market bridge works on 261108.1 |
+
+The daemon was stopped again afterwards (it was started for this check only);
+port 40111 must stay free for the owner's stack.
+
 
 No `docker build`, no container, no client, no gameplay. Docker Desktop's Linux
 engine was down; starting it would have restarted the owner's containers, which
