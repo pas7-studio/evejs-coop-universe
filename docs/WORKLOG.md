@@ -3880,3 +3880,8 @@ Why: a gate that can silently become a self-comparison is worse than no gate
 Detail: Once the port is committed the engine checkout is the branch, so presence against --ours coop/pas7std is trivially 100%. The script now says that on stderr and names the baseline that still measures overlay completeness: coop/legacy-20261028 (54/73 files, 156 lines). Audit, perf and client contracts re-run against the integrated tree: AUDIT_OK, PERF_OK, 542 calls / 0 missing / 11 stubs.
 Where: docs/evidence/overlay-261108.1.md, scripts/coop-overlay-presence.cjs
 Evidence: scripts/coop-overlay-presence.cjs self-comparison warning; docs/evidence/overlay-261108.1.md gates block; AUDIT_OK/PERF_OK/CONTRACTS_OK on the integrated tree
+### 2026-11-10T19:07Z · 50e349f · TEST · docs(evidence): coop telemetry works on the integrated engine - 11 events, explicit statuses
+
+Why: clear the BLOCKED_TELEMETRY rung on the new engine instead of assuming it
+Where: docs/evidence/overlay-261108.1.md
+Evidence: docs/evidence/overlay-261108.1.md telemetry section; living-startup-entered START_REQUESTED_NOT_READY plus five explicit war-phase SKIPPED reasons
