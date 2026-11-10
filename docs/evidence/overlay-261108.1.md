@@ -252,3 +252,20 @@ first start. Nothing failed: `stderr 0`, one banner, steady RSS.
 Rollback, if this engine has to go, is `git checkout coop/legacy-20261028` - the old
 line is byte-identical to what the containers were built from.
 
+
+## Gates re-run on the integrated tree (`C:\Games\EveCoop\upstream-evejs\Code`)
+
+```
+coop-engine-audit      AUDIT_OK   563 co-op modules, 68 stock files, 382 co-op lines, 0 patching of ours
+coop-perf-audit        PERF_OK
+coop-client-contracts  CONTRACTS_OK calls=542 missing=0 stub=11
+coop-overlay-presence  54/73 files, 156 lines missing  (with --ours coop/legacy-20261028)
+```
+
+One subtlety worth spelling out: presence against the *default* `--ours coop/pas7std`
+now reports `68/68 complete, 0 missing`, because the port was integrated into that
+branch and the checkout is that branch - a self-comparison. The script now says so
+on stderr and points at the baseline that still measures something: the pre-port
+line. The 156 remaining lines there are the market fence (75), the documented
+retirements, and lines that moved with a different require depth.
+

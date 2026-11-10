@@ -29,6 +29,21 @@ const oursRev = opt('--ours', 'coop/pas7std');
 const asJson = args.includes('--json');
 const strict = args.includes('--strict');
 
+// Once the port is committed, the engine checkout IS the branch: comparing that
+// branch with the same checkout would report 100% and mean nothing. Say so.
+try {
+  const headRev = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const oursFull = execFileSync('git', ['-C', repo, 'rev-parse', oursRev], { encoding: 'utf8' }).trim();
+  if (headRev === oursFull) {
+    console.error(
+      'coop-overlay-presence: --engine points at a checkout of the same revision as --ours (' +
+        oursRev +
+        '), so this is a self-comparison and will always be 100%. ' +
+        'For overlay completeness pass --ours coop/legacy-20261028 (the pre-port line).',
+    );
+  }
+} catch { /* not a git checkout: keep going, the comparison is still meaningful */ }
+
 if (!engine || !fs.existsSync(engine)) {
   console.error('coop-overlay-presence: --engine <path to the engine Code folder> is required and must exist');
   process.exit(2);
