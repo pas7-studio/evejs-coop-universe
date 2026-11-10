@@ -3811,3 +3811,9 @@ Why: give the 261108.1 port a resumable queue instead of a one-shot merge
 Detail: Records branch layout (coop/261108 at 36543ca), what the machine pass already re-anchored (30 files), the 114 hunks in 26 files left for manual work, the two movement files whose hooks have no upstream home, and queue B (our engine rewrites, market decision point).
 Where: docs/UPSTREAM_261108_1_PORT_PLAN.md
 Evidence: docs/UPSTREAM_261108_1_PORT_PLAN.md; fork commit 36543ca; port report O:\tmp\port-report.json
+### 2026-11-10T12:56Z · ab77e60 · DOCS · feat(upstream): overlay presence gate + 261108.1 second-pass status
+
+Why: make the 261108.1 port measurable and record which of our guards upstream has superseded
+Detail: scripts/coop-overlay-presence.cjs turns 'is the overlay re-anchored?' into a number: every co-op line our branch added to a stock file must exist in the delivered engine tree. Current port (coop/261108 b18502e) reports 29/73 files complete, 452 lines missing, 2 files gone from the engine.
+Where: docs/UPSTREAM_261108_1_PORT_PLAN.md, scripts/coop-overlay-presence.cjs
+Evidence: scripts/coop-overlay-presence.cjs; docs/UPSTREAM_261108_1_PORT_PLAN.md; fork commit b18502e; gate output 29/73 files, 452 lines missing
