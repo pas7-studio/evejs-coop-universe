@@ -29,6 +29,53 @@ Excluded on purpose: `content-packs/` (572 MB). A build without them yields a
 server with no incursions, missions, AIR or wormhole content, silently — copy
 `content-packs\*.json` into the build context before any gameplay run.
 
+## Second pass, 2026-11-10 (`b18502e`)
+
+A presence gate now measures the port instead of the diff size:
+`node scripts/coop-overlay-presence.cjs --engine O:\tmp\c261108\Code` takes every
+line our branch added to a stock file that names co-op code and checks the
+delivered tree still contains it.
+
+```
+overlay presence: 29/73 files complete, 452 co-op line(s) missing, 2 file(s) gone
+```
+
+Landed in `b18502e`:
+
+* `network/tcp`: `coopVirtualWorldRuntime.start()` restored after
+  `tidiAutoscaler.init()`. Our startup dungeon-resume patch is **retired** — the
+  call it patched no longer exists in `tcp/index.js`; upstream moved persistent
+  site advancement into `globalSiteSchedulerRuntime`, and whether the
+  "sites expired while the server was down" case is still swept at boot is an
+  **open question**, not a silent drop.
+* `_shared/sessionDisconnect`: probe + client-cache reset run inside the same
+  `attemptCleanup("logoff persistence")` callback that persists logoff state.
+* `account/tutorialSvcService`: handler takes `(args, session)` again.
+* `gameStore/index`: `coopAtomicNativeRows` adapter export restored (the table
+  names had been re-anchored by the machine pass).
+* `corporation/allianceRegistryRuntime`: binder + 24 `enforce` calls + owner-name
+  `wstring` fix (py2 `ExtractLocalizedTags` trap).
+* `corporation/corpRegistryRuntime`: owner-name `wstring` + `canUpdateApplication`.
+  Our `canRecruit` / `canManageMembers` / `isMember` guards are **retired**:
+  upstream now ships `canManageCorporationRecruitment` /
+  `requireCorporationReadAccess` on the same handlers, so keeping ours would
+  double-guard.
+* `corporation/corpMemberActionState`: `canExecuteActions` restored.
+
+Still structural (our code has no anchor in the new file, so it needs design, not
+re-anchoring):
+
+| File | missing co-op lines | why |
+| --- | --- | --- |
+| `services/mining/miningNpcOperations.js` | 84 | upstream rewrote the mining NPC operations |
+| `services/market/marketProxyService.js` | 76 | upstream rewrote the market proxy (see queue B) |
+| `space/runtime.js` | 49 | runtime hook surface moved |
+| `space/npc/nativeNpcWreckService.js` | 27 | wreck service rewritten |
+| `compose.yaml` | 24 | our stack overrides vs upstream's new compose |
+| `services/inventory/itemStore.js` | 14 | atomic manifest transfer path |
+| `services/trade/tradeMgrService.js` | 10 | trade service rewritten (persisted trades, bound objects) |
+| `space/npc/*` (store, service, behavior loop) | 14 + 11 + 10 | durable NPC records |
+
 ## Remaining queue A — finish the overlay (the 64 hook files)
 
 114 hunks need a human decision, in 26 files. `syntax-fail` means the whole file
