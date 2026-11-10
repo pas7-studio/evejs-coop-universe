@@ -64,6 +64,31 @@ headless boot-request event.
 To diagnose failures, inspect the ordinary `-Action Logs` output and the
 event log inside the server container; never infer success from flags alone.
 
+## Prerequisite chain: why a "silent" headless run proves nothing
+
+Measured 2026-11-10 on the integrated 261108.1 engine. A run that sets the
+ALIFE flags but not these two gates produces **zero** coop events and no
+materialization attempt, and says nothing about the code: the runtime
+returns from `start()` before it observes anything.
+
+| gate | where | effect when off |
+| --- | --- | --- |
+| `EVEJS_COOP_VIRTUAL_WORLD=1` | `space/coopVirtualWorldRuntime.js` `start()` | returns at the first line; not even `living-startup-entered` is written |
+| `EVEJS_COOP_HEADLESS_WORLD_BOOT=1` | same file, materializer bridge | bridge is only built for a live `session`; without a client and without this flag no NPC can materialize |
+| `EVEJS_COOP_EVENTS_FILE=<path>` | `space/coopRuntimeProbe.js` `observe()` | `BLOCKED_TELEMETRY_CONFIG` warning, every event dropped |
+
+`EVEJS_COOP_MATERIALIZE_LIMIT` is read in one place only
+(`coopVirtualWorldRuntime.js`, via `coopMaterializeLimit`), so setting it
+without the two gates above changes nothing. On Windows every state file
+defaults to `/var/lib/evejs/...`; point `EVEJS_COOP_VIRTUAL_STATE_FILE`,
+`EVEJS_COOP_LIFE_FILE`, `EVEJS_COOP_IDENTITY_FILE` and the economy/warehouse
+paths at a writable directory, or the run either fails on its first write or
+writes outside the tree you are inspecting.
+
+Rule: before interpreting an absent `living-headless-boot-requested`, confirm
+all three gates in the *effective* environment. Silence is a configuration
+answer, not a gameplay answer.
+
 ## P0 recovery for empty but real headless EveJS scenes
 
 `coopHeadlessScenePolicy.cjs` now marks a **genuinely loaded native
