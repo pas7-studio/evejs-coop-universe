@@ -13,6 +13,7 @@ upgrade runbook.
 | Upstream | SHA | Pinned since | Notes |
 | --- | --- | --- | --- |
 | [gameboys84/EveJS](https://github.com/gameboys84/EveJS) | `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f` | 2026-10-24 | 19 native files / 22 hooks / 59 overlay modules; not yet upgraded once |
+| EveJS 261108.1 (git-less release, imported into the fork) | import `1d6b691`, port head `1ebf774` on `coop/261108` | 2026-11-10 | The project publishes zip releases, not commits: `gameboys84/EveJS` `main` is still `c3ea396`. Release root maps onto `Code/`; content packs (572 MB) stay outside git. Evidence: [evidence/overlay-261108.1.md](evidence/overlay-261108.1.md). The legacy installer PIN stays at `c3ea396` on purpose - it patches that layout and does not apply to this tree. |
 
 When a new SHA is adopted, add a row (old → new) with the re-anchor work done and
 the evidence file `docs/evidence/overlay-<sha>.md`. Never delete old rows.

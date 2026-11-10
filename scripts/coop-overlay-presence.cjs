@@ -70,10 +70,13 @@ function coopLinesAdded(file) {
 }
 
 const results = [];
-// Re-homing means a co-op line can legitimately end up in a different file after a
-// module split (261108.1 split space/runtime.js into space/runtime/* and
-// space/destiny/*). Build a whole-engine line index once so a moved hook is
-// reported as relocated rather than lost.
+// A re-home can also change the require depth (`./coopX` -> `../coopX`), so the
+// comparison normalises require specifiers down to the module basename: the
+// question is whether the hook exists, not how many `../` it walks.
+const normalize = (line) => line
+  .trim()
+  .replace(/(["'])\.\.?\/[^"']*?\/(coop[A-Za-z0-9_.-]+)/g, '$1$2')
+  .replace(/\s+/g, ' ');
 let engineIndex = null;
 function relocatedIn(line, sameFile) {
   if (!engineIndex) {
@@ -88,14 +91,14 @@ function relocatedIn(line, sameFile) {
         const rel = path.relative(engine, p).split(path.sep).join('/');
         const text = fs.readFileSync(p, 'utf8');
         for (const l of text.split(/\r?\n/)) {
-          const key = l.trim();
+          const key = normalize(l);
           if (!key) continue;
           if (!engineIndex.has(key)) engineIndex.set(key, rel);
         }
       }
     }
   }
-  const hit = engineIndex.get(line.trim());
+  const hit = engineIndex.get(normalize(line));
   return hit && hit !== sameFile ? hit : null;
 }
 
@@ -108,11 +111,11 @@ for (const file of stockFiles) {
     results.push({ file: rel, status: 'engine-file-missing', total: lines.length, missing: lines });
     continue;
   }
-  const targetLines = new Set(fs.readFileSync(target, 'utf8').split(/\r?\n/).map((l) => l.trim()));
+  const targetLines = new Set(fs.readFileSync(target, 'utf8').split(/\r?\n/).map(normalize));
   const missing = [];
   const relocated = [];
   for (const l of lines) {
-    if (targetLines.has(l.trim())) continue;
+    if (targetLines.has(normalize(l))) continue;
     const other = relocatedIn(l, rel);
     if (other) { relocated.push({ line: l.trim().slice(0, 120), in: other }); continue; }
     missing.push(l);

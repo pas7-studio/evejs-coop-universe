@@ -89,12 +89,20 @@ const SMELLS = [
 ];
 const smells = [];
 let sourceRewrites = 0;
+let stockUpstreamRewrites = 0;
 for (const p of jsFiles) {
   const src = fs.readFileSync(p, 'utf8');
   for (const [name, re] of SMELLS) {
     const n = (src.match(re) || []).length;
     if (!n) continue;
-    if (/source rewrite|require\.cache|Module\._load|new Function|vm\.run/.test(name)) sourceRewrites += n;
+    if (/source rewrite|require\.cache|Module\._load|new Function|vm\.run/.test(name)) {
+      // Our burden is co-op code. Upstream 261108.1 ships its own require.cache
+      // juggling in incursion/ess/drone stock files (23 sites at import); that is
+      // not something we added and is reported separately, never silently counted
+      // as ours.
+      if (isCoopModule(p)) sourceRewrites += n;
+      else stockUpstreamRewrites += n;
+    }
     smells.push({ smell: name, file: rel(p), count: n, coop: isCoopModule(p) });
   }
 }
@@ -167,6 +175,7 @@ const totals = {
   coopsModules: jsFiles.filter(isCoopModule).length,
   smells: smells.length,
   sourceRewrites,
+  stockUpstreamRewrites,
   patchScripts: patchScripts.length,
   integrationDrift: drift.length,
   gigaCoop,
@@ -196,7 +205,7 @@ if (asJson) {
   console.log(`co-op modules ${totals.coopsModules}, stock files touched ${totals.stockFiles}, co-op lines in them ${totals.stockLines} (${totals.stockChars} chars)`);
   console.log(`biggest     ${totals.biggestFile ? `${totals.biggestFile.file} (${totals.biggestFile.lines} lines, ${totals.biggestFile.chars} chars)` : 'none'}`);
   console.log(`runtime patching: ${totals.sourceRewrites} (monkey-patch/require-cache/source-rewrite sites: ${totals.smells})`);
-  console.log(`legacy patch scripts ${totals.patchScripts} (budget ${BUDGET.patchScriptsMax}), integration copies differing ${totals.integrationDrift}`);
+  console.log(`stock upstream patching: ${totals.stockUpstreamRewrites} site(s) shipped by the engine itself, not ours`);  console.log(`legacy patch scripts ${totals.patchScripts} (budget ${BUDGET.patchScriptsMax}), integration copies differing ${totals.integrationDrift}`);
   console.log(`split safety: ${totals.splitProblems} undeclared/coupled name(s), ${totals.splitTwoStates} two-state name(s) (max ${SPLIT_TWO_STATES_MAX})`);
   if (gigaCoop.length) {
     console.log(`\nco-op modules over ${GIGA_COOP_LINES} lines (ratchet, may only shrink):`);

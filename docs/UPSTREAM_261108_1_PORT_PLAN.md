@@ -101,6 +101,30 @@ Biggest remaining: market proxy (75), mining NPC operations (41), `runtime.js`
 (40), `compose.yaml` (24), wreck service (23), item store (11), native NPC store
 (11), mining runtime (9), trade (7), dungeon sites (6).
 
+## Final state, 2026-11-10 (`1ebf774`): the port boots
+
+```
+node index.js  ->  EveJS Elysian is running!
+                   8490 systems, 5210 stations, 40928 belts, 13978 stargates
+                   express secondary service up, 75 s of ticks, no exception
+```
+
+Gates on the port tree: `AUDIT_OK` (563 co-op modules, 66 stock files, 372 co-op
+lines, 0 patching of ours), `PERF_OK`, presence 54/73 files complete / 156 lines
+missing / 2 files gone. Full evidence: [evidence/overlay-261108.1.md](evidence/overlay-261108.1.md).
+
+Eight bulk-port defects were found by the boot loop and fixed (displaced blocks,
+exports without definitions, duplicate protobuf types, missing imports). What
+remains is deliberate: the market proxy settlement fence (75 gated lines, needs a
+design decision against upstream's durable market), the escort motion observer,
+the runaway-goto guard and the warp landing tracer. Everything else that the
+presence gate still counts is either a documented retirement (upstream now does
+it natively) or a line that moved with a different require depth.
+
+Not done: `docker build`, containers, client, gameplay - Docker's Linux engine
+was down and starting Docker Desktop would have restarted the owner's stacks.
+
+
 ## Remaining queue A — finish the overlay (the 64 hook files)
 
 114 hunks need a human decision, in 26 files. `syntax-fail` means the whole file

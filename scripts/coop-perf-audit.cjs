@@ -48,10 +48,17 @@ const TRAPS = [
 ];
 
 const files = walk(SERVER);
+// Attribution: our burden is co-op code (coop* modules and the fork's own files).
+// 261108.1 ships 3997 `require()` calls inside function bodies and 206 JSON
+// round-trip clones in its own modules (measured at import); counting those as
+// ours would make the gate meaningless, so they are reported separately.
+const isCoopFile = (p) => /(?:^|[\\/])coop[A-Za-z0-9_]*\.[cm]?js$/.test(p) || /[\\/]coop[A-Za-z0-9_]*[\\/]/.test(p);
 const findings = [];
+const stockTotals = {};
 for (const p of files) {
   const src = fs.readFileSync(p, 'utf8');
   if (src.length > 2_000_000) continue;
+  const coop = isCoopFile(p);
   const rows = [];
   let score = 0;
   for (const [name, re, weight] of TRAPS) {
@@ -60,14 +67,18 @@ for (const p of files) {
     const lineOf = (idx) => src.slice(0, idx).split('\n').length;
     rows.push({ trap: name, count: hits.length, weight, sample: hits.slice(0, 2).map((h) => lineOf(h.index)) });
     score += hits.length * weight;
+    if (!coop) stockTotals[name] = (stockTotals[name] || 0) + hits.length;
   }
   if (!rows.length) continue;
-  findings.push({ file: path.relative(SERVER, p).replace(/\\/g, '/'), lines: src.split('\n').length, score, rows });
+  findings.push({ file: path.relative(SERVER, p).replace(/\\/g, '/'), coop, lines: src.split('\n').length, score, rows });
 }
 findings.sort((a, b) => b.score - a.score);
 
 const totals = {};
-for (const f of findings) for (const r of f.rows) totals[r.trap] = (totals[r.trap] || 0) + r.count;
+for (const f of findings) {
+  if (!f.coop) continue;
+  for (const r of f.rows) totals[r.trap] = (totals[r.trap] || 0) + r.count;
+}
 
 // Budget: the three known-fixed classes must stay at zero, and no single module
 // may accumulate a score that says "this is a per-tick clone machine".
@@ -77,7 +88,7 @@ const failures = Object.entries(BUDGET)
   .map(([trap, max]) => `${trap}: ${totals[trap]} > ${max}`);
 
 if (asJson) {
-  console.log(JSON.stringify({ code: CODE, totals, findings, failures }, null, 2));
+  console.log(JSON.stringify({ code: CODE, totals, stockTotals, findings, failures }, null, 2));
 } else {
   console.log(`engine ${CODE}`);
   console.log('traps by count:');
