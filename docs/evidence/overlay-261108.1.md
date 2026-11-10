@@ -56,21 +56,23 @@ Warnings that are expected without Docker: `MarketDaemonClient ... 127.0.0.1:401
 * **`services/market/marketProxyService.js`** — 75 of our P2P settlement hooks are not ported.
   261108.1 rewrote the proxy to a 7 487-line durable market (saga, idempotency
   keys, durable expiry/recovery jobs). Porting our settlement fence into it is a
-  design decision, not a transplant. Every one of those hooks is `EVEJS_COOP_*`
-  gated, default OFF, so the port boots and trades stock without them.
-* **`space/runtime.js` / `space/npc/nativeNpcWreckService.js` / `miningRuntime.js` /
-  `tradeMgrService.js`** — the remaining "missing" lines are documented
-  retirements (below) plus lines that moved with different require depth
-  (counted as relocated).
-* **Two movement files deleted upstream** — `movementWarpState.js` (escort motion
-  observer) and `movementSceneRefresh.js` (drone resync). The warp-range half is
-  re-homed in `destiny/simulation/warpTargets.js`; the drone resync is re-homed in
-  `runtime/scene/presentation.js`; the escort `noteNativeMotion` observer has no
-  home yet.
-* **`coopNpcRunawayGoto`** guard — movement advance now lives in `destiny/simulation`;
-  the hook is not re-homed yet.
-* **Warp landing tracer** (`coopWarpLandingTrace`) — not wired into the new warp
-  pipeline.
+  design decision, not a transplant. **To make that impossible to forget, the
+  proxy now refuses to load when any flag that expects the fence is on**:
+  `EVEJS_COOP_PLAYER_MARKET_ATOMIC`, `..._SETTLEMENT_FENCE`, `..._BUY_RESERVE`,
+  `..._FILL_GUARD`, `EVEJS_COOP_MARKET_CANCEL_CUSTODY`, `EVEJS_COOP_MARKET_SELL_CUSTODY`,
+  `EVEJS_COOP_NATIVE_NPC_CORP_SETTLEMENT` → `COOP_MARKET_FENCE_NOT_PORTED: <flag>`.
+  Verified: the flag on throws at require time, off loads normally.
+* **Two movement files deleted upstream** — `movementWarpState.js` and
+  `movementSceneRefresh.js`. All three behaviours are re-homed now: the warp-range
+  fix in `destiny/simulation/warpTargets.js`, the drone resync in
+  `runtime/scene/presentation.js`, the escort motion witness in
+  `destiny/simulation/evolve.js` (`realWarp`).
+* **`coopNpcRunawayGoto`** — re-homed: `destiny/simulation/evolve.js` `behaviour()`
+  case `GOTO` parks a native NPC whose target is further than a solar system
+  (the stock "straight for ever" sentinel) instead of flying it for ever.
+* **Warp landing tracer** (`coopWarpLandingTrace`) — still not wired: the new
+  warp pipeline has no single completion site that carries the fields the tracer
+  logs. Diagnostics only; open.
 
 ## Retired after checking upstream now does it natively
 
