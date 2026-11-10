@@ -16,6 +16,14 @@ client. The repository is the only shared memory. Read in this order:
 
 ## How we work
 
+- **The engine is EveJS 261108.1** (integrated 2026-11-10 as branch `coop/pas7std`
+  `099603f`; the previous line is preserved as `coop/legacy-20261028` and is the
+  rollback). Provenance, what was retired because upstream now does it, and what is
+  still open: [`docs/UPSTREAM_261108_1_PORT_PLAN.md`](UPSTREAM_261108_1_PORT_PLAN.md)
+  and [`docs/evidence/overlay-261108.1.md`](evidence/overlay-261108.1.md). The
+  `patch-evejs-coop.cjs` installer and its pin are **legacy**: they patch the
+  `c3ea396` layout, do not apply to this tree, and `state/NOW.md` reporting
+  `overlay WRONG_PIN` is expected.
 - **No CI, ever.** The owner removed all workflows. Testing is local and manual.
 - **Layered changes, owned here.** L1 stock bugs = `patches/upstream/*.patch`
   (`scripts/apply-upstream-patches.cjs`, refuses hash/pin drift); L2 co-op rules =
