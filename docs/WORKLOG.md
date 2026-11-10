@@ -3817,3 +3817,9 @@ Why: make the 261108.1 port measurable and record which of our guards upstream h
 Detail: scripts/coop-overlay-presence.cjs turns 'is the overlay re-anchored?' into a number: every co-op line our branch added to a stock file must exist in the delivered engine tree. Current port (coop/261108 b18502e) reports 29/73 files complete, 452 lines missing, 2 files gone from the engine.
 Where: docs/UPSTREAM_261108_1_PORT_PLAN.md, scripts/coop-overlay-presence.cjs
 Evidence: scripts/coop-overlay-presence.cjs; docs/UPSTREAM_261108_1_PORT_PLAN.md; fork commit b18502e; gate output 29/73 files, 452 lines missing
+### 2026-11-10T13:02Z · f366566 · DOCS · feat(upstream): relocation-aware presence gate, third-pass status
+
+Why: let the port be judged by delivered lines, not by diff size, after upstream split space/runtime.js
+Detail: A module split moves our hooks into files that did not exist at the pin, so the gate searches the whole engine for a moved co-op line and reports it as complete-relocated. Port now measures 38/73 files complete, 323 lines missing.
+Where: docs/UPSTREAM_261108_1_PORT_PLAN.md, scripts/coop-overlay-presence.cjs
+Evidence: scripts/coop-overlay-presence.cjs; fork commits 101c383, 2132ef0; gate 38/73 complete, 323 missing
