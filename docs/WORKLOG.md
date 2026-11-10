@@ -3858,3 +3858,8 @@ Why: prove client-call compatibility of the port without a client session
 Detail: 261108.1 splits services/<svc>/*.js and attaches them to the class; the scanner only read class bodies, so dogmaIM.GetRequiredSkillLevels read as MISSING. With the attachments followed: the port answers all 542 client calls with 0 missing and 11 stubs (the play engine today: 37 stubs) - the upgrade loses nothing and gains 26 real implementations.
 Where: docs/evidence/overlay-261108.1.md, scripts/coop-client-contracts.cjs
 Evidence: CONTRACTS_OK calls=542 missing=0 stub=11 on O:\tmp\c261108 vs stub=37 on the play tree; --verify CONTRACTS_OFFLINE_OK
+### 2026-11-10T18:13Z · 88864ea · TEST · docs(evidence): eight-minute soak with the market daemon attached - no crash, no leak trend, zero stderr errors
+
+Why: show the port stays up under its own tick load, not just that it boots
+Where: docs/evidence/overlay-261108.1.md
+Evidence: docs/evidence/overlay-261108.1.md; soak 8 min, RSS 2859->2727 MB, 0 stderr errors, ports closed after
