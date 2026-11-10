@@ -3868,3 +3868,9 @@ Evidence: docs/evidence/overlay-261108.1.md; soak 8 min, RSS 2859->2727 MB, 0 st
 Why: catch hooks that only break when their flag is on
 Where: docs/evidence/overlay-261108.1.md
 Evidence: docs/evidence/overlay-261108.1.md; 18 flags, 90 s alive, 0 stderr; only market-daemon-absent and contractMgr alias warnings
+### 2026-11-10T18:36Z · 05ec3be · OPS · feat(upstream): EveJS 261108.1 is the engine line
+
+Why: make the verified port the engine the repo builds from, with a one-command rollback
+Detail: coop/pas7std now carries the integrated 261108.1 tree (099603f); the previous engine is preserved byte-identical as coop/legacy-20261028 (f64fed0) and is the one-command rollback. The shared checkout is switched, node_modules refreshed, 24 content packs (572 MB) placed in Code/content-packs and excluded from git. Boot from the real tree: banner 61-90 s, stderr 0, RSS steady. state/ republished (ST
+Where: .opencode/state.md, docs/UPSTREAM.md, docs/UPSTREAM_261108_1_PORT_PLAN.md, docs/evidence/overlay-261108.1.md, state/NOW.md, state/changelog.jsonl, state/digests/20261031-183835.md, state/digests/20261110-183544.md, state/manifest.json, state/status.json
+Evidence: docs/evidence/overlay-261108.1.md integration section; branch move coop/pas7std->legacy, coop/261108->pas7std; boot from C:\Games\EveCoop\upstream-evejs 099603f; state STATE_OK
