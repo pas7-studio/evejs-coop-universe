@@ -147,6 +147,27 @@ function readServer() {
       }
       if (methods.size) services.set(service, methods);
       blocks.set(block.name, { service, methods, base: block.base });
+      // 261108.1 splits a service across ./<service>/<system>.js modules that are
+      // attached with attachXServiceMethods(require(...)). Those handlers are part
+      // of the same service name and must be counted, or a split-out method reads
+      // as MISSING to the client (dogmaIM.GetRequiredSkillLevels was the first).
+      for (const attach of source.matchAll(/attach\w*ServiceMethods\(\s*require\(([^)]*)\)\s*\)/g)) {
+        const spec = /__dirname,\s*"([^"]+)"/.exec(attach[1]);
+        if (!spec) continue;
+        const attached = path.resolve(path.dirname(file), spec[1]);
+        const attachedFile = attached.endsWith(".js") ? attached : attached + ".js";
+        let attachedSource;
+        try { attachedSource = fs.readFileSync(attachedFile, "utf8"); } catch { continue; }
+        for (const match of attachedSource.matchAll(/^ {2,6}(?:async\s+)?(Handle_)?([A-Za-z0-9_]+)\(([^)]*)\)\s*\{/gm)) {
+          const start = match.index + match[0].length;
+          const end = attachedSource.indexOf("\n  },", start);
+          methods.set(match[2], {
+            file: attachedFile,
+            body: attachedSource.slice(start, end < 0 ? attachedSource.length : end),
+          });
+        }
+        if (methods.size) services.set(service, methods);
+      }
     }
     // A subclass in the same file (StationSvcAlias extends StationService, the monolith
     // wrappers) inherits its parent's handlers, and the client calls both names.

@@ -143,3 +143,27 @@ engine was down for the whole session; starting it would have restarted the owne
 containers, which the two-stack rule forbids outside an explicit restart window. What was
 verified instead: host-Node boot, a host-Rust market daemon end to end, and
 `docker compose config` for both the engine compose and the agents override.
+
+## Client contract compatibility against the port (no client needed)
+
+`scripts/coop-client-contracts.cjs --check` with `EVEJS_FORK_ROOT=O:\tmp\c261108`:
+
+```
+CONTRACTS_OK calls=542 missing=0 stub=11
+```
+
+The same check against the engine the owner plays on today (`C:\Games\EveCoop\upstream-evejs`):
+
+```
+CONTRACTS_OK calls=542 missing=0 stub=37
+```
+
+So the port did not lose a single client-facing call, and 261108.1 answers 26
+calls our fork still stubbed (a placeholder answer the client tolerates). The
+register itself is unchanged: `--verify` reports
+`CONTRACTS_OFFLINE_OK calls=542 missing=0 stub=37 nullable=102 ok=403`.
+
+One scanner fix was needed for this to be true: 261108.1 splits a service into
+`services/<svc>/<system>.js` modules attached with
+`attach<X>ServiceMethods(require(...))`. `dogmaIM.GetRequiredSkillLevels` moved
+there and read as MISSING until the scanner followed those attachments.
