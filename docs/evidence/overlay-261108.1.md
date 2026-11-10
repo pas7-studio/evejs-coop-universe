@@ -167,3 +167,28 @@ One scanner fix was needed for this to be true: 261108.1 splits a service into
 `services/<svc>/<system>.js` modules attached with
 `attach<X>ServiceMethods(require(...))`. `dogmaIM.GetRequiredSkillLevels` moved
 there and read as MISSING until the scanner followed those attachments.
+
+## Eight-minute soak with the market daemon attached
+
+`O:\tmp\soak.ps1`: market daemon up, world booted, one process, sampled every 60 s.
+
+```
+alive after 8m: True          started-banner count: 1
+minute 0 : rss 2859 MB threads 18
+minute 1 : rss 2888 MB threads 15
+minute 2 : rss 2763 MB threads 15
+minute 3 : rss 2763 MB threads 14
+minute 4 : rss 2723 MB threads 16
+minute 5 : rss 2722 MB threads 16
+minute 6 : rss 2725 MB threads 14
+minute 7 : rss 2727 MB threads 14
+stderr errors: 0
+```
+
+No crash, no restart, no stderr error, no memory growth (the residue is the static
+tables and the 8490-system cache; RSS drifts down, not up). The only log output in
+the window is informational startup/reconciliation.
+
+After the soak both processes were stopped and 40110/40111/26000 verified closed -
+the owner's ports are free again.
+
