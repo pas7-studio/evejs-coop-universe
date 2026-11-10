@@ -75,12 +75,13 @@ returns from `start()` before it observes anything.
 | --- | --- | --- |
 | `EVEJS_COOP_VIRTUAL_WORLD=1` | `space/coopVirtualWorldRuntime.js` `start()` | returns at the first line; not even `living-startup-entered` is written |
 | `EVEJS_COOP_HEADLESS_WORLD_BOOT=1` | same file, materializer bridge | bridge is only built for a live `session`; without a client and without this flag no NPC can materialize |
+| `EVEJS_COOP_MATERIALIZE_NPCS=1` | same file, three sites | **the actual master switch**: `EVEJS_COOP_MATERIALIZE_LIMIT` alone changes nothing, the reconcile is never called and no `living-native-materialization-attempt` is written |
 | `EVEJS_COOP_EVENTS_FILE=<path>` | `space/coopRuntimeProbe.js` `observe()` | `BLOCKED_TELEMETRY_CONFIG` warning, every event dropped |
 | `EVEJS_COOP_VIRTUAL_ROUTE` | `createWorld` in `coopVirtualWorld.js` | a one-system route (e.g. Perimeter alone) is rejected: `living-startup-failed` with `status=BLOCKED_PERSISTED_WORLD_INIT`, `phase=persistent-state-load` |
 
 `EVEJS_COOP_MATERIALIZE_LIMIT` is read in one place only
 (`coopVirtualWorldRuntime.js`, via `coopMaterializeLimit`), so setting it
-without the two gates above changes nothing. On Windows every state file
+without the gates above changes nothing. On Windows every state file
 defaults to `/var/lib/evejs/...`; point `EVEJS_COOP_VIRTUAL_STATE_FILE`,
 `EVEJS_COOP_LIFE_FILE`, `EVEJS_COOP_IDENTITY_FILE` and the economy/warehouse
 paths at a writable directory, or the run either fails on its first write or
@@ -89,6 +90,12 @@ writes outside the tree you are inspecting.
 Rule: before interpreting an absent `living-headless-boot-requested`, confirm
 every gate above in the *effective* environment. Silence, or an immediate
 failure, is a configuration answer, not a gameplay answer.
+
+Do not build a flag list by hand: `scripts/Deploy-Coop-RuntimeProbe.ps1`
+already encodes the canonical set (`-LivingCoop` implies native mining,
+retryable startup, headless boot, durable hulls, ALIFE and the stock mining
+fleet counts). A hand-written subset is how all four traps below were hit in
+one session.
 
 A refused boot is diagnosable rather than silent: `createWorld` throwing yields
 `living-startup-failed` with `status=BLOCKED_PERSISTED_WORLD_INIT` and
